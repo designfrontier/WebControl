@@ -16,15 +16,11 @@ import {
 } from "./quickConfigure";
 import type { NumberField, QuickConfigureForm } from "./quickConfigure";
 import { Screen } from "./Screen";
+import { SetupFigure } from "./SetupFigure";
 import { useLoad } from "./useLoad";
 
-const image = (folder: string, file: string) => `/static/images/${folder}/${file}`;
-
 const Figure = ({ file, caption }: { file: string; caption: string }) => (
-  <figure className="setup-figure">
-    <img src={image("quickConfig", file)} alt={caption} loading="lazy" width={300} height={300} />
-    <figcaption>{caption}</figcaption>
-  </figure>
+  <SetupFigure folder="quickConfig" file={file} caption={caption} />
 );
 
 interface MmFieldProps {

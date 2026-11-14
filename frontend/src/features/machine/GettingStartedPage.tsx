@@ -1,11 +1,9 @@
 import { Link } from "react-router";
 import { Screen } from "./Screen";
+import { SetupFigure } from "./SetupFigure";
 
 const Figure = ({ file, caption }: { file: string; caption: string }) => (
-  <figure className="setup-figure wide">
-    <img src={`/static/images/gettingStarted/${encodeURIComponent(file)}`} alt={caption} loading="lazy" />
-    <figcaption>{caption}</figcaption>
-  </figure>
+  <SetupFigure folder="gettingStarted" file={file} caption={caption} />
 );
 
 export const GettingStartedPage = () => (
