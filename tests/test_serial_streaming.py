@@ -280,3 +280,12 @@ def test_closing_the_port_mid_cut_pauses_the_run(data, serial):
 
     assert data.uploadFlag == 2
     assert ("Action", "setAsResume", "") in serial.ui_messages()
+
+
+def test_a_new_connection_puts_the_controller_and_the_host_back_in_absolute_mode(data, serial):
+    data.positioningMode = 1
+
+    port = serial.run()
+
+    assert "G90  " in port.sent
+    assert data.positioningMode == 0
