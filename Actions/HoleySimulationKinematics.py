@@ -549,43 +549,41 @@ class Kinematics(MakesmithInitFuncs):
                     self.y + YPlus - self.h * math.sin(Psi)) / Denominator)
         return Temp
 
-    def updateSetting(self, firmwareKey, value):
+    FLOAT_SETTINGS = {
+        2: "D",
+        1: "machineHeight",
+        0: "machineWidth",
+        3: "motorOffsetY",
+        40: "leftChainTolerance",
+        41: "rightChainTolerance",
+        45: "chainElasticity",
+        46: "sledWeight",
+        8: "rotationDiskRadius",
+        37: "chainSagCorrection",
+    }
 
-        if firmwareKey == 2:
-            self.D = float(value)
+    def updateSetting(self, firmwareKey, value):
+        # Settings arrive as the stored strings; a bad one must not abort the settings save that called this.
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            if getattr(self, "data", None) is not None:
+                self.data.console_queue.put(f"Simulator ignored ${firmwareKey}={value!r}")
+            return
+        if firmwareKey in self.FLOAT_SETTINGS:
+            setattr(self, self.FLOAT_SETTINGS[firmwareKey], number)
         elif firmwareKey == 13:
-            self.R = float(value/3.141592/2)
-        elif firmwareKey == 1:
-            self.machineHeight = float(value)
-        elif firmwareKey == 0:
-            self.machineWidth = float(value)
-        elif firmwareKey == 3:
-            self.motorOffsetY = float(value)
-        elif firmwareKey == 40:
-            self.leftChainTolerance = float(value)
-        elif firmwareKey == 41:
-            self.rightChainTolerance = float(value)
-        elif firmwareKey == 45:
-            self.chainElasticity = float(value)
-        elif firmwareKey == 46:
-            self.sledWeight = float(value)
-        elif firmwareKey == 8:
-            self.rotationDiskRadius = float(value)
-        elif firmwareKey == 37:
-            self.chainSagCorrection = float(value)
+            self.R = number / math.pi / 2
         elif firmwareKey == 38:
-            self.chainOverSprocket = int(value)
+            self.chainOverSprocket = int(number)
         elif firmwareKey == 7:
-            if int(value) == 1:
-                self.isQuadKinematics = True
-            else:
-                self.isQuadKinematics = False
+            self.isQuadKinematics = int(number) == 1
         self._xCordOfMotor = self.D / 2
         self._yCordOfMotor = self.machineHeight / 2 + self.motorOffsetY
 
     def initializeSettings(self):
         self.D = float(self.data.config.getValue("Maslow Settings","motorSpacingX"))
-        self.R = float(self.data.config.getValue("Computed Settings","distPerRot"))/3.141592/2
+        self.R = float(self.data.config.getValue("Computed Settings","distPerRot"))/math.pi/2
         self.machineHeight = float(self.data.config.getValue("Maslow Settings","bedHeight"))
         self.machineWidth = float(self.data.config.getValue("Maslow Settings", "bedWidth"))
         self.motorOffsetY = float(self.data.config.getValue("Maslow Settings", "motorOffsetY"))
