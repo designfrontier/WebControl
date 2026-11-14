@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "envelope",
+  "type": "object",
+  "properties": {
+    "command": {
+      "type": "string"
+    },
+    "data": {},
+    "dataFormat": {
+      "examples": [
+        "json",
+        "int",
+        "base64"
+      ],
+      "type": "string"
+    }
+  },
+  "required": [
+    "command",
+    "data"
+  ]
+}

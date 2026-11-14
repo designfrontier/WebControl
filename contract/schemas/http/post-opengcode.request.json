@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "post-opengcode.request",
+  "type": "object",
+  "properties": {
+    "selectedGCode": {
+      "type": "string",
+      "description": "\"<directory>/<file name>\"; directory \".\" is the library root."
+    }
+  },
+  "required": [
+    "selectedGCode"
+  ]
+}

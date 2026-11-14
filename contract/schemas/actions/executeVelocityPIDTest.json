@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "executeVelocityPIDTest",
+  "type": "object",
+  "properties": {
+    "data": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "const": "executeVelocityPIDTest"
+        },
+        "arg": {
+          "type": "object",
+          "properties": {
+            "vMotor": {
+              "type": "string"
+            },
+            "vStart": {
+              "type": "string"
+            },
+            "vStop": {
+              "type": "string"
+            },
+            "vSteps": {
+              "type": "string"
+            },
+            "vVersion": {
+              "type": "string"
+            },
+            "KpV": {
+              "type": "string"
+            },
+            "KiV": {
+              "type": "string"
+            },
+            "KdV": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "vMotor",
+            "vStart",
+            "vStop",
+            "vSteps",
+            "vVersion",
+            "KpV",
+            "KiV",
+            "KdV"
+          ]
+        },
+        "arg1": {
+          "description": "Ignored by the backend; the UI sends \"\".",
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "command",
+        "arg",
+        "arg1"
+      ]
+    }
+  },
+  "required": [
+    "data"
+  ]
+}

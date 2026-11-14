@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get-api-system-pid.200",
+  "type": "object",
+  "properties": {
+    "velocity": {
+      "type": "object",
+      "properties": {
+        "kp": {
+          "type": "string"
+        },
+        "ki": {
+          "type": "string"
+        },
+        "kd": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kp",
+        "ki",
+        "kd"
+      ]
+    },
+    "position": {
+      "type": "object",
+      "properties": {
+        "kp": {
+          "type": "string"
+        },
+        "ki": {
+          "type": "string"
+        },
+        "kd": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kp",
+        "ki",
+        "kd"
+      ]
+    },
+    "fourMotor": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "velocity",
+    "position",
+    "fourMotor"
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get-downloaddiagnostics.500",
+  "type": "string",
+  "enum": [
+    "success",
+    "failed"
+  ]
+}

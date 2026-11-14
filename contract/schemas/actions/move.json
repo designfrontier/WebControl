@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "move",
+  "type": "object",
+  "properties": {
+    "data": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "const": "move"
+        },
+        "arg": {
+          "type": "string",
+          "enum": [
+            "upLeft",
+            "up",
+            "upRight",
+            "left",
+            "right",
+            "downLeft",
+            "down",
+            "downRight"
+          ]
+        },
+        "arg1": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\s*[-+]?(\\d+\\.?\\d*|\\.\\d+)([eE][-+]?\\d+)?\\s*$"
+            }
+          ],
+          "description": "Distance in the front-page units"
+        }
+      },
+      "required": [
+        "command",
+        "arg",
+        "arg1"
+      ]
+    }
+  },
+  "required": [
+    "data"
+  ]
+}
