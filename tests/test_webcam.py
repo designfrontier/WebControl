@@ -83,3 +83,20 @@ def test_a_missing_frame_keeps_the_last_image(camera, data):
     assert data.cameraImage == "previous"
     assert data.cameraImageUpdated is False
     assert camera.frame is None
+
+
+def test_changing_the_sleep_interval_restarts_the_capture_thread(camera, monkeypatch):
+    class Thread:
+        joined = False
+
+        def join(self):
+            self.joined = True
+
+    camera.stream = object()
+    camera.th = Thread()
+    started = []
+    monkeypatch.setattr(camera, "start", lambda: started.append(camera.stopped))
+    camera.changeSetting("cameraSleep", 0.05)
+    assert camera.th.joined is True
+    assert started == [True]
+    assert camera.cameraSleep == 0.05

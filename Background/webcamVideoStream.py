@@ -160,7 +160,7 @@ class WebcamVideoStream(MakesmithInitFuncs):
                 self.cameraSleep = value
                 if self.stream is not None:
                     self.stopped = True
-                    self.stream.join()
+                    self.th.join()
                     self.start()
 
     def setFPS(self):
