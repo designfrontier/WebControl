@@ -96,6 +96,7 @@ class GCodeFile(MakesmithInitFuncs):
             del self.line3D[:]
             if filename is "":  # Blank the g-code if we're loading "nothing"
                 self.data.gcode = ""
+                self.data.gcodeIndex = 0
                 return False
 
             try:
@@ -150,6 +151,7 @@ class GCodeFile(MakesmithInitFuncs):
             filtersparsed = [x.replace("F ", "F") for x in filtersparsed]
             self.data.gcode = "[]"
             self.data.gcode = filtersparsed
+            self.data.gcodeIndex = 0 if gcodeLoad else min(self.data.gcodeIndex, len(self.data.gcode) - 1)
 
 
 
