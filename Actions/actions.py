@@ -675,6 +675,9 @@ class Actions(MakesmithInitFuncs):
                     self.data.uploadFlag = 1
                 else:
                     self.data.uploadFlag = self.data.previousUploadStatus ### just moved this here from after if statement
+            elif self.data.uploadFlag == 1:
+                # A second Resume (double click, another client) must not lift and replunge mid-cut.
+                return True
             else:
                 # The user may have jogged, homed or moved the gcode index while paused, so return to the file's
                 # position at the current index at safe height before lowering the bit.

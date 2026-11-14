@@ -294,3 +294,15 @@ def test_restart_follows_numbered_modal_moves(job):
     job.actions.processGCode()
 
     assert drain(job.gcode_queue)[3] == "G0 X30.0 Y40.0 F300.0"
+
+
+def test_resume_while_the_job_is_already_running_moves_nothing(job):
+    pause_at(job, METRIC_FILE + ["G1 X50 Y60"], 4, -3.0)
+    job.actions.resumeRun()
+    drain(job.gcode_queue)
+    drain(job.quick_queue)
+
+    job.actions.resumeRun()
+
+    assert drain(job.gcode_queue) == []
+    assert job.uploadFlag == 1
