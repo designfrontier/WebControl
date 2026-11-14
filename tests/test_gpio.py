@@ -22,7 +22,7 @@ def pin_factory():
 def gpio(data, pin_factory):
     """A GPIOActions on fresh mock pins, with the run state restored afterwards."""
     Device.pin_factory = MockFactory()
-    saved = (data.gcode, data.gcodeIndex, data.manualZAxisAdjust)
+    saved = (data.gcode, data.gcodeIndex, data.manualZAxisAdjust, data.uploadFlag)
     actions = gpioActions.GPIOActions()
     actions.setUpData(data)
     drain(data.console_queue)
@@ -31,7 +31,7 @@ def gpio(data, pin_factory):
         button.close()
     for _, led in actions.LEDs:
         led.close()
-    data.gcode, data.gcodeIndex, data.manualZAxisAdjust = saved
+    data.gcode, data.gcodeIndex, data.manualZAxisAdjust, data.uploadFlag = saved
 
 
 @pytest.fixture

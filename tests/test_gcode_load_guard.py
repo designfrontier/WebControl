@@ -9,10 +9,10 @@ MESSAGE = "Cannot load gcode while a job is running or paused. Stop the job firs
 
 @pytest.fixture
 def running_job(data):
-    saved = (data.gcode, data.gcodeFile.filename, data.manualZAxisAdjust)
+    saved = (data.gcode, data.gcodeFile.filename, data.manualZAxisAdjust, data.uploadFlag)
     data.gcode = ["G0 X1 ", "G1 Z-1 "]
     yield data
-    data.gcode, data.gcodeFile.filename, data.manualZAxisAdjust = saved
+    data.gcode, data.gcodeFile.filename, data.manualZAxisAdjust, data.uploadFlag = saved
 
 
 def post(client, path):

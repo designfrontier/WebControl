@@ -19,7 +19,7 @@ def job(data):
     attributes = [
         "gcode", "gcodeIndex", "gcodeShift", "zval", "currentZTarget", "positioningMode", "tolerance", "feedRate",
         "pausedzval", "pausedUnits", "pausedPositioningMode", "pausedGcodeIndex", "manualZAxisAdjust",
-        "gcodeFileUnits",
+        "gcodeFileUnits", "uploadFlag",
     ]
     saved = {name: getattr(data, name) for name in attributes}
     set_machine_units(data, "MM")
