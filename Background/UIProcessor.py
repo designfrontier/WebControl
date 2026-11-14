@@ -315,9 +315,12 @@ class UIProcessor:
                         # regardless of setting, if not custom firmware there cannot be a forward kinematic compute
                         computedEnabled = 0
 
+                    computed = None
                     if computedEnabled > 0:
-                        self.app.data.computedX, self.app.data.computedY = self.app.data.holeyKinematics.forward(
+                        computed = self.app.data.holeyKinematics.forward(
                             self.app.data.leftChain, self.app.data.rightChain, self.app.data.xval, self.app.data.yval)
+                    if computed is not None:
+                        self.app.data.computedX, self.app.data.computedY = computed
                     else:
                         # the -999999 value tells the UI client to ignore the data.
                         self.app.data.computedX = -999999

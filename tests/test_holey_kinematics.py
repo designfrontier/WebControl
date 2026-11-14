@@ -5,6 +5,8 @@ import math
 import pytest
 
 from Actions.HoleySimulationKinematics import Kinematics
+from Background.UIProcessor import UIProcessor
+from calibration_helpers import holey_form, ideal_holey_measurements
 from helpers import drain
 
 
@@ -87,3 +89,78 @@ def test_changing_the_sprocket_through_the_settings_api(client, settings_saved):
     assert response.status_code == 200
     assert stored(data, "Advanced Settings", "gearTeeth") == "11"
     assert data.holeyKinematics.R == pytest.approx(11 * 6.35 / math.pi / 2)
+
+
+def triangular():
+    kinematics = Kinematics()
+    kinematics.isQuadKinematics = False
+    kinematics.recomputeGeometry()
+    return kinematics
+
+
+def test_forward_inverts_inverse_inside_the_work_area():
+    kinematics = triangular()
+    x, y = kinematics.forward(*kinematics.inverse(-600.0, 300.0))
+    assert (x, y) == (pytest.approx(-600.0, abs=1e-6), pytest.approx(300.0, abs=1e-6))
+
+
+@pytest.mark.parametrize("chains", [(100.0, 100.0), (4000.0, 4000.0)])
+def test_forward_returns_none_when_it_cannot_converge(chains):
+    assert triangular().forward(*chains) is None
+
+
+def test_clamp_returns_the_target_on_the_edge_of_the_work_area():
+    kinematics = triangular()
+    assert kinematics._verifyValidTarget(-5000.0, 10.0) == (-1219.2, 10.0)
+    assert kinematics._verifyValidTarget(20.0, -5000.0) == (20.0, -609.6)
+    assert kinematics.inverse(5000.0, 10.0) == kinematics.inverse(1219.2, 10.0)
+
+
+def test_clamp_moves_one_axis_like_the_firmware():
+    assert triangular()._verifyValidTarget(-5000.0, 5000.0) == (-1219.2, 5000.0)
+
+
+def test_singular_quadrilateral_jacobian_does_not_raise():
+    kinematics = Kinematics()
+    kinematics.Jac = [0.0] * 10
+    assert kinematics._MatSolv() is False
+
+
+def test_quadrilateral_forward_gives_up_on_a_singular_jacobian(monkeypatch):
+    kinematics = Kinematics()
+    monkeypatch.setattr(kinematics, "_MatSolv", lambda: False)
+    kinematics.Phi = 1.0
+    assert kinematics.forward(1740.0, 1740.0) is None
+
+
+def test_quadrilateral_forward_still_converges():
+    kinematics = Kinematics()
+    x, y = kinematics.forward(*kinematics.inverse(300.0, -200.0))
+    assert (x, y) == (pytest.approx(300.0, abs=0.01), pytest.approx(-200.0, abs=0.01))
+
+
+def test_error_report_hides_an_unknown_computed_position(app, data, monkeypatch):
+    processor = UIProcessor()
+    processor.app = app
+    sent = []
+    settings = {"positionErrorLimit": "2.0", "computedPosition": "1"}
+    real_get_value = data.config.getValue
+    monkeypatch.setattr(data.config, "getValue", lambda section, key: settings.get(key) or real_get_value(section, key))
+    monkeypatch.setattr(data, "controllerFirmwareVersion", 100)
+    touched = ["leftError", "rightError", "leftError_prev", "rightError_prev", "computedX", "computedY"]
+    for key in [*touched, "leftChain", "rightChain", "bufferSize"]:
+        monkeypatch.setattr(data, key, getattr(data, key))
+    monkeypatch.setattr(data.holeyKinematics, "forward", lambda *args: None)
+    monkeypatch.setattr(processor, "sendErrorValueMessage", sent.append)
+    processor.setErrorOnScreen("[PE:0.5,0.25,127,100.0,100.0]")
+    assert sent[0]["computedX"] == -999999
+    assert sent[0]["computedY"] == -999999
+
+
+def test_holey_fit_refuses_when_the_kinematics_cannot_place_a_hole(data, monkeypatch):
+    measurements = ideal_holey_measurements(data)
+    monkeypatch.setattr(data.holeyCalibration.kin, "forward", lambda *args: None)
+    monkeypatch.setattr(data.holeyCalibration, "hasResult", False)
+    assert data.holeyCalibration.Calibrate(holey_form(measurements)) is None
+    assert data.holeyCalibration.hasResult is False
+    assert "could not be calculated" in data.message_queue.get_nowait()

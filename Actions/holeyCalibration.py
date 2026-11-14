@@ -62,12 +62,7 @@ class HoleyCalibration(MakesmithInitFuncs):
         self.kin.leftChainTolerance = self.SP_leftChainTolerance + DeltaArray[2]
         self.kin.rightChainTolerance = self.SP_rightChainTolerance + DeltaArray[3]
         self.kin.recomputeGeometry()
-        CalculatedPositions = []
-        for LeftChainLength, RightChainLength in self.ChainLengths:
-            CalculatedPositions.append(
-                self.kin.forward(LeftChainLength, RightChainLength)
-            )
-
+        CalculatedPositions = self.HolePositionsFromChainLengths()
         return self.MeasuredLengthArray - self.CalculateMeasurements(
             CalculatedPositions
         )
@@ -270,9 +265,9 @@ class HoleyCalibration(MakesmithInitFuncs):
         return self.OptimizationOutput.fun
 
     def HolePositionsFromChainLengths(self):
-        HolePositions = []
-        for LeftChainLength, RightChainLength in self.ChainLengths:
-            HolePositions.append(self.kin.forward(LeftChainLength, RightChainLength))
+        HolePositions = [self.kin.forward(left, right) for left, right in self.ChainLengths]
+        if None in HolePositions:
+            raise ValueError("No sled position matches these machine parameters.")
         return HolePositions
 
     def SimulateMeasurement(
