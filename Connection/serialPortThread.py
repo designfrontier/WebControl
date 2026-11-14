@@ -242,6 +242,10 @@ class SerialPortThread(MakesmithInitFuncs):
 
         self.weAreBufferingLines = bool(int(self.data.config.getValue("Maslow Settings", "bufferOn")) )
 
+        # Opening the port resets the controller, which would break a firmware upgrade in progress.
+        if self.data.serialPort.serialPortRequest == "requestToClose":
+            return
+
         try:
             self.data.comport = self.data.config.getValue("Maslow Settings", "COMport")
             connectMessage = "Trying to connect to controller on " +self.data.comport

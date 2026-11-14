@@ -204,3 +204,15 @@ def test_classic_settings_form_with_no_ports_found_keeps_the_saved_port(client, 
     assert client.post("/maslowSettings", data=form).status_code == 200
     assert settings.getValue("Maslow Settings", "COMport") == "/dev/ttyACM0"
     assert settings.getValue("Maslow Settings", "macro1_title") == "Saved anyway"
+
+
+def test_a_reconnect_attempt_while_flashing_never_opens_the_port(data, monkeypatch):
+    import Connection.serialPortThread as thread_module
+
+    opened = []
+    monkeypatch.setattr(thread_module.serial, "Serial", lambda *args, **kwargs: opened.append(args))
+    monkeypatch.setattr(data.serialPort, "serialPortRequest", "requestToClose")
+    reconnect = thread_module.SerialPortThread()
+    reconnect.data = data
+    reconnect.getmessage()
+    assert opened == []
