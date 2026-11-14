@@ -51,6 +51,11 @@ const toDialog = (modal: ModalMessage, id: number): ServerDialog | null => {
 const sameContent = (a: ServerDialog, b: ServerDialog) =>
   a.kind === b.kind && a.title === b.title && a.message === b.message;
 
+const without = (state: DialogState, keep: (dialog: ServerDialog) => boolean): DialogState => {
+  const dialogs = state.dialogs.filter(keep);
+  return dialogs.length === state.dialogs.length ? state : { ...state, dialogs };
+};
+
 /** A queue of server-pushed dialogs. The view shows only the head, so no number of messages can stack overlays. */
 export const dialogReducer = (state: DialogState, event: DialogEvent): DialogState => {
   switch (event.type) {
@@ -67,13 +72,9 @@ export const dialogReducer = (state: DialogState, event: DialogEvent): DialogSta
           }
         : { dialogs: [...state.dialogs, dialog], nextId: state.nextId + 1 };
     }
-    case "close": {
-      const dialogs = state.dialogs.filter((open) => open.kind !== event.kind || open.title !== event.title);
-      return dialogs.length === state.dialogs.length ? state : { ...state, dialogs };
-    }
-    case "dismiss": {
-      const dialogs = state.dialogs.filter((open) => open.id !== event.id);
-      return dialogs.length === state.dialogs.length ? state : { ...state, dialogs };
-    }
+    case "close":
+      return without(state, (open) => open.kind !== event.kind || open.title !== event.title);
+    case "dismiss":
+      return without(state, (open) => open.id !== event.id);
   }
 };

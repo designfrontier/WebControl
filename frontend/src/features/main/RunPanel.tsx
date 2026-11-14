@@ -3,6 +3,13 @@ import type { MainScreenState } from "../../protocol";
 import type { ControlAvailability } from "./controls";
 import { useDraft } from "./hooks";
 
+const STEPS = [
+  { command: "moveGcodeZ", delta: -1, label: "Previous Z move", arrow: "⇤" },
+  { command: "moveGcodeIndex", delta: -1, label: "Previous line", arrow: "←" },
+  { command: "moveGcodeIndex", delta: 1, label: "Next line", arrow: "→" },
+  { command: "moveGcodeZ", delta: 1, label: "Next Z move", arrow: "⇥" },
+] as const;
+
 interface Props {
   available: ControlAvailability;
   /** The gcode line from GET /api/main, used until the server pushes a gcodePositionMessage. */
@@ -57,18 +64,24 @@ export const RunPanel = ({ available, loadedGcode }: Props) => {
         )}
       </div>
       <div className="button-row" role="group" aria-label="Step through gcode">
-        <button type="button" disabled={!available.step} onClick={() => client.sendAction("moveGcodeZ", -1)}>
-          <span aria-hidden="true">⇤</span> Previous Z move
-        </button>
-        <button type="button" disabled={!available.step} onClick={() => client.sendAction("moveGcodeIndex", -1)}>
-          <span aria-hidden="true">←</span> Previous line
-        </button>
-        <button type="button" disabled={!available.step} onClick={() => client.sendAction("moveGcodeIndex", 1)}>
-          Next line <span aria-hidden="true">→</span>
-        </button>
-        <button type="button" disabled={!available.step} onClick={() => client.sendAction("moveGcodeZ", 1)}>
-          Next Z move <span aria-hidden="true">⇥</span>
-        </button>
+        {STEPS.map(({ command, delta, label, arrow }) => (
+          <button
+            key={label}
+            type="button"
+            disabled={!available.step}
+            onClick={() => client.sendAction(command, delta)}
+          >
+            {delta < 0 ? (
+              <>
+                <span aria-hidden="true">{arrow}</span> {label}
+              </>
+            ) : (
+              <>
+                {label} <span aria-hidden="true">{arrow}</span>
+              </>
+            )}
+          </button>
+        ))}
       </div>
       <form
         className="goto-line"
@@ -82,7 +95,6 @@ export const RunPanel = ({ available, loadedGcode }: Props) => {
           id="gcode-line"
           type="number"
           min={1}
-          max={loadedGcode?.lineCount || undefined}
           step={1}
           value={lineText}
           aria-invalid={!validTarget}

@@ -64,6 +64,18 @@ describe("MainPage run status", () => {
     expect(store.getState().status).toBeNull();
   });
 
+  it("keeps a status pushed while GET /api/main was in flight", async () => {
+    let answer: (response: Response) => void = () => {};
+    const fetch = fakeFetch({ "/api/main": () => new Promise<Response>((resolve) => (answer = resolve)) });
+    const { socket, store } = renderApp("/", { fetch });
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/main", expect.anything()));
+    status(socket, 1);
+    answer(jsonResponse(mainState()));
+    await waitFor(() => expect(screen.getByText("G1 X10 Y5")).toBeInTheDocument());
+    expect(store.getState().status?.uploadFlag).toBe(1);
+    expect(button("Play")).toBeDisabled();
+  });
+
   it("gates controls while running: only Pause and Stop work", async () => {
     const { socket } = await renderMain();
     status(socket, 1);
@@ -83,6 +95,7 @@ describe("MainPage run status", () => {
     expect(button("Play")).toBeDisabled();
     expect(button("Up")).toBeEnabled();
     expect(button("Next line")).toBeEnabled();
+    expect(button("Set Home Here")).toBeDisabled();
 
     await user.click(button("Resume"));
     expect(socket.actions()).toEqual([["resumeRun", "", ""]]);
@@ -277,10 +290,19 @@ describe("MainPage gcode stepping", () => {
   it("goes to a 1-based line number", async () => {
     const { socket, user } = await renderMain();
     const line = screen.getByLabelText("Line number");
-    expect(line).toHaveAttribute("max", "120");
     await user.clear(line);
     await user.type(line, "42{Enter}");
     expect(socket.actions()).toEqual([["moveGcodeGoto", 41, ""]]);
+  });
+
+  it("does not cap the line number at the length of the file loaded on mount", async () => {
+    const { socket, user } = await renderMain();
+    const line = screen.getByLabelText("Line number");
+    expect(line).not.toHaveAttribute("max");
+    await user.clear(line);
+    await user.type(line, "500");
+    await user.click(button("Go to line"));
+    expect(socket.actions()).toEqual([["moveGcodeGoto", 499, ""]]);
   });
 
   it("refuses a line number below 1", async () => {

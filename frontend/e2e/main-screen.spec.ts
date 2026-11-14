@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
+// These tests jog, start runs and write units: safe only because tests/e2e_backend.py runs with a temporary HOME and no port.
 const openDialog = (page: Page) => page.getByRole("dialog").or(page.getByRole("alertdialog"));
 
 /** Closes server dialogs one by one, returning every message seen; a first-run notice may be queued too. */

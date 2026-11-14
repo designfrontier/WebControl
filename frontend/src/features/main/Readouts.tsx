@@ -3,6 +3,11 @@ import { useMachine } from "../../app/context";
 import { fixed, positioningModeLabel } from "./controls";
 
 const MOTOR_POWER_MAX = 255;
+const MOTORS = [
+  ["left", "Left"],
+  ["right", "Right"],
+  ["z", "Z"],
+] as const;
 
 const Row = ({ term, children }: { term: string; children: ReactNode }) => (
   <div>
@@ -46,9 +51,9 @@ export const Readouts = () => {
           <meter min={0} max={100} high={50} value={error ? error.right * 100 : 0} />
         </label>
         {position &&
-          (["left", "right", "z"] as const).map((motor) => (
+          MOTORS.map(([motor, name]) => (
             <label key={motor}>
-              {motor === "z" ? "Z" : motor === "left" ? "Left" : "Right"} motor power
+              {name} motor power
               <meter min={0} max={MOTOR_POWER_MAX} high={240} value={position.power[motor]} />
             </label>
           ))}
