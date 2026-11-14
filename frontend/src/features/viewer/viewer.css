@@ -20,7 +20,10 @@
 
 .viewer-stage {
   position: relative;
-  height: clamp(280px, 60vh, 900px);
+  /* Follows the 2:1 bed so phones do not get a tall empty stage. */
+  aspect-ratio: 2 / 1;
+  min-height: 260px;
+  max-height: 70vh;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius);

@@ -85,7 +85,7 @@ beforeEach(() => {
 describe("Viewer loading", () => {
   it("loads gcode, board and machine from /api/viewer and asks for the camera status", async () => {
     const { socket } = await loaded();
-    expect(screen.getByText("Board: Shelf, Birch ply")).toBeInTheDocument();
+    expect(screen.getByText("Board: Shelf, Material: Birch ply")).toBeInTheDocument();
     expect(current().fit).toHaveBeenLastCalledWith({
       bedWidth: 96,
       bedHeight: 48,
@@ -126,7 +126,7 @@ describe("Viewer loading", () => {
   it("updates the board from boardDataUpdate and cut data pushes", async () => {
     const { socket } = await loaded();
     socket.serverMessage("boardDataUpdate", { ...board, boardID: "Door", material: "Oak" });
-    expect(screen.getByText("Board: Door, Oak")).toBeInTheDocument();
+    expect(screen.getByText("Board: Door, Material: Oak")).toBeInTheDocument();
     socket.serverRaw({
       command: "boardCutDataUpdateCompressed",
       data: asArrayBuffer(gz([true])),

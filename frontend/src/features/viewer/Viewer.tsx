@@ -265,7 +265,7 @@ export const Viewer = () => {
         <span>{data.gcode ? `${cutSegments} cut and ${rapidSegments} rapid moves` : "No gcode loaded"}</span>
         {data.board ? (
           <span>
-            Board: {data.board.boardID}, {data.board.material}
+            Board: {data.board.boardID}, Material: {data.board.material}
           </span>
         ) : null}
         {cursorText ? <span>{cursorText}</span> : null}
