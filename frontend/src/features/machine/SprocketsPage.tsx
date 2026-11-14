@@ -3,7 +3,7 @@ import { useClient } from "../../app/context";
 import { LoadStatus } from "./LoadStatus";
 import { ControllerLog, Screen } from "./Screen";
 import { SprocketJog } from "./SprocketJog";
-import { EXTEND_COUNTDOWN_SECONDS, motorsFor, sprocketDegrees } from "./sprockets";
+import { DIRECTIONS, EXTEND_COUNTDOWN_SECONDS, motorsFor, sprocketDegrees } from "./sprockets";
 import { useCountdown } from "./useCountdown";
 import { useMachineSetup } from "./useLoad";
 
@@ -14,7 +14,7 @@ const RUN_SECONDS = [10, 5, 1, 0.1] as const;
 const extendStatus = (chain: Chain, remaining: number) =>
   remaining > 0
     ? `The ${chain} chain starts extending in ${remaining} s. Hold the chain end with some tension so it does not wrap the sprocket.`
-    : `The ${chain} chain is extending. Keep tension on it as it feeds off the sprocket.`;
+    : `The ${chain} chain started extending. Keep tension on it as it feeds off the sprocket.`;
 
 export const SprocketsPage = () => {
   const client = useClient();
@@ -44,20 +44,6 @@ export const SprocketsPage = () => {
       <h3>Step 1: Set a tooth on each sprocket vertical</h3>
       <p>Turn each sprocket until one tooth points straight up, as precisely as you can.</p>
       <SprocketJog fourMotor={ready?.fourMotor ?? false} onTurn={lockExtend} />
-      <div className="button-grid">
-        <button
-          type="button"
-          onClick={() => {
-            client.sendAction("setSprocketAutomatic");
-            lockExtend();
-          }}
-        >
-          Align sprockets automatically
-        </button>
-      </div>
-      <p className="muted">
-        Automatic alignment reads both chain lengths and turns each sprocket to the nearest vertical tooth.
-      </p>
 
       <h3>Step 2: Define zero</h3>
       <p>With the teeth vertical, tell the controller both chain lengths are zero.</p>
@@ -88,7 +74,15 @@ export const SprocketsPage = () => {
       <p role="status" className="extend-status">
         {extending && countdown.remaining !== null ? extendStatus(extending, countdown.remaining) : ""}
       </p>
-      <button type="button" className="danger wide" onClick={() => client.sendAction("stopRun")}>
+      <button
+        type="button"
+        className="danger wide"
+        onClick={() => {
+          client.sendAction("stopRun");
+          setExtending(null);
+          countdown.reset();
+        }}
+      >
         Stop
       </button>
 
@@ -99,7 +93,7 @@ export const SprocketsPage = () => {
           <div key={motor.id} className="motor-row" role="group" aria-label={`Run ${motor.label.toLowerCase()}`}>
             <span className="motor-row-label">{motor.label}</span>
             {RUN_SECONDS.flatMap((seconds) =>
-              (["clockwise", "counterclockwise"] as const).map((direction) => (
+              DIRECTIONS.map((direction) => (
                 <button
                   key={`${direction}-${seconds}`}
                   type="button"
