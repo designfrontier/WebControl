@@ -1,0 +1,97 @@
+{
+  "geometry": {
+    "Maslow Settings": {
+      "bedWidth": "2438.4",
+      "bedHeight": "1219.2",
+      "motorSpacingX": "2978.4",
+      "motorOffsetY": "463",
+      "sledWeight": "97.9"
+    },
+    "Advanced Settings": {
+      "rotationRadius": "139.1",
+      "chainSagCorrection": "33",
+      "leftChainTolerance": "0",
+      "rightChainTolerance": "0",
+      "chainOverSprocket": "Bottom",
+      "gearTeeth": "10",
+      "chainPitch": "6.35",
+      "chainElasticity": "5.1685e-6",
+      "kinematicsType": "Triangular"
+    }
+  },
+  "holey": {
+    "measurements": "exact measurements of the differing machine",
+    "trueMachine": {
+      "D": 2990.0,
+      "motorOffsetY": 470.0,
+      "leftChainTolerance": 0.3,
+      "rightChainTolerance": -0.2
+    },
+    "queued": [
+      {
+        "command": "$3=470.0",
+        "key": 3,
+        "value": "470.0",
+        "units": "mm"
+      },
+      {
+        "command": "$2=2990.0",
+        "key": 2,
+        "value": "2990.0",
+        "units": "mm"
+      },
+      {
+        "command": "$40=0.3",
+        "key": 40,
+        "value": "0.3",
+        "units": "%"
+      },
+      {
+        "command": "$41=-0.2",
+        "key": 41,
+        "value": "-0.2",
+        "units": "%"
+      }
+    ]
+  },
+  "triangular": {
+    "inputs": {
+      "cut12": 1925.5,
+      "cut34": 1932,
+      "cut5": 310,
+      "bitDiameter": 6.35
+    },
+    "queued": [
+      {
+        "command": "$3=381.9",
+        "key": 3,
+        "value": "381.9",
+        "units": "mm"
+      },
+      {
+        "command": "$8=133.2",
+        "key": 8,
+        "value": "133.2",
+        "units": "mm"
+      },
+      {
+        "command": "$37=6.482489",
+        "key": 37,
+        "value": "6.482489",
+        "units": ""
+      },
+      {
+        "gcode": "G21 "
+      },
+      {
+        "gcode": "G90 "
+      },
+      {
+        "gcode": "G40 "
+      },
+      {
+        "gcode": "G0 X0 Y0 "
+      }
+    ]
+  }
+}
