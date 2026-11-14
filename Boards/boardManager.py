@@ -137,8 +137,8 @@ class BoardManager(MakesmithInitFuncs):
         boardHeight = self.currentBoard.height
         boardLeftX = self.currentBoard.centerX - boardWidth/2
         boardRightX = self.currentBoard.centerX + boardWidth / 2
-        boardTopY = self.currentBoard.centerY + boardWidth/2
-        boardBottomY = self.currentBoard.centerY - boardWidth / 2
+        boardTopY = self.currentBoard.centerY + boardHeight / 2
+        boardBottomY = self.currentBoard.centerY - boardHeight / 2
 
         # calculate the extents of the array and its offset.
         pointsX = math.ceil(boardWidth)
@@ -191,7 +191,7 @@ class BoardManager(MakesmithInitFuncs):
 
                         else:
                             if line.points[x][2] < 0:
-                                if line.points[x][0] + homeX >= boardLeftX and line.points[x][0] + homeX <= boardRightX and line.points[x][1] + homeY >= boardBottomY and line.points[x][1] + homeX <= boardTopY:
+                                if line.points[x][0] + homeX >= boardLeftX and line.points[x][0] + homeX <= boardRightX and line.points[x][1] + homeY >= boardBottomY and line.points[x][1] + homeY <= boardTopY:
                                     pointx = self.constrain(round(line.points[x][0] + offsetX + homeX), 0, pointsX)
                                     pointy = self.constrain(round(line.points[x][1] + offsetY + homeY), 0, pointsY)
                                     cutPoints[pointx + pointy * pointsX] = True
