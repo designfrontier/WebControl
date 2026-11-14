@@ -59,3 +59,25 @@ def test_the_health_check_reports_the_controller_firmware_version(ui, data, monk
 
     health = json.loads(next(payload["data"] for _, payload in emitted if payload["command"] == "healthMessage"))
     assert health["controllerFirmwareVersion"] == reported
+
+
+def status_messages(emitted):
+    return [json.loads(payload["data"]) for _, payload in emitted if payload["command"] == "statusMessage"]
+
+
+def test_the_status_message_carries_the_job_state_and_goes_out_when_it_changes(ui, data, monkeypatch):
+    emitted = []
+    monkeypatch.setattr("Background.UIProcessor.socketio.emit", lambda *args, **kwargs: emitted.append(args))
+    monkeypatch.setattr(data, "uploadFlag", 0)
+    monkeypatch.setattr(data, "jobInProgress", False)
+    monkeypatch.setattr(data, "manualZAxisAdjust", False)
+    ui.performStatusCheck()
+    ui.performStatusCheck()
+    assert len(status_messages(emitted)) == 1
+
+    monkeypatch.setattr(data, "jobInProgress", True)
+    monkeypatch.setattr(data, "manualZAxisAdjust", True)
+    ui.performStatusCheck()
+
+    latest = status_messages(emitted)[-1]
+    assert (latest["uploadFlag"], latest["jobInProgress"], latest["manualZAxisAdjust"]) == (0, True, True)

@@ -10,6 +10,15 @@ def _number(value):
         return 0.0
 
 
+def job_status(data):
+    """Whether a job is running or paused (uploadFlag drops to 0 on controller pauses), and whether it waits on a
+    manual Z adjustment such as a tool change."""
+    return {
+        "jobInProgress": bool(data.jobInProgress),
+        "manualZAxisAdjust": bool(data.manualZAxisAdjust),
+    }
+
+
 def startup_state(data):
     """The computed settings the old UI fetched one settingRequest at a time on connect."""
     config = data.config
@@ -23,6 +32,7 @@ def startup_state(data):
             "y": _number(config.getValue("Advanced Settings", "homeY")),
         },
         "pauseButtonSetting": "Pause" if data.uploadFlag in (0, 1) else "Resume",
+        **job_status(data),
         "hostAddress": data.hostAddress,
         "controllerFirmwareVersion": _number(data.controllerFirmwareVersion),
         "macros": [

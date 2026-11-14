@@ -1,4 +1,5 @@
 from app import socketio
+from api.state import job_status
 
 import json
 import math
@@ -30,6 +31,7 @@ class UIProcessor:
     previousUploadFlag = None
     previousCurrentTool = None
     previousPositioningMode = None
+    previousJobStatus = None
 
     def start(self, _app):
 
@@ -682,6 +684,10 @@ class UIProcessor:
         if self.previousCurrentTool != self.app.data.currentTool:
             update = True
             self.previousCurrentTool = self.app.data.currentTool
+        jobStatus = job_status(self.app.data)
+        if self.previousJobStatus != jobStatus:
+            update = True
+            self.previousJobStatus = jobStatus
 
         #print("positioning mode = "+str(self.app.data.positioningMode))
 
@@ -690,6 +696,7 @@ class UIProcessor:
                 "uploadFlag": self.app.data.uploadFlag,
                 "positioningMode": self.app.data.positioningMode,
                 "currentTool": self.app.data.currentTool,
+                **jobStatus,
             }
             socketio.emit("message",
                           {"command": "statusMessage", "data": json.dumps(statusData), "dataFormat": "json"},

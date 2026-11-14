@@ -16,11 +16,16 @@ SETTINGS = {
 }
 
 
-def fake_data(upload_flag=0, overrides=None, firmware=51.27):
+def fake_data(upload_flag=0, overrides=None, firmware=51.27, job=False, manual_z=False):
     settings = {**SETTINGS, **(overrides or {})}
     config = SimpleNamespace(getValue=lambda section, key: settings.get((section, key)))
     return SimpleNamespace(
-        config=config, uploadFlag=upload_flag, hostAddress="10.0.0.5:5000", controllerFirmwareVersion=firmware
+        config=config,
+        uploadFlag=upload_flag,
+        hostAddress="10.0.0.5:5000",
+        controllerFirmwareVersion=firmware,
+        jobInProgress=job,
+        manualZAxisAdjust=manual_z,
     )
 
 
@@ -32,6 +37,8 @@ def test_collects_the_computed_settings_the_ui_needs_at_startup():
         "distToMoveZ": 1.0,
         "homePosition": {"x": 12.5, "y": -3.0},
         "pauseButtonSetting": "Pause",
+        "jobInProgress": False,
+        "manualZAxisAdjust": False,
         "hostAddress": "10.0.0.5:5000",
         "controllerFirmwareVersion": 51.27,
         "macros": [{"command": "macro1", "title": "Spindle on"}, {"command": "macro2", "title": "Dust collector"}],
@@ -47,6 +54,18 @@ def test_unparseable_or_missing_values_fall_back():
     state = startup_state(fake_data(0, {("Computed Settings", "distToMove"): "abc", ("Advanced Settings", "homeX"): None}))
     assert state["distToMove"] == 0.0
     assert state["homePosition"]["x"] == 0.0
+
+
+@pytest.mark.parametrize("job, manual_z", [(True, False), (True, True), (False, False)])
+def test_reports_whether_a_job_is_in_progress_and_waiting_on_a_tool_change(job, manual_z):
+    state = startup_state(fake_data(job=job, manual_z=manual_z))
+    assert (state["jobInProgress"], state["manualZAxisAdjust"]) == (job, manual_z)
+
+
+def test_a_job_paused_by_the_controller_is_still_in_progress(client, data, monkeypatch):
+    monkeypatch.setattr(data, "uploadFlag", 0)
+    monkeypatch.setattr(data, "jobInProgress", True)
+    assert client.get("/api/state").get_json()["jobInProgress"] is True
 
 
 def test_firmware_version_is_zero_until_the_controller_reports_one():
