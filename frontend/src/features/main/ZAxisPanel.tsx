@@ -1,10 +1,7 @@
-import { useRef } from "react";
 import { useClient, useMachine } from "../../app/context";
-import type { Units } from "../../protocol";
-import { convertDistance, parseDistance } from "./controls";
 import type { ControlAvailability } from "./controls";
 import { DistanceField } from "./DistanceField";
-import { useDraft } from "./hooks";
+import { useDistanceControl } from "./hooks";
 
 const Z_DECIMALS = 5;
 
@@ -18,18 +15,16 @@ export const ZAxisPanel = ({ available, touchPlate }: Props) => {
   const client = useClient();
   const unitsZ = useMachine((s) => s.unitsZ);
   const distToMoveZ = useMachine((s) => s.distToMoveZ);
-  const [text, setText] = useDraft(distToMoveZ === null ? "" : String(distToMoveZ));
-  const input = useRef<HTMLInputElement>(null);
-  const distance = parseDistance(text, Z_DECIMALS);
+  const field = useDistanceControl({
+    source: distToMoveZ,
+    decimals: Z_DECIMALS,
+    convertDecimals: 2,
+    toInches: "toInchesZ",
+    toMM: "toMMZ",
+  });
 
   const moveZ = (direction: "raise" | "lower") =>
-    distance === null ? input.current?.focus() : client.sendAction("moveZ", direction, distance);
-
-  const toggleUnits = (current: Units) =>
-    client.updateSetting(
-      current === "MM" ? "toInchesZ" : "toMMZ",
-      convertDistance(distance ?? distToMoveZ ?? 0, current, 2),
-    );
+    field.run((distance) => client.sendAction("moveZ", direction, distance));
 
   return (
     <section className="panel" aria-labelledby="z-title">
@@ -38,14 +33,14 @@ export const ZAxisPanel = ({ available, touchPlate }: Props) => {
         id="z-distance"
         label="Z distance"
         unitsName="Z units"
-        text={text}
-        onText={setText}
+        text={field.text}
+        onText={field.setText}
         decimals={Z_DECIMALS}
         units={unitsZ}
-        onToggleUnits={toggleUnits}
+        onToggleUnits={field.toggleUnits}
         unitsDisabled={!available.manual}
-        inputRef={input}
-        invalid={distance === null && text !== ""}
+        inputRef={field.input}
+        invalid={field.invalid}
       />
       <div className="button-row">
         <button type="button" disabled={!available.manual} onClick={() => moveZ("raise")}>

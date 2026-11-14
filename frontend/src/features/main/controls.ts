@@ -4,25 +4,23 @@ import type { RunState } from "../../state/machine";
 export interface ControlAvailability {
   /** Jog, home, macros, Z moves, units: everything the server refuses while gcode streams. */
   manual: boolean;
+  /** Set Home Here, which processAction refuses while paused as well as while running. */
+  defineHome: boolean;
   play: boolean;
   pause: boolean;
   /** Gcode line stepping, which the server allows while paused but not while running. */
   step: boolean;
 }
 
-/** The old UI's disabler / gcdisabler / ndisabler classes, keyed by uploadFlag. Stop is always available. */
-export const controlsFor = (runState: RunState): ControlAvailability => {
-  switch (runState) {
-    case "idle":
-      return { manual: true, play: true, pause: false, step: true };
-    case "running":
-      return { manual: false, play: false, pause: true, step: false };
-    case "paused":
-      return { manual: true, play: false, pause: true, step: true };
-    case "unknown":
-      return { manual: false, play: false, pause: false, step: false };
-  }
+const CONTROLS: Record<RunState, ControlAvailability> = {
+  idle: { manual: true, defineHome: true, play: true, pause: false, step: true },
+  running: { manual: false, defineHome: false, play: false, pause: true, step: false },
+  paused: { manual: true, defineHome: false, play: false, pause: true, step: true },
+  unknown: { manual: false, defineHome: false, play: false, pause: false, step: false },
 };
+
+/** The old UI's disabler / gcdisabler / ndisabler classes, keyed by uploadFlag. Stop is always available. */
+export const controlsFor = (runState: RunState): ControlAvailability => CONTROLS[runState];
 
 const MM_PER_INCH = 25.4;
 

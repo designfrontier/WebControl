@@ -11,10 +11,10 @@ import {
 
 describe("controlsFor", () => {
   it.each([
-    ["idle", { manual: true, play: true, pause: false, step: true }],
-    ["running", { manual: false, play: false, pause: true, step: false }],
-    ["paused", { manual: true, play: false, pause: true, step: true }],
-    ["unknown", { manual: false, play: false, pause: false, step: false }],
+    ["idle", { manual: true, defineHome: true, play: true, pause: false, step: true }],
+    ["running", { manual: false, defineHome: false, play: false, pause: true, step: false }],
+    ["paused", { manual: true, defineHome: false, play: false, pause: true, step: true }],
+    ["unknown", { manual: false, defineHome: false, play: false, pause: false, step: false }],
   ] as const)("gates the controls while %s", (runState, expected) => {
     expect(controlsFor(runState)).toEqual(expected);
   });

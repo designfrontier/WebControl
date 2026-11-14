@@ -1,10 +1,7 @@
-import { useRef } from "react";
 import { useClient, useMachine } from "../../app/context";
-import type { Units } from "../../protocol";
-import { convertDistance, parseDistance } from "./controls";
 import type { ControlAvailability } from "./controls";
 import { DistanceField } from "./DistanceField";
-import { useDraft } from "./hooks";
+import { useDistanceControl } from "./hooks";
 
 const JOG_DECIMALS = 3;
 
@@ -27,18 +24,15 @@ export const JogPanel = ({ available }: { available: ControlAvailability }) => {
   const units = useMachine((s) => s.units);
   const distToMove = useMachine((s) => s.distToMove);
   const macros = useMachine((s) => s.macros);
-  const [text, setText] = useDraft(distToMove === null ? "" : String(distToMove));
-  const input = useRef<HTMLInputElement>(null);
-  const distance = parseDistance(text, JOG_DECIMALS);
+  const field = useDistanceControl({
+    source: distToMove,
+    decimals: JOG_DECIMALS,
+    convertDecimals: JOG_DECIMALS,
+    toInches: "toInches",
+    toMM: "toMM",
+  });
 
-  const jog = (direction: Direction) =>
-    distance === null ? input.current?.focus() : client.sendAction("move", direction, distance);
-
-  const toggleUnits = (current: Units) =>
-    client.updateSetting(
-      current === "MM" ? "toInches" : "toMM",
-      convertDistance(distance ?? distToMove ?? 0, current, JOG_DECIMALS),
-    );
+  const jog = (direction: Direction) => field.run((distance) => client.sendAction("move", direction, distance));
 
   return (
     <section className="panel" aria-labelledby="jog-title">
@@ -66,19 +60,19 @@ export const JogPanel = ({ available }: { available: ControlAvailability }) => {
         id="jog-distance"
         label="Jog distance"
         unitsName="Units"
-        text={text}
-        onText={setText}
+        text={field.text}
+        onText={field.setText}
         decimals={JOG_DECIMALS}
         units={units}
-        onToggleUnits={toggleUnits}
+        onToggleUnits={field.toggleUnits}
         unitsDisabled={!available.manual}
-        inputRef={input}
-        invalid={distance === null && text !== ""}
+        inputRef={field.input}
+        invalid={field.invalid}
       />
       <div className="button-row">
         <button
           type="button"
-          disabled={!available.manual}
+          disabled={!available.defineHome}
           onClick={() => client.sendAction("defineHome")}
           title="Make the sled's current position the home position"
         >
