@@ -17,21 +17,19 @@ class SerialPortThread(MakesmithInitFuncs):
 
     """
 
-    # def __init__(self, app):
-    #    self.app = app
-    #    print "serialportthread.self.data.logger="+str(self.data.logger)
-
-    machineIsReadyForData = False  # Tracks whether last command was acked
-    lastWriteTime = time.time()
     bufferSize = 126  # The total size of the arduino buffer
-    bufferSpace = bufferSize  # The amount of space currently available in the buffer
-    lengthOfLastLineStack = deque()
     weAreBufferingLines = 0
     # Minimum time between lines sent to allow Arduino to cope
     # could be smaller (0.02) however larger number doesn't seem to impact performance
     MINTimePerLine = 0.05
 
     serialInstance = None
+
+    def __init__(self):
+        self.machineIsReadyForData = False  # Tracks whether last command was acked
+        self.lastWriteTime = time.time()
+        self.bufferSpace = self.bufferSize  # The amount of space currently available in the buffer
+        self.lengthOfLastLineStack = deque()
 
     def _write(self, message, isQuickCommand=False):
         '''

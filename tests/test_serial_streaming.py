@@ -151,3 +151,12 @@ def test_closing_for_a_firmware_upgrade_leaves_the_status_to_the_upgrade(data, s
     assert data.serialPort.serialPortRequest == "Closed"
     assert data.connectionStatus == 1
     assert serial.clock.now < 1002
+
+
+def test_a_reconnect_does_not_inherit_unacked_lines_from_the_old_connection(data, serial):
+    serial.run(ack=False)
+    drain(data.gcode_queue)
+
+    port = serial.run()
+
+    assert port.sent[:3] == ["B05  ", f"{'G20' if data.units == 'INCHES' else 'G21'}  ", "$$ "]
