@@ -1,5 +1,6 @@
 """Checks the Flask app against contract/, the frozen frontend <-> backend spec generated from frontend/src/protocol."""
 import base64
+import io
 import inspect
 import json
 import os
@@ -208,6 +209,69 @@ def test_classic_routes_answer_as_listed(app, client, data, monkeypatch):
     missing = client.post("/sendGCode", data={})
     assert missing.status_code == 400
     assert response_schema("POST", "/sendGCode", 400)["contentType"] == "text/html"
+
+
+@pytest.fixture
+def restored(data):
+    """Puts back the gcode, board and calibration state the successful writes below change."""
+    board = data.boardManager.currentBoard
+    saved_board = dict(board.__dict__)
+    saved_gcode = (list(data.gcode), data.gcodeIndex, data.gcodeFile.filename)
+    saved_config = [
+        (section, key, data.config.getValue(section, key))
+        for section, key in [("Maslow Settings", "openFile"), ("Computed Settings", "lastSelectedDirectory")]
+    ]
+    data.uploadFlag = 0
+    data.jobInProgress = False
+    yield data
+    data.boardManager.currentBoard = board
+    board.__dict__.update(saved_board)
+    data.gcode, data.gcodeIndex, data.gcodeFile.filename = saved_gcode
+    for section, key, value in saved_config:
+        data.config.setValue(section, key, value, recursionBreaker=True)
+    data.triangularCalibration.hasResult = False
+    data.holeyCalibration.hasResult = False
+
+
+def writes(client, data):
+    """(method, path, contract path, request kwargs, status) for a successful call to every write endpoint."""
+    library = "contract-check"
+    triangular = {"cut12": 1930, "cut34": 1930, "cut5": 300, "bitDiameter": 6.35}
+    holey = [float(value) for value in data.holeyCalibration.InitializeIdealXyCoordinates()]
+    quick_configure = client.get("/api/machine/quick-configure").get_json()
+    optical = client.get("/api/calibration/optical").get_json()["settings"]
+    pid = {"kind": "velocity", "motor": "L", "start": "1", "stop": "2", "steps": "1", "version": "2"}
+    gains = {"kp": "1", "ki": "0", "kd": "0"}
+    upload = {"selectedDirectory": library, "file[]": (io.BytesIO(b"G0 X1\n"), "contract.nc")}
+    board = {"boardID": "b", "material": "Plywood", "width": "48", "height": "24", "thickness": "0.75"}
+    centre = {"centerX": "0", "centerY": "0", "units": "INCHES"}
+    trim = {"trimTop": "0", "trimBottom": "0", "trimLeft": "0", "trimRight": "0", "units": "INCHES"}
+    return [
+        ("PUT", "/api/settings/maslow", "/api/settings/{sectionId}", {"json": {"values": {}}}, 200),
+        ("POST", "/api/files/gcode/directories", None, {"json": {"name": library}}, 201),
+        ("POST", "/api/boards/directories", None, {"json": {"name": library}}, 201),
+        ("POST", "/api/machine/quick-configure", None, {"json": quick_configure}, 200),
+        ("POST", "/api/calibration/triangular", None, {"json": triangular}, 200),
+        ("POST", "/api/calibration/holey", None, {"json": {"measurements": holey}}, 200),
+        ("PUT", "/api/calibration/optical/settings", None, {"json": optical}, 200),
+        ("POST", "/api/system/pid-test", None, {"json": {**pid, **gains}}, 202),
+        ("POST", "/uploadGCode", None, {"data": upload}, 200),
+        ("POST", "/openGCode", None, {"data": {"selectedGCode": f"{library}/contract.nc"}}, 200),
+        ("POST", "/saveGCode", None, {"data": {"selectedDirectory": library, "fileName": "saved.nc"}}, 200),
+        ("POST", "/editGCode", None, {"data": {"gcode": "G0 X2"}}, 200),
+        ("POST", "/sendGCode", None, {"data": {"gcode": "G0 X0"}}, 200),
+        ("POST", "/saveBoard", None, {"data": {"selectedDirectory": library, "fileName": "contract.brd"}}, 200),
+        ("POST", "/openBoard", None, {"data": {"selectedBoard": f"{library}/contract.brd"}}, 200),
+        ("POST", "/editBoard", None, {"data": {**board, **centre}}, 200),
+        ("POST", "/trimBoard", None, {"data": trim}, 200),
+    ]
+
+
+def test_successful_writes_answer_as_listed(client, restored):
+    for method, path, contract_path, kwargs, status in writes(client, restored):
+        response = client.open(path, method=method, **kwargs)
+        assert response.status_code == status, path
+        validate(response_schema(method, contract_path or path, status)["schema"], response.get_json())
 
 
 def decoded(envelope):

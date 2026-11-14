@@ -56,8 +56,9 @@ npm test             # src/contract/build.test.ts fails if contract/ is stale
   from `index.json` or its body does not fit the request schema, or if `index.json` lists an endpoint the UI never
   calls.
 - `tests/test_contract.py` checks that Flask registers every endpoint and socket event listed, that
-  `Actions.processAction` handles exactly the listed actions with the listed gates, and validates real GET responses,
-  4xx bodies and every `message` UIProcessor emits against the schemas.
+  `Actions.processAction` handles exactly the listed actions and refuses each in exactly the run states its gate
+  lists, and validates real GET responses, successful writes, 4xx bodies and every `message` UIProcessor emits against
+  the schemas.
 
 ## Versioning
 
