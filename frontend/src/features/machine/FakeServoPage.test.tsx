@@ -3,13 +3,15 @@ import { describe, expect, it } from "vitest";
 import { renderApp } from "../../test/render";
 
 describe("FakeServoPage", () => {
-  it("shows the controller's fake servo state", () => {
+  it("shows the fake servo state only as last reported at connect", () => {
     const { socket } = renderApp("/machine/fake-servo");
     expect(screen.getByText("The controller is not connected.")).toBeInTheDocument();
     socket.serverMessage("connectionStatus", { status: "connected", port: "COM3", fakeServoStatus: true });
-    expect(screen.getByText("Fake servo is on.")).toBeInTheDocument();
+    expect(
+      screen.getByText(/When the controller connected, fake servo was reported on\. This may be out of date/),
+    ).toBeInTheDocument();
     socket.serverMessage("connectionStatus", { status: "connected", port: "COM3", fakeServoStatus: false });
-    expect(screen.getByText("Fake servo is off.")).toBeInTheDocument();
+    expect(screen.getByText(/fake servo was reported off/)).not.toHaveAttribute("role");
   });
 
   it("disables fake servo", async () => {

@@ -22,11 +22,13 @@ export const FakeServoPage = () => {
 
   return (
     <Screen title="Fake servo">
-      <p role="status">
-        {connected ? `Fake servo is ${fakeServo ? "on" : "off"}.` : "The controller is not connected."}
+      <p className="muted">
+        {connected
+          ? `When the controller connected, fake servo was reported ${fakeServo ? "on" : "off"}. This may be out of date.`
+          : "The controller is not connected."}
       </p>
       <h3>Disable</h3>
-      <p>If fake servo is reported as on and you want it off, disable it here.</p>
+      <p>If fake servo is on and you want it off, disable it here.</p>
       <button
         type="button"
         onClick={() => {
