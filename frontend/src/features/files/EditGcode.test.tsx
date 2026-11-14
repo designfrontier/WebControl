@@ -40,6 +40,14 @@ describe("View or edit gcode", () => {
     expect(screen.getByLabelText("Loaded gcode")).toHaveValue("G21\nG0 X1 Y1\nG1 Z-1\nM2");
   });
 
+  it("shows the server's reason when it refuses the edit during a job", async () => {
+    const error = "Cannot load gcode while a job is running or paused. Stop the job first.";
+    const { user } = setup(recorder(409, { status: 409, error }));
+    await user.type(await screen.findByLabelText("Loaded gcode"), "\nM2");
+    await user.click(screen.getByRole("button", { name: "Apply changes" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(error);
+  });
+
   it("counts an empty file as no lines", async () => {
     setup(recorder(), "");
     expect(await screen.findByLabelText("Loaded gcode")).toHaveAccessibleDescription(/^0 lines/);

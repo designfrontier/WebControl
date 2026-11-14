@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Fetch } from "../../api/http";
 import { useFetch } from "../../app/context";
+import { FormRouteError } from "./api";
 
 export type Resource<T> = { status: "loading" } | { status: "ready"; data: T } | { status: "error" };
 
@@ -25,7 +26,7 @@ export const useResource = <T>(load: (fetchImpl: Fetch) => Promise<T>) => {
   return { resource, reload };
 };
 
-/** Runs one request at a time, exposing busy and a failure message for the form that started it. */
+/** Runs one request at a time, exposing busy and a failure message (the server's own, when it gives one). */
 export const useSubmit = () => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,8 +36,8 @@ export const useSubmit = () => {
     setError(null);
     try {
       await task();
-    } catch {
-      setError(failure);
+    } catch (caught) {
+      setError((caught instanceof FormRouteError && caught.reason) || failure);
     } finally {
       setBusy(false);
     }

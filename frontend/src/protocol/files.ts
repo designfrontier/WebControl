@@ -38,5 +38,8 @@ export const loadedGcodeSchema = z.object({
 });
 export type LoadedGcode = z.infer<typeof loadedGcodeSchema>;
 
+/** Error body of a classic form route that explains its refusal, e.g. 409 from /openGCode during a job. */
+export const formErrorSchema = z.object({ error: z.string() });
+
 /** GET /api/files/gcode/text and /api/files/gcode/custom. */
 export const gcodeTextSchema = z.object({ text: z.string() });

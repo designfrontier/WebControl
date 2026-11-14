@@ -244,9 +244,24 @@ def gpioSettings():
         return resp
 
 
+GCODE_LOCKED_MESSAGE = "Cannot load gcode while a job is running or paused. Stop the job first."
+
+
+def gcodeLockedResponse():
+    if app.data.uploadFlag == 0 and not app.data.manualZAxisAdjust:
+        return None
+    resp = jsonify({"status": 409, "error": GCODE_LOCKED_MESSAGE})
+    # The classic UI alerts the reason phrase (jQuery's errorThrown), so it carries the message too.
+    resp.status = "409 " + GCODE_LOCKED_MESSAGE
+    return resp
+
+
 @app.route("/uploadGCode", methods=["POST"])
 def uploadGCode():
     app.data.logger.resetIdler()
+    locked = gcodeLockedResponse()
+    if locked:
+        return locked
     if request.method == "POST":
         result = request.form
         directory = result["selectedDirectory"]
@@ -297,6 +312,9 @@ def uploadGCode():
 @app.route("/openGCode", methods=["POST"])
 def openGCode():
     app.data.logger.resetIdler()
+    locked = gcodeLockedResponse()
+    if locked:
+        return locked
     if request.method == "POST":
         f = request.form["selectedGCode"]
         app.data.console_queue.put(f"selectedGcode={f}")
@@ -579,7 +597,9 @@ def quickConfigure():
 @app.route("/editGCode", methods=["POST"])
 def editGCode():
     app.data.logger.resetIdler()
-    # print(request.form["gcode"])
+    locked = gcodeLockedResponse()
+    if locked:
+        return locked
     if request.method == "POST":
         returnVal = app.data.actions.updateGCode(request.form["gcode"].rstrip())
         if returnVal:

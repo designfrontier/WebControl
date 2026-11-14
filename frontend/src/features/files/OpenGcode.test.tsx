@@ -64,6 +64,14 @@ describe("Open gcode", () => {
     expect(screen.getByRole("button", { name: "Open" })).toBeEnabled();
   });
 
+  it("shows the server's reason when it refuses to open a file during a job", async () => {
+    const error = "Cannot load gcode while a job is running or paused. Stop the job first.";
+    const { user } = setup(recorder(409, { status: 409, error }));
+    await user.click(await screen.findByRole("button", { name: "Open" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(error);
+    await expectPath("/files/open");
+  });
+
   it("shows progress while the server parses the file", async () => {
     const fetch = fakeFetch({ "/api/files/gcode": gcodeLibrary(), "POST /openGCode": pending });
     const { user } = renderApp("/files/open", { fetch });
