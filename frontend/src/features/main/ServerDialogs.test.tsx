@@ -134,6 +134,42 @@ describe("ServerDialogs", () => {
     expect(play).toHaveFocus();
   });
 
+  it("keeps Tab inside the dialog and makes the page behind it inert", async () => {
+    const { socket, user } = renderApp("/");
+    socket.serverMessage("statusMessage", { uploadFlag: 0, positioningMode: 0, currentTool: 0 });
+    sendNotification(socket, "Change to tool 2", { resume: "resume" });
+    const dialog = screen.getByRole("dialog");
+    const resume = within(dialog).getByRole("button", { name: "Resume" });
+    const close = within(dialog).getByRole("button", { name: "Close" });
+    expect(document.querySelector("main")?.closest("[inert]")).not.toBeNull();
+
+    await user.tab();
+    expect(close).toHaveFocus();
+    await user.tab();
+    expect(resume).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(close).toHaveFocus();
+
+    await user.click(close);
+    expect(document.querySelector("[inert]")).toBeNull();
+  });
+
+  it("pulls focus back in and closes with Escape when focus has left the dialog", async () => {
+    const { socket, user } = renderApp("/");
+    sendAlert(socket, "Oops");
+    const close = screen.getByRole("button", { name: "Close" });
+    close.blur();
+
+    await user.tab({ shift: true });
+    expect(close).toHaveFocus();
+    close.blur();
+    await user.tab();
+    expect(close).toHaveFocus();
+    close.blur();
+    await user.keyboard("{Escape}");
+    expect(backdrop()).not.toBeInTheDocument();
+  });
+
   it("ignores other keys", async () => {
     const { socket, user } = renderApp("/");
     sendAlert(socket, "Oops");

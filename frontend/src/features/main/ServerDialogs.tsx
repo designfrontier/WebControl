@@ -1,11 +1,11 @@
-import { useEffect, useReducer, useRef } from "react";
-import type { KeyboardEvent } from "react";
+import { useEffect, useEffectEvent, useReducer, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { useClient, useServerMessage } from "../../app/context";
 import { dialogReducer, initialDialogState } from "./dialogs";
 import type { ServerDialog } from "./dialogs";
 
-/** Hosts the alerts and notifications the server pushes with activateModal; closing never round-trips. */
-export const ServerDialogs = () => {
+/** Hosts server-pushed alerts over `children`, which go inert while one is open; closing never round-trips. */
+export const ServerDialogs = ({ children }: { children: ReactNode }) => {
   const client = useClient();
   const [{ dialogs }, dispatch] = useReducer(dialogReducer, initialDialogState);
   useServerMessage("activateModal", (modal) => dispatch({ type: "open", modal }));
@@ -19,15 +19,40 @@ export const ServerDialogs = () => {
     dismiss(dialog);
   };
 
-  return current ? (
-    <DialogView
-      dialog={current}
-      pending={dialogs.length - 1}
-      onClose={() => dismiss(current)}
-      onResume={() => act(current, "resumeRun")}
-      onClear={() => act(current, "stopRun")}
-    />
-  ) : null;
+  return (
+    <>
+      <div className="dialog-host" inert={current !== undefined}>
+        {children}
+      </div>
+      {current && (
+        <DialogView
+          dialog={current}
+          pending={dialogs.length - 1}
+          onClose={() => dismiss(current)}
+          onResume={() => act(current, "resumeRun")}
+          onClear={() => act(current, "stopRun")}
+        />
+      )}
+    </>
+  );
+};
+
+/** Keeps Tab inside `container` by wrapping from either end, or pulling focus back in from outside. */
+const trapTab = (event: KeyboardEvent, container: HTMLElement) => {
+  const buttons = Array.from(container.querySelectorAll("button"));
+  const first = buttons[0];
+  const last = buttons[buttons.length - 1];
+  const inside = container.contains(document.activeElement);
+  const target = event.shiftKey
+    ? !inside || document.activeElement === first
+      ? last
+      : null
+    : !inside || document.activeElement === last
+      ? first
+      : null;
+  if (!target) return;
+  event.preventDefault();
+  target.focus();
 };
 
 interface ViewProps {
@@ -40,22 +65,31 @@ interface ViewProps {
 
 const DialogView = ({ dialog, pending, onClose, onResume, onClear }: ViewProps) => {
   const firstButton = useRef<HTMLButtonElement>(null);
-  const opener = useRef<Element | null>(null);
+  const container = useRef<HTMLDivElement>(null);
+  // Read during render: once the page behind goes inert, browsers move focus to <body>.
+  const [opener] = useState(() => document.activeElement);
 
-  useEffect(() => {
-    opener.current = document.activeElement;
-    return () => {
-      if (opener.current instanceof HTMLElement && opener.current.isConnected) opener.current.focus();
-    };
-  }, []);
+  useEffect(
+    () => () => {
+      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+    },
+    [opener],
+  );
 
   useEffect(() => {
     firstButton.current?.focus();
   }, [dialog.id]);
 
-  const onKeyDown = (event: KeyboardEvent) => {
+  const onKeyDown = useEffectEvent((event: KeyboardEvent) => {
     if (event.key === "Escape") onClose();
-  };
+    if (event.key === "Tab" && container.current) trapTab(event, container.current);
+  });
+
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => onKeyDown(event);
+    document.addEventListener("keydown", listener);
+    return () => document.removeEventListener("keydown", listener);
+  }, []);
 
   const titleId = `server-dialog-${dialog.id}-title`;
   const bodyId = `server-dialog-${dialog.id}-body`;
@@ -70,7 +104,7 @@ const DialogView = ({ dialog, pending, onClose, onResume, onClear }: ViewProps) 
         aria-labelledby={titleId}
         aria-describedby={bodyId}
         data-kind={dialog.kind}
-        onKeyDown={onKeyDown}
+        ref={container}
       >
         <header>
           <h2 id={titleId}>{dialog.title.replace(/:$/, "")}</h2>
