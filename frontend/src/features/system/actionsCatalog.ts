@@ -123,6 +123,7 @@ export const actionGroups: ActionGroup[] = [
   {
     id: "positioning",
     title: "Positioning",
+    // Stricter than processAction, which also moves the sled while paused; that loses the paused job's position.
     items: [
       { id: "returnToCenter", label: fixed("Return to center"), command: "returnToCenter", allowed: "idle" },
       {

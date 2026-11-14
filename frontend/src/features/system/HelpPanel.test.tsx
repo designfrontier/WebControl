@@ -1,8 +1,8 @@
 import { screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { jsonResponse } from "../../test/fakeFetch";
 import { currentPath, renderApp } from "../../test/render";
-import { helpPage, systemFetch } from "./systemFixtures";
+import { helpPage, systemFetch } from "../../test/systemFixtures";
 
 const FIRST_STEPS = helpPage(
   "GettingStarted/firstSteps.md",
@@ -39,6 +39,23 @@ describe("HelpPanel", () => {
       "/system/help/GettingStarted/firstSteps.md",
     );
     expect(index().getByRole("link", { name: "Home" })).toHaveAttribute("href", "/system/help");
+  });
+
+  it("scrolls to the page only after a link is followed, home included", async () => {
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: scrollIntoView });
+    const { user } = renderHelp();
+    await article().findByRole("heading", { name: "WebControl" });
+    expect(scrollIntoView).not.toHaveBeenCalled();
+
+    await user.click(index().getByRole("link", { name: "First Steps" }));
+    await article().findByRole("heading", { name: "First Steps" });
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+
+    await user.click(index().getByRole("link", { name: "Home" }));
+    await article().findByRole("heading", { name: "WebControl" });
+    expect(scrollIntoView).toHaveBeenCalledTimes(2);
+    Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
   });
 
   it("follows doc links client-side and renders tables, images and external links", async () => {

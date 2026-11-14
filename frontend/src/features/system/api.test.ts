@@ -10,7 +10,7 @@ import {
   restoreBackup,
   startPidTest,
 } from "./api";
-import { helpPage, pidSettings, releases, systemInfo } from "./systemFixtures";
+import { helpPage, pidSettings, releases, systemInfo } from "../../test/systemFixtures";
 
 describe("system api", () => {
   it("reads info, PID settings and releases", async () => {

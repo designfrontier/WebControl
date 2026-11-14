@@ -1,22 +1,22 @@
 import { useEffect, useRef } from "react";
 import { useParams } from "react-router";
-import type { Fetch } from "../../api/http";
 import { getHelpPage } from "./api";
 import { LazyMarkdown as MarkdownView } from "./LazyMarkdown";
 import { errorText, useLoad } from "./useLoad";
 
 const INDEX_PAGE = "assets/helpPages.md";
-const loadPage = (fetchImpl: Fetch, path: string) => getHelpPage(fetchImpl, path);
 
 /** Offline help: docs/*.md rendered client-side, with the classic help index alongside. */
 export const HelpPanel = () => {
   const path = useParams()["*"] || "index.md";
-  const page = useLoad(loadPage, path);
-  const index = useLoad(loadPage, INDEX_PAGE);
+  const page = useLoad(getHelpPage, path);
+  const index = useLoad(getHelpPage, INDEX_PAGE);
   const article = useRef<HTMLElement>(null);
+  const landing = useRef<string | null>(path);
 
   useEffect(() => {
-    if (page.status === "ready") article.current?.scrollIntoView?.({ block: "start" });
+    if (path !== landing.current) landing.current = null;
+    if (page.status === "ready" && landing.current === null) article.current?.scrollIntoView?.({ block: "start" });
   }, [page.status, path]);
 
   return (

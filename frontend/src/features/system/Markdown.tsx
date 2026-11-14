@@ -15,9 +15,9 @@ const NewTab: Components["a"] = ({ href, children }) => (
 
 const docsComponents: Components = {
   a: ({ href = "", children }) => {
-    const route = EXTERNAL.test(href) ? null : helpRoute(href);
-    if (route) return <Link to={route}>{children}</Link>;
-    return EXTERNAL.test(href) ? <NewTab href={href}>{children}</NewTab> : <a href={href}>{children}</a>;
+    if (EXTERNAL.test(href)) return <NewTab href={href}>{children}</NewTab>;
+    const route = helpRoute(href);
+    return route ? <Link to={route}>{children}</Link> : <a href={href}>{children}</a>;
   },
   img: ({ src, alt }) => {
     const source = typeof src === "string" ? src : "";

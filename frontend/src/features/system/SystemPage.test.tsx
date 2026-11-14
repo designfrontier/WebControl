@@ -2,7 +2,7 @@ import { screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { jsonResponse } from "../../test/fakeFetch";
 import { currentPath, renderApp } from "../../test/render";
-import { systemFetch, systemInfo } from "./systemFixtures";
+import { systemFetch, systemInfo } from "../../test/systemFixtures";
 
 vi.mock("socket.io-client", () => ({
   io: () => ({ id: undefined, connected: false, on: vi.fn(), disconnect: vi.fn() }),

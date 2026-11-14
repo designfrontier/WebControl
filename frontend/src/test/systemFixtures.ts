@@ -1,5 +1,5 @@
-import type { HelpPage, PidSettings, Releases, SystemInfo } from "../../protocol";
-import { fakeFetch } from "../../test/fakeFetch";
+import type { HelpPage, PidSettings, Releases, SystemInfo } from "../protocol";
+import { fakeFetch } from "./fakeFetch";
 
 export const systemInfo = (over: Partial<SystemInfo> = {}): SystemInfo => ({
   version: "0.95",
