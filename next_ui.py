@@ -1,11 +1,15 @@
 """Serves the built React frontend (frontend/dist) at /next, falling back to index.html for client-side routes."""
 import os
+import sys
 
 from flask import Blueprint, Response, send_from_directory
 
 from app import base_dir
 
-DEFAULT_DIST = os.path.join(base_dir, "frontend", "dist")
+# app.base_dir is "." outside PyInstaller, which would tie /next to the process's working directory.
+DEFAULT_DIST = os.path.join(
+    base_dir if hasattr(sys, "_MEIPASS") else os.path.dirname(os.path.abspath(__file__)), "frontend", "dist"
+)
 
 NOT_BUILT = (
     "The new WebControl UI has not been built. Run `npm ci && npm run build` in frontend/, then reload. "
@@ -14,6 +18,7 @@ NOT_BUILT = (
 
 
 def create_next_blueprint(dist_dir=DEFAULT_DIST):
+    dist_dir = os.path.abspath(dist_dir)
     next_ui = Blueprint("next_ui", __name__)
 
     @next_ui.get("/next/", defaults={"path": ""})

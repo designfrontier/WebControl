@@ -1,7 +1,11 @@
+import os
+
 import pytest
 from flask import Flask
 
-from next_ui import NOT_BUILT, init_next_ui
+from next_ui import DEFAULT_DIST, NOT_BUILT, init_next_ui
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 @pytest.fixture
@@ -61,3 +65,17 @@ def test_does_not_serve_files_outside_dist(dist):
     response = client_for(dist).get("/next/..%2Fsecret.txt")
     assert response.status_code == 404
     assert b"nope" not in response.data
+
+
+def test_default_dist_is_anchored_to_the_repo_not_the_working_directory(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    assert DEFAULT_DIST == os.path.join(REPO, "frontend", "dist")
+
+
+def test_relative_dist_dir_survives_a_later_change_of_working_directory(dist, tmp_path_factory, monkeypatch):
+    monkeypatch.chdir(dist.parent)
+    client = client_for(dist.name)
+    monkeypatch.chdir(tmp_path_factory.mktemp("elsewhere"))
+    response = client.get("/next/")
+    assert response.status_code == 200
+    assert b"<div id=root>" in response.data
