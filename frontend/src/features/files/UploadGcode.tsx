@@ -1,0 +1,79 @@
+import { useState } from "react";
+import type { FormEvent } from "react";
+import { Link, useNavigate } from "react-router";
+import { useClient, useFetch } from "../../app/context";
+import type { CreatedDirectory, GcodeLibrary } from "../../protocol";
+import { createGcodeDirectory, getGcodeLibrary, uploadGcode } from "./api";
+import { useResource, useSubmit } from "./hooks";
+import { initialDirectory } from "./library";
+import { DirectorySelect, FormError, Loaded, NewDirectoryForm, SubPage } from "./ui";
+
+const UploadForm = ({ library }: { library: GcodeLibrary }) => {
+  const fetchImpl = useFetch();
+  const client = useClient();
+  const navigate = useNavigate();
+  const [directories, setDirectories] = useState(library.directories);
+  const [directory, setDirectory] = useState(() => initialDirectory(library));
+  const [files, setFiles] = useState<File[]>([]);
+  const { busy, error, setError, run } = useSubmit();
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (files.length === 0) return setError("Choose at least one gcode file to upload.");
+    return run(async () => {
+      await uploadGcode(fetchImpl, directory, files);
+      client.emit("checkForGCodeUpdate", { data: "Please" });
+      navigate("/");
+    }, "The upload failed, or the first file could not be opened as gcode.");
+  };
+
+  const created = ({ directory: name, directories: next }: CreatedDirectory) => {
+    setDirectories(next);
+    setDirectory(name);
+  };
+
+  return (
+    <>
+      <form onSubmit={submit} noValidate>
+        <DirectorySelect directories={directories} value={directory} onChange={setDirectory} />
+        <div className="field">
+          <label htmlFor="upload-files">Gcode files</label>
+          <input
+            id="upload-files"
+            type="file"
+            multiple
+            accept={library.validExtensions}
+            onChange={(event) => setFiles([...(event.target.files ?? [])])}
+            aria-describedby="upload-files-hint"
+          />
+          <span id="upload-files-hint" className="muted">
+            {files.length > 1
+              ? `${files.length} files selected. All are uploaded and ${files[0].name} is opened.`
+              : "The file is uploaded to the directory above and opened."}
+          </span>
+        </div>
+        <FormError message={error} />
+        <div className="actions">
+          <button type="submit" className="primary" disabled={busy}>
+            {busy ? "Uploading…" : "Upload and open"}
+          </button>
+          <Link className="button" to="/files">
+            Cancel
+          </Link>
+        </div>
+      </form>
+      <NewDirectoryForm create={(name) => createGcodeDirectory(fetchImpl, name)} onCreated={created} />
+    </>
+  );
+};
+
+export const UploadGcode = () => {
+  const { resource } = useResource(getGcodeLibrary);
+  return (
+    <SubPage title="Upload gcode" back="/files">
+      <Loaded resource={resource} what="the gcode library">
+        {(library) => <UploadForm library={library} />}
+      </Loaded>
+    </SubPage>
+  );
+};

@@ -21,3 +21,21 @@ export const boardsMessages = {
 export const boardsActions = ["boardProcessGCode", "boardClearBoard"] as const;
 
 export const boardsEvents = {} satisfies EventSchemas;
+
+export const boardUnitsSchema = z.enum(["mm", "inches"]);
+export type BoardUnits = z.infer<typeof boardUnitsSchema>;
+
+/** GET /api/boards/current: dimensions in the machine's units, plus the router position for aligning. */
+export const boardDetailsSchema = z.object({
+  boardID: z.string(),
+  material: z.string(),
+  width: z.number(),
+  height: z.number(),
+  thickness: z.number(),
+  centerX: z.number(),
+  centerY: z.number(),
+  units: boardUnitsSchema,
+  fileName: z.string(),
+  router: z.object({ x: z.number(), y: z.number() }),
+});
+export type BoardDetails = z.infer<typeof boardDetailsSchema>;
