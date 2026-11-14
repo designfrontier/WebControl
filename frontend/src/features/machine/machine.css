@@ -1,0 +1,258 @@
+/* Machine setup screens. Everything is scoped under .machine-screen so other slices' class names cannot collide. */
+.machine {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.machine > h1 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: var(--muted);
+}
+
+.machine-screen {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 72ch;
+}
+
+.machine-screen h2,
+.machine-screen h3,
+.machine-screen h4,
+.machine-screen p {
+  margin: 0;
+}
+
+.machine-screen h2 {
+  font-size: 1.5rem;
+}
+
+.machine-screen h3 {
+  margin-top: var(--space-3);
+  font-size: 1.1rem;
+}
+
+.machine-screen .crumb a {
+  text-decoration: none;
+}
+
+.machine-screen .screen-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.machine-screen .screen-list li {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.machine-screen .screen-list a {
+  font-weight: 600;
+}
+
+.machine-screen input,
+.machine-screen select {
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.machine-screen input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.machine-screen .field-error {
+  color: var(--danger);
+}
+
+.machine-screen .warning {
+  color: var(--warn);
+}
+
+.machine-screen button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.machine-screen button.danger {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: var(--danger-ink);
+  font-weight: 600;
+}
+
+.machine-screen button.wide {
+  width: 100%;
+}
+
+.machine-screen .notice {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+}
+
+.machine-screen .notice[data-tone="bad"] {
+  border-left-color: var(--danger);
+}
+
+.machine-screen .notice[data-tone="warn"] {
+  border-left-color: var(--warn);
+}
+
+.machine-screen .button-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--space-2);
+}
+
+.machine-screen .z-jog {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.machine-screen .z-jog-distance {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.machine-screen .z-jog-distance input {
+  width: 8rem;
+}
+
+.machine-screen .sprocket-jog {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.machine-screen .motor {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.machine-screen .motor legend {
+  padding: 0 var(--space-1);
+  font-weight: 600;
+}
+
+.machine-screen .motor-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.machine-screen .motor-row-label {
+  grid-column: 1 / -1;
+  color: var(--muted);
+}
+
+.machine-screen .advanced .motor-row {
+  margin-top: var(--space-2);
+}
+
+.machine-screen .advanced summary {
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.machine-screen .extend-status {
+  min-height: 1.45em;
+  color: var(--warn);
+}
+
+.machine-screen .inline-form,
+.machine-screen .field,
+.machine-screen .form-actions {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+}
+
+.machine-screen .field-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.machine-screen .quick-configure {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.machine-screen .quick-configure section {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.machine-screen .figure-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-3);
+}
+
+.machine-screen .setup-figure {
+  margin: 0;
+}
+
+.machine-screen .setup-figure img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.machine-screen .setup-figure.wide {
+  margin: var(--space-2) 0;
+}
+
+.machine-screen .setup-figure figcaption {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.machine-screen .steps {
+  display: grid;
+  gap: var(--space-4);
+  padding-left: var(--space-6);
+}
+
+.machine-screen .steps li {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.machine-screen .controller-log ol {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}

@@ -27,3 +27,27 @@ export const machineActions = [
 ] as const;
 
 export const machineEvents = {} satisfies EventSchemas;
+
+/** GET /api/machine/setup: the firmware-dependent facts the setup screens need. */
+export const machineSetupSchema = z.object({
+  chainExtendLength: z.number(),
+  fourMotor: z.boolean(),
+  firmwareSupportsZaxisLimit: z.boolean(),
+  touchPlate: z.boolean(),
+  controllerFirmwareVersion: z.number(),
+});
+export type MachineSetup = z.infer<typeof machineSetupSchema>;
+
+export const kinematicsTypes = ["Ring", "Linkage", "Pantograph", "Metal Maslow", "Custom", "Quadrilateral"] as const;
+export const chainOverSprocketValues = ["Top", "Bottom"] as const;
+
+/** GET and POST /api/machine/quick-configure; lengths are mm. */
+export const quickConfigureSchema = z.object({
+  kinematicsType: z.enum(kinematicsTypes),
+  rotationRadius: z.number().nonnegative(),
+  chainOverSprocket: z.enum(chainOverSprocketValues),
+  motorSpacingX: z.number().nonnegative(),
+  motorOffsetY: z.number().nonnegative(),
+});
+export type QuickConfigure = z.infer<typeof quickConfigureSchema>;
+export type KinematicsType = QuickConfigure["kinematicsType"];
