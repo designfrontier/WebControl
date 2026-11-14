@@ -1,5 +1,7 @@
 """Boots main.py's app once per session with no serial port, camera, gevent patching or network checks."""
+import atexit
 import os
+import shutil
 import sys
 import tempfile
 
@@ -9,6 +11,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Config reads ~/.WebControl at import time, so HOME must point somewhere disposable before anything imports it.
 os.environ["HOME"] = tempfile.mkdtemp(prefix="webcontrol-pytest-")
+atexit.register(shutil.rmtree, os.environ["HOME"], ignore_errors=True)
 os.chdir(REPO)
 sys.path.insert(0, REPO)
 

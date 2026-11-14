@@ -1,7 +1,9 @@
 """Runs main.py against a throwaway ~/.WebControl so e2e runs never touch the real config."""
+import atexit
 import json
 import os
 import runpy
+import shutil
 import sys
 import tempfile
 
@@ -10,6 +12,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def prepare_home(port):
     home = tempfile.mkdtemp(prefix="webcontrol-e2e-")
+    atexit.register(shutil.rmtree, home, ignore_errors=True)
     os.makedirs(os.path.join(home, ".WebControl"))
     with open(os.path.join(REPO, "defaultwebcontrol.json")) as infile:
         settings = json.load(infile)
