@@ -2,11 +2,14 @@ import type { z } from "zod";
 
 export class ApiError extends Error {
   readonly status: number;
+  /** The parsed JSON error body, when the server sent one. */
+  readonly body: unknown;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, body?: unknown) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.body = body;
   }
 }
 
@@ -28,7 +31,10 @@ export const requestJson = async <S extends z.ZodType>(
       ...Object.fromEntries(new Headers(init.headers)),
     },
   });
-  if (!response.ok) throw new ApiError(response.status, `${method} /api${path} failed with ${response.status}`);
+  if (!response.ok) {
+    const body: unknown = await response.json().catch(() => undefined);
+    throw new ApiError(response.status, `${method} /api${path} failed with ${response.status}`, body);
+  }
   const parsed = schema.safeParse(await response.json());
   if (!parsed.success) throw new ApiError(response.status, `${method} /api${path} returned an unexpected shape`);
   return parsed.data;

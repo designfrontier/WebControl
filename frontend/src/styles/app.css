@@ -139,3 +139,7 @@
     margin: 0;
   }
 }
+
+.dialog-host {
+  display: contents;
+}
