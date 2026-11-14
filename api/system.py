@@ -5,6 +5,8 @@ import re
 import frontmatter
 from flask import Blueprint, abort, current_app, jsonify, request, send_from_directory
 
+from File.safePaths import UnsafePathError, docsRoot, resolveInside
+
 blueprint = Blueprint("system", __name__, url_prefix="/system")
 
 MOTORS = ("L", "R", "M", "N")
@@ -139,8 +141,7 @@ def get_releases():
 
 
 def docs_root(data):
-    base = data.platformHome if data.platform == "PYINSTALLER" else os.path.dirname(os.path.dirname(__file__))
-    return os.path.realpath(os.path.join(base, "docs"))
+    return docsRoot(data)
 
 
 def clean_markdown(text):
@@ -157,9 +158,11 @@ def clean_markdown(text):
 
 
 def resolve_doc(root, path):
-    full = os.path.realpath(os.path.join(root, path))
-    inside = full.startswith(root + os.sep)
-    return full if inside and full.endswith(".md") and os.path.isfile(full) else None
+    try:
+        full = resolveInside(root, path)
+    except UnsafePathError:
+        return None
+    return full if full.endswith(".md") and os.path.isfile(full) else None
 
 
 @blueprint.get("/help")
@@ -176,9 +179,17 @@ def get_help():
     return jsonify({"path": path, "title": str(title), "markdown": clean_markdown(page.content)})
 
 
+def resolve_asset(root, path):
+    try:
+        full = resolveInside(root, path)
+    except UnsafePathError:
+        return None
+    return full if os.path.isfile(full) else None
+
+
 @blueprint.get("/help/assets/<path:path>")
 def get_help_asset(path):
     root = os.path.join(docs_root(current_app.data), "assets")
-    if not os.path.isfile(os.path.join(root, path)):
+    if resolve_asset(root, path) is None:
         abort(404)
     return send_from_directory(root, path)

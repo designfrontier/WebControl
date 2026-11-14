@@ -4,6 +4,8 @@ import re
 
 from flask import Blueprint, abort, current_app, jsonify, request
 
+from Actions.firmware import isSerialPortName
+
 blueprint = Blueprint("settings", __name__)
 
 SECTIONS = {
@@ -78,7 +80,9 @@ def section_payload(section_id, data):
     return {**payload, "ports": list(data.comPorts)} if section_id == "maslow" else payload
 
 
-def setting_error(setting, value, enable_custom):
+def setting_error(setting, value, enable_custom, known_ports=()):
+    if setting["key"] == "COMport" and value != "" and not isSerialPortName(value, known_ports):
+        return "Must be a serial port such as /dev/ttyACM0 or COM3"
     if setting["custom"] and not enable_custom:
         return "Needs custom firmware (version 100 or later)"
     if setting["type"] == "bool":
@@ -99,14 +103,14 @@ def form_value(setting, value):
     return bool(value) if setting["type"] == "bool" else str(value)
 
 
-def validate(described, values, enable_custom):
+def validate(described, values, enable_custom, known_ports=()):
     by_key = {setting["key"]: setting for setting in described}
     unknown = {key: "Unknown setting" for key in values if key not in by_key}
     invalid = {
         key: error
         for key, value in values.items()
         if key in by_key
-        for error in [setting_error(by_key[key], value, enable_custom)]
+        for error in [setting_error(by_key[key], value, enable_custom, known_ports)]
         if error
     }
     return {**unknown, **invalid}
@@ -135,7 +139,7 @@ def update_section(section_id):
     if not isinstance(values, dict):
         return jsonify({"error": 'Expected {"values": {key: value}}'}), 400
     described = section_payload(section_id, data)["settings"]
-    errors = validate(described, values, custom_enabled(data))
+    errors = validate(described, values, custom_enabled(data), data.comPorts)
     if errors:
         return jsonify({"errors": errors}), 400
     form = {

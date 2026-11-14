@@ -13,6 +13,8 @@ from pathlib import Path
 
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
 
+MAX_LOG_BYTES = 5 * 1024 * 1024
+
 
 class Logger(MakesmithInitFuncs):
 
@@ -28,6 +30,7 @@ class Logger(MakesmithInitFuncs):
     lastALogWrite = 0
     lastLogWrite = 0
     loggingTimeout = -1
+    writeLock = threading.Lock()
 
     def __init__(self):
         print("Initializing Logger")
@@ -36,13 +39,10 @@ class Logger(MakesmithInitFuncs):
         if not os.path.isdir(self.home + "/.WebControl"):
             print("creating " + self.home + "/.WebControl directory")
             os.mkdir(self.home + "/.WebControl")
-        print(self.home+"/.WebControl/"+"log.txt")
-        with open(self.home+"/.WebControl/"+"log.txt", "a") as logFile:
-            logFile.truncate()
+        print(self.logPath(True))
+        self.rotate(self.logPath(True))
+        self.rotate(self.logPath(False))
 
-        with open(self.home+"/.WebControl/"+"alog.txt", "a") as logFile:
-            logFile.truncate()
-        
         self.logStartTime = time.time()
         dateTime = datetime.datetime.fromtimestamp(self.logStartTime).strftime('%Y-%m-%d %H:%M:%S')
         self.amessageBuffer = "+++++\n"+dateTime+"\n+++++\n".format(self.logStartTime)
@@ -50,6 +50,14 @@ class Logger(MakesmithInitFuncs):
         self.idler = time.time()
         self.lastALogWrite = self.idler
         self.lastLogWrite = self.idler
+
+    def logPath(self, log):
+        return self.home + "/.WebControl/" + ("log.txt" if log else "alog.txt")
+
+    def rotate(self, path):
+        if os.path.exists(path):
+            os.replace(path, path + ".1")
+        open(path, "a").close()
 
     def resetIdler(self):
         self.idler = time.time()
@@ -141,14 +149,12 @@ class Logger(MakesmithInitFuncs):
         """
         Write to the log file
         """
-        if log is True:
-            with open(self.home+"/.WebControl/"+"log.txt", "a") as logFile:
+        path = self.logPath(log is True)
+        with self.writeLock:
+            if os.path.exists(path) and os.path.getsize(path) + len(toWrite) > MAX_LOG_BYTES:
+                self.rotate(path)
+            with open(path, "a") as logFile:
                 logFile.write(toWrite)
-        else:
-            with open(self.home+"/.WebControl/"+"alog.txt", "a") as logFile:
-                logFile.write(toWrite)
-
-        return
 
     def deleteLogFiles(self):
         """
@@ -172,6 +178,9 @@ class Logger(MakesmithInitFuncs):
             except:
                 success2 = False
 
+        for path in (self.logPath(True) + ".1", self.logPath(False) + ".1"):
+            if os.path.exists(path):
+                os.remove(path)
         if success1 and success2:
             return True
         else:

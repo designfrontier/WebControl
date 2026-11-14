@@ -7,6 +7,8 @@ import os
 from flask import Blueprint, current_app, jsonify, request
 from werkzeug.utils import secure_filename
 
+from File.safePaths import UnsafePathError, resolveInside
+
 blueprint = Blueprint("files", __name__)
 
 ROOT = "."
@@ -55,7 +57,10 @@ def create_directory(root):
     name = secure_filename(str(body.get("name", "")).strip())
     if not name:
         return jsonify({"error": "Enter a directory name using letters, numbers, dashes or underscores."}), 400
-    os.makedirs(os.path.join(root, name), exist_ok=True)
+    try:
+        os.makedirs(resolveInside(root, name), exist_ok=True)
+    except UnsafePathError:
+        return jsonify({"error": "That directory points outside the library."}), 400
     return jsonify({"directory": name, **list_library(root)}), 201
 
 

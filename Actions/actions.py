@@ -1,4 +1,7 @@
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
+from File.safePaths import libraryRoot, resolveInside
+from Actions import firmware
+from File.retention import keepNewest
 
 import os
 import sys
@@ -13,6 +16,13 @@ import subprocess
 from subprocess import call
 from gpiozero.pins.mock import MockFactory
 from gpiozero import Device
+
+KEEP_ARCHIVES = 5
+
+
+class FirmwareUpgradeError(Exception):
+    pass
+
 
 '''
 This class does most of the heavy lifting in processing messages from the UI client.
@@ -1417,68 +1427,52 @@ class Actions(MakesmithInitFuncs):
 
     def upgradeFirmware(self, version):
         '''
-        Upgrades the firmware in the controller
-        :param version:
-        :return:
+        Flashes the bundled firmware (0 custom, 1 stock, 2 holey) to the controller, alerting on any failure.
         '''
+        home = firmware.installRoot(self.data)
+        port = str(self.data.comport)
+        closeRequested = False
         try:
-            # if this is a pyinstaller release, find out where the root is... it could be a temp directory if single
-            # file
-            if self.data.platform == "PYINSTALLER":
-                home = os.path.join(self.data.platformHome)
-            else:
-                home = "."
-            if version == 0:
-                self.data.ui_queue1.put("SpinnerMessage", "", "Custom Firmware Update in Progress, Please Wait.")
-                path = home+"/firmware/beta/*.hex"
-            if version == 1:
-                self.data.ui_queue1.put("SpinnerMessage", "", "Stock Firmware Update in Progress, Please Wait.")
-                path = home+"/firmware/maslowcnc/*.hex"
-            if version == 2:
-                self.data.ui_queue1.put("SpinnerMessage", "", "Holey Firmware Update in Progress, Please Wait.")
-                path = home+"/firmware/holey/*.hex"
-            # wait half second... not sure why
-            time.sleep(.5)
-            t0 = time.time()*1000
-            portClosed = False
-            # request the the serial port is closed
+            if not firmware.isSerialPortName(port, self.data.comPorts):
+                raise FirmwareUpgradeError("Cannot upgrade firmware: '" + port + "' is not a serial port.")
+            variant = firmware.UPGRADE_VARIANTS[version]
+            self.data.ui_queue1.put(
+                "SpinnerMessage", "", variant.capitalize() + " Firmware Update in Progress, Please Wait."
+            )
+            hexFiles = firmware.firmwareFiles(home, variant)
+            if not hexFiles:
+                raise FirmwareUpgradeError("No firmware file found in " + firmware.firmwareFolder(home, variant))
+            wasConnected = self.data.connectionStatus
+            closeRequested = True
             self.data.serialPort.closeConnection()
-            # give it five seconds to close
-            while (time.time()*1000 - t0) < 5000:
-                if self.data.serialPort.getConnectionStatus():
-                    portClosed = True
-                    break
-            # wait 1.5 seconds.. not sure why...
+            if wasConnected and not self.waitForSerialClose(firmware.PORT_CLOSE_SECONDS):
+                raise FirmwareUpgradeError("The serial port did not close, so the firmware was not loaded.")
+            # Any reconnect attempt while avrdude runs sees this and closes the port straight away.
+            self.data.serialPort.serialPortRequest = "requestToClose"
             time.sleep(1.5)
-            # if port is closed, then upgrade firmware..
-            if portClosed:
-                # works if there is only only valid hex file in the directory
-                for filename in glob.glob(path):
-                    port = self.data.comport
-                    # this was commented out below. probably not needed.  Todo: cleanup
-                    #if home != "":
-                    #    cmd = "\"C:\\Program Files (x86)\\Arduino\\hardware\\tools\\avr\\bin\\avrdude\" -Cavr/avrdude.conf -v -patmega2560 -cwiring -P" + port + " -b115200 -D -Uflash:w:" + filename + ":i"
-                    #else:
-                    cmd = home+"/tools/avrdude -C"+home+"/tools/avrdude.conf -v -patmega2560 -cwiring -P"+port+" -b115200 -D -Uflash:w:"+filename+":i"
-                    # I think this is blocking..
-                    x = subprocess.run(cmd, shell=True, stderr=subprocess.STDOUT, stdout=subprocess.PIPE)
-                    if x.returncode > 0:
-                        print("Error upgrading:"+str(x.stdout,'utf-8'))
-                        self.data.ui_queue1.put("Action", "closeModals", "Notification:")
-                        self.data.ui_queue1.put("Alert", "Alert", "Error loading firmware: "+str(x.stdout,'utf-8'))
-                        return False
-                    self.data.connectionStatus = 0
-                    #print("closing modals")
-                    # close off the modals and put away the spinner.
-                    self.data.ui_queue1.put("Action", "closeModals", "Notification:")
-                    return True
-            else:
-                self.data.ui_queue1.put("Action", "closeModals", "Notification:")
-                print("Port not closed")
-                return False
+            x = subprocess.run(
+                firmware.avrdudeCommand(home, port, hexFiles[-1]), stderr=subprocess.STDOUT, stdout=subprocess.PIPE
+            )
+            if x.returncode != 0:
+                raise FirmwareUpgradeError("Error loading firmware: " + str(x.stdout, "utf-8", "replace"))
+            return True
         except Exception as e:
-            print(str(e))
+            self.data.console_queue.put(str(e))
+            self.data.ui_queue1.put("Alert", "Alert", str(e))
             return False
+        finally:
+            if closeRequested:
+                self.data.serialPort.serialPortRequest = ""
+                self.data.connectionStatus = 0
+            self.data.ui_queue1.put("Action", "closeModals", "Notification:")
+
+    def waitForSerialClose(self, timeout):
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if self.data.serialPort.getConnectionStatus() == "Closed":
+                return True
+            time.sleep(0.05)
+        return self.data.serialPort.getConnectionStatus() == "Closed"
 
 
     def createDirectory(self, _directory):
@@ -1488,8 +1482,7 @@ class Actions(MakesmithInitFuncs):
         :return:
         '''
         try:
-            home = self.data.config.getHome()
-            directory = home + "/.WebControl/gcode/" + _directory
+            directory = resolveInside(libraryRoot(self.data.config, "gcode"), _directory)
             if not os.path.isdir(directory):
                 os.mkdir(directory)
             data = {"directory": _directory}
@@ -2018,7 +2011,12 @@ class Actions(MakesmithInitFuncs):
             zipObj.write(path1, os.path.basename(path1))
             path1 = self.data.config.home + "/.WebControl/log.txt"
             zipObj.write(path1, os.path.basename(path1))
+            for previous in ("log.txt.1", "alog.txt.1"):
+                path1 = self.data.config.home + "/.WebControl/" + previous
+                if os.path.exists(path1):
+                    zipObj.write(path1, previous)
             zipObj.close()
+            keepNewest(self.data.config.home + "/.WebControl/wc_diagnostics_*.zip", KEEP_ARCHIVES)
             return filename
         except Exception as e:
             self.data.console_queue.put(str(e))
@@ -2160,8 +2158,7 @@ class Actions(MakesmithInitFuncs):
             folder = self.data.config.home+'/.WebControl'
             print(folder)
             self.zipfolder(filename, folder)
-            #self.addDirToZip(zipObj, self.data.config.home+'/.Webcontrol')
-            #zipObj.close()
+            keepNewest(home + "/wc_backup_*.zip", KEEP_ARCHIVES)
             return filename
         except Exception as e:
             self.data.console_queue.put(str(e))
@@ -2171,11 +2168,16 @@ class Actions(MakesmithInitFuncs):
     def restoreWebControl(self, fileName):
         try:
             with zipfile.ZipFile(fileName, 'r') as zipObj:
-                # Extract all the contents of zip file in different directory
-                zipObj.extractall(self.data.config.home+'/.Webcontrol')
-                retval = self.data.config.reloadWebControlJSON()
-                if retval is True:
-                    self.data.gcode_queue.put("$$")
+                if "webcontrol.json" not in zipObj.namelist():
+                    self.data.console_queue.put("Restore file has no webcontrol.json")
+                    return False
+                if not isinstance(json.loads(zipObj.read("webcontrol.json")), dict):
+                    self.data.console_queue.put("Restore file's webcontrol.json holds no settings")
+                    return False
+                zipObj.extractall(os.path.join(self.data.config.home, ".WebControl"))
+            retval = self.data.config.reloadWebControlJSON()
+            if retval is True:
+                self.data.gcode_queue.put("$$")
             return retval
         except Exception as e:
             self.data.console_queue.put(str(e))

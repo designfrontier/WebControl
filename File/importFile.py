@@ -97,9 +97,8 @@ class ImportFile(MakesmithInitFuncs):
                             print("added " + section + "->" + self.data.config.settings[section][len(self.data.config.settings[section]) - 1]["key"])
                             updated = True
                 if updated:
-                    with open(self.data.config.home+"/.WebControl/webcontrol.json", "w") as outfile:
-                        json.dump(self.data.config.settings, outfile, sort_keys=True, indent=4, ensure_ascii=False)
-                        self.data.gcode_queue.put("$$")
+                    self.data.config.saveSettings()
+                    self.data.gcode_queue.put("$$")
         except:
             self.data.console_queue.put("Import File Error")
             self.data.message_queue.put("Message: Cannot open import file.")

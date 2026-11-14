@@ -5,9 +5,13 @@ import glob
 import re
 from shutil import copyfile
 import subprocess
+from urllib.parse import unquote, urlparse
 
 from github import Github
 import requests
+from werkzeug.utils import secure_filename
+
+DOWNLOAD_TIMEOUT_SECONDS = 60
 
 
 class ReleaseManager(MakesmithInitFuncs):
@@ -118,15 +122,17 @@ class ReleaseManager(MakesmithInitFuncs):
                 except:
                     print("error cleaning download directory: ", filePath)
                     print("---")
-            req = requests.get(self.data.pyInstallUpdateBrowserUrl)
-            if (
-                self.data.pyInstallPlatform == "win32"
-                or self.data.pyInstallPlatform == "win64"
-            ):
-                filename = home + "\\.WebControl\\downloads"
-            else:
-                filename = home + "/.WebControl/downloads"
-            open(filename, "wb").write(req.content)
+            filename = os.path.join(
+                home, ".WebControl", "downloads", self.assetName(self.data.pyInstallUpdateBrowserUrl)
+            )
+            try:
+                req = requests.get(self.data.pyInstallUpdateBrowserUrl, timeout=DOWNLOAD_TIMEOUT_SECONDS)
+                req.raise_for_status()
+            except requests.RequestException as e:
+                print(f"Error downloading update: {e}")
+                return False
+            with open(filename, "wb") as download:
+                download.write(req.content)
             print(filename)
 
             if self.data.platform == "PYINSTALLER":
@@ -166,6 +172,9 @@ class ReleaseManager(MakesmithInitFuncs):
             subprocess.Popen(command)
             return True
         return False
+
+    def assetName(self, url):
+        return secure_filename(unquote(urlparse(url).path.rsplit("/", 1)[-1])) or "webcontrol-update"
 
     def make_executable(self, path):
         print("1")
