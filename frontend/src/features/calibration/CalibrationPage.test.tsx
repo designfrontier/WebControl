@@ -14,14 +14,14 @@ describe("CalibrationPage", () => {
   it("lists the three methods with what each is for", () => {
     renderApp("/calibration", { fetch: fetch() });
     expect(screen.getByRole("heading", { level: 1, name: "Calibration" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Triangular calibration" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Holey calibration" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open triangular calibration" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open holey calibration" })).toBeInTheDocument();
     expect(screen.getByText(/camera on the sled/)).toBeInTheDocument();
   });
 
   it("moves between methods with the sub-navigation", async () => {
     const { user } = renderApp("/calibration", { fetch: fetch() });
-    await user.click(screen.getByRole("link", { name: "Triangular calibration" }));
+    await user.click(screen.getByRole("link", { name: "Open triangular calibration" }));
     expect(currentPath()).toBe("/calibration/triangular");
     expect(screen.getByRole("heading", { name: "Triangular calibration" })).toBeInTheDocument();
 

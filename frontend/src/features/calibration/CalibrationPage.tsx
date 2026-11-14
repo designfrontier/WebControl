@@ -29,10 +29,9 @@ const Overview = () => (
   <ul className="method-list">
     {METHODS.map(({ path, label, summary }) => (
       <li key={path} className="card">
-        <h2>
-          <Link to={path}>{label} calibration</Link>
-        </h2>
+        <h2>{label}</h2>
         <p>{summary}</p>
+        <Link to={path}>Open {label.toLowerCase()} calibration</Link>
       </li>
     ))}
   </ul>
