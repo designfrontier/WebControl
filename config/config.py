@@ -16,6 +16,7 @@ import glob
 
 from app import app
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
+from Actions import firmware
 
 
 class Config(MakesmithInitFuncs):
@@ -724,37 +725,14 @@ class Config(MakesmithInitFuncs):
         This function determines the version number.
         :return:
         '''
-        home = "."
-        if hasattr(sys, '_MEIPASS'):
-            home = os.path.join(sys._MEIPASS)
-            print(self.home)
-        path = home+"/firmware/madgrizzle/*.hex"
-        for filename in glob.glob(path):
-            version = filename.split("-")
-            maxIndex = len(version)-1
-            if maxIndex >= 0:
-                version = version[maxIndex].split(".hex")
-                self.data.customFirmwareVersion = version[0]
-            else:
-                self.data.customFirmwareVersion = "n/a"
-        path = home+"/firmware/maslowcnc/*.hex"
-        for filename in glob.glob(path):
-            version = filename.split("-")
-            maxIndex = len(version)-1
-            if maxIndex >= 0:
-                version = version[maxIndex].split(".hex")
-                self.data.stockFirmwareVersion = version[0]
-            else:
-                self.data.stockFirmwareVersion = "n/a"
-        path = home+"/firmware/holey/*.hex"
-        for filename in glob.glob(path):
-            version = filename.split("-")
-            maxIndex = len(version)-1
-            if maxIndex >= 0:
-                version = version[maxIndex].split(".hex")
-                self.data.holeyFirmwareVersion = version[0]
-            else:
-                self.data.holeyFirmwareVersion = "n/a"
+        home = firmware.installRoot(self.data)
+        for variant, attribute in (
+            ("custom", "customFirmwareVersion"),
+            ("stock", "stockFirmwareVersion"),
+            ("holey", "holeyFirmwareVersion"),
+        ):
+            for filename in firmware.firmwareFiles(home, variant):
+                setattr(self.data, attribute, os.path.basename(filename).split("-")[-1].split(".hex")[0])
 
     def processChange(self, key, value):
         ### TODO: This does not currently fire on bools ##

@@ -1431,18 +1431,13 @@ class Actions(MakesmithInitFuncs):
         try:
             if not firmware.isSerialPortName(port, self.data.comPorts):
                 raise FirmwareUpgradeError("Cannot upgrade firmware: '" + port + "' is not a serial port.")
-            if version == 0:
-                self.data.ui_queue1.put("SpinnerMessage", "", "Custom Firmware Update in Progress, Please Wait.")
-                path = home+"/firmware/beta/*.hex"
-            if version == 1:
-                self.data.ui_queue1.put("SpinnerMessage", "", "Stock Firmware Update in Progress, Please Wait.")
-                path = home+"/firmware/maslowcnc/*.hex"
-            if version == 2:
-                self.data.ui_queue1.put("SpinnerMessage", "", "Holey Firmware Update in Progress, Please Wait.")
-                path = home+"/firmware/holey/*.hex"
-            hexFiles = sorted(glob.glob(path))
+            variant = firmware.UPGRADE_VARIANTS[version]
+            self.data.ui_queue1.put(
+                "SpinnerMessage", "", variant.capitalize() + " Firmware Update in Progress, Please Wait."
+            )
+            hexFiles = firmware.firmwareFiles(home, variant)
             if not hexFiles:
-                raise FirmwareUpgradeError("No firmware file found in " + os.path.dirname(path))
+                raise FirmwareUpgradeError("No firmware file found in " + firmware.firmwareFolder(home, variant))
             wasConnected = self.data.connectionStatus
             closeRequested = True
             self.data.serialPort.closeConnection()

@@ -176,3 +176,10 @@ def test_a_missing_avrdude_is_alerted_and_clears_the_spinner(data, flash, monkey
     messages = ui_messages(data)
     assert any("tools/avrdude" in alert for alert in alerts(data, messages))
     assert spinner_cleared(messages)
+
+
+@pytest.mark.parametrize("version, folder", [(0, "madgrizzle"), (1, "maslowcnc"), (2, "holey")])
+def test_each_upgrade_flashes_the_folder_the_build_script_writes(data, flash, version, folder):
+    assert data.actions.upgradeFirmware(version) is True
+    (args, _), = flash.runs
+    assert args[0][-1] == f"-Uflash:w:{flash.root}/firmware/{folder}/{folder}-1.26.hex:i"
