@@ -27,7 +27,7 @@
     "motorOffsetY": 463.0,
     "rotationDiskRadius": 139.1,
     "sledWeight": 97.9,
-    "chainDensity": 0.0013,
+    "chainDensity": 0.0013720000000000004,
     "chainElasticity": 5.1685e-06,
     "leftChainTolerance": 0.0,
     "rightChainTolerance": 0.0,
@@ -72,31 +72,31 @@
         "Opt_motorOffsetY": 463.0,
         "Opt_leftChainTolerance": 0.0,
         "Opt_rightChainTolerance": 0.0,
-        "totalError": 2.208019417017139e-09
+        "totalError": 2.2007413711708974e-09
       }
     },
     {
       "name": "exact measurements of a machine that differs from the configuration",
       "measurements": [
-        960.9240311722759,
-        964.0185724272787,
-        960.9583169545966,
-        963.9878510690887,
-        717.3738137423163,
-        716.9452275812214,
-        712.0437112549146,
-        1198.6986634777877,
-        1199.4052100520873,
-        1195.5804346869272,
-        1204.2360609014136,
-        236.62684440040266
+        960.9256601373492,
+        964.0188881277147,
+        960.9637602757331,
+        963.9873077334407,
+        717.3746467881768,
+        716.9450744622756,
+        712.043229390828,
+        1198.7042815577784,
+        1199.4056677766953,
+        1195.5806475841935,
+        1204.235289909488,
+        236.62700206270944
       ],
       "expected": {
         "Opt_D": 2990.0,
         "Opt_motorOffsetY": 470.0,
         "Opt_leftChainTolerance": 0.3,
         "Opt_rightChainTolerance": -0.2,
-        "totalError": 7.311619312302678e-10
+        "totalError": 7.527171441741551e-10
       }
     },
     {
@@ -116,11 +116,11 @@
         253.93
       ],
       "expected": {
-        "Opt_D": 2978.6796,
-        "Opt_motorOffsetY": 462.74492,
+        "Opt_D": 2978.67968,
+        "Opt_motorOffsetY": 462.74467,
         "Opt_leftChainTolerance": 0.00043,
-        "Opt_rightChainTolerance": -0.00205,
-        "totalError": 0.9449306661780394
+        "Opt_rightChainTolerance": -0.00206,
+        "totalError": 0.9448618727321081
       }
     },
     {
@@ -140,11 +140,11 @@
         253.32
       ],
       "expected": {
-        "Opt_D": 2979.29172,
-        "Opt_motorOffsetY": 463.30543,
+        "Opt_D": 2979.29124,
+        "Opt_motorOffsetY": 463.30583,
         "Opt_leftChainTolerance": 0.02807,
-        "Opt_rightChainTolerance": 0.0012,
-        "totalError": 1.9109616851889195
+        "Opt_rightChainTolerance": 0.00119,
+        "totalError": 1.9110516816370102
       }
     },
     {
@@ -158,41 +158,41 @@
         716.51,
         711.56,
         1199.04,
-        1199.16,
+        1199.17,
         1195.31,
         1204.73,
         236.6
       ],
       "expected": {
-        "Opt_D": 2989.8695,
-        "Opt_motorOffsetY": 470.01182,
-        "Opt_leftChainTolerance": 0.31172,
-        "Opt_rightChainTolerance": -0.21962,
-        "totalError": 0.9128395307723144
+        "Opt_D": 2989.86853,
+        "Opt_motorOffsetY": 470.01238,
+        "Opt_leftChainTolerance": 0.31195,
+        "Opt_rightChainTolerance": -0.21989,
+        "totalError": 0.9064041673607312
       }
     },
     {
       "name": "differing machine, uniform noise +-1 mm, seed 4",
       "measurements": [
         960.4,
-        963.22,
-        960.75,
+        963.23,
+        960.76,
         963.3,
         716.51,
         716.75,
         712.88,
-        1199.3,
+        1199.31,
         1199.94,
         1195.02,
         1204.31,
         236.18
       ],
       "expected": {
-        "Opt_D": 2990.30816,
-        "Opt_motorOffsetY": 469.66752,
-        "Opt_leftChainTolerance": 0.26109,
-        "Opt_rightChainTolerance": -0.18409,
-        "totalError": 1.6353735184995866
+        "Opt_D": 2990.31029,
+        "Opt_motorOffsetY": 469.67109,
+        "Opt_leftChainTolerance": 0.2612,
+        "Opt_rightChainTolerance": -0.18392,
+        "totalError": 1.6348692637898055
       }
     },
     {

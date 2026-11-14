@@ -18,8 +18,8 @@ exactly.
 - `geometry`: the WebControl settings in force, by section and key, as stored strings (the values of
   `defaultwebcontrol.json`).
 - `kinematics`: the parameters of the kinematics model the fit uses. It is the firmware's model: `R` is
-  distPerRot / (2 × 3.14159), as the firmware computes it, and chainElasticity and the sled geometry (`l`, `s`, `h3`)
-  come from the settings.
+  distPerRot / (2 × 3.14159), as the firmware computes it, `chainDensity` is the firmware's hard-coded
+  0.14 × 9.8 / 1000 N/mm, and chainElasticity and the sled geometry (`l`, `s`, `h3`) come from the settings.
 - `trueMachine`: the machine used to simulate the "differing machine" measurements.
 - `cases[]`: `name`, `measurements` (M1 to M12, in the order of the form; `null` is an empty field) and
   `expected`: `Opt_D`, `Opt_motorOffsetY`, `Opt_leftChainTolerance`, `Opt_rightChainTolerance` (each rounded to 5

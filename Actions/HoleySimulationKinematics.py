@@ -88,7 +88,7 @@ class Kinematics(MakesmithInitFuncs):
 
     leftChainTolerance = 0
     rightChainTolerance = 0
-    chainDensity = .0013  # N/mm
+    chainDensity = 0.14 * 9.8 / 1000  # N/mm, hard-coded in the firmware's triangular inverse
     chainElasticity = 5.1685e-6  # mm/mm/N
     sledWeight = 97.9  # N
 

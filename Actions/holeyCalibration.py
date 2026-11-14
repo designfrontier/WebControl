@@ -54,7 +54,6 @@ class HoleyCalibration(MakesmithInitFuncs):
     kin.isQuadKinematics = False
     OPTIONAL_MODEL_SETTINGS = [
         ("Advanced Settings", "chainElasticity", "chainElasticity"),
-        ("Advanced Settings", "chainDensity", "chainDensity"),
         ("Maslow Settings", "sledWidth", "l"),
         ("Maslow Settings", "sledHeight", "s"),
         ("Maslow Settings", "sledCG", "h3"),

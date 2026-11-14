@@ -90,27 +90,27 @@ def test_the_fit_uses_the_sled_geometry_settings(holey):
     assert kin.Theta == pytest.approx(math.atan(2 * 120.0 / 300.0), rel=1e-15)
 
 
-def test_the_fit_uses_a_chain_density_setting_when_there_is_one(holey, monkeypatch):
+def test_the_fit_uses_the_firmware_chain_density_whatever_the_settings_say(holey, monkeypatch):
     real_get_value = holey.data.config.getValue
     monkeypatch.setattr(holey.data.config, "getValue", lambda section, key: (
         "0.0015" if key == "chainDensity" else real_get_value(section, key)))
 
     holey.InitializeIdealXyCoordinates()
 
-    assert holey.kin.chainDensity == 0.0015
+    assert holey.kin.chainDensity == 0.14 * 9.8 / 1000
 
 
 def test_settings_that_are_missing_keep_the_model_defaults(holey, monkeypatch):
     real_get_value = holey.data.config.getValue
-    missing = {"chainElasticity", "sledWidth", "sledHeight", "sledCG", "chainDensity"}
+    missing = {"chainElasticity", "sledWidth", "sledHeight", "sledCG"}
     monkeypatch.setattr(holey.data.config, "getValue", lambda section, key: (
         None if key in missing else real_get_value(section, key)))
 
     holey.InitializeIdealXyCoordinates()
 
     kin = holey.kin
-    assert (kin.chainElasticity, kin.l, kin.s, kin.h3, kin.chainDensity) == (
-        Kinematics.chainElasticity, Kinematics.l, Kinematics.s, Kinematics.h3, Kinematics.chainDensity)
+    assert (kin.chainElasticity, kin.l, kin.s, kin.h3) == (
+        Kinematics.chainElasticity, Kinematics.l, Kinematics.s, Kinematics.h3)
 
 
 def firmware_machine(params):
