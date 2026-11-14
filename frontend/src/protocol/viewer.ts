@@ -45,7 +45,10 @@ export const gcodeMoveSchema = z.object({
 });
 export type GcodeMove = z.infer<typeof gcodeMoveSchema>;
 export const gcodeMovesSchema = z.array(gcodeMoveSchema);
-export const cutCellsSchema = z.array(z.unknown());
+/** Truthy/falsy cells, or [x, y, 0] convex-hull vertices after boardProcessGCode; see the contract README. */
+export const cutCellsSchema = z.array(
+  z.union([z.boolean(), z.number(), z.tuple([z.number(), z.number(), z.number()])]),
+);
 
 const inches = z.number().nullable();
 

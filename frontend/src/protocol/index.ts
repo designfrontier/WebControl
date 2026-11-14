@@ -8,10 +8,12 @@ import { settingsActions, settingsEvents, settingsMessages } from "./settings";
 import { systemActions, systemEvents, systemMessages } from "./system";
 import { viewerActions, viewerEvents, viewerMessages } from "./viewer";
 
+export * from "./actionArgs";
 export * from "./boards";
 export * from "./calibration";
 export * from "./core";
 export * from "./files";
+export * from "./http";
 export * from "./machine";
 export * from "./main";
 export * from "./settings";

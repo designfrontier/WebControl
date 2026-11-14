@@ -43,22 +43,25 @@ export const pidSettingsSchema = z.object({
 });
 export type PidSettings = z.infer<typeof pidSettingsSchema>;
 
-export type Motor = "L" | "R" | "M" | "N";
-export type PidKind = "velocity" | "position";
+export const motorSchema = z.enum(["L", "R", "M", "N"]);
+export const pidKindSchema = z.enum(["velocity", "position"]);
+export type Motor = z.infer<typeof motorSchema>;
+export type PidKind = z.infer<typeof pidKindSchema>;
 
 /** POST /api/system/pid-test body; numbers stay as typed because the backend splices them into B13/B14. */
-export interface PidTestRequest {
-  kind: PidKind;
-  motor: Motor;
-  start: string;
-  stop: string;
-  steps: string;
-  version: string;
-  time?: string;
-  kp: string;
-  ki: string;
-  kd: string;
-}
+export const pidTestRequestSchema = z.object({
+  kind: pidKindSchema,
+  motor: motorSchema,
+  start: z.string(),
+  stop: z.string(),
+  steps: z.string(),
+  version: z.string(),
+  time: z.string().optional().describe('Required when kind is "position".'),
+  kp: z.string(),
+  ki: z.string(),
+  kd: z.string(),
+});
+export type PidTestRequest = z.infer<typeof pidTestRequestSchema>;
 
 export const pidTestResponseSchema = z.object({ status: z.literal("sent") });
 
@@ -84,3 +87,6 @@ export type HelpPage = z.infer<typeof helpPageSchema>;
 
 /** POST /importRestoreWebControl (the classic UI's route) answers with its status code in the body. */
 export const restoreResponseSchema = z.object({ status: z.number() });
+
+/** GET /api/system/help query. */
+export const helpQuerySchema = z.object({ path: z.string().optional() });

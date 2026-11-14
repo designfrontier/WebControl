@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { numberLike } from "./core";
 import type { EventSchemas, MessageSchemas } from "./core";
 
 const grid = z.array(z.array(z.number()));
@@ -105,3 +106,14 @@ export const opticalSettingsSavedSchema = z.object({ settings: opticalSettingsSc
 
 /** The body of a 4xx/5xx from /api/calibration. */
 export const calibrationErrorSchema = z.object({ error: z.string() });
+
+/** POST /api/calibration/triangular body, in mm. */
+export const triangularMeasurementsSchema = z.object({
+  cut12: numberLike,
+  cut34: numberLike,
+  cut5: numberLike,
+  bitDiameter: numberLike,
+});
+
+/** POST /api/calibration/holey body: M1 to M12 in mm. */
+export const holeyMeasurementsSchema = z.object({ measurements: z.array(numberLike).length(12) });
