@@ -1,0 +1,185 @@
+import { useId, useState } from "react";
+import type { FormEvent, ReactNode } from "react";
+import { Link } from "react-router";
+import type { CreatedDirectory } from "../../protocol";
+import { useSubmit } from "./hooks";
+import type { Resource } from "./hooks";
+import { directoryLabel, filesIn } from "./library";
+import type { Listing } from "./library";
+
+interface SubPageProps {
+  title: string;
+  /** Where Cancel / Back returns to. */
+  back: string;
+  children: ReactNode;
+}
+
+/** One task screen under a section: its own heading and a way back, instead of a modal over the page. */
+export const SubPage = ({ title, back, children }: SubPageProps) => {
+  const id = useId();
+  return (
+    <section className="subpage" aria-labelledby={id}>
+      <p className="subpage-back">
+        <Link to={back}>Back</Link>
+      </p>
+      <h2 id={id}>{title}</h2>
+      {children}
+    </section>
+  );
+};
+
+export const FormError = ({ message }: { message: string | null }) =>
+  message ? (
+    <p className="form-error" role="alert">
+      {message}
+    </p>
+  ) : null;
+
+interface LoadedProps<T> {
+  resource: Resource<T>;
+  what: string;
+  children: (data: T) => ReactNode;
+}
+
+export const Loaded = <T,>({ resource, what, children }: LoadedProps<T>) =>
+  resource.status === "ready" ? (
+    children(resource.data)
+  ) : resource.status === "loading" ? (
+    <p className="muted" role="status">
+      Loading {what}…
+    </p>
+  ) : (
+    <p className="form-error" role="alert">
+      Could not load {what}. Check that WebControl is running, then reload the page.
+    </p>
+  );
+
+interface PickerProps {
+  listing: Listing;
+  directory: string;
+  onDirectoryChange: (directory: string) => void;
+  selected: string | null;
+  onSelect: (name: string) => void;
+  legend: string;
+}
+
+interface DirectorySelectProps {
+  directories: string[];
+  value: string;
+  onChange: (directory: string) => void;
+}
+
+export const DirectorySelect = ({ directories, value, onChange }: DirectorySelectProps) => {
+  const id = useId();
+  return (
+    <div className="field">
+      <label htmlFor={id}>Directory</label>
+      <select id={id} value={value} onChange={(event) => onChange(event.target.value)}>
+        {directories.map((name) => (
+          <option key={name} value={name}>
+            {directoryLabel(name)}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+};
+
+/** A directory dropdown and the files in it as radio buttons. */
+export const LibraryPicker = ({ listing, directory, onDirectoryChange, selected, onSelect, legend }: PickerProps) => {
+  const id = useId();
+  const files = filesIn(listing, directory);
+  return (
+    <div className="picker">
+      <DirectorySelect directories={listing.directories} value={directory} onChange={onDirectoryChange} />
+      <fieldset className="file-list">
+        <legend>{legend}</legend>
+        {files.length === 0 ? (
+          <p className="muted">No files in this directory.</p>
+        ) : (
+          files.map(({ name }) => (
+            <label key={name} className="file-option">
+              <input
+                type="radio"
+                name={`${id}-file`}
+                value={name}
+                checked={selected === name}
+                onChange={() => onSelect(name)}
+              />
+              <span>{name}</span>
+            </label>
+          ))
+        )}
+      </fieldset>
+    </div>
+  );
+};
+
+interface EditorProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  hint: string;
+}
+
+const countLines = (text: string) => (text === "" ? 0 : text.split("\n").length);
+
+/** A plain monospace textarea: no wrapping, spellcheck or autocorrect, which would mangle gcode. */
+export const GcodeEditor = ({ label, value, onChange, hint }: EditorProps) => {
+  const id = useId();
+  const lines = countLines(value);
+  return (
+    <div className="field">
+      <label htmlFor={id}>{label}</label>
+      <textarea
+        id={id}
+        className="code-editor"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        rows={18}
+        wrap="off"
+        spellCheck={false}
+        autoCapitalize="off"
+        autoComplete="off"
+        autoCorrect="off"
+        aria-describedby={`${id}-hint`}
+      />
+      <span id={`${id}-hint`} className="muted">
+        {lines} {lines === 1 ? "line" : "lines"}. {hint}
+      </span>
+    </div>
+  );
+};
+
+interface NewDirectoryProps {
+  create: (name: string) => Promise<CreatedDirectory>;
+  onCreated: (created: CreatedDirectory) => void;
+}
+
+export const NewDirectoryForm = ({ create, onCreated }: NewDirectoryProps) => {
+  const id = useId();
+  const [name, setName] = useState("");
+  const { busy, error, setError, run } = useSubmit();
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (!name.trim()) return setError("Enter a name for the new directory.");
+    return run(async () => {
+      onCreated(await create(name));
+      setName("");
+    }, "Could not create that directory. Use letters, numbers, dashes or underscores.");
+  };
+
+  return (
+    <form className="new-directory" onSubmit={submit} noValidate>
+      <div className="field">
+        <label htmlFor={id}>New directory</label>
+        <input id={id} value={name} onChange={(event) => setName(event.target.value)} autoComplete="off" />
+      </div>
+      <button type="submit" disabled={busy}>
+        Create directory
+      </button>
+      <FormError message={error} />
+    </form>
+  );
+};

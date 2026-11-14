@@ -76,6 +76,8 @@ events, per-client emits.
 - `frontend/src/socket/` — `createClient(socket)`: validates messages, drops ones whose `client` field names another
   socket, `sendAction(command, arg?, arg1?)`, `requestSetting`, `updateSetting`, typed `emit`
 - `frontend/src/api/` — `getJson`/`sendJson(fetch, path, schema)` against `/api`
+- `frontend/src/features/files/api.ts` — `postForm(fetch, path, fields)` posts FormData to classic `main.py` form
+  routes (`/openGCode`, `/trimBoard`, ...); each such route also needs an entry in the `vite.config.ts` dev proxy
 - `frontend/src/state/` — machine store (reducer + `useSyncExternalStore`) fed by the socket; reloads `GET /api/state`
   on every reconnect
 - `frontend/src/app/` — shell (`Layout`, `StatusBar`), `WebControlProvider`, hooks (`useClient`, `useFetch`,
@@ -83,7 +85,8 @@ events, per-client emits.
 - `frontend/src/features/<x>/` — one folder per slice; `index.ts` exports its `Section` (`path`, `label`,
   `Component`). The viewer is rendered inside the main screen via `features/viewer`'s `Viewer`
 - `frontend/src/test/` — `renderApp(route, opts)`, `renderWithProviders(ui, opts)`, `createFakeSocket()`
-  (`serverConnect`, `serverMessage(command, data)`, `emitted`, `actions()`), `fakeFetch(routes)`, `startupState()`
+  (`serverConnect`, `serverMessage(command, data)`, `emitted`, `actions()`), `fakeFetch(routes)`, `startupState()`; `filesBoards.ts` (`expectPath`, `recorder`, `postedForm`, library and board
+  fixtures)
 - `frontend/src/styles/theme.css` — design tokens (custom properties); `app.css` — shell layout
 
 ### Commands

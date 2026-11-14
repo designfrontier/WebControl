@@ -1,0 +1,252 @@
+/* Files and Boards screens; everything is scoped under .fb so other slices' class names cannot collide. */
+.fb {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 960px;
+}
+
+.fb h1,
+.fb h2 {
+  margin: 0;
+}
+
+.fb h2 {
+  font-size: 1.15rem;
+}
+
+.fb .panel,
+.fb .subpage {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.fb .subpage-back {
+  margin: 0;
+}
+
+.fb form {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.fb p {
+  margin: 0;
+}
+
+.fb .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.fb .button {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.fb .button:hover,
+.fb button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.fb button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.fb button.danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.fb .field {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.fb .field label {
+  font-weight: 600;
+}
+
+.fb input:not([type="radio"]):not([type="file"]),
+.fb select,
+.fb textarea {
+  min-height: var(--tap);
+  padding: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.fb input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.fb .code-editor {
+  width: 100%;
+  min-height: 50vh;
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  line-height: 1.4;
+  white-space: pre;
+  overflow: auto;
+  resize: vertical;
+}
+
+.fb .picker {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.fb .file-list {
+  display: grid;
+  max-height: 40vh;
+  overflow-y: auto;
+  margin: 0;
+  padding: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.fb .file-list legend {
+  padding: 0 var(--space-1);
+  font-weight: 600;
+}
+
+.fb .file-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.fb .file-option:has(input:checked) {
+  background: var(--surface-2);
+}
+
+.fb .new-directory {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+
+.fb .new-directory .form-error {
+  grid-column: 1 / -1;
+}
+
+.fb .form-error {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.fb .warning {
+  color: var(--warn);
+}
+
+.fb .details {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+}
+
+.fb .details > div {
+  display: contents;
+}
+
+.fb .details dt {
+  color: var(--muted);
+}
+
+.fb .details dd {
+  margin: 0;
+}
+
+.fb .board-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-3);
+}
+
+.fb fieldset {
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.fb .align-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  max-width: 420px;
+}
+
+.fb .trim-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-areas:
+    ". top ."
+    "left . right"
+    ". bottom .";
+  gap: var(--space-3);
+  max-width: 560px;
+}
+
+.fb .trim-top {
+  grid-area: top;
+}
+.fb .trim-left {
+  grid-area: left;
+}
+.fb .trim-right {
+  grid-area: right;
+}
+.fb .trim-bottom {
+  grid-area: bottom;
+}
+
+.fb .confirm {
+  display: grid;
+  gap: var(--space-2);
+}
+
+@media (max-width: 720px) {
+  .fb .new-directory {
+    grid-template-columns: 1fr;
+  }
+
+  .fb .details {
+    grid-template-columns: 1fr;
+  }
+
+  .fb .details dd {
+    margin-bottom: var(--space-2);
+  }
+
+  .fb .trim-grid {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      "top bottom"
+      "left right";
+  }
+}
