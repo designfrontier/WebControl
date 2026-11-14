@@ -46,6 +46,21 @@ describe("bindMachineStore", () => {
     expect(loadStartup).toHaveBeenCalledTimes(2);
   });
 
+  it("keeps the newest startup snapshot when an older one resolves later", async () => {
+    const pending: ((state: ReturnType<typeof startupState>) => void)[] = [];
+    const { socket, store } = setup(vi.fn(() => new Promise((resolve) => pending.push(resolve))));
+    socket.serverConnect();
+    socket.serverDisconnect();
+    socket.serverConnect();
+
+    pending[1](startupState({ units: "MM" }));
+    await flush();
+    pending[0](startupState({ units: "INCHES" }));
+    await flush();
+
+    expect(store.getState().units).toBe("MM");
+  });
+
   it("feeds store commands into the store", () => {
     const { socket, store } = setup();
     socket.serverConnect();

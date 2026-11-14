@@ -10,12 +10,14 @@ export const bindMachineStore = (
   loadStartup: () => Promise<StartupState>,
 ): (() => void) => {
   let bound = true;
+  let generation = 0;
 
   const sync = () => {
     // The server resends the sled position on its next report only after someone asks for units.
     client.requestSetting("Computed Settings", "units");
+    const current = ++generation;
     loadStartup().then(
-      (state) => bound && store.dispatch({ type: "startup", state }),
+      (state) => bound && current === generation && store.dispatch({ type: "startup", state }),
       (error: unknown) => console.warn("Could not load /api/state", error),
     );
   };
