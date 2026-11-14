@@ -1,5 +1,6 @@
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { useModal } from "../../app/modal";
 
 interface DialogProps {
   title: string;
@@ -12,24 +13,26 @@ interface DialogProps {
 /** A client-owned modal: no server round trip, closes on Escape or a backdrop click, restores focus on close. */
 export const Dialog = ({ title, onClose, children, actions }: DialogProps) => {
   const titleId = useId();
+  const backdrop = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLDivElement>(null);
+  // Read during render: once the page behind goes inert, browsers move focus to <body>.
+  const [opener] = useState(() => document.activeElement);
+  useModal(backdrop, panel, onClose);
 
   useEffect(() => {
-    const opener = document.activeElement as HTMLElement | null;
     panel.current?.querySelector<HTMLElement>("input, button")?.focus();
-    return () => opener?.focus();
-  }, []);
+    return () => {
+      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+    };
+  }, [opener]);
 
   return (
-    <div className="dialog-backdrop" onClick={(event) => event.target === event.currentTarget && onClose()}>
-      <div
-        ref={panel}
-        className="dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        onKeyDown={(event) => event.key === "Escape" && onClose()}
-      >
+    <div
+      ref={backdrop}
+      className="dialog-backdrop"
+      onClick={(event) => event.target === event.currentTarget && onClose()}
+    >
+      <div ref={panel} className="dialog" role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <h2 id={titleId}>{title}</h2>
         <div className="dialog-body">{children}</div>
         <div className="dialog-actions">{actions}</div>

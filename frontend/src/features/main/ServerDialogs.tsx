@@ -1,6 +1,7 @@
 import { useEffect, useEffectEvent, useReducer, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useClient, useServerMessage } from "../../app/context";
+import { trapTab } from "../../app/modal";
 import { dialogReducer, initialDialogState } from "./dialogs";
 import type { ServerDialog } from "./dialogs";
 
@@ -35,24 +36,6 @@ export const ServerDialogs = ({ children }: { children: ReactNode }) => {
       )}
     </>
   );
-};
-
-/** Keeps Tab inside `container` by wrapping from either end, or pulling focus back in from outside. */
-const trapTab = (event: KeyboardEvent, container: HTMLElement) => {
-  const buttons = Array.from(container.querySelectorAll("button"));
-  const first = buttons[0];
-  const last = buttons[buttons.length - 1];
-  const inside = container.contains(document.activeElement);
-  const target = event.shiftKey
-    ? !inside || document.activeElement === first
-      ? last
-      : null
-    : !inside || document.activeElement === last
-      ? first
-      : null;
-  if (!target) return;
-  event.preventDefault();
-  target.focus();
 };
 
 interface ViewProps {

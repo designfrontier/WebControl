@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { jsonResponse } from "../../test/fakeFetch";
 import { renderApp } from "../../test/render";
-import { systemFetch, systemInfo } from "./systemFixtures";
+import { systemFetch, systemInfo } from "../../test/systemFixtures";
 
 const group = (name: string) => within(screen.getByRole("region", { name }));
 const dialog = () => screen.getByRole("dialog");
@@ -81,6 +81,41 @@ describe("ActionsPanel", () => {
     expect(socket.actions()).toEqual([["returnToCenter", "", ""]]);
   });
 
+  it("keeps Tab inside the dialog and makes the page behind it inert", async () => {
+    const { user } = renderActions();
+    const trigger = screen.getByRole("button", { name: "Wipe controller EEPROM" });
+    await user.click(trigger);
+    const cancel = within(dialog()).getByRole("button", { name: "Cancel" });
+    const wipe = within(dialog()).getByRole("button", { name: "Wipe controller EEPROM" });
+    expect(trigger.closest("[inert]")).not.toBeNull();
+    expect(screen.getByRole("navigation", { name: "Primary", hidden: true }).closest("[inert]")).not.toBeNull();
+    expect(dialog().closest("[inert]")).toBeNull();
+
+    await user.tab();
+    expect(wipe).toHaveFocus();
+    await user.tab();
+    expect(cancel).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(wipe).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+    expect(document.querySelector("[inert]")).toBeNull();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("closes on Escape and pulls Tab back in after focus leaves the dialog", async () => {
+    const { user } = renderActions();
+    await user.click(screen.getByRole("button", { name: "Clear log files" }));
+    await user.click(within(dialog()).getByText(/./, { selector: ".dialog-body p" }));
+    expect(document.body).toHaveFocus();
+    await user.tab();
+    expect(within(dialog()).getByRole("button", { name: "Cancel" })).toHaveFocus();
+
+    await user.click(within(dialog()).getByRole("heading"));
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
   it("disables actions the server would refuse while a job runs", () => {
     renderActions({ machine: { status: { uploadFlag: 1, positioningMode: 0, currentTool: 0 } } });
     expect(screen.getByText(/A job is running/)).toBeInTheDocument();
@@ -89,6 +124,7 @@ describe("ActionsPanel", () => {
     expect(screen.getByRole("button", { name: "Query camera" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Shut down WebControl" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Restore WebControl…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Fake servo (advanced)…" })).toBeDisabled();
   });
 
   it("allows clearing logs while paused", () => {
@@ -182,6 +218,17 @@ describe("Fake servo dialog", () => {
 
     expect(socket.actions()).toEqual([["setFakeServo", 1, ""]]);
     expect(notice()).toHaveTextContent("enable fake servo");
+  });
+
+  it("disables both changes when a job starts while it is open", async () => {
+    const { user, socket } = renderActions();
+    await user.click(screen.getByRole("button", { name: "Fake servo (advanced)…" }));
+    await user.type(within(dialog()).getByLabelText("Secret code to enable"), "42");
+    socket.serverMessage("statusMessage", { uploadFlag: 2, positioningMode: 0, currentTool: 0 });
+
+    expect(await within(dialog()).findByText(/A job is paused/)).toBeInTheDocument();
+    expect(within(dialog()).getByRole("button", { name: "Disable fake servo" })).toBeDisabled();
+    expect(within(dialog()).getByRole("button", { name: "Enable fake servo" })).toBeDisabled();
   });
 
   it("closes on cancel", async () => {
