@@ -100,3 +100,24 @@ def test_changing_the_sleep_interval_restarts_the_capture_thread(camera, monkeyp
     assert camera.th.joined is True
     assert started == [True]
     assert camera.cameraSleep == 0.05
+
+
+def test_read_new_frame_waits_for_the_next_capture(camera, monkeypatch):
+    monkeypatch.setattr(camera, "start", lambda: None)
+    camera.stream = SlowCapture(camera, reads_before_stop=99, delay=0)
+    camera._grab()
+    first = camera.frameCount
+    waiter = gevent.spawn(camera.readNewFrame, first, 2)
+    gevent.sleep(0.05)
+    assert not waiter.ready()
+    camera._grab()
+    frame, count = waiter.get(timeout=2)
+    assert count == first + 1
+    assert frame[0, 0, 0] == 2
+
+
+def test_read_new_frame_gives_up_without_a_new_capture(camera, monkeypatch):
+    monkeypatch.setattr(camera, "start", lambda: None)
+    camera.stream = SlowCapture(camera, reads_before_stop=99, delay=0)
+    camera._grab()
+    assert camera.readNewFrame(camera.frameCount, 0.05) == (None, camera.frameCount)

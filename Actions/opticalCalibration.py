@@ -209,10 +209,16 @@ class OpticalCalibration(MakesmithInitFuncs):
         falseCounter = 0
         xA=0
         yA=0
+        gray = None
+        frameCount = None
         time.sleep(1)
         while True:
-            #(grabbed, image) = self.camera.read()
-            image = self.camera.read()
+            image, frameCount = self.camera.readNewFrame(frameCount)
+            if image is None:
+                falseCounter += 1
+                if falseCounter == 10:
+                    break
+                continue
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             gray = cv2.GaussianBlur(
                 gray, (self.gaussianBlurValue, self.gaussianBlurValue), 0
@@ -499,10 +505,11 @@ class OpticalCalibration(MakesmithInitFuncs):
             else:
                 return True
         else:
-            imgencode = cv2.imencode(".png", image)[1]
-            stringData = base64.b64encode(imgencode).decode()
-            self.data.opticalCalibrationTestImage = stringData
-            self.data.opticalCalibrationTestImageUpdated = True
+            if image is not None:
+                imgencode = cv2.imencode(".png", image)[1]
+                stringData = base64.b64encode(imgencode).decode()
+                self.data.opticalCalibrationTestImage = stringData
+                self.data.opticalCalibrationTestImageUpdated = True
             if findCenter:
                 return None, None
             else:

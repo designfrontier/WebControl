@@ -20,6 +20,7 @@ class WebcamVideoStream(MakesmithInitFuncs):
     videoSize = "640x480"
     cameraSleep = 0.01
     debugCamera = False
+    frameCount = 0
     
     def __init__(self, src=0):
         # initialize the video camera stream and read the first frame
@@ -111,6 +112,7 @@ class WebcamVideoStream(MakesmithInitFuncs):
         # The "thread" running update() is a greenlet under monkey-patching, so blocking cv2 calls go to a real thread.
         (self.grabbed, self.frame, encoded) = get_hub().threadpool.apply(self._captureAndEncode)
         if encoded is not None:
+            self.frameCount += 1
             self.data.cameraImage = encoded
             self.data.cameraImageUpdated = True
 
@@ -132,6 +134,16 @@ class WebcamVideoStream(MakesmithInitFuncs):
         if self.stopped:
             self.start()
         return self.frame
+
+    def readNewFrame(self, previousCount, timeout=5.0):
+        """Returns (frame, frameCount) once a frame newer than previousCount arrives, or (None, previousCount)."""
+        self.read()
+        deadline = time.time() + timeout
+        while self.frameCount == previousCount:
+            if time.time() >= deadline:
+                return None, previousCount
+            time.sleep(self.cameraSleep)
+        return self.frame, self.frameCount
 
     def stop(self):
         # indicate that the thread should be stopped
