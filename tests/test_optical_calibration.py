@@ -1,3 +1,4 @@
+import copy
 import time
 
 import numpy
@@ -5,6 +6,7 @@ import pytest
 
 from Actions.opticalCalibration import OpticalCalibration
 from api.calibration import OPTICAL_DEFAULTS
+from helpers import drain
 
 
 def square_frame(centre=(170, 125), size=60):
@@ -90,3 +92,48 @@ def test_test_image_survives_a_camera_without_frames(optical, data, monkeypatch)
     optical.camera.readNewFrame = lambda previousCount, timeout=5.0: (None, previousCount)
     assert optical.testImage(dict(OPTICAL_DEFAULTS)) is True
     assert data.opticalCalibrationTestImageUpdated is False
+
+
+@pytest.fixture
+def auto_home(optical, data, monkeypatch):
+    """A 1x1 scan area starting in millimetres, with every setting a unit change touches restored afterwards."""
+    monkeypatch.setattr(data.config, "settings", copy.deepcopy(data.config.settings))
+    for key in ("tolerance", "gcodeShift", "feedRate", "measureRequest"):
+        monkeypatch.setattr(data, key, getattr(data, key, None), raising=False)
+    monkeypatch.setattr(data.actions, "updateSetting", data.actions.updateSetting)
+    data.units = "MM"
+    optical.tlX = optical.brX = optical.tlY = optical.brY = 0
+    optical.camera = FakeCamera([square_frame()])
+    return optical
+
+
+def test_auto_home_remembers_the_units_it_started_in(auto_home, data):
+    auto_home.on_AutoHome()
+    assert auto_home.oldUnits == "MM"
+    assert data.units == "INCHES"
+    assert "G20 " in drain(data.gcode_queue)
+
+
+def test_auto_home_puts_the_units_back_when_it_finishes(auto_home, data):
+    auto_home.on_AutoHome()
+    drain(data.gcode_queue)
+    auto_home.on_AutoHome()
+    assert auto_home.inAutoMode is False
+    assert data.units == "MM"
+    assert "G21 " in drain(data.gcode_queue)
+    assert auto_home.oldUnits is None
+
+
+def test_stopping_puts_the_units_back(auto_home, data):
+    auto_home.on_AutoHome()
+    assert auto_home.stopOpticalCalibration() is True
+    assert data.units == "MM"
+    assert drain(data.gcode_queue) == ["G21 "]
+
+
+def test_auto_home_in_inches_leaves_the_units_alone(auto_home, data):
+    data.units = "INCHES"
+    auto_home.on_AutoHome()
+    auto_home.on_AutoHome()
+    assert data.units == "INCHES"
+    assert "G21 " not in drain(data.gcode_queue)

@@ -85,11 +85,19 @@ class OpticalCalibration(MakesmithInitFuncs):
                 self.data.gcode_queue.queue.clear()
             self.inAutoMode = False
             self.inMeasureOnlyMode = False
+            self.restoreUnits()
             return True
         except Exception as e:
             self.data.console_queue.put(str(e))
             return False
 
+
+    def restoreUnits(self):
+        """Switches back to the units the scan started in; HomeIn moves in inches."""
+        if self.oldUnits == "MM" and self.data.units != "MM":
+            self.data.actions.updateSetting("toMM", 0, True)
+            self.data.gcode_queue.put("G21 ")
+        self.oldUnits = None
 
     def midpoint(self, ptA, ptB):
         return ((ptA[0] + ptB[0]) * 0.5, (ptA[1] + ptB[1]) * 0.5)
@@ -186,7 +194,7 @@ class OpticalCalibration(MakesmithInitFuncs):
             )
         self.data.console_queue.put("message")
 
-        if self.oldUnits != "INCHES":
+        if self.data.units != "INCHES":
             self.data.actions.updateSetting("toInches", 0, True)
         #self.data.units = "INCHES"
         self.data.gcode_queue.put("G20 ")
@@ -388,8 +396,8 @@ class OpticalCalibration(MakesmithInitFuncs):
                 self.HomingPosY = minY
                 self.HomingScanDirection = 1
                 self.inAutoMode = True
-                self.HomeIn()
                 self.oldUnits = self.data.units
+                self.HomeIn()
             else:
                 # note, the self.HomingX and self.HomingY are not reinitialzed here
                 # The rationale is that the offset for the previous registration point is
@@ -411,6 +419,7 @@ class OpticalCalibration(MakesmithInitFuncs):
                         self.HomeIn()
                     else:
                         self.inAutoMode = False
+                        self.restoreUnits()
                         self.data.console_queue.put("Stopping Camera")
                         self.camera.stop()
                         #self.camera=None
@@ -441,6 +450,7 @@ class OpticalCalibration(MakesmithInitFuncs):
                         self.HomeIn()
                     else:
                         self.inAutoMode = False
+                        self.restoreUnits()
                         self.data.console_queue.put("Stopping Camera")
                         self.camera.stop()
                         #self.camera=None
