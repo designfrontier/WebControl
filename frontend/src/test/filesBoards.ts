@@ -1,6 +1,11 @@
-import { vi } from "vitest";
+import { waitFor } from "@testing-library/react";
+import { expect, vi } from "vitest";
 import type { BoardDetails, GcodeLibrary, Library } from "../protocol";
 import { jsonResponse } from "./fakeFetch";
+import { currentPath } from "./render";
+
+/** Navigation after a submit waits for the request to settle, so poll for it. */
+export const expectPath = (path: string) => waitFor(() => expect(currentPath()).toBe(path));
 
 /** Fixtures and fetch helpers for the Files and Boards screens. */
 export const gcodeLibrary = (over: Partial<GcodeLibrary> = {}): GcodeLibrary => ({

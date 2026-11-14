@@ -1,7 +1,8 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { fakeFetch } from "../../test/fakeFetch";
-import { currentPath, renderApp } from "../../test/render";
+import { expectPath } from "../../test/filesBoards";
+import { renderApp } from "../../test/render";
 
 const loaded = (over = {}) => ({ directory: "jobs", name: "leg.nc", lineCount: 1234, ...over });
 const panel = (name: string) => within(screen.getByRole("region", { name }));
@@ -50,7 +51,7 @@ describe("Files home", () => {
     expect(socket.actions()).toEqual([["clearGCode", "", ""]]);
   });
 
-  it("downloads diagnostics and backups from the classic routes", () => {
+  it("downloads diagnostics and backups from the classic routes", async () => {
     renderApp("/files", { fetch: fakeFetch({ "/api/files/gcode/loaded": loaded() }) });
     const backup = panel("Backup and import");
     expect(backup.getByRole("link", { name: "Download diagnostics" })).toHaveAttribute("href", "/downloadDiagnostics");
@@ -69,15 +70,15 @@ describe("Files home", () => {
   ])("%s opens its own screen and Back returns", async (link, path, heading) => {
     const { user } = renderApp("/files", { fetch: fakeFetch({ "/api/files/gcode/loaded": loaded() }) });
     await user.click(screen.getByRole("link", { name: link }));
-    expect(currentPath()).toBe(path);
+    await expectPath(path);
     expect(screen.getByRole("heading", { name: heading, level: 2 })).toBeInTheDocument();
 
     await user.click(screen.getByRole("link", { name: "Back" }));
-    expect(currentPath()).toBe("/files");
+    await expectPath("/files");
   });
 
-  it("sends unknown sub-paths back to the files screen", () => {
+  it("sends unknown sub-paths back to the files screen", async () => {
     renderApp("/files/nope", { fetch: fakeFetch({ "/api/files/gcode/loaded": loaded() }) });
-    expect(currentPath()).toBe("/files");
+    await expectPath("/files");
   });
 });

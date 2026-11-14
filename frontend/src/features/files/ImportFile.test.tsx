@@ -1,8 +1,8 @@
 import { fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { fakeFetch } from "../../test/fakeFetch";
-import { recorder } from "../../test/filesBoards";
-import { currentPath, renderApp } from "../../test/render";
+import { expectPath, recorder } from "../../test/filesBoards";
+import { renderApp } from "../../test/render";
 
 const file = (name: string) => new File(["{}"], name);
 
@@ -65,8 +65,8 @@ describe("import", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Choose a file first.");
   });
 
-  it("sends unknown kinds back to the files screen", () => {
+  it("sends unknown kinds back to the files screen", async () => {
     renderApp("/files/import/nope");
-    expect(currentPath()).toBe("/files");
+    await expectPath("/files");
   });
 });

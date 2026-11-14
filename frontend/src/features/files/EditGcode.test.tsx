@@ -1,8 +1,8 @@
 import { screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { fakeFetch } from "../../test/fakeFetch";
-import { recorder } from "../../test/filesBoards";
-import { currentPath, renderApp } from "../../test/render";
+import { expectPath, recorder } from "../../test/filesBoards";
+import { renderApp } from "../../test/render";
 
 const page = () => within(screen.getByRole("region", { name: /gcode/ }));
 
@@ -29,7 +29,7 @@ describe("View or edit gcode", () => {
     await user.click(screen.getByRole("button", { name: "Apply changes" }));
 
     expect(edit.forms()).toEqual([{ gcode: "G21\nG0 X1 Y1\nG1 Z-1\nG0 X0" }]);
-    expect(currentPath()).toBe("/");
+    await expectPath("/");
   });
 
   it("explains a failure and keeps the edits", async () => {
@@ -64,7 +64,7 @@ describe("Send gcode", () => {
 
     expect(send.forms()).toEqual([{ gcode: "G0 X5\nG0 Y5" }]);
     expect(await page().findByText("Sent 2 lines to the controller.")).toBeInTheDocument();
-    expect(currentPath()).toBe("/files/send");
+    await expectPath("/files/send");
 
     await user.type(editor, "M3");
     expect(page().queryByText(/^Sent/)).not.toBeInTheDocument();
@@ -93,6 +93,6 @@ describe("Send gcode", () => {
   it("finishes back on the files screen", async () => {
     const { user } = setup();
     await user.click(await screen.findByRole("link", { name: "Done" }));
-    expect(currentPath()).toBe("/files");
+    await expectPath("/files");
   });
 });

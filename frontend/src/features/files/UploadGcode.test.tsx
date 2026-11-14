@@ -1,8 +1,8 @@
 import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { fakeFetch, jsonResponse } from "../../test/fakeFetch";
-import { gcodeLibrary, pending, recorder } from "../../test/filesBoards";
-import { currentPath, renderApp } from "../../test/render";
+import { expectPath, gcodeLibrary, pending, recorder } from "../../test/filesBoards";
+import { renderApp } from "../../test/render";
 
 const nc = (name: string) => new File(["G0 X0\n"], name, { type: "text/plain" });
 
@@ -36,8 +36,8 @@ describe("Upload gcode", () => {
     const [form] = upload.forms();
     expect(form.selectedDirectory).toBe(".");
     expect((form["file[]"] as File[]).map((file) => file.name)).toEqual(["a.nc", "b.nc"]);
+    await expectPath("/");
     expect(socket.emittedEvents("checkForGCodeUpdate")).toEqual([{ data: "Please" }]);
-    expect(currentPath()).toBe("/");
   });
 
   it("explains a failed upload", async () => {
@@ -45,7 +45,7 @@ describe("Upload gcode", () => {
     await user.upload(await screen.findByLabelText("Gcode files"), nc("a.nc"));
     await user.click(screen.getByRole("button", { name: "Upload and open" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("The upload failed");
-    expect(currentPath()).toBe("/files/upload");
+    await expectPath("/files/upload");
   });
 
   it("shows progress while uploading", async () => {

@@ -1,8 +1,8 @@
 import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { fakeFetch } from "../../test/fakeFetch";
-import { gcodeLibrary, pending, recorder } from "../../test/filesBoards";
-import { currentPath, renderApp } from "../../test/render";
+import { expectPath, gcodeLibrary, pending, recorder } from "../../test/filesBoards";
+import { renderApp } from "../../test/render";
 
 const setup = (open = recorder(), library = gcodeLibrary()) => {
   const fetch = fakeFetch({ "/api/files/gcode": library, "POST /openGCode": open.respond });
@@ -42,8 +42,8 @@ describe("Open gcode", () => {
     await user.click(screen.getByRole("button", { name: "Open" }));
 
     expect(open.forms()).toEqual([{ selectedGCode: "jobs/arm.nc" }]);
+    await expectPath("/");
     expect(socket.emittedEvents("checkForGCodeUpdate")).toEqual([{ data: "Please" }]);
-    expect(currentPath()).toBe("/");
   });
 
   it("uses ./name for files at the top level, as the classic route expects", async () => {
@@ -59,7 +59,7 @@ describe("Open gcode", () => {
     const { user, socket } = setup(recorder(500));
     await user.click(await screen.findByRole("button", { name: "Open" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Could not open leg.nc.");
-    expect(currentPath()).toBe("/files/open");
+    await expectPath("/files/open");
     expect(socket.emittedEvents("checkForGCodeUpdate")).toEqual([]);
     expect(screen.getByRole("button", { name: "Open" })).toBeEnabled();
   });
@@ -74,7 +74,7 @@ describe("Open gcode", () => {
   it("cancels back to the files screen", async () => {
     const { user } = setup();
     await user.click(await screen.findByRole("link", { name: "Cancel" }));
-    expect(currentPath()).toBe("/files");
+    await expectPath("/files");
   });
 
   it("reports a library that cannot be listed", async () => {

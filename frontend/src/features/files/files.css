@@ -170,6 +170,10 @@
   margin: 0;
 }
 
+.fb .details > div {
+  display: contents;
+}
+
 .fb .details dt {
   color: var(--muted);
 }
@@ -206,6 +210,24 @@
     ". bottom .";
   gap: var(--space-3);
   max-width: 560px;
+}
+
+.fb .trim-top {
+  grid-area: top;
+}
+.fb .trim-left {
+  grid-area: left;
+}
+.fb .trim-right {
+  grid-area: right;
+}
+.fb .trim-bottom {
+  grid-area: bottom;
+}
+
+.fb .confirm {
+  display: grid;
+  gap: var(--space-2);
 }
 
 @media (max-width: 720px) {

@@ -1,8 +1,8 @@
 import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { fakeFetch, jsonResponse } from "../../test/fakeFetch";
-import { gcodeLibrary, recorder } from "../../test/filesBoards";
-import { currentPath, renderApp } from "../../test/render";
+import { expectPath, gcodeLibrary, recorder } from "../../test/filesBoards";
+import { renderApp } from "../../test/render";
 
 const setup = (save = recorder()) => {
   const fetch = fakeFetch({
@@ -40,7 +40,7 @@ describe("Save gcode as", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     expect(save.forms()).toEqual([{ selectedDirectory: "jobs", fileName: "leg-v2.nc" }]);
-    expect(currentPath()).toBe("/files");
+    await expectPath("/files");
   });
 
   it.each([
