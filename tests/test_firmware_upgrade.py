@@ -6,7 +6,7 @@ import pytest
 
 import Actions.actions as actions_module
 import Actions.firmware as firmware
-from helpers import drain
+from helpers import decode_ui_message, drain
 
 INJECTIONS = ["/dev/ttyACM0; rm -rf ~", "COM3 && calc", "$(reboot)", "/dev/ttyACM0`id`", "-Uflash:w:evil.hex", ""]
 
@@ -28,6 +28,7 @@ def flash(data, tmp_path, monkeypatch):
     monkeypatch.setattr(firmware, "installRoot", lambda data: str(tmp_path))
     monkeypatch.setattr(actions_module.subprocess, "run", fake_run)
     monkeypatch.setattr(actions_module.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(firmware, "PORT_CLOSE_SECONDS", 0.05)
     monkeypatch.setattr(data.serialPort, "closeConnection", lambda: setattr(data.serialPort, "serialPortRequest", "Closed"))
     data.comport = "/dev/ttyACM0"
     data.connectionStatus = 1
@@ -37,10 +38,16 @@ def flash(data, tmp_path, monkeypatch):
     drain(data.ui_queue1)
 
 
-def alerts(data):
-    import json
+def ui_messages(data):
+    return [decode_ui_message(item) for item in drain(data.ui_queue1)]
 
-    return [json.loads(item)["data"] for item in drain(data.ui_queue1) if json.loads(item)["command"] == "Alert"]
+
+def alerts(data, messages=None):
+    return [payload for command, _, payload in (messages or ui_messages(data)) if command == "Alert"]
+
+
+def spinner_cleared(messages):
+    return ("Action", "closeModals", "Notification:") in messages
 
 
 def test_avrdude_gets_an_argument_list_without_a_shell(data, flash):
@@ -114,3 +121,58 @@ def test_classic_settings_form_refuses_a_port_that_is_not_a_serial_device(client
 def test_classic_settings_form_still_saves_a_serial_device(client, settings):
     assert client.post("/maslowSettings", data=maslow_form(settings, COMport="COM4")).status_code == 200
     assert settings.getValue("Maslow Settings", "COMport") == "COM4"
+
+
+def test_flashing_waits_for_the_port_to_report_closed(data, flash, monkeypatch):
+    monkeypatch.setattr(
+        data.serialPort, "closeConnection", lambda: setattr(data.serialPort, "serialPortRequest", "requestToClose")
+    )
+    assert data.actions.upgradeFirmware(1) is False
+    messages = ui_messages(data)
+    assert flash.runs == []
+    assert any("did not close" in alert for alert in alerts(data, messages))
+    assert spinner_cleared(messages)
+
+
+def test_a_disconnected_port_is_flashed_without_waiting(data, flash, monkeypatch):
+    data.connectionStatus = 0
+    monkeypatch.setattr(data.serialPort, "closeConnection", lambda: None)
+    assert data.actions.upgradeFirmware(1) is True
+    assert len(flash.runs) == 1
+
+
+def test_success_clears_the_spinner_and_lets_the_port_reconnect(data, flash):
+    assert data.actions.upgradeFirmware(1) is True
+    assert spinner_cleared(ui_messages(data))
+    assert data.connectionStatus == 0
+    assert data.serialPort.serialPortRequest == ""
+
+
+def test_an_avrdude_failure_is_alerted_and_clears_the_spinner(data, flash):
+    flash.result.returncode = 1
+    flash.result.stdout = b"avrdude: ser_open(): can't open device"
+    assert data.actions.upgradeFirmware(1) is False
+    messages = ui_messages(data)
+    assert any("can't open device" in alert for alert in alerts(data, messages))
+    assert spinner_cleared(messages)
+    assert data.serialPort.serialPortRequest == ""
+
+
+def test_a_missing_hex_file_is_alerted_and_clears_the_spinner(data, flash):
+    (flash.root / "firmware" / "holey" / "holey-1.26.hex").unlink()
+    assert data.actions.upgradeFirmware(2) is False
+    messages = ui_messages(data)
+    assert flash.runs == []
+    assert any("No firmware file" in alert for alert in alerts(data, messages))
+    assert spinner_cleared(messages)
+
+
+def test_a_missing_avrdude_is_alerted_and_clears_the_spinner(data, flash, monkeypatch):
+    def missing(*args, **kwargs):
+        raise FileNotFoundError("tools/avrdude")
+
+    monkeypatch.setattr(actions_module.subprocess, "run", missing)
+    assert data.actions.upgradeFirmware(1) is False
+    messages = ui_messages(data)
+    assert any("tools/avrdude" in alert for alert in alerts(data, messages))
+    assert spinner_cleared(messages)

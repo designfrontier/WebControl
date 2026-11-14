@@ -16,6 +16,10 @@ from subprocess import call
 from gpiozero.pins.mock import MockFactory
 from gpiozero import Device
 
+class FirmwareUpgradeError(Exception):
+    pass
+
+
 '''
 This class does most of the heavy lifting in processing messages from the UI client.
 '''
@@ -1419,16 +1423,14 @@ class Actions(MakesmithInitFuncs):
 
     def upgradeFirmware(self, version):
         '''
-        Upgrades the firmware in the controller
-        :param version:
-        :return:
+        Flashes the bundled firmware (0 custom, 1 stock, 2 holey) to the controller, alerting on any failure.
         '''
+        home = firmware.installRoot(self.data)
+        port = str(self.data.comport)
+        closeRequested = False
         try:
-            home = firmware.installRoot(self.data)
-            port = str(self.data.comport)
             if not firmware.isSerialPortName(port, self.data.comPorts):
-                self.data.ui_queue1.put("Alert", "Alert", "Cannot upgrade firmware: '" + port + "' is not a serial port.")
-                return False
+                raise FirmwareUpgradeError("Cannot upgrade firmware: '" + port + "' is not a serial port.")
             if version == 0:
                 self.data.ui_queue1.put("SpinnerMessage", "", "Custom Firmware Update in Progress, Please Wait.")
                 path = home+"/firmware/beta/*.hex"
@@ -1438,42 +1440,40 @@ class Actions(MakesmithInitFuncs):
             if version == 2:
                 self.data.ui_queue1.put("SpinnerMessage", "", "Holey Firmware Update in Progress, Please Wait.")
                 path = home+"/firmware/holey/*.hex"
-            # wait half second... not sure why
-            time.sleep(.5)
-            t0 = time.time()*1000
-            portClosed = False
-            # request the the serial port is closed
+            hexFiles = sorted(glob.glob(path))
+            if not hexFiles:
+                raise FirmwareUpgradeError("No firmware file found in " + os.path.dirname(path))
+            wasConnected = self.data.connectionStatus
+            closeRequested = True
             self.data.serialPort.closeConnection()
-            # give it five seconds to close
-            while (time.time()*1000 - t0) < 5000:
-                if self.data.serialPort.getConnectionStatus():
-                    portClosed = True
-                    break
-            # wait 1.5 seconds.. not sure why...
+            if wasConnected and not self.waitForSerialClose(firmware.PORT_CLOSE_SECONDS):
+                raise FirmwareUpgradeError("The serial port did not close, so the firmware was not loaded.")
+            # Any reconnect attempt while avrdude runs sees this and closes the port straight away.
+            self.data.serialPort.serialPortRequest = "requestToClose"
             time.sleep(1.5)
-            # if port is closed, then upgrade firmware..
-            if portClosed:
-                # works if there is only only valid hex file in the directory
-                for filename in glob.glob(path):
-                    cmd = firmware.avrdudeCommand(home, port, filename)
-                    x = subprocess.run(cmd, stderr=subprocess.STDOUT, stdout=subprocess.PIPE)
-                    if x.returncode > 0:
-                        print("Error upgrading:"+str(x.stdout,'utf-8'))
-                        self.data.ui_queue1.put("Action", "closeModals", "Notification:")
-                        self.data.ui_queue1.put("Alert", "Alert", "Error loading firmware: "+str(x.stdout,'utf-8'))
-                        return False
-                    self.data.connectionStatus = 0
-                    #print("closing modals")
-                    # close off the modals and put away the spinner.
-                    self.data.ui_queue1.put("Action", "closeModals", "Notification:")
-                    return True
-            else:
-                self.data.ui_queue1.put("Action", "closeModals", "Notification:")
-                print("Port not closed")
-                return False
+            x = subprocess.run(
+                firmware.avrdudeCommand(home, port, hexFiles[-1]), stderr=subprocess.STDOUT, stdout=subprocess.PIPE
+            )
+            if x.returncode != 0:
+                raise FirmwareUpgradeError("Error loading firmware: " + str(x.stdout, "utf-8", "replace"))
+            return True
         except Exception as e:
-            print(str(e))
+            self.data.console_queue.put(str(e))
+            self.data.ui_queue1.put("Alert", "Alert", str(e))
             return False
+        finally:
+            if closeRequested:
+                self.data.serialPort.serialPortRequest = ""
+                self.data.connectionStatus = 0
+            self.data.ui_queue1.put("Action", "closeModals", "Notification:")
+
+    def waitForSerialClose(self, timeout):
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if self.data.serialPort.getConnectionStatus() == "Closed":
+                return True
+            time.sleep(0.05)
+        return self.data.serialPort.getConnectionStatus() == "Closed"
 
 
     def createDirectory(self, _directory):

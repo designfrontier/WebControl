@@ -3,6 +3,8 @@ import glob
 import os
 import re
 
+PORT_CLOSE_SECONDS = 5.0
+
 # Must match the folders buildFirmware.sh writes to.
 FIRMWARE_FOLDERS = {"custom": "madgrizzle", "stock": "maslowcnc", "holey": "holey"}
 
