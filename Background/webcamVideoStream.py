@@ -3,6 +3,7 @@ import threading
 import time
 
 import cv2
+from gevent import get_hub
 
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
 
@@ -70,8 +71,8 @@ class WebcamVideoStream(MakesmithInitFuncs):
         # start the thread to read frames from the video stream
         print("Starting camera thread")
         if self.stream is None:
-            self.stream = cv2.VideoCapture(src)
-            (self.grabbed, self.frame) = self.stream.read()
+            self.stream = get_hub().threadpool.apply(cv2.VideoCapture, (src,))
+            self._grab()
 
             #self.setVideoSize()
             #self.setFPS()
@@ -92,36 +93,39 @@ class WebcamVideoStream(MakesmithInitFuncs):
         # keep looping infinitely until the thread is stopped
         while True:
             time.sleep(self.cameraSleep)
-            if not self.data.continuousCamera or time.time()-self.lastCameraRead < 20:
-                (self.grabbed, self.frame) = self.stream.read()
-                self.suspended = False
-            else:
-                if self.suspended == False:
-                    #self.data.ui_queue.put("Action:updateCamera_off")
-                    self.data.ui_queue1.put("Action", "updateCamera", "off")
-                self.suspended=True
             # if the thread indicator variable is set, stop the thread
             if self.stopped:
                 self.stream.release()
                 self.stream = None
-                #self.data.ui_queue.put("Action:updateCamera_off")
                 self.data.ui_queue1.put("Action", "updateCamera", "off")
                 return
-            # otherwise, read the next frame from the stream
-            if self.frame is not None:
-                small = cv2.resize(self.frame, (256,192))
-                imgencode = cv2.imencode(".png",small )[1]
-                stringData = base64.b64encode(imgencode).decode()
-                self.data.cameraImage = stringData
-                self.data.cameraImageUpdated = True
+            if not self.data.continuousCamera or time.time()-self.lastCameraRead < 20:
+                self._grab()
+                self.suspended = False
+            else:
+                if self.suspended == False:
+                    self.data.ui_queue1.put("Action", "updateCamera", "off")
+                self.suspended=True
+
+    def _grab(self):
+        # The "thread" running update() is a greenlet under monkey-patching, so blocking cv2 calls go to a real thread.
+        (self.grabbed, self.frame, encoded) = get_hub().threadpool.apply(self._captureAndEncode)
+        if encoded is not None:
+            self.data.cameraImage = encoded
+            self.data.cameraImageUpdated = True
+
+    def _captureAndEncode(self):
+        grabbed, frame = self.stream.read()
+        if frame is None:
+            return grabbed, None, None
+        small = cv2.resize(frame, (256, 192))
+        return grabbed, frame, base64.b64encode(cv2.imencode(".png", small)[1]).decode()
 
     def read(self):
         # return the frame most recently read
-        #print("Reading camera frame")
         if self.suspended:
-            (self.grabbed, self.frame) = self.stream.read()
+            self._grab()
             self.suspended = False
-            #self.data.ui_queue.put("Action:updateCamera_on")
             self.data.ui_queue1.put("Action", "updateCamera", "on")
         self.lastCameraRead = time.time()
         
