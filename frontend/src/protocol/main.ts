@@ -104,4 +104,13 @@ export const startupStateSchema = z.object({
   macros: z.array(z.object({ command: z.enum(["macro1", "macro2"]), title: z.string() })),
 });
 export type StartupState = z.infer<typeof startupStateSchema>;
+
+/** GET /api/main: the control screen's run status and gcode line, without waiting for the 5 s status push. */
+export const mainScreenStateSchema = z.object({
+  status: mainMessages.statusMessage,
+  touchPlate: z.boolean(),
+  gcode: z.object({ lineIndex: z.number(), line: z.string(), lineCount: z.number() }),
+});
+export type MainScreenState = z.infer<typeof mainScreenStateSchema>;
+export type ModalMessage = z.infer<typeof modalSchema>;
 export type Units = z.infer<typeof unitsSchema>;
