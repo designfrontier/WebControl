@@ -91,12 +91,13 @@ class HoleyCalibration(MakesmithInitFuncs):
         self.data.gcode_queue.put("G90")  # Switch to absolute mode
         self.data.gcode_queue.put("G40")
         self.data.gcode_queue.put("G17")
+        self.data.gcode_queue.put("G0 Z5")
         self.data.gcode_queue.put("M3")
         for idx in self.CutOrder:
             x, y = self.IdealCoordinates[idx]
             self.data.console_queue.put(f"cutting index: {idx + 1}")
             self.data.gcode_queue.put("G0 X" + str(x) + " Y" + str(y))
-            self.data.gcode_queue.put("G0 Z-5")
+            self.data.gcode_queue.put("G1 Z-5 F500")
             self.data.gcode_queue.put("G0 Z5")
 
         self.data.gcode_queue.put("G0 X0 Y0")
