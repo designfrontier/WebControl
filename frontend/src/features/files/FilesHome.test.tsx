@@ -38,6 +38,10 @@ describe("Files home", () => {
     lineCount = 0;
     socket.serverRaw({ command: "gcodeUpdateCompressed", data: "", dataFormat: "base64" });
     expect(await screen.findByText("No gcode is loaded.")).toBeInTheDocument();
+
+    lineCount = 7;
+    socket.serverRaw({ command: "showFPSpinner", data: 2048, dataFormat: "int" });
+    expect(await screen.findByText(/7 lines/)).toBeInTheDocument();
   });
 
   it("says so when the summary cannot load", async () => {

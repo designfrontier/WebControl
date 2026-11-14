@@ -20,6 +20,8 @@ const LoadedSummary = ({ loaded }: { loaded: LoadedGcode }) =>
 export const FilesHome = () => {
   const client = useClient();
   const { resource, reload } = useResource(getLoadedGcode);
+  // The spinner announces every gcode push; the gzip payload itself arrives as binary, which the schema rejects.
+  useServerMessage("showFPSpinner", reload);
   useServerMessage("gcodeUpdateCompressed", reload);
 
   return (
