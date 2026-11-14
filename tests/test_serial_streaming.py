@@ -289,3 +289,20 @@ def test_a_new_connection_puts_the_controller_and_the_host_back_in_absolute_mode
 
     assert "G90  " in port.sent
     assert data.positioningMode == 0
+
+
+def test_a_stop_while_a_line_is_being_written_leaves_the_index_at_the_start(data, serial):
+    data.gcode = ["G1 X1 ", "G1 X2 ", "G1 X3 "]
+    data.gcodeIndex = 1
+    data.uploadFlag = 1
+    thread = serial.thread()
+    write = thread.serialInstance.write
+
+    def write_then_stop(payload):
+        write(payload)
+        data.actions.stopRun()
+
+    thread.serialInstance.write = write_then_stop
+    thread.sendNextLine()
+
+    assert (data.gcodeIndex, data.uploadFlag) == (0, 0)

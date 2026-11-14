@@ -502,6 +502,9 @@ class Actions(MakesmithInitFuncs):
         :return:
         '''
         try:
+            # Play while a tool change waits is a resume; a restart would lower the new bit to the old tool's Z.
+            if self.data.manualZAxisAdjust:
+                return self.resumeRun()
             if len(self.data.gcode) > 0:
                 # set current Z target to the current z height in case gcode doesn't include a z move before an xy move.
                 # if it doesn't and the user pauses during an xy move, then the target Z is set to 0.  This sets it to
@@ -542,6 +545,7 @@ class Actions(MakesmithInitFuncs):
             self.data.inPIDVelocityTest = False
             self.data.uploadFlag = 0
             self.data.gcodeIndex = 0
+            self.data.runGeneration += 1
             self.data.manualZAxisAdjust = False
             self.data.quick_queue.put("!")
             with self.data.gcode_queue.mutex:
@@ -1575,7 +1579,8 @@ class Actions(MakesmithInitFuncs):
         previousUnits = units
         xpos = homeX
         ypos = homeY
-        zpos = 0
+        # None until the file sets Z for the current tool; a restart must not lower the bit to a guess.
+        zpos = None
         tool = None
         spindle = None
         laser = None
@@ -1612,7 +1617,7 @@ class Actions(MakesmithInitFuncs):
                             if units != previousUnits:
                                 scale = 1 / 25.4 if units == "G20 " else 25.4
                                 homeX, homeY, xpos, ypos, zpos, xyAxisFeedRate, zAxisFeedRate = [
-                                    value * scale
+                                    None if value is None else value * scale
                                     for value in (homeX, homeY, xpos, ypos, zpos, xyAxisFeedRate, zAxisFeedRate)
                                 ]
                                 previousUnits = units
@@ -1631,7 +1636,7 @@ class Actions(MakesmithInitFuncs):
                             if line.find("Z") != -1:
                                 _zpos = re.search("Z(?=.)(([ ]*)?[+-]?([0-9]*)(\.([0-9]+))?)", line)
                                 if positioning == "G91 ":
-                                    zpos = zpos+float(_zpos.groups()[0])
+                                    zpos = None if zpos is None else zpos + float(_zpos.groups()[0])
                                 else:
                                     zpos = float(_zpos.groups()[0])
                             if 4 in gCodes:
@@ -1648,6 +1653,7 @@ class Actions(MakesmithInitFuncs):
                             spindle = next((f"M{code} " for code in (3, 4, 5) if code in mCodes), spindle)
                             laser = "M106 " if 106 in mCodes else laser
                             laser = "M107 " if 107 in mCodes or 16 in mCodes else laser
+                            zpos = None if 6 in mCodes else zpos
                         if line[0] == 'T':
                             tool = line[1:] #slice off the T
         return {
@@ -1680,7 +1686,8 @@ class Actions(MakesmithInitFuncs):
         if state["dwell"] is not None:
             self.data.gcode_queue.put("G4 " + state["dwell"])
         zpos = state["z"] if zTarget is None else zTarget
-        self.data.gcode_queue.put("G0 Z" + str(round(zpos, 4)) + " ")
+        if zpos is not None:
+            self.data.gcode_queue.put("G0 Z" + str(round(zpos, 4)) + " ")
         self.data.gcode_queue.put(state["positioning"])
 
     def findPositionAt(self, index):

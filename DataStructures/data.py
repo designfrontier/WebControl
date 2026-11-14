@@ -90,6 +90,8 @@ class Data:
     # sets a flag if the gcode is being uploaded currently
     uploadFlag = 0
     previousUploadStatus = 0
+    # Bumped by Stop, so a line already being sent can't move the index after the stop reset it.
+    runGeneration = 0
     manualZAxisAdjust = False
     # this is used to determine the first time the position is received from the machine
     firstTimePosFlag = 0

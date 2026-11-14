@@ -145,6 +145,7 @@ class SerialPortThread(MakesmithInitFuncs):
             Sends the next line of gcode to the machine
         """
         if self.data.gcodeIndex < len(self.data.gcode):
+            runGeneration = self.data.runGeneration
             line = self._stripComments(self.data.gcode[self.data.gcodeIndex])
             # check if command is going to be issued that pauses the controller.
             self.managePause(line)
@@ -159,6 +160,8 @@ class SerialPortThread(MakesmithInitFuncs):
                     # The line is already written, so the index must still advance or the line goes out again.
                     self.data.console_queue.put("Error after sending gcode line: " + str(e))
 
+            if self.data.runGeneration != runGeneration:
+                return
             # increment gcode index
             if self.data.gcodeIndex + 1 < len(self.data.gcode):
                 self.data.gcodeIndex = self.data.gcodeIndex + 1
