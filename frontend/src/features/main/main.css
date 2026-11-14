@@ -1,0 +1,303 @@
+.main-page h1 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+/* Viewer beside the controls on wide screens; stacked on phones. */
+@media (min-width: 1100px) {
+  .main-page {
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 460px);
+    grid-template-rows: auto 1fr;
+    align-items: start;
+  }
+
+  .main-page h1 {
+    grid-column: 1 / -1;
+  }
+
+  .main-page .control-panels {
+    grid-column: 2;
+    grid-row: 2;
+  }
+}
+
+.control-panels {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.panel {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.panel h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.button-row > button {
+  flex: 1 1 auto;
+}
+
+.run-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+}
+
+.run-buttons button {
+  font-weight: 700;
+}
+
+button.go:not(:disabled) {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+button.caution:not(:disabled) {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+button.danger,
+button.primary {
+  font-weight: 600;
+}
+
+button.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--danger-ink);
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+button.danger[data-alarm="true"] {
+  animation: alarm-pulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes alarm-pulse {
+  to {
+    box-shadow: 0 0 0 4px var(--danger);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button.danger[data-alarm="true"] {
+    animation: none;
+    box-shadow: 0 0 0 4px var(--danger);
+  }
+}
+
+.alarm-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--ok);
+  border-radius: var(--radius);
+  color: var(--ok);
+}
+
+.alarm-status[data-alarm="true"] {
+  border-color: var(--danger);
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.jog-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+}
+
+.jog-pad button {
+  min-height: calc(var(--tap) * 1.25);
+  padding: 0 var(--space-2);
+}
+
+.distance-field {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.distance-field input,
+.goto-line input {
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.distance-field input[aria-invalid="true"],
+.goto-line input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.field-error {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.85rem;
+}
+
+.goto-line {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.gcode-line {
+  margin: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.readouts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+}
+
+.readouts div {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.readouts dt {
+  color: var(--muted);
+}
+
+.readouts dd {
+  margin: 0;
+  font-family: var(--mono);
+  white-space: pre;
+}
+
+.meters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-2);
+}
+
+.meters label {
+  display: grid;
+  gap: var(--space-1);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.meters meter {
+  width: 100%;
+}
+
+.console ol {
+  max-height: 240px;
+  margin: 0;
+  padding: var(--space-2);
+  overflow-y: auto;
+  list-style: none;
+  background: var(--bg);
+  border-radius: var(--radius);
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+}
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: rgb(0 0 0 / 0.55);
+}
+
+.server-dialog {
+  display: grid;
+  gap: var(--space-3);
+  width: min(480px, 100%);
+  max-height: calc(100vh - 2 * var(--space-4));
+  overflow-y: auto;
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.server-dialog[data-kind="alert"] {
+  border-color: var(--warn);
+}
+
+.server-dialog header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.server-dialog h2,
+.server-dialog header p {
+  margin: 0;
+}
+
+.server-dialog h2 {
+  font-size: 1.1rem;
+}
+
+.server-dialog-message {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.server-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.server-dialog progress {
+  width: 100%;
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  margin: 0 auto;
+  border: 3px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

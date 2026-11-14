@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, NavLink, Outlet } from "react-router";
+import { ServerDialogs } from "../features/main";
 import { sections } from "./sections";
 import { AlarmBanner, StatusBar } from "./StatusBar";
 
@@ -42,6 +43,7 @@ export const Layout = () => {
       <main className="content">
         <Outlet />
       </main>
+      <ServerDialogs />
     </div>
   );
 };

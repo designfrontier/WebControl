@@ -72,8 +72,6 @@ describe("dialogReducer", () => {
 
   it("dismisses one dialog by id", () => {
     const opened = run(alert("one"), alert("two"));
-    expect(dialogReducer(opened, { type: "dismiss", id: 1 }).dialogs.map((dialog) => dialog.message)).toEqual([
-      "two",
-    ]);
+    expect(dialogReducer(opened, { type: "dismiss", id: 1 }).dialogs.map((dialog) => dialog.message)).toEqual(["two"]);
   });
 });
