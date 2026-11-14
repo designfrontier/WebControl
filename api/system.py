@@ -31,7 +31,7 @@ def _firmware_version(data):
 
 
 def _release_tag(release):
-    return getattr(release, "tag_name", None) or _text(release) if release else None
+    return (getattr(release, "tag_name", None) or _text(release)) if release else None
 
 
 def system_info(data):
@@ -78,12 +78,12 @@ def get_pid():
     return jsonify(pid_settings(current_app.data))
 
 
+PLAIN_DECIMAL = re.compile(r"-?(\d+\.?\d*|\.\d+)")
+
+
 def _is_number(value):
-    try:
-        float(value)
-        return True
-    except (TypeError, ValueError):
-        return False
+    """Plain decimals only: the firmware's parser knows no exponents, nan, inf or digit separators."""
+    return not isinstance(value, bool) and bool(PLAIN_DECIMAL.fullmatch(str(value).strip()))
 
 
 def pid_test_action(body):

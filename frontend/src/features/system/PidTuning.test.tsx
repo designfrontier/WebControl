@@ -2,7 +2,7 @@ import { screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { jsonResponse } from "../../test/fakeFetch";
 import { renderApp } from "../../test/render";
-import { pidSettings, systemFetch } from "./systemFixtures";
+import { pidSettings, systemFetch } from "../../test/systemFixtures";
 
 const card = (name: string) => within(screen.getByRole("region", { name }));
 const velocity = () => card("Velocity PID test");
@@ -77,6 +77,14 @@ describe("PidTuning", () => {
     expect(velocity().getByRole("textbox", { name: "Kp" })).toHaveAttribute("aria-invalid", "true");
     expect(velocity().getByRole("textbox", { name: "Start" })).not.toHaveAttribute("aria-invalid");
     expect(fetch).not.toHaveBeenCalledWith("/api/system/pid-test", expect.anything());
+  });
+
+  it("refuses forms the firmware cannot parse, as the server does", async () => {
+    const { user } = renderPid();
+    await loaded();
+    await fill(user, velocity, { Start: "1e3", Stop: "0x10", Steps: "Infinity", Kp: ".5" });
+    await user.click(velocity().getByRole("button", { name: "Run velocity test" }));
+    expect(velocity().getByRole("alert")).toHaveTextContent("Enter numbers for Start, Stop, Steps.");
   });
 
   it("posts a position test with the chosen motor and version", async () => {

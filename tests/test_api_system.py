@@ -104,11 +104,25 @@ class TestPid:
             ({"kind": "speed"}, "kind"),
             ({"kind": "velocity", "motor": "Z"}, "motor"),
             ({"kind": "position", "motor": "L", "start": "x"}, "not numbers: start, stop, steps, time"),
+            ({"kind": "velocity", "motor": "L", "start": 0, "stop": 1, "steps": 1, "version": 1, "kp": "nan", "ki": 0, "kd": 0}, "not numbers: kp"),
+            ({"kind": "velocity", "motor": "L", "start": 0, "stop": 1, "steps": 1, "version": 1, "kp": "inf", "ki": 0, "kd": 0}, "not numbers: kp"),
+            ({"kind": "velocity", "motor": "L", "start": 0, "stop": 1, "steps": 1, "version": 1, "kp": "-inf", "ki": 0, "kd": 0}, "not numbers: kp"),
+            ({"kind": "velocity", "motor": "L", "start": 0, "stop": 1, "steps": 1, "version": 1, "kp": "1e400", "ki": 0, "kd": 0}, "not numbers: kp"),
+            ({"kind": "velocity", "motor": "L", "start": 0, "stop": 1, "steps": 1, "version": 1, "kp": "1_0", "ki": 0, "kd": 0}, "not numbers: kp"),
+            ({"kind": "velocity", "motor": "L", "start": 0, "stop": 1, "steps": 1, "version": 1, "kp": True, "ki": 0, "kd": 0}, "not numbers: kp"),
+            ({"kind": "velocity", "motor": "L", "start": 0, "stop": 1, "steps": 1, "version": 1, "kp": " ", "ki": 0, "kd": 0}, "not numbers: kp"),
+            ({"kind": "velocity", "motor": "L", "start": 0, "stop": 1, "steps": 1, "version": 1, "kp": None, "ki": 0, "kd": 0}, "not numbers: kp"),
         ],
     )
     def test_rejects_bad_requests(self, body, message):
         with pytest.raises(ValueError, match=message):
             pid_test_action(body)
+
+    @pytest.mark.parametrize("value", ["-1.5", ".5", "2.", " 3 ", 4, 0.25])
+    def test_accepts_plain_decimals(self, value):
+        body = {"kind": "velocity", "motor": "L", "start": 0, "stop": 1, "steps": 1, "version": 1, "ki": 0, "kd": 0}
+        body["kp"] = value
+        assert pid_test_action(body)["data"]["arg"]["KpV"] == str(value).strip()
 
     def test_endpoint_queues_the_b13_command(self, client, data):
         data.uploadFlag = 0

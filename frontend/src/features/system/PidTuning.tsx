@@ -41,8 +41,9 @@ const FIELDS: Record<PidKind, { field: Field; label: string }[]> = {
   ],
 };
 
-const isNumber = (value: string | undefined) =>
-  value !== undefined && value.trim() !== "" && Number.isFinite(Number(value));
+/** Matches api/system.py: the firmware parses plain decimals only. */
+const PLAIN_DECIMAL = /^-?(\d+\.?\d*|\.\d+)$/;
+const isNumber = (value: string | undefined) => value !== undefined && PLAIN_DECIMAL.test(value.trim());
 
 const MotorAdjustment = ({ fourMotor, disabled }: { fourMotor: boolean; disabled: boolean }) => {
   const client = useClient();
