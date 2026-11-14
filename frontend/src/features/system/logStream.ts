@@ -43,7 +43,10 @@ export const logReducer = (view: LogView, event: LogEvent): LogView => {
       const { message } = event;
       const withState = { ...view, suspended: message.state };
       if (message.log === "state" || !view.following[message.log]) return withState;
-      return { ...withState, lines: { ...view.lines, [message.log]: append(view.lines[message.log], message.data) } };
+      return {
+        ...withState,
+        lines: { ...view.lines, [message.log]: append(view.lines[message.log], message.data.replace(/\r?\n$/, "")) },
+      };
     }
   }
 };

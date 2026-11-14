@@ -1,7 +1,10 @@
 import { useLayoutEffect, useRef } from "react";
+import type { UIEvent } from "react";
 import type { SocketLike } from "../../socket/client";
 import { LOG_LINE_LIMIT, connectLogSocket, useLogStream } from "./logStream";
 import type { LogEvent, LogName, LogView } from "./logStream";
+
+const BOTTOM_SLACK_PX = 4;
 
 const PANES: { log: LogName; title: string }[] = [
   { log: "log", title: "Log" },
@@ -29,11 +32,16 @@ interface PaneProps {
 
 const LogPane = ({ log, title, view, dispatch }: PaneProps) => {
   const output = useRef<HTMLPreElement>(null);
+  const atBottom = useRef(true);
   const lines = view.lines[log];
 
   useLayoutEffect(() => {
-    if (output.current) output.current.scrollTop = output.current.scrollHeight;
+    if (output.current && atBottom.current) output.current.scrollTop = output.current.scrollHeight;
   }, [lines]);
+
+  const onScroll = ({ currentTarget: pane }: UIEvent<HTMLPreElement>) => {
+    atBottom.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < BOTTOM_SLACK_PX;
+  };
 
   return (
     <section className="log-pane" aria-labelledby={`${log}-title`}>
@@ -51,7 +59,7 @@ const LogPane = ({ log, title, view, dispatch }: PaneProps) => {
           Clear view
         </button>
       </div>
-      <pre ref={output} className="log-output" tabIndex={0} aria-label={`${title} lines`}>
+      <pre ref={output} onScroll={onScroll} className="log-output" tabIndex={0} aria-label={`${title} lines`}>
         {lines.join("\n")}
       </pre>
       <p className="muted">

@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { createFakeSocket } from "../../test/fakeSocket";
 import type { FakeSocket } from "../../test/fakeSocket";
@@ -9,7 +9,8 @@ import { LogsPanel } from "./LogsPanel";
 const io = vi.hoisted(() => vi.fn(() => ({ id: undefined, connected: false })));
 vi.mock("socket.io-client", () => ({ io }));
 
-const line = (log: "log" | "alog", data: string, state = false) => ({ log, data, state });
+/** LogStreamer queues each entry with its trailing newline. */
+const line = (log: "log" | "alog", data: string, state = false) => ({ log, data: `${data}\n`, state });
 
 /** StrictMode mounts twice, so each connect gets a fresh socket like the real forceNew one; tests drive the last. */
 const renderLogs = ({ connected = false } = {}) => {
@@ -74,6 +75,34 @@ describe("LogsPanel", () => {
 
     await user.click(pane("Log").getByRole("button", { name: "Clear view" }));
     expect(lines("Log")).toBe("");
+  });
+
+  it("strips the server's CRLF too", () => {
+    const { logSocket } = renderLogs();
+    logSocket.serverRaw({ log: "log", data: "a\r\n", state: false });
+    logSocket.serverRaw({ log: "log", data: "b\r\n", state: false });
+    expect(lines("Log")).toBe("a\nb");
+  });
+
+  it("follows new lines only while the pane is scrolled to the bottom", () => {
+    const { logSocket } = renderLogs();
+    const output = pane("Log").getByLabelText("Log lines");
+    Object.defineProperties(output, {
+      scrollHeight: { configurable: true, value: 500 },
+      clientHeight: { configurable: true, value: 100 },
+    });
+    logSocket.serverRaw(line("log", "first"));
+    expect(output.scrollTop).toBe(500);
+
+    output.scrollTop = 200;
+    fireEvent.scroll(output);
+    logSocket.serverRaw(line("log", "second"));
+    expect(output.scrollTop).toBe(200);
+
+    output.scrollTop = 400;
+    fireEvent.scroll(output);
+    logSocket.serverRaw(line("log", "third"));
+    expect(output.scrollTop).toBe(500);
   });
 
   it("disconnects when it unmounts", () => {
