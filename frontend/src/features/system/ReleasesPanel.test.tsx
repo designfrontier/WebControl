@@ -14,7 +14,10 @@ describe("ReleasesPanel", () => {
     renderReleases();
     expect(await screen.findByText("Installed version: v0.95")).toBeInTheDocument();
     expect(release("Faster previews (v0.96)").getByText("Latest")).toBeInTheDocument();
-    expect(release("Faster previews (v0.96)").getByRole("link", { name: "#12" })).toHaveAttribute("target", "_blank");
+    expect(await release("Faster previews (v0.96)").findByRole("link", { name: "#12" })).toHaveAttribute(
+      "target",
+      "_blank",
+    );
     expect(release("v0.95").getByText("Installed")).toBeInTheDocument();
     expect(release("v0.95").queryByRole("button")).not.toBeInTheDocument();
     expect(release("Older (v0.94)").getByRole("button", { name: "Install v0.94" })).toBeInTheDocument();

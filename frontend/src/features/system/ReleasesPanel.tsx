@@ -4,7 +4,7 @@ import type { Releases } from "../../protocol";
 import { selectRunState } from "../../state/machine";
 import { getReleases } from "./api";
 import { ConfirmDialog } from "./Dialog";
-import { MarkdownView } from "./Markdown";
+import { LazyMarkdown as MarkdownView } from "./LazyMarkdown";
 import { errorText, useLoad } from "./useLoad";
 
 type Release = Releases["releases"][number];

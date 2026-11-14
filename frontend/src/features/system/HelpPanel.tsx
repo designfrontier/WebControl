@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { useParams } from "react-router";
 import type { Fetch } from "../../api/http";
 import { getHelpPage } from "./api";
-import { MarkdownView } from "./Markdown";
+import { LazyMarkdown as MarkdownView } from "./LazyMarkdown";
 import { errorText, useLoad } from "./useLoad";
 
 const INDEX_PAGE = "assets/helpPages.md";
