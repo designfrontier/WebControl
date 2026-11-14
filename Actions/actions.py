@@ -1,4 +1,5 @@
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
+from File.safePaths import libraryRoot, resolveInside
 
 import os
 import sys
@@ -1488,8 +1489,7 @@ class Actions(MakesmithInitFuncs):
         :return:
         '''
         try:
-            home = self.data.config.getHome()
-            directory = home + "/.WebControl/gcode/" + _directory
+            directory = resolveInside(libraryRoot(self.data.config, "gcode"), _directory)
             if not os.path.isdir(directory):
                 os.mkdir(directory)
             data = {"directory": _directory}
