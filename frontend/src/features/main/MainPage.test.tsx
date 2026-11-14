@@ -376,7 +376,7 @@ describe("MainPage readouts and console", () => {
     expect(screen.getByText("No messages yet.")).toBeInTheDocument();
     socket.serverMessage("controllerMessage", "Grbl v1.1");
     socket.serverMessage("controllerMessage", "ok");
-    const log = screen.getByRole("log", { name: "Controller messages" });
+    const log = screen.getByRole("log", { name: "Machine messages" });
     expect(
       within(log)
         .getAllByRole("listitem")

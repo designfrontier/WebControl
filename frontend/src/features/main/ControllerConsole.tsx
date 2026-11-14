@@ -11,7 +11,7 @@ export const ControllerConsole = () => {
 
   return (
     <section className="panel console" aria-labelledby="console-title">
-      <h2 id="console-title">Controller messages</h2>
+      <h2 id="console-title">Machine messages</h2>
       {messages.length === 0 ? (
         <p className="muted">No messages yet.</p>
       ) : (
