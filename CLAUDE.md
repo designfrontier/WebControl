@@ -56,7 +56,8 @@
 - `app.py` — creates Flask app, SocketIO and Mobility instances
 - `docs/index.md` — help site home
 - `main.py` — entry point: builds `Data`, starts worker threads, defines HTTP routes and socket handlers, runs the server
-- `main.spec` — PyInstaller build spec
+- `main.spec` — PyInstaller build spec; it does not bundle `frontend/dist` yet, so packaged builds return 503 at
+  `/next`
 - `next_ui.py` — serves `frontend/dist` at `/next` with SPA fallback
 - `tests/e2e_backend.py` — runs `main.py` on a throwaway `HOME` and port for Playwright
 
@@ -104,13 +105,14 @@ events, per-client emits.
 ### Slice ownership
 
 Each slice edits only its own `frontend/src/features/<x>/`, `frontend/src/protocol/<x>.ts`, `api/<x>.py` and
-`tests/test_api_<x>.py`, and replaces its placeholder inside its own folder. `app/sections.ts` and
+`tests/test_api_<x>.py`, and replaces its placeholder inside its own folder. A slice's `index.ts` only re-exports
+or declares its `Section`; logic goes in a sibling module, because coverage skips `index.ts` files. `app/sections.ts` and
 `protocol/index.ts` already import every slice, so they need no edits. Other shared files (`app/`, `state/`,
 `socket/`, `test/`, `api/__init__.py`, `main.py`) change only for that slice's own placeholder entry, kept minimal
 and additive.
 
 New endpoints go in `api/<x>.py` (a module-level `blueprint`, auto-mounted under `/api`). Emit to just the requester
-with `api.client_emit.emit_to_client(command, data)`. A new socket event needs a
+with `api.client_emit.emit_to_client(command, data)`; outside a socket handler, pass `sid=`. A new socket event needs a
 `@socketio.on(..., namespace="/MaslowCNC")` handler in `main.py` or `api/`; the protocol contract test fails if an
 event has none.
 
