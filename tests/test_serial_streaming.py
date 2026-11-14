@@ -190,3 +190,15 @@ def test_losing_the_connection_mid_cut_pauses_the_run(data, serial):
     messages = serial.ui_messages()
     assert ("Action", "setAsResume", "") in messages
     assert any(command == "Alert" and message == "Connection Lost" for command, message, _ in messages)
+
+
+def test_buffered_streaming_never_overfills_the_controller_buffer(data, serial):
+    data.gcode = ["G1 X1 Y1 "] * 20
+    data.gcodeShift = [1000.1234, 1000.1234]
+    data.uploadFlag = 1
+    skip_startup_commands = once_after(serial.clock, 0, lambda port: drain(data.gcode_queue))
+
+    port = serial.run(ack=False, on_poll=skip_startup_commands, buffer=True)
+
+    assert port.sent[0].startswith("G1 X1001.1234")
+    assert sum(len(line) for line in port.written) <= SerialPortThread.bufferSize

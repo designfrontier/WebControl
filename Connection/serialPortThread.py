@@ -129,22 +129,27 @@ class SerialPortThread(MakesmithInitFuncs):
         '''
         self.data.gcode_queue.put("$$")
 
+    def _stripComments(self, line):
+        filtersparsed = re.sub(r'\(([^)]*)\)', '', line)  # mach3 style ( ) comments
+        return re.sub(r';([^\n]*)?', '', filtersparsed)  # standard ; comments
+
+    def _shiftToHome(self, line):
+        '''
+        Applies the gcode home shift, which only makes sense for absolute (G90) moves.
+        '''
+        return self.data.gcodeFile.moveLine(line) if self.data.positioningMode == 0 else line
+
     def sendNextLine(self):
         """
             Sends the next line of gcode to the machine
         """
         if self.data.gcodeIndex < len(self.data.gcode):
-            line = self.data.gcode[self.data.gcodeIndex]
-            # filter comments from line
-            filtersparsed = re.sub(r'\(([^)]*)\)', '', line)  # replace mach3 style gcode comments with newline
-            line = re.sub(r';([^\n]*)?', '',filtersparsed)  # replace standard ; initiated gcode comments with newline
+            line = self._stripComments(self.data.gcode[self.data.gcodeIndex])
             # check if command is going to be issued that pauses the controller.
             self.managePause(line)
             self.manageToolChange(line)
             if not line.isspace(): # if all spaces, don't send.  likely a comment.
-                # put gcode home shift here.. only if in absolute mode (G90)    
-                if self.data.positioningMode == 0:
-                    line = self.data.gcodeFile.moveLine(line)
+                line = self._shiftToHome(line)
                 self._write(line)
                 # if there is a units change, then update the UI client so position messages are processed correctly.
                 if line.find("G20") != -1:
@@ -382,15 +387,9 @@ class SerialPortThread(MakesmithInitFuncs):
         if self.data.uploadFlag == 1 and len(self.data.gcode) > 0 and self.data.gcode_queue.empty():
             if self.weAreBufferingLines:
                 try:
-                    # todo: clean this up because the line gets filtered twice.. once to make sure its not too
-                    # long, and the second in the sendNextLine command.. bit redundant.
-                    line = self.data.gcode[self.data.gcodeIndex]
-                    # replace mach3 style gcode comments with newline
-                    filtersparsed = re.sub(r'\(([^)]*)\)', '', line)
-                    # replace standard ; initiated gcode comments with newline
-                    line = re.sub(r';([^\n]*)?', '', filtersparsed)
-                    # if there is space in the buffer send line
-                    if self.bufferSpace > len(line):
+                    line = self._stripComments(self.data.gcode[self.data.gcodeIndex])
+                    # if there is space in the buffer for the line as it will be written, newline included
+                    if line.isspace() or self.bufferSpace > len(self._shiftToHome(line) + "\n"):
                         self.sendNextLine()
                 except IndexError:
                     self.data.console_queue.put("index error when reading gcode")
