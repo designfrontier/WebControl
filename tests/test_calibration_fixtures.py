@@ -5,6 +5,7 @@ import os
 
 import pytest
 
+import Actions.holeyCalibration as holeyCalibration
 import calibration_fixture_cases as cases
 from helpers import drain
 
@@ -27,11 +28,16 @@ def geometry(data):
         drain(queue)
 
 
-def matches(actual, expected, tolerance):
+def matches(actual, expected, tolerance, key_tolerance=None):
+    key_tolerance = key_tolerance or {}
     if isinstance(expected, dict):
-        return actual.keys() == expected.keys() and all(matches(actual[k], v, tolerance) for k, v in expected.items())
+        return actual.keys() == expected.keys() and all(
+            matches(actual[k], v, key_tolerance.get(k, tolerance), key_tolerance) for k, v in expected.items()
+        )
     if isinstance(expected, list):
-        return len(actual) == len(expected) and all(matches(a, e, tolerance) for a, e in zip(actual, expected))
+        return len(actual) == len(expected) and all(
+            matches(a, e, tolerance, key_tolerance) for a, e in zip(actual, expected)
+        )
     if isinstance(expected, float) and not isinstance(actual, bool):
         return actual == pytest.approx(expected, abs=tolerance, rel=0)
     return actual == expected
@@ -46,11 +52,20 @@ def check(name, actual):
             outfile.write("\n")
     with open(path) as infile:
         expected = json.load(infile)
-    assert matches(normalised, expected, expected.get("tolerance", 0))
+    assert matches(normalised, expected, expected.get("tolerance", 0), expected.get("keyTolerance"))
 
 
 def test_holey_calibrate_reproduces_the_fixture(geometry):
     check("holey_calibrate.json", cases.holey_cases(geometry))
+
+
+def test_holey_fixture_accepts_a_different_least_squares_solver(geometry, monkeypatch):
+    real = holeyCalibration.least_squares
+    monkeypatch.setattr(holeyCalibration, "least_squares", lambda *args, **kwargs: real(*args, **kwargs, method="lm"))
+    with open(os.path.join(FIXTURES, "holey_calibrate.json")) as infile:
+        expected = json.load(infile)
+    actual = json.loads(json.dumps(cases.holey_cases(geometry)))
+    assert matches(actual, expected, expected["tolerance"], expected.get("keyTolerance"))
 
 
 def test_holey_kinematics_reproduces_the_fixture():

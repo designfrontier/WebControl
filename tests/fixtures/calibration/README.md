@@ -5,7 +5,8 @@ the same numbers. `tests/test_calibration_fixtures.py` checks that the Python co
 the case builders live in `tests/calibration_fixture_cases.py`.
 
 All lengths are millimetres. Chain tolerances are percent. Every file that compares floats has a `tolerance` field:
-the largest absolute difference allowed for each float in it. Integers, strings, booleans and `null` must match
+the largest absolute difference allowed for each float in it. A `keyTolerance` object, where present, overrides
+`tolerance` for the fields it names, wherever they appear in the file. Integers, strings, booleans and `null` must match
 exactly.
 
 ## Files
@@ -23,6 +24,9 @@ exactly.
   `expected`: `Opt_D`, `Opt_motorOffsetY`, `Opt_leftChainTolerance`, `Opt_rightChainTolerance` (each rounded to 5
   decimals by the code) and `totalError` (root of the summed squared residuals, not rounded). `expected` is `null`
   when the calculation must be refused.
+- `keyTolerance`: 1e-3 for the four `Opt_*` fields. They are where a least-squares solver stopped, so another
+  correct solver lands up to about 1e-4 away (scipy's `lm`, `dogbox` or a different start all do); `totalError`
+  keeps the 1e-6 `tolerance`.
 
 Cases: ideal measurements of the configured geometry; exact measurements of a different machine (the fit must
 recover `trueMachine`); four sets with uniform noise of ±0.5 or ±1 mm from fixed seeds, rounded to 0.01 mm; a
@@ -38,8 +42,11 @@ work area (2438.4 x 1219.2 mm, 304.8 mm by 152.4 mm steps, edges included).
   `forward(left, right)` starting at `forwardGuess`, or `null` when it does not converge). `forward` stops once
   both chain errors are under 1e-9 mm; after 5001 guesses it returns its last guess if both errors are under
   0.1 mm, and `null` otherwise.
-- The quadrilateral solver keeps its sled angle between calls, so evaluate the points in file order on one fresh
-  model, inverse then forward for each point.
+- `offBed[]`: targets outside the work area and the `chains` `inverse()` gives for them. Each axis is clamped to the
+  work area on its own first, as the firmware does.
+- `unreachable[]`: chain lengths no position matches; `forward` is always `null`.
+- The quadrilateral solver keeps its sled angle between calls, so evaluate on one fresh model, in file order:
+  `points` (inverse then forward for each), then `offBed`, then `unreachable`.
 
 ### `triangular_calculate.json`
 

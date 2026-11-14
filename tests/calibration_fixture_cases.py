@@ -45,6 +45,7 @@ KINEMATIC_PARAMETERS = [
     "isQuadKinematics",
 ]
 FIRMWARE_UNITS = {0: "mm", 1: "mm", 2: "mm", 3: "mm", 8: "mm", 13: "mm", 37: "", 40: "%", 41: "%"}
+OPTIMISED_PARAMETERS = ["Opt_D", "Opt_motorOffsetY", "Opt_leftChainTolerance", "Opt_rightChainTolerance"]
 TRUE_MACHINE = {"D": 2990.0, "motorOffsetY": 470.0, "leftChainTolerance": 0.3, "rightChainTolerance": -0.2}
 TRIANGULAR_INPUTS = [
     {"cut12": 1930, "cut34": 1930, "cut5": 300, "bitDiameter": 6.35},
@@ -111,6 +112,7 @@ def holey_cases(data):
         "kinematics": kinematic_parameters(data.holeyCalibration.kin),
         "trueMachine": TRUE_MACHINE,
         "tolerance": 1e-6,
+        "keyTolerance": {key: 1e-3 for key in OPTIMISED_PARAMETERS},
         "cases": cases,
     }
 
@@ -146,14 +148,33 @@ def kinematics_points(kinematics):
     return [point(x, y) for x, y in grid()]
 
 
+OFF_BED = [(-5000.0, 5000.0), (5000.0, -5000.0), (-1500.0, 0.0), (0.0, 700.0)]
+UNREACHABLE = [(100.0, 100.0), (4000.0, 100.0)]
+
+
+def off_bed_points(kinematics):
+    return [{"x": x, "y": y, "chains": list(kinematics.inverse(x, y))} for x, y in OFF_BED]
+
+
+def unreachable_points(kinematics):
+    return [{"left": left, "right": right, "forward": kinematics.forward(left, right)} for left, right in UNREACHABLE]
+
+
 def kinematics_cases():
+    def mode(name, kinematics):
+        points = kinematics_points(kinematics)
+        return {
+            "mode": name,
+            "parameters": kinematic_parameters(kinematics),
+            "points": points,
+            "offBed": off_bed_points(kinematics),
+            "unreachable": unreachable_points(kinematics),
+        }
+
     return {
         "tolerance": 1e-9,
         "forwardGuess": [-10, 10],
-        "modes": [
-            {"mode": mode, "parameters": kinematic_parameters(kinematics), "points": kinematics_points(kinematics)}
-            for mode, kinematics in (("triangular", simulator(False)), ("quadrilateral", simulator(True)))
-        ],
+        "modes": [mode("triangular", simulator(False)), mode("quadrilateral", simulator(True))],
     }
 
 

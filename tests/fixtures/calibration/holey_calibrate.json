@@ -44,6 +44,12 @@
     "rightChainTolerance": -0.2
   },
   "tolerance": 1e-06,
+  "keyTolerance": {
+    "Opt_D": 0.001,
+    "Opt_motorOffsetY": 0.001,
+    "Opt_leftChainTolerance": 0.001,
+    "Opt_rightChainTolerance": 0.001
+  },
   "cases": [
     {
       "name": "ideal measurements of the configured geometry",
