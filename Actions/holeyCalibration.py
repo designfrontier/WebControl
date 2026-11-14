@@ -52,6 +52,13 @@ class HoleyCalibration(MakesmithInitFuncs):
 
     kin = kinematics.Kinematics()
     kin.isQuadKinematics = False
+    OPTIONAL_MODEL_SETTINGS = [
+        ("Advanced Settings", "chainElasticity", "chainElasticity"),
+        ("Advanced Settings", "chainDensity", "chainDensity"),
+        ("Maslow Settings", "sledWidth", "l"),
+        ("Maslow Settings", "sledHeight", "s"),
+        ("Maslow Settings", "sledCG", "h3"),
+    ]
 
     # Define function with input of (ideal lengths and) machine parameters (delta) and output of length error
     def LengthDeltaFromIdeal(
@@ -168,6 +175,11 @@ class HoleyCalibration(MakesmithInitFuncs):
         self.kin.leftChainTolerance = self.SP_leftChainTolerance
         self.kin.rightChainTolerance = self.SP_rightChainTolerance
         self.kin.chainOverSprocket = self.SP_chainOverSprocket
+        distPerRot = float(self.data.config.getValue("Computed Settings", "distPerRot"))
+        self.kin.R = distPerRot / (2.0 * kinematics.FIRMWARE_PI)
+        for section, key, attribute in self.OPTIONAL_MODEL_SETTINGS:
+            value = self.data.config.getValue(section, key)
+            setattr(self.kin, attribute, getattr(kinematics.Kinematics, attribute) if value is None else float(value))
         self.kin.recomputeGeometry()
         self.IdealLengthArray = self.CalculateMeasurements(IdealCoordinates)
 

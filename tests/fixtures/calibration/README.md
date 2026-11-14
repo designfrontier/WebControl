@@ -17,8 +17,9 @@ exactly.
 
 - `geometry`: the WebControl settings in force, by section and key, as stored strings (the values of
   `defaultwebcontrol.json`).
-- `kinematics`: the parameters of the kinematics model the fit uses. Holey calibration keeps its own model and
-  does not take the sprocket radius from the settings, so `R` is the class default 10.2, not distPerRot / 2π.
+- `kinematics`: the parameters of the kinematics model the fit uses. It is the firmware's model: `R` is
+  distPerRot / (2 × 3.14159), as the firmware computes it, and chainElasticity and the sled geometry (`l`, `s`, `h3`)
+  come from the settings.
 - `trueMachine`: the machine used to simulate the "differing machine" measurements.
 - `cases[]`: `name`, `measurements` (M1 to M12, in the order of the form; `null` is an empty field) and
   `expected`: `Opt_D`, `Opt_motorOffsetY`, `Opt_leftChainTolerance`, `Opt_rightChainTolerance` (each rounded to 5
@@ -34,7 +35,7 @@ missing M5 and a non-numeric M12, both refused.
 
 ### `kinematics.json`
 
-`HoleySimulationKinematics.Kinematics` `inverse()` and `forward()` over a 9 x 9 grid covering the whole default
+`HoleySimulationKinematics.Kinematics` `inverse()` and `forward()`, with `R` = 63.5 / (2 × 3.14159), over a 9 x 9 grid covering the whole default
 work area (2438.4 x 1219.2 mm, 304.8 mm by 152.4 mm steps, edges included).
 
 - `modes[]`: one entry for triangular and one for quadrilateral kinematics, each with the model `parameters` and
