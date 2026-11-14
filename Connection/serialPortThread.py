@@ -167,6 +167,7 @@ class SerialPortThread(MakesmithInitFuncs):
                 self.data.gcodeIndex = self.data.gcodeIndex + 1
             else:
                 self.data.uploadFlag = 0
+                self.data.jobInProgress = False
                 self.data.gcodeIndex = 0
                 self.data.console_queue.put("Gcode Ended")
 
