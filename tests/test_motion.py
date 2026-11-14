@@ -73,7 +73,7 @@ def test_restart_mid_file_uses_the_files_units_over_the_machines(job):
 
     job.actions.processGCode()
 
-    assert drain(job.gcode_queue)[:3] == ["G20 ", "G90 ", "G0 Z0.1969 F12.8"]
+    assert drain(job.gcode_queue)[:3] == ["G20 ", "G90 ", "G0 Z0.1969 F0.5039"]
 
 
 def test_restart_converts_home_not_the_current_position_when_the_file_switches_units(job):
@@ -83,7 +83,7 @@ def test_restart_converts_home_not_the_current_position_when_the_file_switches_u
 
     job.actions.processGCode()
 
-    assert drain(job.gcode_queue)[3] == "G0 X2.0 Y3.0" + FEED
+    assert drain(job.gcode_queue)[3] == "G0 X2.0 Y3.0 F31.4961"
 
 
 def pause_at(data, lines, index, z_target):
@@ -243,3 +243,22 @@ def test_restart_does_not_mistake_g91_1_arc_centres_for_relative_moves(job):
     queued = drain(job.gcode_queue)
     assert queued[3] == "G0 X30.0 Y40.0" + FEED
     assert queued[-1] == "G90 "
+
+
+def test_restart_converts_the_default_feeds_to_inches(job):
+    set_machine_units(job, "INCHES")
+    load(job, ["G90", "G0 X1 Y1", "G1 X2"], 2)
+
+    job.actions.processGCode()
+
+    assert drain(job.gcode_queue)[2:4] == ["G0 Z0.1969 F0.5039", "G0 X1.0 Y1.0 F31.4961"]
+
+
+def test_restart_converts_z_and_feeds_when_the_file_switches_units(job):
+    load(job, ["G21", "G1 Z-2.54 F254", "G1 X25.4 F508", "G20", "G1 X2"], 4)
+
+    job.actions.processGCode()
+
+    queued = drain(job.gcode_queue)
+    assert queued[2:4] == ["G0 Z0.1969 F10.0", "G0 X1.0 Y0.0 F20.0"]
+    assert queued[4] == "G0 Z-0.1 "

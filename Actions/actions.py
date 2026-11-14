@@ -1599,13 +1599,14 @@ class Actions(MakesmithInitFuncs):
         Parses the file up to index for the units, positioning, XYZ target (XY include home), feed rates, tool,
         spindle, laser and dwell in effect there, all in the units in effect there.
         '''
-        zAxisFeedRate = 12.8  # currently hardcoded, but Todo: Add setting
-        xyAxisFeedRate = float(self.data.config.getValue("Advanced Settings", "maxFeedrate"))
         positioning = "G90 "
         homeX = float(self.data.config.getValue("Advanced Settings", "homeX"))
         homeY = float(self.data.config.getValue("Advanced Settings", "homeY"))
         # homeX/homeY are stored in machine units, so a file without G20/G21 runs in them too.
         units = "G20 " if self.data.units == "INCHES" else "G21 "
+        defaultFeedScale = 1 / 25.4 if units == "G20 " else 1
+        zAxisFeedRate = 12.8 * defaultFeedScale  # mm/min, currently hardcoded, but Todo: Add setting
+        xyAxisFeedRate = float(self.data.config.getValue("Advanced Settings", "maxFeedrate")) * defaultFeedScale
         previousUnits = units
         xpos = homeX
         ypos = homeY
@@ -1640,20 +1641,15 @@ class Actions(MakesmithInitFuncs):
                                 positioning = "G91 "
                             if 20 in gCodes:
                                 units = "G20 "
-                                if previousUnits != units: #previous metrics now imperial
-                                    homeX = homeX / 25.4
-                                    homeY = homeY / 25.4
-                                    xpos = xpos / 25.4
-                                    ypos = ypos / 25.4
-                                    previousUnits = units
                             if 21 in gCodes:
                                 units = "G21 "
-                                if previousUnits != units: #previous imperial now metrics
-                                    homeX = homeX * 25.4
-                                    homeY = homeY * 25.4
-                                    xpos = xpos * 25.4
-                                    ypos = ypos * 25.4
-                                    previousUnits = units
+                            if units != previousUnits:
+                                scale = 1 / 25.4 if units == "G20 " else 25.4
+                                homeX, homeY, xpos, ypos, zpos, xyAxisFeedRate, zAxisFeedRate = [
+                                    value * scale
+                                    for value in (homeX, homeY, xpos, ypos, zpos, xyAxisFeedRate, zAxisFeedRate)
+                                ]
+                                previousUnits = units
                             if line.find("X") != -1:
                                 _xpos = re.search("X(?=.)(([ ]*)?[+-]?([0-9]*)(\.([0-9]+))?)", line)
                                 if positioning == "G91 ":
