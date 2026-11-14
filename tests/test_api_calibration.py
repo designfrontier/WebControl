@@ -208,3 +208,10 @@ def test_optical_event_runs_the_action_with_parsed_settings(socket_client, proce
 def test_optical_event_ignores_other_commands_and_bad_settings(socket_client, data, processed, payload):
     socket_client.emit("opticalCalibration", payload, namespace=NAMESPACE)
     assert processed == []
+
+
+def test_optical_event_names_an_unknown_command(socket_client, data, processed):
+    socket_client.emit("opticalCalibration", {"data": {"command": "stopRun", "arg": OPTICAL_SETTINGS}}, namespace=NAMESPACE)
+    logged = [data.console_queue.get_nowait() for _ in range(data.console_queue.qsize())]
+    assert "Ignoring opticalCalibration request: unknown command 'stopRun'" in logged
+    assert processed == []

@@ -216,8 +216,11 @@ def optical_calibration(msg):
     data.logger.resetIdler()
     payload = msg.get("data") if isinstance(msg, dict) else None
     command = payload.get("command") if isinstance(payload, dict) else None
+    if command not in OPTICAL_ACTIONS:
+        data.console_queue.put(f"Ignoring opticalCalibration request: unknown command {command!r}")
+        return
     try:
-        settings = optical_inputs(payload.get("arg") if command in OPTICAL_ACTIONS else None)
+        settings = optical_inputs(payload.get("arg"))
     except InvalidInput as error:
         data.console_queue.put(f"Ignoring opticalCalibration request: {error}")
         return
