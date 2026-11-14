@@ -302,6 +302,8 @@ class SerialPortThread(MakesmithInitFuncs):
                 if self.data.uploadFlag > 0:
                     self.data.ui_queue1.put("Alert", "Connection Lost",
                                             "Message: USB connection lost. This has likely caused the machine to loose it's calibration, which can cause erratic behavior. It is recommended to stop the program, remove the sled, and perform the chain calibration process. Press Continue to override and proceed with the cut.")
+                    # Lines in the controller's buffer were lost, so don't stream again until the user resumes.
+                    self.data.actions.pauseRun()
                 else:
                     self.data.ui_queue1.put("SendAlarm", "Alarm: Connection Failed or Invalid Firmware", "")
                 self.data.connectionStatus = 0

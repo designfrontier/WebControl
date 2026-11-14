@@ -178,3 +178,15 @@ def test_a_requested_close_ends_the_thread_before_it_can_take_a_stop(data, seria
     assert data.requestSerialClose is False
     assert data.connectionStatus == 0
     assert polls_after_close == []
+
+
+def test_losing_the_connection_mid_cut_pauses_the_run(data, serial):
+    data.gcode = [f"G1 X{n} " for n in range(20)]
+    data.uploadFlag = 1
+
+    serial.run(on_poll=once_after(serial.clock, 1, lambda port: setattr(port, "ack", False)))
+
+    assert data.uploadFlag == 2
+    messages = serial.ui_messages()
+    assert ("Action", "setAsResume", "") in messages
+    assert any(command == "Alert" and message == "Connection Lost" for command, message, _ in messages)
