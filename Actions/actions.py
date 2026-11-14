@@ -1,3 +1,4 @@
+from DataStructures.data import GCODE_LOCKED_MESSAGE
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
 from File.safePaths import libraryRoot, resolveInside
 from Actions import firmware
@@ -182,7 +183,9 @@ class Actions(MakesmithInitFuncs):
                 if not self.wipeEEPROM(msg["data"]["arg"]):
                     self.data.ui_queue1.put("Alert", "Alert", "Error with wiping EEPROM")
             elif msg["data"]["command"] == "clearGCode":
-                if self.clearGCode():
+                if self.data.gcodeLocked():
+                    self.data.ui_queue1.put("Alert", "Alert", GCODE_LOCKED_MESSAGE)
+                elif self.clearGCode():
                     # send blank gcode to UI
                     self.data.ui_queue1.put("Action", "gcodeUpdate", "")
                 else:
@@ -521,6 +524,7 @@ class Actions(MakesmithInitFuncs):
                     self.data.uploadFlag = 1
                 else:
                     self.data.uploadFlag = 1
+                self.data.jobInProgress = True
                 self.data.gpioActions.causeAction("PlayLED", "on")
                 return True
             else:
@@ -529,6 +533,7 @@ class Actions(MakesmithInitFuncs):
             # something goes wrong, stop uploading.
             self.data.console_queue.put(str(e))
             self.data.uploadFlag = 0
+            self.data.jobInProgress = False
             self.data.gcodeIndex = 0
             return False
 
@@ -544,6 +549,7 @@ class Actions(MakesmithInitFuncs):
             self.data.inPIDPositionTest = False
             self.data.inPIDVelocityTest = False
             self.data.uploadFlag = 0
+            self.data.jobInProgress = False
             self.data.gcodeIndex = 0
             self.data.runGeneration += 1
             self.data.manualZAxisAdjust = False

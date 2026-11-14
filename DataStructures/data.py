@@ -5,6 +5,8 @@ from DataStructures.logger import Logger
 from DataStructures.loggingQueue import LoggingQueue
 from DataStructures.uiQueue import UIQueue
 
+GCODE_LOCKED_MESSAGE = "Cannot load gcode while a job is running or paused. Stop the job first."
+
 
 class Data:
     """
@@ -90,6 +92,8 @@ class Data:
     # sets a flag if the gcode is being uploaded currently
     uploadFlag = 0
     previousUploadStatus = 0
+    # Set from Play until Stop or the end of the file; uploadFlag drops to 0 on controller pauses mid-job.
+    jobInProgress = False
     # Bumped by Stop, so a line already being sent can't move the index after the stop reset it.
     runGeneration = 0
     manualZAxisAdjust = False
@@ -229,3 +233,6 @@ class Data:
         """
         self.logger.data = self
         self.config.data = self
+
+    def gcodeLocked(self):
+        return self.jobInProgress or self.uploadFlag != 0 or self.manualZAxisAdjust
