@@ -18,6 +18,7 @@ export interface MeasurementConfig {
   intro: ReactNode;
   cutAction: ActionCommand;
   acceptAction: ActionCommand;
+  acceptNote?: string;
   image: { src: string; alt: string };
   fields: MeasurementField[];
   parameters: { key: string; label: string }[];
@@ -50,6 +51,7 @@ export const MeasurementCalibration = ({ config }: { config: MeasurementConfig }
     }
     setErrors({});
     setBusy(true);
+    setResult(null);
     setStatus({ tone: "info", message: "Calculating…" });
     const outcome = await config.calculate(fetchImpl, parsed.values);
     setBusy(false);
@@ -142,7 +144,8 @@ export const MeasurementCalibration = ({ config }: { config: MeasurementConfig }
             </tbody>
           </table>
           {current.status === "error" && <p className="field-error">Could not load the current settings.</p>}
-          <button type="button" className="primary" disabled={!result} onClick={accept}>
+          {config.acceptNote && <p>{config.acceptNote}</p>}
+          <button type="button" className="primary" disabled={!result || busy} onClick={accept}>
             Accept results
           </button>
         </li>

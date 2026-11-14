@@ -66,6 +66,31 @@ describe("triangular calibration", () => {
     expect(screen.getByRole("button", { name: "Accept results" })).toBeDisabled();
   });
 
+  it("withdraws the old result while a new calculation runs", async () => {
+    let calls = 0;
+    let reply: (response: Response) => void = () => undefined;
+    const { user } = triangular({
+      "POST /api/calibration/triangular": () =>
+        calls++ === 0 ? jsonResponse(calculated) : new Promise<Response>((resolve) => (reply = resolve)),
+    });
+    await user.click(screen.getByRole("button", { name: "Calculate" }));
+    await waitFor(() => expect(row("Height of motors")).toEqual(["463", "400.6"]));
+    const accept = screen.getByRole("button", { name: "Accept results" });
+    expect(accept).toBeEnabled();
+
+    await user.click(screen.getByRole("button", { name: "Calculate" }));
+    expect(accept).toBeDisabled();
+    expect(row("Height of motors")).toEqual(["463", "—"]);
+    reply(jsonResponse({ ...calculated, motorYoffset: 410 }));
+    await waitFor(() => expect(accept).toBeEnabled());
+    expect(row("Height of motors")).toEqual(["463", "410"]);
+  });
+
+  it("warns that accepting moves the sled", async () => {
+    triangular();
+    expect(screen.getByText(/moves the sled to the center/)).toBeInTheDocument();
+  });
+
   it("flags fields that are not numbers without asking the server", async () => {
     const { user, fetch } = triangular();
     const field = screen.getByRole("textbox", { name: "Router bit diameter" });

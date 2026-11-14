@@ -12,6 +12,7 @@ const config: MeasurementConfig = {
   ),
   cutAction: "cutTriangularCalibrationPattern",
   acceptAction: "acceptTriangularCalibrationResults",
+  acceptNote: "Accepting saves the values and moves the sled to the center of the work area.",
   image: {
     src: "/static/images/triangularCalibration/triangularCalibration.png",
     alt: "Test pattern: measure from cut 1 to cut 2 near the top and from cut 3 to cut 4 lower down, as the arrows show; cut 5 is the corner mark at top right, measured from the top edge of the work area.",
