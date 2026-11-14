@@ -104,9 +104,16 @@ def test_forward_inverts_inverse_inside_the_work_area():
     assert (x, y) == (pytest.approx(-600.0, abs=1e-6), pytest.approx(300.0, abs=1e-6))
 
 
-@pytest.mark.parametrize("chains", [(100.0, 100.0), (4000.0, 4000.0)])
+@pytest.mark.parametrize("chains", [(100.0, 100.0), (4000.0, 100.0)])
 def test_forward_returns_none_when_it_cannot_converge(chains):
     assert triangular().forward(*chains) is None
+
+
+@pytest.mark.parametrize("target", [(-1219.2, 609.6), (1219.2, 0.0), (0.0, -609.6)])
+def test_forward_finds_points_on_the_edge_of_the_work_area(target):
+    kinematics = triangular()
+    x, y = kinematics.forward(*kinematics.inverse(*target))
+    assert (x, y) == (pytest.approx(target[0], abs=1e-6), pytest.approx(target[1], abs=1e-6))
 
 
 def test_clamp_returns_the_target_on_the_edge_of_the_work_area():

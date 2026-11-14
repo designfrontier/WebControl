@@ -125,18 +125,18 @@ class Kinematics(MakesmithInitFuncs):
         self._xCordOfMotor = self.D / 2
         self._yCordOfMotor = self.machineHeight / 2 + self.motorOffsetY
 
-    def inverse(self, xTarget, yTarget):
+    def inverse(self, xTarget, yTarget, clamp=True):
         '''
 
         Compute the lengths of chain needed to reach a target XY position
 
         '''
         if self.isQuadKinematics:
-            return self.quadrilateralInverse(xTarget, yTarget)
+            return self.quadrilateralInverse(xTarget, yTarget, clamp)
         else:
-            return self.triangularInverse(xTarget, yTarget)
+            return self.triangularInverse(xTarget, yTarget, clamp)
 
-    def triangularInverse(self, xTarget, yTarget):
+    def triangularInverse(self, xTarget, yTarget, clamp=True):
         '''
 
         The inverse kinematics (relating an xy coordinate pair to the required chain lengths to hit that point)
@@ -146,7 +146,8 @@ class Kinematics(MakesmithInitFuncs):
         '''
 
         # Confirm that the coordinates are on the wood
-        xTarget, yTarget = self._verifyValidTarget(xTarget, yTarget)
+        if clamp:
+            xTarget, yTarget = self._verifyValidTarget(xTarget, yTarget)
 
         Motor1Distance = math.sqrt(
             math.pow((-1 * self._xCordOfMotor - xTarget), 2) + math.pow((self._yCordOfMotor - yTarget), 2))
@@ -242,7 +243,7 @@ class Kinematics(MakesmithInitFuncs):
 
         return Chain1, Chain2
 
-    def quadrilateralInverse(self, xTarget, yTarget):
+    def quadrilateralInverse(self, xTarget, yTarget, clamp=True):
 
         '''
 
@@ -251,7 +252,8 @@ class Kinematics(MakesmithInitFuncs):
         '''
 
         # Confirm that the coordinates are on the wood
-        xTarget, yTarget = self._verifyValidTarget(xTarget, yTarget)
+        if clamp:
+            xTarget, yTarget = self._verifyValidTarget(xTarget, yTarget)
 
         # coordinate shift to put (0,0) in the center of the plywood from the left sprocket
         self.x = (self.D / 2.0) + xTarget
@@ -399,7 +401,8 @@ class Kinematics(MakesmithInitFuncs):
 
         for guessCount in range(self.MaxForwardGuesses + 2):
             try:
-                guessLengthA, guessLengthB = self.inverse(xGuess, yGuess)
+                # Unclamped, or every guess past an edge would match the chain lengths of the edge itself.
+                guessLengthA, guessLengthB = self.inverse(xGuess, yGuess, clamp=False)
             except (ArithmeticError, ValueError):
                 return None
 
