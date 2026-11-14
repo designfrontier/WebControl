@@ -190,9 +190,12 @@ def logs(template):
 def maslowSettings():
     app.data.logger.resetIdler()
     if request.method == "POST":
-        result = request.form
+        result = request.form.to_dict()
         port = result.get("COMport", "")
-        if port != "" and not isSerialPortName(port, app.data.comPorts):
+        # The port list offers "None" when no serial port was found.
+        if port == "None":
+            result["COMport"] = app.data.config.getValue("Maslow Settings", "COMport")
+        elif port != "" and not isSerialPortName(port, app.data.comPorts):
             return jsonify({"status": 400, "error": "COMport is not a serial port"}), 400
         app.data.config.updateSettings("Maslow Settings", result)
         message = {"status": 200}

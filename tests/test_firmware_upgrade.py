@@ -195,3 +195,12 @@ def test_each_upgrade_flashes_the_folder_the_build_script_writes(data, flash, ve
     assert data.actions.upgradeFirmware(version) is True
     (args, _), = flash.runs
     assert args[0][-1] == f"-Uflash:w:{flash.root}/firmware/{folder}/{folder}-1.26.hex:i"
+
+
+def test_classic_settings_form_with_no_ports_found_keeps_the_saved_port(client, data, settings, monkeypatch):
+    monkeypatch.setattr(data, "comPorts", ["None"])
+    settings.setValue("Maslow Settings", "COMport", "/dev/ttyACM0")
+    form = maslow_form(settings, COMport="None", macro1_title="Saved anyway")
+    assert client.post("/maslowSettings", data=form).status_code == 200
+    assert settings.getValue("Maslow Settings", "COMport") == "/dev/ttyACM0"
+    assert settings.getValue("Maslow Settings", "macro1_title") == "Saved anyway"
