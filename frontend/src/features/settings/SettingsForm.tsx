@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { ApiError } from "../../api/http";
 import { useClient, useFetch, useServerMessage } from "../../app/context";
+import { settingsRejectionSchema } from "../../protocol";
 import type { SettingsSection } from "../../protocol";
 import { saveSettingsSection } from "./api";
 import { changedValues, initialValues, isLocked, validate } from "./form";
@@ -19,6 +20,11 @@ const saveFailure = (error: Error) =>
   error instanceof ApiError && error.status === 400
     ? "The server rejected these values; nothing was saved."
     : `Saving failed: ${error.message}`;
+
+const serverErrors = (error: Error): FormErrors =>
+  error instanceof ApiError && error.status === 400
+    ? (settingsRejectionSchema.safeParse(error.body).data?.errors ?? {})
+    : {};
 
 export const SettingsForm = ({ section, onSaved }: Props) => {
   const fetchImpl = useFetch();
@@ -62,6 +68,7 @@ export const SettingsForm = ({ section, onSaved }: Props) => {
       setNotice({ tone: "ok", text: `${section.title} saved.` });
       onSaved(saved);
     } catch (error) {
+      setErrors(serverErrors(error as Error));
       setNotice({ tone: "bad", text: saveFailure(error as Error) });
     } finally {
       setSaving(false);

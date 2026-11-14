@@ -177,6 +177,21 @@ describe("SettingsPage", () => {
     await user.click(saveButton());
     expect(await screen.findByText("The server rejected these values; nothing was saved.")).toBeInTheDocument();
     expect(screen.getByLabelText("Macro 1 Title")).toHaveValue("Macro 1!");
+    expect(screen.getByLabelText("Macro 1 Title")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByText("nope")).toBeInTheDocument();
+  });
+
+  it("shows no field errors when a rejection has no per-setting reasons", async () => {
+    const fetch = fakeFetch({
+      "GET /api/settings/maslow": maslowSection(),
+      "PUT /api/settings/maslow": () => jsonResponse({ error: "Expected values" }, 400),
+    });
+    const { user } = renderApp("/settings", { fetch });
+    await form();
+    await user.type(screen.getByLabelText("Macro 1 Title"), "!");
+    await user.click(saveButton());
+    expect(await screen.findByText("The server rejected these values; nothing was saved.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Macro 1 Title")).not.toHaveAttribute("aria-invalid");
   });
 
   it("reports a failed save", async () => {

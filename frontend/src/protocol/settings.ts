@@ -54,3 +54,6 @@ export type SettingsSection = z.output<typeof settingsSectionSchema>;
 export interface SettingsUpdate {
   values: Record<string, string | boolean>;
 }
+
+/** PUT /api/settings/<id> 400 body: why each rejected setting failed, keyed by setting key. */
+export const settingsRejectionSchema = z.object({ errors: z.record(z.string(), z.string()) });
