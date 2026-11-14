@@ -56,3 +56,14 @@ def test_a_failed_download_does_not_launch_the_upgrade(data, update, monkeypatch
     monkeypatch.setattr(release_module.requests, "get", failing)
     assert data.releaseManager.updatePyInstaller(bypassCheck=True) is False
     assert update.launched == []
+
+
+def test_a_stalled_download_gives_up_instead_of_hanging(data, update, monkeypatch):
+    def stalls_without_timeout(url, **kwargs):
+        if kwargs.get("timeout") is None:
+            raise AssertionError("requests.get without a timeout waits forever on a stalled server")
+        raise release_module.requests.Timeout("read timed out")
+
+    monkeypatch.setattr(release_module.requests, "get", stalls_without_timeout)
+    assert data.releaseManager.updatePyInstaller(bypassCheck=True) is False
+    assert update.launched == []

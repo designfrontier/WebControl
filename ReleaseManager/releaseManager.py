@@ -11,6 +11,8 @@ from github import Github
 import requests
 from werkzeug.utils import secure_filename
 
+DOWNLOAD_TIMEOUT_SECONDS = 60
+
 
 class ReleaseManager(MakesmithInitFuncs):
     def __init__(self):
@@ -124,7 +126,7 @@ class ReleaseManager(MakesmithInitFuncs):
                 home, ".WebControl", "downloads", self.assetName(self.data.pyInstallUpdateBrowserUrl)
             )
             try:
-                req = requests.get(self.data.pyInstallUpdateBrowserUrl)
+                req = requests.get(self.data.pyInstallUpdateBrowserUrl, timeout=DOWNLOAD_TIMEOUT_SECONDS)
                 req.raise_for_status()
             except requests.RequestException as e:
                 print(f"Error downloading update: {e}")
