@@ -15,13 +15,15 @@ describe("StatusBar", () => {
 
   it("shows the host address from /api/state once connected", async () => {
     renderApp("/");
-    await waitFor(() => expect(status().getByText("Server: connected (192.168.1.20:5000)")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(status().getByText("Server: connected")).toHaveAttribute("title", "WebControl at 192.168.1.20:5000"),
+    );
   });
 
   it("omits the placeholder host address the server uses before it knows its own", () => {
     const socket = createFakeSocket();
     renderApp("/", { socket, machine: { hostAddress: "-" }, fetch: () => new Promise(() => {}) });
-    expect(status().getByText("Server: connected")).toBeInTheDocument();
+    expect(status().getByText("Server: connected")).not.toHaveAttribute("title");
   });
 
   it("shows not connected after the socket drops", () => {

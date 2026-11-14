@@ -146,11 +146,11 @@
   color: var(--danger);
 }
 
-/* Phones: no spare height to fill, so the stage follows the 2:1 bed. */
+/* Phones: no spare height to fill, so the stage keeps close to the 2:1 bed. */
 @media (max-width: 900px) {
   .viewer-stage {
     flex: none;
-    aspect-ratio: 4 / 3;
+    aspect-ratio: 3 / 2;
     min-height: 0;
   }
 

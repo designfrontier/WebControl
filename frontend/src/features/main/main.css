@@ -300,3 +300,7 @@ button.caution:not(:disabled) {
 .readouts div:not(.wide) dt {
   min-width: auto;
 }
+
+.readouts div:not(.wide) dd {
+  white-space: normal;
+}

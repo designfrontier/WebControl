@@ -1,12 +1,16 @@
 import { useMachine } from "./context";
 import type { MachineState } from "../state/machine";
 
-const serverText = ({ socket, hostAddress }: Pick<MachineState, "socket" | "hostAddress">) =>
+const serverText = (socket: MachineState["socket"]) =>
   socket === "connected"
-    ? `Server: connected${hostAddress && hostAddress !== "-" ? ` (${hostAddress})` : ""}`
+    ? "Server: connected"
     : socket === "connecting"
       ? "Server: connecting…"
       : "Server: not connected";
+
+/** The server's own address, which it reports as "-" until it knows it. */
+const hostTitle = (hostAddress: string | null) =>
+  hostAddress && hostAddress !== "-" ? `WebControl at ${hostAddress}` : undefined;
 
 const controllerText = ({ status, port, fakeServo }: MachineState["controller"]) =>
   status === "connected"
@@ -31,8 +35,12 @@ export const StatusBar = () => {
 
   return (
     <ul className="status-bar" aria-label="Status">
-      <li className="chip" data-tone={socket === "connected" ? "ok" : socket === "connecting" ? undefined : "bad"}>
-        {serverText({ socket, hostAddress })}
+      <li
+        className="chip"
+        title={hostTitle(hostAddress)}
+        data-tone={socket === "connected" ? "ok" : socket === "connecting" ? undefined : "bad"}
+      >
+        {serverText(socket)}
       </li>
       <li className="chip" data-tone={toneFor(controller.status)}>
         {controllerText(controller)}
