@@ -31,7 +31,7 @@
 - `frontend/` — the new React + TypeScript UI served at `/next` (see "New frontend" below)
 - `HelpManager/` — stub for fetching updated help pages from GitHub (mostly no-op)
 - `ReleaseManager/` — checks GitHub releases and self-updates PyInstaller builds
-- `settings/` — `settings.py`: master schema/defaults of every setting by section
+- `settings/` — `settings.py`: legacy GroundControl settings list, not imported anywhere; the real schema and defaults are `defaultwebcontrol.json`
 - `static/` — browser assets served by Flask
 - `static/images/` — UI images
 - `static/images/gettingStarted/` — setup wizard images
