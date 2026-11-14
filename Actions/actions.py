@@ -1,6 +1,7 @@
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
 from File.safePaths import libraryRoot, resolveInside
 from Actions import firmware
+from File.retention import keepNewest
 
 import os
 import sys
@@ -15,6 +16,9 @@ import subprocess
 from subprocess import call
 from gpiozero.pins.mock import MockFactory
 from gpiozero import Device
+
+KEEP_ARCHIVES = 5
+
 
 class FirmwareUpgradeError(Exception):
     pass
@@ -2007,7 +2011,12 @@ class Actions(MakesmithInitFuncs):
             zipObj.write(path1, os.path.basename(path1))
             path1 = self.data.config.home + "/.WebControl/log.txt"
             zipObj.write(path1, os.path.basename(path1))
+            for previous in ("log.txt.1", "alog.txt.1"):
+                path1 = self.data.config.home + "/.WebControl/" + previous
+                if os.path.exists(path1):
+                    zipObj.write(path1, previous)
             zipObj.close()
+            keepNewest(self.data.config.home + "/.WebControl/wc_diagnostics_*.zip", KEEP_ARCHIVES)
             return filename
         except Exception as e:
             self.data.console_queue.put(str(e))
@@ -2149,8 +2158,7 @@ class Actions(MakesmithInitFuncs):
             folder = self.data.config.home+'/.WebControl'
             print(folder)
             self.zipfolder(filename, folder)
-            #self.addDirToZip(zipObj, self.data.config.home+'/.Webcontrol')
-            #zipObj.close()
+            keepNewest(home + "/wc_backup_*.zip", KEEP_ARCHIVES)
             return filename
         except Exception as e:
             self.data.console_queue.put(str(e))
