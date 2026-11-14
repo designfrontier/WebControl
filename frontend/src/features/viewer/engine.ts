@@ -21,7 +21,9 @@ export interface ViewerEngine {
 const FOV = 45;
 const CAMERA_Z = 100;
 
+/** Throws when the browser has no WebGL 2, which current three.js requires. */
 export const createViewerEngine = (host: HTMLElement, scene: Scene): ViewerEngine => {
+  if (typeof WebGL2RenderingContext === "undefined") throw new Error("WebGL 2 is not supported");
   const renderer = new WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(window.devicePixelRatio);
   host.appendChild(renderer.domElement);

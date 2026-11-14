@@ -1,5 +1,5 @@
-import { BufferGeometry, Group, LineSegments, Mesh, Sprite, SpriteMaterial, Texture } from "three";
-import type { BufferAttribute, Object3D } from "three";
+import { Group, Sprite, SpriteMaterial, Texture } from "three";
+import type { BoxGeometry, BufferAttribute, BufferGeometry, LineSegments, Mesh, Object3D } from "three";
 import { describe, expect, it, vi } from "vitest";
 import { buildGcodeGeometry } from "./gcodeGeometry";
 import type { GcodeGeometry } from "./gcodeGeometry";
@@ -186,7 +186,11 @@ describe("createViewerScene", () => {
     scene.setBoardVisible(true);
     expect(get<Group>("boardLayer").visible).toBe(true);
     expect(get<Group>("board").position.toArray()).toEqual([3, -2, -0.25]);
-    expect(get<Mesh>("boardFill").geometry.parameters).toMatchObject({ width: 24, height: 12, depth: 0.5 });
+    expect((get<Mesh>("boardFill").geometry as BoxGeometry).parameters).toMatchObject({
+      width: 24,
+      height: 12,
+      depth: 0.5,
+    });
     expect(vertices("cutCells")).toBe(12);
 
     scene.setBoard(board, null);

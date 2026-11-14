@@ -1,6 +1,7 @@
 import { OrthographicCamera, PerspectiveCamera, Scene, TOUCH } from "three";
 import type { Camera } from "three";
-import type { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import type * as ThreeModule from "three";
+import type * as OrbitModule from "three/addons/controls/OrbitControls.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createViewerEngine } from "./engine";
 import { DEFAULT_MACHINE } from "./shapes";
@@ -14,10 +15,10 @@ const renderer = vi.hoisted(() => ({
   }[],
 }));
 
-const controls = vi.hoisted(() => ({ instances: [] as OrbitControls[] }));
+const controls = vi.hoisted(() => ({ instances: [] as OrbitModule.OrbitControls[] }));
 
 vi.mock("three/addons/controls/OrbitControls.js", async (importOriginal) => {
-  const original = await importOriginal<typeof import("three/addons/controls/OrbitControls.js")>();
+  const original = await importOriginal<typeof OrbitModule>();
   class TrackedControls extends original.OrbitControls {
     constructor(...args: ConstructorParameters<typeof original.OrbitControls>) {
       super(...args);
@@ -28,7 +29,7 @@ vi.mock("three/addons/controls/OrbitControls.js", async (importOriginal) => {
 });
 
 vi.mock("three", async (importOriginal) => {
-  const three = await importOriginal<typeof import("three")>();
+  const three = await importOriginal<typeof ThreeModule>();
   class FakeWebGLRenderer {
     domElement = document.createElement("canvas");
     render = vi.fn();
@@ -60,6 +61,7 @@ beforeEach(() => {
     vi.fn((callback: FrameRequestCallback) => setTimeout(() => callback(0), 0) as unknown as number),
   );
   vi.stubGlobal("cancelAnimationFrame", vi.fn());
+  vi.stubGlobal("WebGL2RenderingContext", class {});
 });
 
 afterEach(() => {
@@ -151,6 +153,12 @@ describe("createViewerEngine", () => {
     const [x, y, z] = camera().position.toArray();
     expect([x, y, z].map((value) => Math.round(value * 1e6) / 1e6)).toEqual([0, 0, 100]);
     expect(camera().zoom).toBe(1);
+  });
+
+  it("refuses to start without WebGL 2", () => {
+    vi.stubGlobal("WebGL2RenderingContext", undefined);
+    expect(() => createViewerEngine(document.createElement("div"), new Scene())).toThrow("WebGL 2 is not supported");
+    expect(renderer.instances).toEqual([]);
   });
 
   it("releases WebGL, the observer and the canvas on dispose", () => {
