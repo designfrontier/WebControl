@@ -29,7 +29,6 @@
 - `docs/GettingStarted/` — first-steps setup guide
 - `File/` — G-code file loading/parsing/compression for the 3D preview, and settings import
 - `frontend/` — the new React + TypeScript UI served at `/next` (see "New frontend" below)
-- `GCodeOptimizer/` — OR-Tools route optimizer for G-code (currently disabled)
 - `HelpManager/` — stub for fetching updated help pages from GitHub (mostly no-op)
 - `ReleaseManager/` — checks GitHub releases and self-updates PyInstaller builds
 - `settings/` — `settings.py`: master schema/defaults of every setting by section

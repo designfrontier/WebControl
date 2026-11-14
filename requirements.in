@@ -2,7 +2,6 @@
 -r ./Background/requirements.in
 -r ./Boards/requirements.in
 -r ./Connection/requirements.in
--r ./GCodeOptimizer/requirements.in
 -r ./HelpManager/requirements.in
 -r ./ReleaseManager/requirements.in
 -r ./WebPageProcessor/requirements.in

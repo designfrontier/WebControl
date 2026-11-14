@@ -4,8 +4,6 @@
 #
 #    pip-compile --resolver=backtracking requirements.in
 #
-absl-py==1.3.0
-    # via ortools
 bidict==0.22.0
     # via python-socketio
 certifi==2022.12.7
@@ -57,16 +55,11 @@ numpy==1.23.5
     # via
     #   -r ./Actions/requirements.in
     #   opencv-python
-    #   ortools
     #   scipy
 opencv-python==4.6.0.66
     # via
     #   -r ./Actions/requirements.in
     #   -r ./Background/requirements.in
-ortools==9.5.2237
-    # via -r ./GCodeOptimizer/requirements.in
-protobuf==4.21.12
-    # via ortools
 psutil==5.9.4
     # via -r ./Background/requirements.in
 pycparser==2.21

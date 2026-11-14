@@ -20,7 +20,6 @@ from File.importFile import ImportFile
 from ReleaseManager.releaseManager import ReleaseManager
 from HelpManager.helpManager import HelpManager
 
-# from GCodeOptimizer.gcodeOptimizer import GCodeOptimizer
 
 
 class NonVisibleWidgets(MakesmithInitFuncs):
@@ -47,7 +46,6 @@ class NonVisibleWidgets(MakesmithInitFuncs):
     boardManager = BoardManager()
     releaseManager = ReleaseManager()
     helpManager = HelpManager()
-    # gcodeOptimizer = GCodeOptimizer()
 
     def setUpData(self, data):
         """
@@ -79,7 +77,6 @@ class NonVisibleWidgets(MakesmithInitFuncs):
         data.boardManager = self.boardManager
         data.releaseManager = self.releaseManager
         data.helpManager = self.helpManager
-        # data.gcodeOptimizer = self.gcodeOptimizer
 
         if hasattr(sys, "_MEIPASS"):
             data.platform = "PYINSTALLER"
@@ -134,7 +131,6 @@ class NonVisibleWidgets(MakesmithInitFuncs):
         self.boardManager.initializeNewBoard()
         self.releaseManager.setUpData(data)
         self.helpManager.setUpData(data)
-        # self.gcodeOptimizer.setUpData(data)
 
         # set up kinematics with current settings
         self.holeyKinematics.initializeSettings()
