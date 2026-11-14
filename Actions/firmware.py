@@ -4,6 +4,7 @@ import os
 import re
 
 PORT_CLOSE_SECONDS = 5.0
+SOURCE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Must match the folders buildFirmware.sh writes to.
 FIRMWARE_FOLDERS = {"custom": "madgrizzle", "stock": "maslowcnc", "holey": "holey"}
@@ -22,7 +23,7 @@ def isSerialPortName(port, knownPorts=()):
 
 
 def installRoot(data):
-    return data.platformHome if data.platform == "PYINSTALLER" else "."
+    return data.platformHome if data.platform == "PYINSTALLER" else SOURCE_ROOT
 
 
 def firmwareFolder(root, variant):

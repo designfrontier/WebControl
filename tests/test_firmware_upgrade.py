@@ -1,4 +1,5 @@
 import copy
+import os
 import subprocess
 from types import SimpleNamespace
 
@@ -216,3 +217,10 @@ def test_a_reconnect_attempt_while_flashing_never_opens_the_port(data, monkeypat
     reconnect.data = data
     reconnect.getmessage()
     assert opened == []
+
+
+def test_the_install_root_does_not_depend_on_the_working_directory(data, tmp_path, monkeypatch):
+    monkeypatch.setattr(data, "platform", "RPI")
+    monkeypatch.chdir(tmp_path)
+    assert os.path.isfile(os.path.join(firmware.installRoot(data), "buildFirmware.sh"))
+
