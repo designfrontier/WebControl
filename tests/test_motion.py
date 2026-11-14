@@ -70,3 +70,13 @@ def test_restart_mid_file_uses_the_files_units_over_the_machines(job):
     job.actions.processGCode()
 
     assert drain(job.gcode_queue)[:3] == ["G20 ", "G90 ", "G0 Z0.1969 F12.8"]
+
+
+def test_restart_converts_home_not_the_current_position_when_the_file_switches_units(job):
+    job.config.setValue("Advanced Settings", "homeX", 25.4, recursionBreaker=True)
+    job.config.setValue("Advanced Settings", "homeY", 50.8, recursionBreaker=True)
+    load(job, ["G21", "G0 X10 Y10", "G20", "G0 X1 Y1", "G1 Z-0.1"], 5)
+
+    job.actions.processGCode()
+
+    assert drain(job.gcode_queue)[3] == "G0 X2.0 Y3.0" + FEED
