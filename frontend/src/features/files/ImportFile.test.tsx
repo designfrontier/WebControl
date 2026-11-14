@@ -64,9 +64,11 @@ describe("import", () => {
     await user.click(screen.getByRole("button", { name: "Restore" }));
     expect(screen.getByRole("alert")).toHaveTextContent("Choose a file first.");
   });
+});
 
-  it("sends unknown kinds back to the files screen", async () => {
-    renderApp("/files/import/nope");
+describe("import route", () => {
+  it.each(["nope", "toString", "constructor"])("sends /files/import/%s back to the files screen", async (kind) => {
+    renderApp(`/files/import/${kind}`);
     await expectPath("/files");
   });
 });

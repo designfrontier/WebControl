@@ -7,7 +7,8 @@ import type { ImportKind } from "./api";
 import { useSubmit } from "./hooks";
 import { FormError, SubPage } from "./ui";
 
-const isImportKind = (kind: string | undefined): kind is ImportKind => kind !== undefined && kind in importKinds;
+const isImportKind = (kind: string | undefined): kind is ImportKind =>
+  kind !== undefined && Object.hasOwn(importKinds, kind);
 
 const ImportForm = ({ kind }: { kind: ImportKind }) => {
   const fetchImpl = useFetch();
