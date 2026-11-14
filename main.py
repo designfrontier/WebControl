@@ -32,6 +32,8 @@ from Background.LogStreamer import LogStreamer  # do this after socketio is decl
 from DataStructures.data import Data
 from Connection.nonVisibleWidgets import NonVisibleWidgets
 from WebPageProcessor.webPageProcessor import WebPageProcessor
+from api import init_api
+from next_ui import init_next_ui
 
 
 app.data = Data()
@@ -66,6 +68,10 @@ app.data.firstRun = False
 app.UIProcessor = UIProcessor()
 app.webPageProcessor = WebPageProcessor(app.data)
 app.LogStreamer = LogStreamer()
+
+## the new React UI: JSON endpoints under /api and the built app under /next
+init_api(app)
+init_next_ui(app)
 
 ## this defines the schedule for running the serial port open connection
 def run_schedule():

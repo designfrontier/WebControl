@@ -26,3 +26,8 @@ alog.txt
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Test output
+.coverage
+htmlcov/
+.pytest_cache/

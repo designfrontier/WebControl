@@ -1,0 +1,4 @@
+pytest==8.3.4
+pytest-cov==6.0.0
+# gpiozero imports pkg_resources; uv venvs ship without setuptools.
+setuptools==75.3.0

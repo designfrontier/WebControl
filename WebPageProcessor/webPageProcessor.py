@@ -1,4 +1,4 @@
-from __main__ import socketio
+from app import socketio
 
 import re
 import os
