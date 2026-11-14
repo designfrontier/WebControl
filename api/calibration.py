@@ -144,6 +144,7 @@ def get_triangular():
 def calculate_triangular():
     data = current_app.data
     data.logger.resetIdler()
+    data.triangularCalibration.hasResult = False
     try:
         values = triangular_inputs(_body(), data)
     except InvalidInput as error:
@@ -179,6 +180,7 @@ def get_holey():
 def calculate_holey():
     data = current_app.data
     data.logger.resetIdler()
+    data.holeyCalibration.hasResult = False
     try:
         values = holey_inputs(_body())
     except InvalidInput as error:

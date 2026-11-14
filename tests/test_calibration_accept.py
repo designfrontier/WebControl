@@ -100,6 +100,19 @@ def test_api_holey_accept_saves_the_calculated_values(client, calibration):
     }
 
 
+def test_api_holey_rejected_recalculation_withdraws_the_earlier_result(client, calibration):
+    measurements = ideal_holey_measurements(calibration)
+    assert client.post("/api/calibration/holey", json={"measurements": measurements}).status_code == 200
+    assert client.post("/api/calibration/holey", json={"measurements": measurements[:-1]}).status_code == 400
+    assert client.post("/api/calibration/holey/accept").status_code == 409
+
+
+def test_api_triangular_rejected_recalculation_withdraws_the_earlier_result(client, calibration):
+    assert client.post("/api/calibration/triangular", json=TRIANGULAR).status_code == 200
+    assert client.post("/api/calibration/triangular", json={**TRIANGULAR, "bitDiameter": 30}).status_code == 400
+    assert client.post("/api/calibration/triangular/accept").status_code == 409
+
+
 def test_api_triangular_accept_refuses_without_a_calculation(client, calibration):
     response = client.post("/api/calibration/triangular/accept")
     assert response.status_code == 409
