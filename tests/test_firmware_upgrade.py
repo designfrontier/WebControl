@@ -224,3 +224,7 @@ def test_the_install_root_does_not_depend_on_the_working_directory(data, tmp_pat
     monkeypatch.chdir(tmp_path)
     assert os.path.isfile(os.path.join(firmware.installRoot(data), "buildFirmware.sh"))
 
+
+@pytest.mark.parametrize("port", ["/dev/tty", "/dev/cu"])
+def test_a_bare_terminal_device_is_refused(port):
+    assert not firmware.isSerialPortName(port)

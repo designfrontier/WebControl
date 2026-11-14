@@ -11,7 +11,7 @@ FIRMWARE_FOLDERS = {"custom": "madgrizzle", "stock": "maslowcnc", "holey": "hole
 UPGRADE_VARIANTS = {0: "custom", 1: "stock", 2: "holey"}
 
 SERIAL_DEVICE = re.compile(
-    r"/dev/(tty|cu)[A-Za-z0-9._-]*|/dev/serial/by-(id|path)/[A-Za-z0-9._:+-]+|COM[0-9]{1,3}"
+    r"/dev/(tty|cu)[A-Za-z0-9._-]+|/dev/serial/by-(id|path)/[A-Za-z0-9._:+-]+|COM[0-9]{1,3}"
 )
 
 
