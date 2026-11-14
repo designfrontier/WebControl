@@ -1,0 +1,312 @@
+.calibration {
+  --chart-1: var(--accent);
+  --chart-2: var(--ok);
+  --chart-3: var(--warn);
+  --chart-4: var(--danger);
+  --chart-5: #b07cff;
+  --chart-6: #2fc4c4;
+  --chart-7: #f07ab8;
+  --chart-8: #c8cdd5;
+
+  display: grid;
+  gap: var(--space-4);
+  max-width: 1100px;
+}
+
+/* Grid tracks default to their content's min width, so the 769px diagrams would widen the page on phones. */
+.calibration,
+.calibration .card,
+.wizard,
+.optical-settings {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.calibration details.card:not([open]) {
+  gap: 0;
+}
+
+.calibration h1,
+.calibration h2,
+.calibration h3 {
+  margin: 0;
+}
+
+.calibration .card {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.calibration summary {
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.subnav ul,
+.method-list,
+.wizard-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.subnav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.subnav a.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.method-list,
+.wizard-steps {
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.wizard {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.wizard-intro,
+.wizard-intro p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.calibration button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.calibration button.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--danger-ink);
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-3);
+}
+
+.calibration .field {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.calibration input,
+.calibration select {
+  min-height: var(--tap);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+}
+
+.calibration input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.calibration input:disabled {
+  opacity: 0.6;
+}
+
+.field-error {
+  color: var(--danger);
+}
+
+.measurements {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+}
+
+.measurements .field-grid {
+  width: 100%;
+}
+
+.diagram,
+.camera-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+}
+
+.diagram {
+  width: 100%;
+  max-width: 560px;
+  background: #fff;
+}
+
+.results {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.results th,
+.results td {
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+.calibration .visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.status-line {
+  min-height: 1.5em;
+  margin: 0;
+}
+
+.status-line[data-tone="ok"] {
+  color: var(--ok);
+}
+
+.status-line[data-tone="error"] {
+  color: var(--danger);
+}
+
+.optical-settings {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-4);
+}
+
+.chart,
+.sled-position {
+  margin: 0;
+}
+
+.chart svg,
+.sled-position svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.chart figcaption,
+.sled-position figcaption {
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.chart-axes rect {
+  fill: none;
+  stroke: var(--line);
+}
+
+.chart-axes text {
+  fill: var(--muted);
+  font-size: 9px;
+}
+
+.chart-line {
+  fill: none;
+  stroke-width: 1;
+}
+
+.chart-line-0 {
+  stroke: var(--chart-1);
+}
+.chart-line-1 {
+  stroke: var(--chart-2);
+}
+.chart-line-2 {
+  stroke: var(--chart-3);
+}
+.chart-line-3 {
+  stroke: var(--chart-4);
+}
+.chart-line-4 {
+  stroke: var(--chart-5);
+}
+.chart-line-5 {
+  stroke: var(--chart-6);
+}
+.chart-line-6 {
+  stroke: var(--chart-7);
+}
+.chart-line-7 {
+  stroke: var(--chart-8);
+}
+
+circle.chart-dot-ideal {
+  fill: var(--muted);
+}
+
+circle.chart-dot-measured {
+  fill: var(--accent);
+}
+
+.chart-key.chart-dot-ideal {
+  color: var(--muted);
+}
+
+.chart-key.chart-dot-measured {
+  color: var(--accent);
+}
+
+.sheet {
+  fill: var(--surface-2);
+  stroke: var(--text);
+  stroke-width: 0.3;
+}
+
+.sheet-grid {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 0.2;
+  stroke-dasharray: 1 1;
+}
+
+.sled circle,
+.sled path {
+  fill: none;
+  stroke: var(--danger);
+  stroke-width: 0.3;
+}
