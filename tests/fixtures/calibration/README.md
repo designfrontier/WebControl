@@ -35,7 +35,9 @@ work area (2438.4 x 1219.2 mm, 304.8 mm by 152.4 mm steps, edges included).
 
 - `modes[]`: one entry for triangular and one for quadrilateral kinematics, each with the model `parameters` and
   `points[]` of `x`, `y`, `left`, `right` (chain lengths from `inverse(x, y)`) and `forward` (`[x, y]` from
-  `forward(left, right)` starting at `forwardGuess`, or `null` when it does not converge).
+  `forward(left, right)` starting at `forwardGuess`, or `null` when it does not converge). `forward` stops once
+  both chain errors are under 1e-9 mm; after 5001 guesses it returns its last guess if both errors are under
+  0.1 mm, and `null` otherwise.
 - The quadrilateral solver keeps its sled angle between calls, so evaluate the points in file order on one fresh
   model, inverse then forward for each point.
 

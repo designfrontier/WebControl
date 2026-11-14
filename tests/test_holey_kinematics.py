@@ -6,6 +6,7 @@ import pytest
 
 from Actions.HoleySimulationKinematics import Kinematics
 from Background.UIProcessor import UIProcessor
+from calibration_fixture_cases import simulator
 from calibration_helpers import holey_form, ideal_holey_measurements
 from helpers import drain
 
@@ -147,6 +148,14 @@ def test_quadrilateral_forward_still_converges():
     kinematics = Kinematics()
     x, y = kinematics.forward(*kinematics.inverse(300.0, -200.0))
     assert (x, y) == (pytest.approx(300.0, abs=0.01), pytest.approx(-200.0, abs=0.01))
+
+
+def test_quadrilateral_forward_places_the_sled_on_the_centre_line():
+    kinematics = simulator(True)
+    ys = [float(y) for y in range(-600, 625, 25)]
+    found = [kinematics.forward(*kinematics.inverse(0.0, y), 0.0, y) for y in ys]
+    assert all(position is not None for position in found)
+    assert all(math.hypot(x, y - target) < 0.1 for (x, y), target in zip(found, ys))
 
 
 def test_error_report_hides_an_unknown_computed_position(app, data, monkeypatch):

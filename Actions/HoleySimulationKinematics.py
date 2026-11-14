@@ -382,10 +382,11 @@ class Kinematics(MakesmithInitFuncs):
         return aChainLength, bChainLength
 
     MaxForwardGuesses = 5000
+    ForwardGiveUpError = 0.1
 
     def forward(self, chainALength, chainBLength, xGuess = -10, yGuess = 10):
         '''
-        Take the chain lengths and return an XY position, or None if no position within the work area matches them
+        Take the chain lengths and return an XY position, or None if no position comes within 0.1 mm of them
         '''
         # apply any offsets for slipped links
         chainALength = chainALength + (self.chain1Offset * self.R)
@@ -404,10 +405,13 @@ class Kinematics(MakesmithInitFuncs):
                 return None
             if abs(aChainError) < .000000001 and abs(bChainError) < .000000001:
                 return xGuess, yGuess
+            if guessCount > self.MaxForwardGuesses:
+                # The quadrilateral solver's own tolerance can leave a residual above 1e-9; the firmware accepts 0.1 mm.
+                closeEnough = abs(aChainError) < self.ForwardGiveUpError and abs(bChainError) < self.ForwardGiveUpError
+                return (xGuess, yGuess) if closeEnough else None
 
             xGuess = xGuess + .1 * aChainError - .1 * bChainError
             yGuess = yGuess - .1 * aChainError - .1 * bChainError
-        return None
 
     def _MatSolv(self):
         Sum = 0
