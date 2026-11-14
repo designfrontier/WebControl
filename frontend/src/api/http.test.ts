@@ -19,6 +19,19 @@ describe("getJson", () => {
     expect(error).toMatchObject({ status: 404, message: "GET /api/missing failed with 404" });
   });
 
+  it("keeps the JSON error body on the ApiError", async () => {
+    const fetch = fakeFetch({ "/api/things/1": () => jsonResponse({ errors: { id: "bad" } }, 400) });
+    await expect(getJson(fetch, "/things/1", thing)).rejects.toMatchObject({
+      status: 400,
+      body: { errors: { id: "bad" } },
+    });
+  });
+
+  it("leaves the body undefined when the error response is not JSON", async () => {
+    const fetch = fakeFetch({ "/api/things/1": () => new Response("oops", { status: 500 }) });
+    await expect(getJson(fetch, "/things/1", thing)).rejects.toMatchObject({ status: 500, body: undefined });
+  });
+
   it("throws when the body does not match the schema", async () => {
     const fetch = fakeFetch({ "/api/things/1": { id: "one" } });
     await expect(getJson(fetch, "/things/1", thing)).rejects.toThrow("GET /api/things/1 returned an unexpected shape");
