@@ -327,6 +327,7 @@ class SerialPortThread(MakesmithInitFuncs):
             if self.data.requestSerialClose:
                 # close down the serial port.
                 self.data.requestSerialClose = False
+                self.data.actions.pauseRun()
                 self.data.connectionStatus = 0
                 self.serialInstance.close()
                 return False

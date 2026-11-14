@@ -270,3 +270,13 @@ def test_buffered_streaming_sends_a_line_too_long_for_the_buffer_once_it_drains(
     assert len(port.written[1]) > SerialPortThread.bufferSize
     assert port.sent[-1] == "G1 X2.0  "
     assert data.uploadFlag == 0
+
+
+def test_closing_the_port_mid_cut_pauses_the_run(data, serial):
+    data.gcode = [f"G1 X{n} " for n in range(500)]
+    data.uploadFlag = 1
+
+    serial.run(on_poll=once_after(serial.clock, 1, lambda port: setattr(data, "requestSerialClose", True)))
+
+    assert data.uploadFlag == 2
+    assert ("Action", "setAsResume", "") in serial.ui_messages()
