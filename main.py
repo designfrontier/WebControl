@@ -32,6 +32,8 @@ from Background.LogStreamer import LogStreamer  # do this after socketio is decl
 from DataStructures.data import Data
 from Connection.nonVisibleWidgets import NonVisibleWidgets
 from WebPageProcessor.webPageProcessor import WebPageProcessor
+from File.safePaths import UnsafePathError, libraryRoot, resolveInside
+from Actions.firmware import isSerialPortName
 from api import init_api
 from next_ui import init_next_ui
 
@@ -188,7 +190,13 @@ def logs(template):
 def maslowSettings():
     app.data.logger.resetIdler()
     if request.method == "POST":
-        result = request.form
+        result = request.form.to_dict()
+        port = result.get("COMport", "")
+        # The port list offers "None" when no serial port was found.
+        if port == "None":
+            result["COMport"] = app.data.config.getValue("Maslow Settings", "COMport")
+        elif port != "" and not isSerialPortName(port, app.data.comPorts):
+            return jsonify({"status": 400, "error": "COMport is not a serial port"}), 400
         app.data.config.updateSettings("Maslow Settings", result)
         message = {"status": 200}
         resp = jsonify(message)
@@ -244,38 +252,45 @@ def gpioSettings():
         return resp
 
 
+@app.errorhandler(UnsafePathError)
+def handleUnsafePath(error):
+    app.data.console_queue.put(f"Rejected unsafe path: {error}")
+    return jsonify({"status": 400, "error": "Path is outside the library"}), 400
+
+
+GCODE_LOCKED_MESSAGE = "Cannot load gcode while a job is running or paused. Stop the job first."
+
+
+def gcodeLockedResponse():
+    if app.data.uploadFlag == 0 and not app.data.manualZAxisAdjust:
+        return None
+    resp = jsonify({"status": 409, "error": GCODE_LOCKED_MESSAGE})
+    # The classic UI alerts the reason phrase (jQuery's errorThrown), so it carries the message too.
+    resp.status = "409 " + GCODE_LOCKED_MESSAGE
+    return resp
+
+
 @app.route("/uploadGCode", methods=["POST"])
 def uploadGCode():
     app.data.logger.resetIdler()
+    locked = gcodeLockedResponse()
+    if locked:
+        return locked
     if request.method == "POST":
         result = request.form
         directory = result["selectedDirectory"]
-        # print(directory)
         f = request.files.getlist("file[]")
-        print(f)
-        home = app.data.config.getHome()
+        root = libraryRoot(app.data.config, "gcode")
+        resolveInside(root, directory)
+        targets = [resolveInside(root, directory, secure_filename(file.filename)) for file in f]
         app.data.config.setValue(
             "Computed Settings", "lastSelectedDirectory", directory
         )
 
         if len(f) > 0:
-            firstFile = f[0]
-            for file in f:
-                app.data.gcodeFile.filename = (
-                    home
-                    + "/.WebControl/gcode/"
-                    + directory
-                    + "/"
-                    + secure_filename(file.filename)
-                )
-                file.save(app.data.gcodeFile.filename)
-            app.data.gcodeFile.filename = (
-                home
-                + "/.WebControl/gcode/"
-                + directory
-                + "/"
-                + secure_filename(firstFile.filename)
-            )
+            for file, target in zip(f, targets):
+                file.save(target)
+            app.data.gcodeFile.filename = targets[0]
             returnVal = app.data.gcodeFile.loadUpdateFile()
             if returnVal:
                 message = {"status": 200}
@@ -297,13 +312,16 @@ def uploadGCode():
 @app.route("/openGCode", methods=["POST"])
 def openGCode():
     app.data.logger.resetIdler()
+    locked = gcodeLockedResponse()
+    if locked:
+        return locked
     if request.method == "POST":
         f = request.form["selectedGCode"]
         app.data.console_queue.put(f"selectedGcode={f}")
+        target = resolveInside(libraryRoot(app.data.config, "gcode"), f)
         tDir = f.split("/")
         app.data.config.setValue("Computed Settings", "lastSelectedDirectory", tDir[0])
-        home = app.data.config.getHome()
-        app.data.gcodeFile.filename = home + "/.WebControl/gcode/" + f
+        app.data.gcodeFile.filename = target
         app.data.config.setValue("Maslow Settings", "openFile", tDir[1])
         returnVal = app.data.gcodeFile.loadUpdateFile()
         if returnVal:
@@ -326,9 +344,11 @@ def saveGCode():
         f = request.form["fileName"]
         d = request.form["selectedDirectory"]
         app.data.console_queue.put(f"selectedGcode={f}")
+        target = resolveInside(libraryRoot(app.data.config, "gcode"), d, f)
         app.data.config.setValue("Computed Settings", "lastSelectedDirectory", d)
-        home = app.data.config.getHome()
-        returnVal = app.data.gcodeFile.saveFile(f, home + "/.WebControl/gcode/" + d)
+        returnVal = app.data.gcodeFile.saveFile(
+            os.path.basename(target), os.path.dirname(target)
+        )
         """
         tDir = f.split("/")
         app.data.config.setValue("Computed Settings","lastSelectedDirectory",tDir[0])
@@ -356,13 +376,13 @@ def openBoard():
     if request.method == "POST":
         f = request.form["selectedBoard"]
         app.data.console_queue.put(f"selectedBoard={f}")
+        target = resolveInside(libraryRoot(app.data.config, "boards"), f)
         tDir = f.split("/")
         app.data.config.setValue(
             "Computed Settings", "lastSelectedBoardDirectory", tDir[0]
         )
-        home = app.data.config.getHome()
-        app.data.config.setValue("Maslow Settings", "openBoardFile", tDir[1])
-        returnVal = app.data.boardManager.loadBoard(home + "/.WebControl/boards/" + f)
+        app.data.config.setValue("Maslow Settings", "openBoardFile", tDir[-1])
+        returnVal = app.data.boardManager.loadBoard(target)
         if returnVal:
             message = {"status": 200}
             resp = jsonify(message)
@@ -383,10 +403,10 @@ def saveBoard():
         f = request.form["fileName"]
         d = request.form["selectedDirectory"]
         app.data.console_queue.put(f"selectedBoard={f}")
+        target = resolveInside(libraryRoot(app.data.config, "boards"), d, f)
         app.data.config.setValue("Computed Settings", "lastSelectedBoardDirectory", d)
-        home = app.data.config.getHome()
         returnVal = app.data.boardManager.saveBoard(
-            f, home + "/.WebControl/boards/" + d
+            os.path.basename(target), os.path.dirname(target)
         )
         app.data.config.setValue("Maslow Settings", "openBoardFile", f)
         if returnVal:
@@ -566,7 +586,9 @@ def quickConfigure():
 @app.route("/editGCode", methods=["POST"])
 def editGCode():
     app.data.logger.resetIdler()
-    # print(request.form["gcode"])
+    locked = gcodeLockedResponse()
+    if locked:
+        return locked
     if request.method == "POST":
         returnVal = app.data.actions.updateGCode(request.form["gcode"].rstrip())
         if returnVal:

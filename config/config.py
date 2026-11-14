@@ -16,6 +16,7 @@ import glob
 
 from app import app
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
+from Actions import firmware
 
 
 class Config(MakesmithInitFuncs):
@@ -44,9 +45,9 @@ class Config(MakesmithInitFuncs):
         if not os.path.isdir(self.home+"/.WebControl"):
             print("creating "+self.home+"/.WebControl directory")
             os.mkdir(self.home+"/.WebControl")
-        if not os.path.exists(self.home+"/.WebControl/webcontrol.json"):
+        if not os.path.exists(self.settingsPath()) and not os.path.exists(self.settingsPath() + ".bak"):
             print("copying defaultwebcontrol.json to "+self.home+"/.WebControl/")
-            copyfile(self.home1+"/defaultwebcontrol.json",self.home+"/.WebControl/webcontrol.json")
+            copyfile(self.home1+"/defaultwebcontrol.json", self.settingsPath())
             self.firstRun = True
         if not os.path.isdir(self.home+"/.WebControl/gcode"):
             print("creating "+self.home+"/.WebControl/gcode directory")
@@ -57,16 +58,30 @@ class Config(MakesmithInitFuncs):
         if not os.path.isdir(self.home+"/.WebControl/boards"):
             print("creating "+self.home+"/.WebControl/boards directory")
             os.mkdir(self.home+"/.WebControl/boards")
-        with open(self.home+"/.WebControl/webcontrol.json", "r") as infile:
-            self.settings = json.load(infile)
-        # load default and see if there is anything missing.. if so, add it
+        self.settings, recovered = self.loadSettingsFile()
+        updated = self.addMissingDefaults()
+        if recovered:
+            self.setAsideCorruptSettings()
+        if updated or recovered:
+            self.saveSettings()
+
         '''
-        This portion scans the webcontrol.json file and sees if anything is missing in comparison to
-        the defaultwebcontrol.json file.  Changes to the defaultwebcontrol.json file are automatically
-        ADDED to the webcontrol.json file.  This function does not DELETE entries in the webcontrol.json
-        file if they do not appear in the defaultwebcontrol.json file.
+        Delete any copies of webcontrol in the downloads directory to cleanup the file system
         '''
-        # TODO: add DELETE function to this to clean up unneeded entries
+        home = self.home
+        dirName = home + "/.WebControl/downloads"
+        if os.path.exists(dirName):
+            dir = os.listdir(dirName)
+            for item in dir:
+                if item.startswith("webcontrol"):
+                    if item.endswith("gz") or item.endswith("zip") or item.endswith("dmg"):
+                        print("Removing file:"+item)
+                        os.remove(os.path.join(dirName, item))
+
+    def addMissingDefaults(self):
+        '''
+        Adds any setting in defaultwebcontrol.json that the loaded settings lack; returns True if any was added.
+        '''
         with open(self.home1+"/defaultwebcontrol.json", "r") as infile:
             self.defaults = json.load(infile)
         updated = False
@@ -116,25 +131,52 @@ class Config(MakesmithInitFuncs):
         If there was a change to webcontrol.json file due to differences with
         defaultwebcontrol.json, then the config is reloaded.
         '''
-        if updated:
-            with open(self.home+"/.WebControl/webcontrol.json", "w") as outfile:
-                # print ("writing file")
-                json.dump(
-                    self.settings, outfile, sort_keys=True, indent=4, ensure_ascii=False
-                )
+        return updated
 
+    def settingsPath(self):
+        return self.home + "/.WebControl/webcontrol.json"
+
+    def loadSettingsFile(self):
         '''
-        Delete any copies of webcontrol in the downloads directory to cleanup the file system
+        Returns (settings, recovered): webcontrol.json, else its .bak, else the defaults, warning on each fallback.
         '''
-        home = self.home
-        dirName = home + "/.WebControl/downloads"
-        if os.path.exists(dirName):
-            dir = os.listdir(dirName)
-            for item in dir:
-                if item.startswith("webcontrol"):
-                    if item.endswith("gz") or item.endswith("zip") or item.endswith("dmg"):
-                        print("Removing file:"+item)
-                        os.remove(os.path.join(dirName, item))
+        path = self.settingsPath()
+        for candidate in (path, path + ".bak"):
+            try:
+                with open(candidate, "r") as infile:
+                    settings = json.load(infile)
+                if not isinstance(settings, dict):
+                    raise ValueError("not a settings object")
+                return settings, candidate != path
+            except (OSError, ValueError) as e:
+                print("WARNING: could not read " + candidate + ": " + str(e))
+        print("WARNING: no readable webcontrol.json or backup, so falling back to the defaults")
+        with open(self.home1 + "/defaultwebcontrol.json", "r") as infile:
+            return json.load(infile), True
+
+    def setAsideCorruptSettings(self):
+        path = self.settingsPath()
+        if os.path.exists(path):
+            os.replace(path, path + ".corrupt")
+            print("WARNING: kept the unreadable settings as " + path + ".corrupt")
+
+    def saveSettings(self):
+        '''
+        Writes the settings atomically, keeping the previous webcontrol.json as webcontrol.json.bak.
+        '''
+        path = self.settingsPath()
+        tmpPath = path + ".tmp"
+        try:
+            with open(tmpPath, "w") as outfile:
+                json.dump(self.settings, outfile, sort_keys=True, indent=4, ensure_ascii=False)
+                outfile.flush()
+                os.fsync(outfile.fileno())
+            if os.path.exists(path):
+                os.replace(path, path + ".bak")
+            os.replace(tmpPath, path)
+        finally:
+            if os.path.exists(tmpPath):
+                os.remove(tmpPath)
 
     def checkForTouchedPort(self):
         '''
@@ -307,12 +349,7 @@ class Config(MakesmithInitFuncs):
             # if not being updated from the computSettings, then call computeSettings to update if needed.
             if not recursionBreaker:
                 self.computeSettings(None, None, None, True)
-            # and now save the settings to storage
-            with open(self.home+"/.WebControl/webcontrol.json", "w") as outfile:
-                # print ("writing file")
-                json.dump(
-                    self.settings, outfile, sort_keys=True, indent=4, ensure_ascii=False
-                )
+            self.saveSettings()
 
     def updateSettings(self, section, result):
         '''
@@ -724,37 +761,14 @@ class Config(MakesmithInitFuncs):
         This function determines the version number.
         :return:
         '''
-        home = "."
-        if hasattr(sys, '_MEIPASS'):
-            home = os.path.join(sys._MEIPASS)
-            print(self.home)
-        path = home+"/firmware/madgrizzle/*.hex"
-        for filename in glob.glob(path):
-            version = filename.split("-")
-            maxIndex = len(version)-1
-            if maxIndex >= 0:
-                version = version[maxIndex].split(".hex")
-                self.data.customFirmwareVersion = version[0]
-            else:
-                self.data.customFirmwareVersion = "n/a"
-        path = home+"/firmware/maslowcnc/*.hex"
-        for filename in glob.glob(path):
-            version = filename.split("-")
-            maxIndex = len(version)-1
-            if maxIndex >= 0:
-                version = version[maxIndex].split(".hex")
-                self.data.stockFirmwareVersion = version[0]
-            else:
-                self.data.stockFirmwareVersion = "n/a"
-        path = home+"/firmware/holey/*.hex"
-        for filename in glob.glob(path):
-            version = filename.split("-")
-            maxIndex = len(version)-1
-            if maxIndex >= 0:
-                version = version[maxIndex].split(".hex")
-                self.data.holeyFirmwareVersion = version[0]
-            else:
-                self.data.holeyFirmwareVersion = "n/a"
+        home = firmware.installRoot(self.data)
+        for variant, attribute in (
+            ("custom", "customFirmwareVersion"),
+            ("stock", "stockFirmwareVersion"),
+            ("holey", "holeyFirmwareVersion"),
+        ):
+            for filename in firmware.firmwareFiles(home, variant):
+                setattr(self.data, attribute, os.path.basename(filename).split("-")[-1].split(".hex")[0])
 
     def processChange(self, key, value):
         ### TODO: This does not currently fire on bools ##
@@ -798,9 +812,15 @@ class Config(MakesmithInitFuncs):
         :return:
         '''
         try:
-            with open(self.home+"/.WebControl/webcontrol.json", "r") as infile:
-                self.settings = json.load(infile)
+            with open(self.settingsPath(), "r") as infile:
+                settings = json.load(infile)
+            if not isinstance(settings, dict):
+                raise ValueError("not a settings object")
+            self.settings = settings
+            if self.addMissingDefaults():
+                self.saveSettings()
+            self.computeSettings(None, None, None, True)
             return True
-        except:
-            print("error reloading WebControlJSON")
+        except (OSError, ValueError) as e:
+            print("error reloading WebControlJSON: " + str(e))
             return False

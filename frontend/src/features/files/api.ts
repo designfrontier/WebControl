@@ -2,6 +2,7 @@ import { ApiError, getJson, sendJson } from "../../api/http";
 import type { Fetch } from "../../api/http";
 import {
   createdDirectorySchema,
+  formErrorSchema,
   gcodeLibrarySchema,
   gcodeTextSchema,
   loadedGcodeSchema,
@@ -24,14 +25,27 @@ export const createGcodeDirectory = (fetchImpl: Fetch, name: string) =>
 
 type FormValue = string | Blob | Blob[];
 
-/** Posts to one of main.py's classic form routes, which answer 200 or 500 without a useful body. */
+/** A classic form route's failure; `reason` is the route's own explanation, when it sent a `formErrorSchema` body. */
+export class FormRouteError extends ApiError {
+  readonly reason: string | undefined;
+
+  constructor(status: number, message: string, body: unknown) {
+    super(status, message, body);
+    this.name = "FormRouteError";
+    this.reason = formErrorSchema.safeParse(body).data?.error;
+  }
+}
+
+/** Posts to one of main.py's classic form routes, which answer 200 or an error, mostly without a useful body. */
 export const postForm = async (fetchImpl: Fetch, path: string, fields: Record<string, FormValue>) => {
   const body = new FormData();
   Object.entries(fields).forEach(([key, value]) =>
     (Array.isArray(value) ? value : [value]).forEach((item) => body.append(key, item)),
   );
   const response = await fetchImpl(path, { method: "POST", body });
-  if (!response.ok) throw new ApiError(response.status, `POST ${path} failed with ${response.status}`);
+  if (response.ok) return;
+  const errorBody: unknown = await response.json().catch(() => undefined);
+  throw new FormRouteError(response.status, `POST ${path} failed with ${response.status}`, errorBody);
 };
 
 export const openGcode = (fetchImpl: Fetch, file: LibraryFile) =>

@@ -21,7 +21,7 @@ function processHostAddress(data){
 function setListeners(){
   console.log("setting Listeners");
   socket.on('connect', function(msg) {
-      socketClientID = socket.io.engine.id;
+      socketClientID = socket.id;
       console.log("id="+socketClientID);
       socket.emit('my event', {data: 'I\'m connected!'});
       $("#clientStatus").text("Connected: "+hostAddress);

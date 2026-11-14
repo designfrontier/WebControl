@@ -7,6 +7,8 @@ from flask import render_template
 import frontmatter
 import markdown
 
+from File.safePaths import docsRoot, resolveInside
+
 
 class WebPageProcessor:
 
@@ -620,8 +622,8 @@ class WebPageProcessor:
                 )
             return page, "Fake Servo", False, "small", "content", False
         elif pageID == "help":
-            helpIndex = self.getPage("/docs/assets/helpPages.md", isMobile)
-            helpPage = self.getPage("/docs/index.md", isMobile)
+            helpIndex = self.getPage("assets/helpPages.md", isMobile)
+            helpPage = self.getPage("index.md", isMobile)
             if isMobile:
                 page = render_template(
                     "help_mobile.html",
@@ -644,8 +646,8 @@ class WebPageProcessor:
             if len(pageParts) > 1:
                 # help page
                 print(pageParts)
-                helpIndex = self.getPage("/docs/assets/helpPages.md", isMobile)
-                helpPage = self.getPage("/docs/"+pageID, isMobile)
+                helpIndex = self.getPage("assets/helpPages.md", isMobile)
+                helpPage = self.getPage(pageID, isMobile)
                 if isMobile:
                     helpIndex = self.createLinks(pageParts)
                     page = render_template(
@@ -676,14 +678,10 @@ class WebPageProcessor:
         return text
 
     def getPage(self, pageName, isMobile):
-        if self.data.platform == "PYINSTALLER":
-            lhome = os.path.join(self.data.platformHome)
-        else:
-            lhome = "."
-        filename = lhome+pageName
-        if filename.find("http") != -1:
+        if pageName.find("http") != -1:
             print("external link")
             return None
+        filename = resolveInside(docsRoot(self.data), pageName)
         with open(filename) as f:
             page = frontmatter.loads(f.read())
         pageContent = page.content

@@ -33,39 +33,14 @@ ADD requirements.txt /requirements.txt
 RUN sed -i '/opencv-python.*/d' /requirements.txt && sed -i '/scipy.*/d' /requirements.txt && sed -i '/numpy.*/d' /requirements.txt
 RUN pip3 install -r /requirements.txt
 
-# Download and compile the Arduino firmware
-# Generates the firmware as /firmware/.pioenvs/megaatmega2560/firmware.hex
-# Python3 support was added in July, 2019: https://github.com/Homebrew/homebrew-core/pull/41821
+# Build the bundled firmware into /WebControl/firmware/<variant>/<variant>-<version>.hex
 RUN apt-get update \
     && pip3 install -U platformio \
-    && pio platform install --with-package framework-arduino atmelavr \
-    && pio lib -g install "Servo"
+    && pio platform install --with-package framework-arduino atmelavr
 
-ARG madgrizzle_firmware_repo=https://github.com/madgrizzle/Firmware.git
-ARG madgrizzle_firmware_sha=bf4350ffd9bc154832505fc0125abd2c4c04dba7
-RUN git clone $madgrizzle_firmware_repo firmware/madgrizzle \
-    && cd firmware/madgrizzle \
-    && git checkout $madgrizzle_firmware_sha \
-    && pio run -e megaatmega2560 \
-    && mkdir build \
-    && mv .pio/build/megaatmega2560/firmware.hex build/$madgrizzle_firmware_sha-$(sed -n -e 's/^.*VERSIONNUMBER //p' cnc_ctrl_v1/Maslow.h).hex
-ARG maslowcnc_firmware_repo=https://github.com/MaslowCNC/Firmware.git
-ARG maslowcnc_firmware_sha=e1e0d020fff1f4f7c6b403a26a85a16546b7e15b
-RUN git clone $maslowcnc_firmware_repo firmware/maslowcnc \
-    && cd firmware/maslowcnc \
-    && git checkout $maslowcnc_firmware_sha \
-    && pio run -e megaatmega2560 \
-    && mkdir build \
-    && mv .pio/build/megaatmega2560/firmware.hex build/$maslowcnc_firmware_sha-$(sed -n -e 's/^.*VERSIONNUMBER //p' cnc_ctrl_v1/Maslow.h).hex
-RUN pwd
-ARG  holey_firmware_repo=https://github.com/madgrizzle/Firmware.git
-ARG  holey_firmware_sha=950fb23396171cbd456c2d4149455cc45f5e6bc3
-RUN git clone $holey_firmware_repo firmware/holey \
-    && cd firmware/holey \
-    && git checkout $holey_firmware_sha \
-    && pio run -e megaatmega2560 \
-    && mkdir build \
-    && mv .pio/build/megaatmega2560/firmware.hex build/$holey_firmware_sha-$(sed -n -e 's/^.*VERSIONNUMBER //p' cnc_ctrl_v1/Maslow.h).hex
+ADD buildFirmware.sh /buildFirmware.sh
+RUN FIRMWARE_DIR=/WebControl/firmware BUILD_DIR=/tmp/firmware-build bash /buildFirmware.sh \
+    && rm -rf /tmp/firmware-build
 
 ADD . /WebControl
 
