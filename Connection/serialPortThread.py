@@ -398,16 +398,22 @@ class SerialPortThread(MakesmithInitFuncs):
                 try:
                     line = self._stripComments(self.data.gcode[self.data.gcodeIndex])
                     # if there is space in the buffer for the line as it will be written, newline included
-                    if line.isspace() or self.bufferSpace > len(self._shiftToHome(line) + "\n"):
+                    fits = line.isspace() or self.bufferSpace > len(self._shiftToHome(line) + "\n")
+                    # A line longer than the whole buffer goes out alone, as in unbuffered mode, so the run can't stall.
+                    if fits or self._controllerIsIdle():
                         self.sendNextLine()
                 except IndexError:
                     self.data.console_queue.put("index error when reading gcode")
                     # we don't want the whole serial thread to close if the gcode can't be sent because of an
                     # index error (file deleted...etc)
-            else:
-                if (self.bufferSpace == self.bufferSize and self.machineIsReadyForData ):
-                    # if the receive buffer is empty and the machine has acked the last line complete...
-                    self.sendNextLine()
+            elif self._controllerIsIdle():
+                self.sendNextLine()
+
+    def _controllerIsIdle(self):
+        '''
+        :return: True when the controller's receive buffer is empty and it has acked the last line.
+        '''
+        return self.bufferSpace == self.bufferSize and self.machineIsReadyForData
 
     def extractGcodeValue(self, readString, target, defaultReturn):
         # Reads a string and returns the value of number following the target character.

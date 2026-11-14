@@ -257,3 +257,16 @@ def test_a_failure_after_writing_a_line_does_not_send_it_again(data, serial, mon
 
     assert port.sent == ["G1 X1.0  ", "G1 X2.0  ", "G1 X3.0  "]
     assert data.uploadFlag == 0
+
+
+def test_buffered_streaming_sends_a_line_too_long_for_the_buffer_once_it_drains(data, serial):
+    long_line = "G1 X1 Y1 " + "F100 " * 24
+    data.gcode = ["G1 X0 ", long_line, "G1 X2 "]
+    data.uploadFlag = 1
+    skip_startup_commands = once_after(serial.clock, 0, lambda port: drain(data.gcode_queue))
+
+    port = serial.run(on_poll=skip_startup_commands, buffer=True)
+
+    assert len(port.written[1]) > SerialPortThread.bufferSize
+    assert port.sent[-1] == "G1 X2.0  "
+    assert data.uploadFlag == 0
