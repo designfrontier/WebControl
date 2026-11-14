@@ -3,7 +3,7 @@ import { gzip } from "pako";
 import type { Object3D, Scene } from "three";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ViewerSnapshot } from "../../protocol";
-import { fakeFetch } from "../../test/fakeFetch";
+import { fakeFetch, jsonResponse } from "../../test/fakeFetch";
 import { renderWithProviders } from "../../test/render";
 import type { RenderOptions } from "../../test/render";
 import { LONG_PRESS_MS, Viewer } from "./Viewer";
@@ -150,6 +150,18 @@ describe("Viewer loading", () => {
     expect(screen.getByText("1 cut and 0 rapid moves")).toBeInTheDocument();
   });
 
+  it("keeps gcode pushed while /api/viewer was loading instead of the older snapshot", async () => {
+    const pending: ((response: Response) => void)[] = [];
+    const fetch = fakeFetch({ "/api/viewer": () => new Promise<Response>((done) => pending.push(done)) });
+    const { socket } = renderViewer({ fetch });
+    socket.serverRaw({ command: "gcodeUpdateCompressed", data: asArrayBuffer(gz([])), dataFormat: "base64" });
+    expect(screen.getByText("0 cut and 0 rapid moves")).toBeInTheDocument();
+
+    await act(async () => pending.forEach((done) => done(jsonResponse(snapshot()))));
+    expect(screen.getByText("Board: Shelf, Material: Birch ply")).toBeInTheDocument();
+    expect(screen.getByText("0 cut and 0 rapid moves")).toBeInTheDocument();
+  });
+
   it("explains when WebGL cannot start", async () => {
     engine.fail = true;
     renderViewer();
@@ -254,6 +266,10 @@ describe("Viewer toolbar", () => {
 
     socket.serverMessage("cameraMessage", { command: "updateCamera", data: "off" });
     expect(screen.queryByRole("img", { name: "Webcam view of the machine" })).not.toBeInTheDocument();
+
+    socket.serverMessage("cameraMessage", { command: "updateCamera", data: "on" });
+    socket.serverMessage("cameraMessage", { command: "cameraImageUpdated", data: "AAAA" });
+    expect(screen.queryByRole("img", { name: "Webcam view of the machine" })).not.toBeInTheDocument();
   });
 });
 
@@ -328,10 +344,53 @@ describe("Viewer screen actions", () => {
     );
   });
 
+  it("disables only Define home while a run is paused, which the server refuses", async () => {
+    await loaded({ machine: { status: { uploadFlag: 2, currentTool: 0, positioningMode: 0 } } });
+    fireEvent.contextMenu(canvas());
+    expect(screen.getByText("Define home is unavailable while a run is paused.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Define home here" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Move here" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Return to center" })).toBeEnabled();
+  });
+
+  it("keeps Tab inside the dialog, makes the page inert and gives focus back on close", async () => {
+    const { user } = await loaded();
+    const threeD = screen.getByRole("button", { name: "3D" });
+    threeD.focus();
+    fireEvent.contextMenu(canvas());
+    const dialog = screen.getByRole("dialog");
+    const buttons = within(dialog).getAllByRole("button");
+    expect(canvas().closest("[inert]")).not.toBeNull();
+    expect(dialog.closest("[inert]")).toBeNull();
+
+    expect(buttons.at(-1)).toHaveFocus();
+    await user.tab();
+    expect(buttons[0]).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(buttons.at(-1)).toHaveFocus();
+    buttons[0].blur();
+    await user.tab();
+    expect(buttons[0]).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(document.querySelector("[inert]")).toBeNull();
+    expect(threeD).toHaveFocus();
+  });
+
+  it("does not start a long press for the second finger of a pinch", async () => {
+    await loaded();
+    vi.useFakeTimers();
+    fireEvent.pointerDown(canvas(), { pointerType: "touch", isPrimary: true, clientX: 50, clientY: 60 });
+    fireEvent.pointerDown(canvas(), { pointerType: "touch", isPrimary: false, clientX: 90, clientY: 60 });
+    act(() => vi.advanceTimersByTime(LONG_PRESS_MS));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
   it("opens on a 1.5 s long press and ignores the touch contextmenu event", async () => {
     await loaded();
     vi.useFakeTimers();
-    fireEvent.pointerDown(canvas(), { pointerType: "touch", clientX: 50, clientY: 60 });
+    fireEvent.pointerDown(canvas(), { pointerType: "touch", isPrimary: true, clientX: 50, clientY: 60 });
     fireEvent.contextMenu(canvas());
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
@@ -345,13 +404,13 @@ describe("Viewer screen actions", () => {
   it("cancels a long press when the finger lifts or drags", async () => {
     await loaded();
     vi.useFakeTimers();
-    fireEvent.pointerDown(canvas(), { pointerType: "touch", clientX: 50, clientY: 60 });
+    fireEvent.pointerDown(canvas(), { pointerType: "touch", isPrimary: true, clientX: 50, clientY: 60 });
     fireEvent.pointerMove(canvas(), { pointerType: "touch", clientX: 52, clientY: 62 });
     fireEvent.pointerMove(canvas(), { pointerType: "touch", clientX: 80, clientY: 60 });
     act(() => vi.advanceTimersByTime(LONG_PRESS_MS));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
-    fireEvent.pointerDown(canvas(), { pointerType: "touch", clientX: 50, clientY: 60 });
+    fireEvent.pointerDown(canvas(), { pointerType: "touch", isPrimary: true, clientX: 50, clientY: 60 });
     fireEvent.pointerUp(canvas(), { pointerType: "touch" });
     act(() => vi.advanceTimersByTime(LONG_PRESS_MS));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();

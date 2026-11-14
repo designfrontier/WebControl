@@ -60,9 +60,12 @@ export interface ViewerScene {
 }
 
 const geometryOf = (positions: ArrayLike<number>) =>
-  new BufferGeometry().setAttribute("position", new BufferAttribute(Float32Array.from(positions), 3));
+  new BufferGeometry().setAttribute(
+    "position",
+    new BufferAttribute(positions instanceof Float32Array ? positions : Float32Array.from(positions), 3),
+  );
 
-/** Swaps an object's geometry and frees the old one's GPU buffers, which the old UI never did. */
+/** Swaps an object's geometry and frees the old GPU buffers. */
 const replaceGeometry = (object: LineSegments | Mesh, positions: ArrayLike<number>) => {
   const previous = object.geometry;
   object.geometry = geometryOf(positions);

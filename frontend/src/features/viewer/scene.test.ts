@@ -94,6 +94,13 @@ describe("createViewerScene", () => {
     expect(["cuts", "rapids", "plunges", "events"].map(vertices)).toEqual([0, 0, 0, 0]);
   });
 
+  it("uploads the toolpath buffers without copying them", () => {
+    const { scene, get } = setup();
+    const geometry = toolpath();
+    scene.setGcode(geometry);
+    expect(get("cuts").geometry.getAttribute("position").array).toBe(geometry.cuts);
+  });
+
   it("creates labels only while they are shown and frees them when the gcode changes", () => {
     const { scene, makeLabel, get } = setup();
     scene.setGcode(toolpath());

@@ -15,7 +15,7 @@ import type { ScreenAction } from "./ScreenActionDialog";
 import { isOnBed } from "./shapes";
 import type { Point } from "./shapes";
 import { fromInches, roundForAction, toInches, unitLabel } from "./units";
-import { initialViewerData, viewerReducer } from "./viewerState";
+import { decodeCutPayload, decodeGcodePayload, decodeSnapshot, initialViewerData, viewerReducer } from "./viewerState";
 import "./viewer.css";
 
 interface View {
@@ -48,7 +48,7 @@ export const Viewer = () => {
   const homePosition = useMachine((state) => state.homePosition);
   const gcodePosition = useMachine((state) => state.gcodePosition);
   const positionError = useMachine((state) => state.positionError);
-  const running = useMachine((state) => selectRunState(state) === "running");
+  const runState = useMachine(selectRunState);
 
   const [data, dispatch] = useReducer(viewerReducer, initialViewerData);
   const [view3D, setView3D] = useState(false);
@@ -81,16 +81,21 @@ export const Viewer = () => {
   }, []);
 
   useServerMessage("showFPSpinner", () => dispatch({ type: "loading" }));
-  useServerMessage("gcodeUpdateCompressed", (payload) => dispatch({ type: "gcode", payload }));
-  useServerMessage("boardCutDataUpdateCompressed", (payload) => dispatch({ type: "cutData", payload }));
+  useServerMessage("gcodeUpdateCompressed", (payload) =>
+    dispatch({ type: "gcode", result: decodeGcodePayload(payload) }),
+  );
+  useServerMessage("boardCutDataUpdateCompressed", (payload) =>
+    dispatch({ type: "cutData", result: decodeCutPayload(payload) }),
+  );
   useServerMessage("boardDataUpdate", (board) => dispatch({ type: "board", board }));
   useServerMessage("cameraMessage", (message) => dispatch({ type: "camera", message }));
 
   useEffect(() => {
     if (socket !== "connected") return;
     let live = true;
+    dispatch({ type: "snapshotStarted" });
     getViewerSnapshot(fetch).then(
-      (snapshot) => live && dispatch({ type: "snapshot", snapshot }),
+      (snapshot) => live && dispatch({ type: "snapshot", snapshot: decodeSnapshot(snapshot) }),
       (error: unknown) => {
         console.warn("Could not load /api/viewer", error);
         if (live) dispatch({ type: "snapshotFailed" });
@@ -174,7 +179,7 @@ export const Viewer = () => {
   const onPointerDown = (event: ReactPointerEvent) => {
     pointerTypeRef.current = event.pointerType;
     cancelPress();
-    if (event.pointerType !== "touch") return;
+    if (event.pointerType !== "touch" || !event.isPrimary) return;
     const { clientX, clientY } = event;
     const timer = window.setTimeout(() => {
       pressRef.current = null;
@@ -191,10 +196,9 @@ export const Viewer = () => {
 
   useEffect(() => cancelPress, []);
 
-  const runAction = (action: ScreenAction) => {
-    const point = target;
+  const runAction = (action: ScreenAction, point: Point) => {
     setTarget(null);
-    if (!point || action === "returnToCenter") return client.sendAction("returnToCenter");
+    if (action === "returnToCenter") return client.sendAction("returnToCenter");
     client.sendAction(action, roundForAction(point.x), roundForAction(point.y));
   };
 
@@ -252,7 +256,7 @@ export const Viewer = () => {
             onPointerLeave={() => setCursor(null)}
           />
         )}
-        <CameraOverlay on={data.camera.on} image={data.camera.image} />
+        <CameraOverlay key={String(data.camera.on)} on={data.camera.on} image={data.camera.image} />
         {data.loading ? (
           <div className="viewer-loading" role="status">
             <span className="viewer-spinner" aria-hidden="true" />
@@ -277,7 +281,7 @@ export const Viewer = () => {
           point={target}
           units={units}
           onBed={isOnBed(data.machine, target)}
-          running={running}
+          runState={runState}
           onAction={runAction}
           onClose={() => setTarget(null)}
         />

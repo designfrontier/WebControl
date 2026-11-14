@@ -2,7 +2,7 @@ import { CanvasTexture, Group, LinearFilter, Sprite, SpriteMaterial } from "thre
 import type { Object3D } from "three";
 
 const FONT_PX = 48;
-/** World height of a label in inches; the old sprite text was 0.1, unreadable unless zoomed right in. */
+/** World height of a label in inches. */
 const LABEL_HEIGHT = 0.25;
 
 /** A camera-facing text sprite for spindle-speed and tool-change labels; an empty group if canvas is unavailable. */

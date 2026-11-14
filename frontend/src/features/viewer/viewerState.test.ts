@@ -1,8 +1,8 @@
 import { gzip } from "pako";
 import { describe, expect, it, vi } from "vitest";
-import type { ViewerSnapshot } from "../../protocol";
+import type { Compressed, ViewerSnapshot } from "../../protocol";
 import { DEFAULT_MACHINE } from "./shapes";
-import { initialViewerData, viewerReducer } from "./viewerState";
+import { decodeCutPayload, decodeGcodePayload, decodeSnapshot, initialViewerData, viewerReducer } from "./viewerState";
 import type { ViewerEvent } from "./viewerState";
 
 const toBase64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
@@ -29,13 +29,16 @@ const board = {
   fileName: "",
 };
 
-const snapshot = (over: Partial<ViewerSnapshot> = {}): ViewerSnapshot => ({
-  machine: { bedWidth: 96, bedHeight: 48, motorOffsetY: 18.2283, motorSpacingX: 117.2598 },
-  gcode: toBase64(gz(moves)),
-  board,
-  cutData: toBase64(gz([true])),
-  ...over,
-});
+const snapshot = (over: Partial<ViewerSnapshot> = {}) =>
+  decodeSnapshot({
+    machine: { bedWidth: 96, bedHeight: 48, motorOffsetY: 18.2283, motorSpacingX: 117.2598 },
+    gcode: toBase64(gz(moves)),
+    board,
+    cutData: toBase64(gz([true])),
+    ...over,
+  });
+const gcodePush = (payload: Compressed): ViewerEvent => ({ type: "gcode", result: decodeGcodePayload(payload) });
+const cutPush = (payload: Compressed): ViewerEvent => ({ type: "cutData", result: decodeCutPayload(payload) });
 
 const apply = (...events: ViewerEvent[]) => events.reduce(viewerReducer, initialViewerData);
 
@@ -58,6 +61,37 @@ describe("viewerReducer", () => {
     expect(bigger.machine).not.toBe(DEFAULT_MACHINE);
   });
 
+  it("keeps fields a socket push set while the snapshot was loading", () => {
+    const newer = { ...board, boardID: "newer" };
+    const state = apply(
+      { type: "snapshotStarted" },
+      gcodePush(""),
+      cutPush(gz([false])),
+      { type: "board", board: newer },
+      { type: "snapshot", snapshot: snapshot() },
+    );
+    expect(state).toMatchObject({ gcode: null, cutCells: [false], board: newer, loading: false });
+    const next = apply({ type: "snapshotStarted" }, { type: "snapshot", snapshot: snapshot() });
+    expect(next.gcode?.cuts).toHaveLength(6);
+  });
+
+  it("applies the machine and board from a snapshot whose gcode is corrupt", () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const state = apply(
+      { type: "snapshotStarted" },
+      {
+        type: "snapshot",
+        snapshot: snapshot({
+          gcode: "%%%",
+          machine: { bedWidth: 120, bedHeight: 48, motorOffsetY: 20, motorSpacingX: 140 },
+        }),
+      },
+    );
+    expect(state).toMatchObject({ board, cutCells: [true], gcode: null, loading: false });
+    expect(state.machine.bedWidth).toBe(120);
+    expect(state.error).toBe("Could not read the gcode preview from the server.");
+  });
+
   it("shows the spinner once per announcement", () => {
     const loading = apply({ type: "loading" });
     expect(loading.loading).toBe(true);
@@ -65,22 +99,22 @@ describe("viewerReducer", () => {
   });
 
   it("replaces and clears the gcode from socket pushes", () => {
-    const loaded = apply({ type: "loading" }, { type: "gcode", payload: gz(moves) });
+    const loaded = apply({ type: "loading" }, gcodePush(gz(moves)));
     expect(loaded).toMatchObject({ loading: false, error: null });
     expect(loaded.gcode?.cuts).toHaveLength(6);
-    expect(viewerReducer(loaded, { type: "gcode", payload: "" }).gcode).toBeNull();
+    expect(viewerReducer(loaded, gcodePush("")).gcode).toBeNull();
   });
 
   it("keeps the last good data and reports corrupt payloads", () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
-    const loaded = apply({ type: "gcode", payload: gz(moves) }, { type: "loading" });
-    const broken = viewerReducer(loaded, { type: "gcode", payload: new Uint8Array([9, 9]) });
+    const loaded = apply(gcodePush(gz(moves)), { type: "loading" });
+    const broken = viewerReducer(loaded, gcodePush(new Uint8Array([9, 9])));
     expect(broken).toMatchObject({ loading: false, error: "Could not read the gcode preview from the server." });
     expect(broken.gcode).toBe(loaded.gcode);
 
-    const badCut = viewerReducer(broken, { type: "cutData", payload: "%%%" });
+    const badCut = viewerReducer(broken, cutPush("%%%"));
     expect(badCut.error).toBe("Could not read the board cut data from the server.");
-    expect(viewerReducer(badCut, { type: "cutData", payload: gz([false]) })).toMatchObject({
+    expect(viewerReducer(badCut, cutPush(gz([false])))).toMatchObject({
       cutCells: [false],
       error: null,
     });
@@ -105,7 +139,7 @@ describe("viewerReducer", () => {
     expect(viewerReducer(framed, { type: "camera", message: { command: "updateCamera", data: "off" } }).camera).toEqual(
       {
         on: false,
-        image: "AAA",
+        image: null,
       },
     );
   });
