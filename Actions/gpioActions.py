@@ -1,16 +1,45 @@
+import warnings
+
+import gevent
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
-from gpiozero import Button, LED
+from gpiozero import Button, Device, LED, PinFactoryFallback
+from gpiozero.pins.mock import MockFactory
+
+BOUNCE_TIME = 0.1
+
+BUTTON_COMMANDS = {
+    "Stop": "stopRun",
+    "Pause": "pauseRun",
+    "Play": "startRun",
+    "Set Home": "defineHome",
+    "Go Home": "home",
+    "Return to Center": "returnToCenter",
+    "Shutdown": "shutdown",
+}
+
+LED_ACTIONS = ["PlayLED", "PauseLED", "StopLED"]
+
+
+def selectPinFactory(data):
+    '''
+    Uses the Pi's real GPIO (or GPIOZERO_PIN_FACTORY) when it loads, and simulated pins anywhere else.
+    '''
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", PinFactoryFallback)
+            Device.pin_factory = Device._default_pin_factory()
+        data.console_queue.put("GPIO pin factory: " + type(Device.pin_factory).__name__)
+    # A factory named by GPIOZERO_PIN_FACTORY raises its own errors rather than BadPinFactory.
+    except Exception as e:
+        Device.pin_factory = MockFactory()
+        data.console_queue.put("GPIO pin factory: MockFactory (no GPIO available, pins are simulated: " + str(e) + ")")
 
 
 class GPIOActions(MakesmithInitFuncs):
     def __init__(self):
-        pass
+        self.Buttons = []
+        self.LEDs = []
 
-    """
-    get gpio settings
-    """
-    Buttons = []
-    LEDs = []
     actionList = [
         "Spindle On",
         "Spindle Off",
@@ -30,55 +59,44 @@ class GPIOActions(MakesmithInitFuncs):
         return self.actionList
 
     def setup(self):
-        # self.setGPIOAction(2,"Stop")
+        selectPinFactory(self.data)
         setValues = self.data.config.getJSONSettingSection("GPIO Settings")
-        # print(setValues)
         for setting in setValues:
             if setting["value"] != "":
                 pinNumber = int(setting["key"][4:])
                 self.setGPIOAction(pinNumber, setting["value"])
 
     def setGPIOAction(self, pin, action):
-        # first remove pin assignments if already made
-        foundButton = None
-        for button in self.Buttons:
-            if button.pin.number == pin:
-                button.pin.close()
-                foundButton = button
-                break
-        if foundButton is not None:
-            self.Buttons.remove(foundButton)
-
-        foundLED = None
-        for led in self.LEDs:
-            if led[1].pin.number == pin:
-                led[1].pin.close()
-                foundLED = led
-                break
-        if foundLED is not None:
-            self.LEDs.remove(foundLED)
-
-        type, pinAction = self.getAction(action)
-        if type == "button":
-            button = Button(pin)
-            button.when_pressed = pinAction
+        self.releasePin(pin)
+        if action in BUTTON_COMMANDS:
+            button = Button(pin, bounce_time=BOUNCE_TIME)
+            button.when_pressed = self.pressHandler(action)
             self.Buttons.append(button)
             print(f"set Button with action: {action}")
-        if type == "led":
-            _led = LED(pin)
-            led = (action, _led)
-            self.LEDs.append(led)
+        elif action in LED_ACTIONS:
+            self.LEDs.append((action, LED(pin)))
             print(f"set LED with action: {action}")
-
-    def getAction(self, action):
-        if action == "Stop":
-            return "button", self.data.actions.stopRun
-        elif action == "Pause":
-            return "button", self.data.actions.pauseRun
-        elif action == "Play":
-            return "button", self.data.actions.startRun
         else:
-            return "led", None
+            self.data.console_queue.put(f"GPIO pin {pin}: '{action}' is not supported, pin left unconfigured")
+
+    def releasePin(self, pin):
+        for button in [button for button in self.Buttons if button.pin.number == pin]:
+            button.close()
+            self.Buttons.remove(button)
+        for led in [led for led in self.LEDs if led[1].pin.number == pin]:
+            led[1].close()
+            self.LEDs.remove(led)
+
+    def pressHandler(self, action):
+        # gpiozero calls this on its own native thread, so the action is handed to the gevent hub it was set up on.
+        loop = gevent.get_hub().loop
+        return lambda: loop.run_callback_threadsafe(self.runButtonAction, action)
+
+    def runButtonAction(self, action):
+        command = BUTTON_COMMANDS[action]
+        if action == "Play" and (self.data.uploadFlag in (2, -1) or self.data.manualZAxisAdjust):
+            command = "resumeRun"
+        self.data.actions.processAction({"data": {"command": command, "arg": "", "arg1": ""}})
 
     def causeAction(self, action, onoff):
         for led in self.LEDs:

@@ -199,6 +199,7 @@ class Data:
     pausedzval = None
     pausedPositioningMode = 0
     pausedUnits = "INCHES"
+    pausedGcodeIndex = None
 
     """
     GCode Position Values

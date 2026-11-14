@@ -14,8 +14,14 @@ import re
 import zipfile
 import subprocess
 from subprocess import call
-from gpiozero.pins.mock import MockFactory
-from gpiozero import Device
+
+
+def gcodeNumbers(letter, line):
+    '''
+    The numbers of the letter's words in line, so M3 and M03 give 3 while M30 gives 30 and G91.1 gives 91.1.
+    '''
+    return {float(number) for number in re.findall(letter + r"\s*([0-9]+(?:\.[0-9]+)?)", line)}
+
 
 KEEP_ARCHIVES = 5
 
@@ -28,8 +34,6 @@ class FirmwareUpgradeError(Exception):
 This class does most of the heavy lifting in processing messages from the UI client.
 '''
 class Actions(MakesmithInitFuncs):
-
-    Device.pin_factory = MockFactory()
 
     def processAction(self, msg):
         '''
@@ -91,16 +95,16 @@ class Actions(MakesmithInitFuncs):
                     self.data.ui_queue1.put("Alert", "Alert", "Error with initiating Z-Axis move.")
             elif msg["data"]["command"] == "setMaxZ":
                 if not self.setMaxZ():
-                    self.data.ui.queue1.put("Alert", "Alert", "Error with setting Z-Axis Maximum")
+                    self.data.ui_queue1.put("Alert", "Alert", "Error with setting Z-Axis Maximum")
             elif msg["data"]["command"] == "setMinZ":
                 if not self.setMinZ():
-                    self.data.ui.queue1.put("Alert", "Alert", "Error with setting Z-Axis Minimum")
+                    self.data.ui_queue1.put("Alert", "Alert", "Error with setting Z-Axis Minimum")
             elif msg["data"]["command"] == "clearZ":
                 if not self.clearZ():
-                    self.data.ui.queue1.put("Alert", "Alert", "Error with clearing Z-Axis Min and Max")
+                    self.data.ui_queue1.put("Alert", "Alert", "Error with clearing Z-Axis Min and Max")
             elif msg["data"]["command"] == "getZlimits":
                 if not self.getZlimits():
-                    self.data.ui.queue1.put("Alert", "Alert", "Error with clearing Z-Axis Min and Max")
+                    self.data.ui_queue1.put("Alert", "Alert", "Error with clearing Z-Axis Min and Max")
             elif msg["data"]["command"] == "reportSettings":
                 self.data.gcode_queue.put("$$")
             elif msg["data"]["command"] == "home":
@@ -652,6 +656,7 @@ class Actions(MakesmithInitFuncs):
                 self.data.pausedzval = self.data.currentZTarget
                 self.data.pausedUnits = self.data.units
                 self.data.pausedPositioningMode = self.data.positioningMode
+                self.data.pausedGcodeIndex = self.data.gcodeIndex
                 #print("Saving paused positioning mode: " + str(self.data.pausedPositioningMode))
                 self.data.gpioActions.causeAction("PauseLED", "on")
             return True
@@ -680,38 +685,25 @@ class Actions(MakesmithInitFuncs):
                     self.data.uploadFlag = 1
                 else:
                     self.data.uploadFlag = self.data.previousUploadStatus ### just moved this here from after if statement
+            elif self.data.uploadFlag == 1:
+                # A second Resume (double click, another client) must not lift and replunge mid-cut.
+                return True
             else:
-                # User has paused and is now resuming.
-                # User could have used UI to move z-axis so restore paused values.
+                # The user may have jogged, homed or moved the gcode index while paused, so return to the file's
+                # position at the current index at safe height before lowering the bit.
                 print("Resume run without manual z-axis adjust.")
-                # Restore units.
                 if self.data.pausedUnits is not None and self.data.pausedUnits != self.data.units:
                     print("Restoring units to:" + str(self.data.pausedUnits))
-                    if self.data.pausedUnits == "INCHES":
-                        self.data.gcode_queue.put("G20 ")
-                    elif self.data.pausedUnits == "MM":
-                        self.data.gcode_queue.put("G21 ")
-                    self.data.pausedUnits = None
-
-                # Move the z-axis back to where it was.
-                if self.data.pausedzval is not None and self.data.pausedzval != self.data.zval:
-                    # Put in absolute mode to make z axis move.
-                    self.data.gcode_queue.put("G90 ")
-                    # THE ABOVE COMMAND IS NOT EXECUTED IN LINE AND REQUIRES THE FOLLOWING TO TRACK POSITIONING MODE
-                    self.data.positioningMode = 0
-                    print("Restoring paused Z value: " + str(self.data.pausedzval))
-                    self.data.gcode_queue.put("G0 Z" + str(self.data.pausedzval) + " ")
-                    self.data.pausedzval = None
-
-                # Restore the last gcode positioning mode in use before pauseRun executed.
-                if self.data.pausedPositioningMode is not None and self.data.positioningMode != self.data.pausedPositioningMode:
-                    print("Restoring positioning mode: " + str(self.data.pausedPositioningMode))
-                    if self.data.pausedPositioningMode == 0:
-                        # this line technically should be unreachable
-                        self.data.gcode_queue.put("G90 ")
-                    elif self.data.pausedPositioningMode == 1:
-                        self.data.gcode_queue.put("G91 ")
-                    self.data.pausedPositioningMode = None
+                    self.updateSetting("toInches" if self.data.pausedUnits == "INCHES" else "toMM", 0, True)
+                zTarget = None
+                # currentZTarget is the last Z sent, which only matches the file's Z if the index has not moved.
+                if self.data.pausedGcodeIndex == self.data.gcodeIndex and self.data.pausedzval is not None:
+                    zTarget = self.data.pausedzval
+                self.queueRestartSequence(self.gcodeStateAt(self.data.gcodeIndex), zTarget, changeTool=False)
+                self.data.pausedUnits = None
+                self.data.pausedzval = None
+                self.data.pausedPositioningMode = None
+                self.data.pausedGcodeIndex = None
 
                 self.sendGCodePositionUpdate(self.data.gcodeIndex, recalculate=True)
                 self.data.uploadFlag = 1
@@ -736,7 +728,7 @@ class Actions(MakesmithInitFuncs):
             safeHeightMM = float(
                 self.data.config.getValue("Maslow Settings", "zAxisSafeHeight")
             )
-            safeHeightInches = safeHeightMM / 24.5
+            safeHeightInches = safeHeightMM / 25.4
             if self.data.units == "INCHES":
                 self.data.gcode_queue.put("G00 Z" + "%.3f" % (safeHeightInches))
             else:
@@ -1593,26 +1585,25 @@ class Actions(MakesmithInitFuncs):
 
     def processGCode(self):
         '''
-        This function processes the gcode up to the current gcode index to develop a set of
-        gcodes to send to the controller upon the user starting a run.  This function is intended
-        to ensure that the sled is in the correct location and the controller is in the correct
-        state prior to starting the current gcode move.  Currently processed are relative/absolute
-        positioning (G90/G91), imperial/metric units (G20/G21) and x, y and z positions
+        Queues the gcode that puts the sled, bit and controller where the file expects them at the current gcode
+        index, so a run can start there.
+        '''
+        self.queueRestartSequence(self.gcodeStateAt(self.data.gcodeIndex))
+
+    def gcodeStateAt(self, index):
+        '''
+        Parses the file up to index for the units, positioning, XYZ target (XY include home), feed rates, tool,
+        spindle, laser and dwell in effect there, all in the units in effect there.
         '''
         positioning = "G90 "
-        zAxisSafeHeight = float(self.data.config.getValue("Maslow Settings", "zAxisSafeHeight"))
-        zAxisFeedRate = 12.8  # currently hardcoded, but Todo: Add setting
-        xyAxisFeedRate = float(self.data.config.getValue("Advanced Settings", "maxFeedrate"))
-        self.data.feedRate - xyAxisFeedRate
-        positioning = "G90 "
-        units = "G20 "
         homeX = float(self.data.config.getValue("Advanced Settings", "homeX"))
         homeY = float(self.data.config.getValue("Advanced Settings", "homeY"))
-        previousUnits = self.data.config.getValue("Computed Settings", "units")
-        if previousUnits == "INCHES":
-            previousUnits = "G20 "
-        else:
-            previousUnits = "G21 "
+        # homeX/homeY are stored in machine units, so a file without G20/G21 runs in them too.
+        units = "G20 " if self.data.units == "INCHES" else "G21 "
+        defaultFeedScale = 1 / 25.4 if units == "G20 " else 1
+        zAxisFeedRate = 12.8 * defaultFeedScale  # mm/min, currently hardcoded, but Todo: Add setting
+        xyAxisFeedRate = float(self.data.config.getValue("Advanced Settings", "maxFeedrate")) * defaultFeedScale
+        previousUnits = units
         xpos = homeX
         ypos = homeY
         zpos = 0
@@ -1620,13 +1611,12 @@ class Actions(MakesmithInitFuncs):
         spindle = None
         laser = None
         dwell = None
-        # start parsing through gcode file up to the index
-        for x in range(self.data.gcodeIndex):
+        for x in range(index):
             filtersparsed = re.sub(r'\(([^)]*)\)', '', self.data.gcode[x])  # replace mach3 style gcode comments with newline
             filtersparsed = re.sub(r';([^\n]*)?', '\n', filtersparsed)  # replace standard ; initiated gcode comments with nothing
             if not filtersparsed.isspace():  # if all spaces, don't send.  likely a comment. #self.data.gcode[x][0] != "(":
                 #lines = self.data.gcode[x].split(" ")
-                lines = filtersparsed.split(" ")
+                lines = re.sub(r"^\s*N[0-9]+", "", filtersparsed).split(" ")
                 if lines:
                     finalLines = []
                     # I think this splits everything up and reassembles them so that each line starts with a M, G or T
@@ -1639,27 +1629,24 @@ class Actions(MakesmithInitFuncs):
                                 finalLines[-1] = finalLines[-1] + " " + line
                     # start processing the lines, keeping track of the state variables.
                     for line in finalLines:
-                        if line[0]=='G':
-                            if line.find("G90") != -1:
+                        # A line of bare axis words (X10 Y5) continues the modal move.
+                        if line[0] in "GXYZF":
+                            gCodes = gcodeNumbers("G", line)
+                            if 90 in gCodes:
                                 positioning = "G90 "
-                            if line.find("G91") != -1:
+                            if 91 in gCodes:
                                 positioning = "G91 "
-                            if line.find("G20") != -1:
+                            if 20 in gCodes:
                                 units = "G20 "
-                                if previousUnits != units: #previous metrics now imperial
-                                    homeX = xpos / 25.4
-                                    homeY = ypos / 25.4
-                                    xpos = xpos / 25.4
-                                    ypos = ypos / 25.4
-                                    previousUnits = units
-                            if line.find("G21") != -1:
+                            if 21 in gCodes:
                                 units = "G21 "
-                                if previousUnits != units: #previous imperial now metrics
-                                    homeX = xpos * 25.4
-                                    homeY = ypos * 25.4
-                                    xpos = xpos * 25.4
-                                    ypos = ypos * 25.4
-                                    previousUnits = units
+                            if units != previousUnits:
+                                scale = 1 / 25.4 if units == "G20 " else 25.4
+                                homeX, homeY, xpos, ypos, zpos, xyAxisFeedRate, zAxisFeedRate = [
+                                    value * scale
+                                    for value in (homeX, homeY, xpos, ypos, zpos, xyAxisFeedRate, zAxisFeedRate)
+                                ]
+                                previousUnits = units
                             if line.find("X") != -1:
                                 _xpos = re.search("X(?=.)(([ ]*)?[+-]?([0-9]*)(\.([0-9]+))?)", line)
                                 if positioning == "G91 ":
@@ -1678,73 +1665,54 @@ class Actions(MakesmithInitFuncs):
                                     zpos = zpos+float(_zpos.groups()[0])
                                 else:
                                     zpos = float(_zpos.groups()[0])
-                            if line.find("G4") != -1:
-                                dwell = line[3:]
-                            if line.find("G04") != -1:
-                                dwell = line[4:]
+                            if 4 in gCodes:
+                                dwell = re.sub(r"^G0*4", "", line).strip()
                             if line.find("F") != -1:
                                 _feedRate = re.search("F(?=.)(([ ]*)?[+-]?([0-9]*)(\.([0-9]+))?)", line)
                                 _feedRateFloat = float(_feedRate.groups()[0])
-                                if line.find("X") != -1 or line.find("Y") == -1:
+                                if line.find("X") != -1 or line.find("Y") != -1 or line.find("Z") == -1:
                                     xyAxisFeedRate = _feedRateFloat
                                 if line.find("Z") != -1:
                                     zAxisFeedRate = _feedRateFloat
                         if line[0] == 'M':
-                            if line.find("M3") != -1 or line.find("M03") != -1:
-                                spindle = "M3 "
-                            if line.find("M4") != -1 or line.find("M05") != -1:
-                                spindle = "M4 "
-                            if line.find("M5") != -1 or line.find("M05") != -1:
-                                spindle = "M5 "
-                            if line.find("M106") != -1:
-                                laser = "M106 "
-                            if line.find("M107") != -1:
-                                laser = "M107 "
-                            if line.find("M16") != -1:
-                                laser = "M107 "
+                            mCodes = gcodeNumbers("M", line)
+                            spindle = next((f"M{code} " for code in (3, 4, 5) if code in mCodes), spindle)
+                            laser = "M106 " if 106 in mCodes else laser
+                            laser = "M107 " if 107 in mCodes or 16 in mCodes else laser
                         if line[0] == 'T':
                             tool = line[1:] #slice off the T
-        # now, after all that processing has been done, put machine in the correct state
-        # first, send the units command.
-        self.data.gcode_queue.put(units)
-        # if units is imperial, then change the zAxisSafeHeight
-        if units == "G20 ":
+        return {
+            "units": units, "positioning": positioning, "x": xpos, "y": ypos, "z": zpos,
+            "xyFeedRate": xyAxisFeedRate, "zFeedRate": zAxisFeedRate,
+            "tool": tool, "spindle": spindle, "laser": laser, "dwell": dwell,
+        }
+
+    def queueRestartSequence(self, state, zTarget=None, changeTool=True):
+        '''
+        Raises the bit to safe height, moves to the state's XY, restores tool, spindle, laser and dwell, lowers the bit
+        to zTarget (the state's Z by default) and leaves the controller in the state's positioning mode.
+        '''
+        zAxisSafeHeight = float(self.data.config.getValue("Maslow Settings", "zAxisSafeHeight"))
+        if state["units"] == "G20 ":
             zAxisSafeHeight = zAxisSafeHeight / 25.4
-        '''
-        I had commented this out.. don't think it should be done since the units above will do it.
-        if units == "G20 ":
-            print("is G20")
-            self.data.actions.updateSetting("toInches", 0, True)  # value = doesn't matter
-            
-        else:
-            print("is G21")
-            self.data.actions.updateSetting("toMM", 0, True)  # value = doesn't matter
-        '''
-        # move the Z-axis to the safe height
-        print("moving to safe height as part of processgcode")
-        #force into absolute mode
+        self.data.gcode_queue.put(state["units"])
         self.data.gcode_queue.put("G90 ")
-        self.data.gcode_queue.put("G0 Z"+str(round(zAxisSafeHeight, 4))+" F"+str(round(zAxisFeedRate, 4)))
-        # move the sled to the x, y coordinate it is supposed to be.
-        self.data.gcode_queue.put("G0 X"+str(round(xpos, 4))+" Y"+str(round(ypos, 4))+" F"+str(round(xyAxisFeedRate, 4)))
-        # if there is a tool, then send tool change command.
-        if tool is not None:
-            self.data.gcode_queue.put("T"+tool+" M6 ")
-        # if there is a spindle command, then send it.
-        if spindle is not None:
-            self.data.gcode_queue.put(spindle)
-        # if there is a laser command, then send it.
-        if laser is not None:
-            self.data.gcode_queue.put(laser)
-        # if there is a dwell command, then send it.
-        if dwell is not None:
-            self.data.gcode_queue.put("G4 "+dwell)
-        # move the z-axis to where it is supposed to be.
-        print("moving to where it should be as part of processgcode")
+        self.data.gcode_queue.put("G0 Z" + str(round(zAxisSafeHeight, 4)) + " F" + str(round(state["zFeedRate"], 4)))
+        self.data.gcode_queue.put(
+            "G0 X" + str(round(state["x"], 4)) + " Y" + str(round(state["y"], 4))
+            + " F" + str(round(state["xyFeedRate"], 4))
+        )
+        if changeTool and state["tool"] is not None:
+            self.data.gcode_queue.put("T" + state["tool"] + " M6 ")
+        if state["spindle"] is not None:
+            self.data.gcode_queue.put(state["spindle"])
+        if state["laser"] is not None:
+            self.data.gcode_queue.put(state["laser"])
+        if state["dwell"] is not None:
+            self.data.gcode_queue.put("G4 " + state["dwell"])
+        zpos = state["z"] if zTarget is None else zTarget
         self.data.gcode_queue.put("G0 Z" + str(round(zpos, 4)) + " ")
-        # finally, put the machine in the appropriate positioning
-        # I have no idea if this really works for G91 gcode files..
-        self.data.gcode_queue.put(positioning)
+        self.data.gcode_queue.put(state["positioning"])
 
     def findPositionAt(self, index):
         '''
