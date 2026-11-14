@@ -14,7 +14,7 @@ from pathlib import Path
 import time
 import glob
 
-from __main__ import app
+from app import app
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
 
 
