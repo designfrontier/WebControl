@@ -220,17 +220,13 @@ class OpticalCalibration(MakesmithInitFuncs):
             edged = cv2.Canny(gray, self.cannyLowValue, self.cannyHighValue)
             edged = cv2.dilate(edged, None, iterations=1)
             edged = cv2.erode(edged, None, iterations=1)
-            cnts = cv2.findContours(
+            found = cv2.findContours(
                 edged.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
             )
-            #assume its not cv2
-            #cnts = cnts[0] if imutils.is_cv2() else cnts[1]
-            cnts = cnts[1]
-            #self.data.console_queue.put(str(imutils.is_cv2()))
-            try:
-               (cnts, _) = self.sort_contours(cnts)
-            except Exception as e:
-               self.data.console_queue.put(str(e))
+            # OpenCV 3 returns (image, contours, hierarchy); OpenCV 2 and 4 return (contours, hierarchy).
+            cnts = found[0] if len(found) == 2 else found[1]
+            if len(cnts) > 0:
+                (cnts, _) = self.sort_contours(cnts)
             height, width, channels = image.shape
             if self.opticalCenter[0] == 0 or self.opticalCenter[1] == 0:
                 xA = int(width / 2)
@@ -238,12 +234,8 @@ class OpticalCalibration(MakesmithInitFuncs):
             else:
                 xA, yA = self.opticalCenter
 
-            maxArea = 0
-            for cTest in cnts:
-                if cv2.contourArea(cTest) > maxArea:
-                    maxArea = cv2.contourArea(cTest)
-                    c = cTest
-            if cv2.contourArea(c) > 1000:
+            c = max(cnts, key=cv2.contourArea) if len(cnts) > 0 else None
+            if c is not None and cv2.contourArea(c) > 1000:
                 orig = image.copy()
                 # approximate to a square (i.e., four contour segments)
                 cv2.drawContours(orig, [c.astype("int")], -1, (255, 255, 0), 2)
