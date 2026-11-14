@@ -4,6 +4,7 @@ import threading
 import json
 import re
 import math
+from decimal import Decimal, InvalidOperation
 import gzip
 import io
 
@@ -16,6 +17,10 @@ class Line:
         self.type = None
         self.radius = None
         self.command = None
+
+
+# The controller works in 32-bit floats, so digits past this are noise.
+MAX_SHIFT_DECIMALS = 6
 
 
 class GCodeFile(MakesmithInitFuncs):
@@ -492,6 +497,21 @@ class GCodeFile(MakesmithInitFuncs):
 
 
 
+    def _shiftAxis(self, gCodeLine, axis, shift):
+        match = re.search(axis + r"(?=.)(([ ]*)?[+-]?([0-9]*)(\.([0-9]+))?)", gCodeLine)
+        if not match:
+            return gCodeLine
+        original = Decimal(match.group(1).strip())
+        offset = Decimal(repr(float(shift))).normalize()
+        # Decimal keeps the sum exact; a float sum can print as 95.89670000000001.
+        places = min(max(-original.as_tuple().exponent, -offset.as_tuple().exponent, 0), self._shiftPlaces())
+        value = original + offset
+        text = f"{(value if value else abs(value)):.{places}f}"
+        return gCodeLine[: match.start() + 1] + text + gCodeLine[match.end():]
+
+    def _shiftPlaces(self):
+        return self.truncate if self.truncate >= 0 else MAX_SHIFT_DECIMALS
+
     def moveLine(self, gCodeLine):
 
         originalLine = gCodeLine
@@ -520,53 +540,12 @@ class GCodeFile(MakesmithInitFuncs):
         if True:
             try:
                 gCodeLine = gCodeLine.upper() + " "
-                x = re.search("X(?=.)(([ ]*)?[+-]?([0-9]*)(\.([0-9]+))?)", gCodeLine)
-                if x:
-                    q = abs(float(x.groups()[0])+shiftX)
-                    if self.truncate >= 0:
-                        q = str(round(q, self.truncate))
-                    else:
-                        q = str(q)
-
-                    eNtnX = re.sub("\-?\d\.|\d*e-","",q,)  # strip off everything but the decimal part or e-notation exponent
-
-                    e = re.search(".*e-", q)
-
-                    if e:
-                        fmtX = "%0.{0}f".format(eNtnX)
-                    else:
-                        fmtX = "%0.{0}f".format(len(eNtnX))
-                    gCodeLine = (
-                        gCodeLine[0 : x.start() + 1]
-                        + (fmtX % (float(x.groups()[0]) + shiftX))
-                        + gCodeLine[x.end() :]
-                    )
-
-                y = re.search("Y(?=.)(([ ]*)?[+-]?([0-9]*)(\.([0-9]+))?)", gCodeLine)
-                if y:
-                    q = abs(float(y.groups()[0])+shiftY)
-                    if self.truncate >= 0:
-                        q = str(round(q, self.truncate))
-                    else:
-                        q = str(q)
-
-                    eNtnY = re.sub("\-?\d\.|\d*e-", "", q, )
-
-                    e = re.search(".*e-", q )
-
-                    if e:
-                        fmtY = "%0.{0}f".format(eNtnY)
-                    else:
-                        fmtY = "%0.{0}f".format(len(eNtnY))
-                    gCodeLine = (
-                        gCodeLine[0 : y.start() + 1]
-                        + (fmtY % (float(y.groups()[0]) + shiftY))
-                        + gCodeLine[y.end() :]
-                    )
+                gCodeLine = self._shiftAxis(gCodeLine, "X", shiftX)
+                gCodeLine = self._shiftAxis(gCodeLine, "Y", shiftY)
                 #now, put any comment back.
                 gCodeLine = gCodeLine+comment
                 return gCodeLine
-            except ValueError:
+            except (ValueError, InvalidOperation):
                 self.data.console_queue.put("line could not be moved:")
                 self.data.console_queue.put(originalLine)
                 return originalLine
