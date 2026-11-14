@@ -4,6 +4,7 @@ import { maslowSection, setting } from "./fixtures";
 import {
   changedValues,
   controlFor,
+  displayDesc,
   initialValues,
   isChecked,
   isLocked,
@@ -42,6 +43,13 @@ describe("initialValues", () => {
   });
 });
 
+describe("displayDesc", () => {
+  it("turns escaped newlines into real ones", () => {
+    expect(displayDesc("The path\\ndefault setting: home")).toBe("The path\ndefault setting: home");
+    expect(displayDesc("a\nb")).toBe("a\nb");
+  });
+});
+
 describe("controlFor", () => {
   it.each([
     [setting({ key: "zAxis", type: "bool" }), "checkbox"],
@@ -61,9 +69,9 @@ describe("options", () => {
     expect(portOptions("COM4", ["COM4"])).toEqual(["COM4"]);
   });
 
-  it("offers just the saved port before any scan, and drops an empty one once ports are known", () => {
+  it("keeps an unset port selectable", () => {
     expect(portOptions("", [])).toEqual([""]);
-    expect(portOptions("", ["COM4"])).toEqual(["COM4"]);
+    expect(portOptions("", ["COM4"])).toEqual(["", "COM4"]);
   });
 
   it("keeps a saved option the schema no longer lists", () => {

@@ -5,7 +5,7 @@ import { SettingsForm } from "./SettingsForm";
 import { useSettingsSection } from "./useSettingsSection";
 import "./settings.css";
 
-const SectionPanel = ({ id }: { id: SettingsSectionId }) => {
+const SectionPanel = ({ id, label }: { id: SettingsSectionId; label: string }) => {
   const { load, retry, replace } = useSettingsSection(id);
 
   if (load.status === "loading") return <p className="muted">Loading settings…</p>;
@@ -21,7 +21,7 @@ const SectionPanel = ({ id }: { id: SettingsSectionId }) => {
   const { section } = load;
   return (
     <div className="settings-section">
-      <h2>{section.title}</h2>
+      <h2>{label}</h2>
       <div className={id === "gpio" ? "settings-gpio" : undefined}>
         <SettingsForm section={section} onSaved={replace} />
         {id === "gpio" && (
@@ -50,11 +50,11 @@ export const SettingsPage = () => (
       </ul>
     </nav>
     <Routes>
-      {settingsTabs.map(({ id, path }) =>
+      {settingsTabs.map(({ id, path, label }) =>
         path === "" ? (
-          <Route key={id} index element={<SectionPanel key={id} id={id} />} />
+          <Route key={id} index element={<SectionPanel key={id} id={id} label={label} />} />
         ) : (
-          <Route key={id} path={path} element={<SectionPanel key={id} id={id} />} />
+          <Route key={id} path={path} element={<SectionPanel key={id} id={id} label={label} />} />
         ),
       )}
       <Route path="*" element={<p>There is no settings section at this address.</p>} />

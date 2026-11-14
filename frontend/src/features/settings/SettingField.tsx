@@ -1,6 +1,6 @@
 import { useId } from "react";
 import type { Setting } from "../../protocol";
-import { controlFor, optionLabel, portOptions, selectOptions } from "./form";
+import { controlFor, displayDesc, optionLabel, portOptions, selectOptions } from "./form";
 import type { FieldValue } from "./form";
 
 interface Props {
@@ -35,7 +35,7 @@ export const SettingField = ({ setting, value, error, locked, ports, onChange, o
           {setting.title}
         </label>
         <p id={`${id}-desc`} className="setting-desc muted">
-          {setting.desc}
+          {displayDesc(setting.desc)}
         </p>
         {locked && (
           <p id={`${id}-locked`} className="setting-note">

@@ -196,6 +196,6 @@
 
   .gpio-diagram {
     position: static;
-    order: -1;
+    max-width: 360px;
   }
 }

@@ -27,11 +27,14 @@ export const controlFor = (setting: Setting): Control =>
         ? "select"
         : "text";
 
+/** Some schema descriptions carry an escaped "\\n" instead of a newline. */
+export const displayDesc = (desc: string) => desc.replaceAll("\\n", "\n");
+
 export const isLocked = (setting: Setting, enableCustom: boolean) => setting.custom && !enableCustom;
 
-/** The ports to offer, keeping the saved one even when the last scan did not find it. */
+/** The ports to offer, keeping the saved one (even unset) so the picker never shows a port that is not saved. */
 export const portOptions = (current: string, ports: string[]) =>
-  ports.includes(current) || (current === "" && ports.length > 0) ? ports : [current, ...ports];
+  ports.includes(current) ? ports : [current, ...ports];
 
 /** A select's options, plus the saved value when the schema no longer lists it. */
 export const selectOptions = (setting: Setting, current: string) => {
