@@ -406,7 +406,7 @@
     },
     "clearGCode": {
       "summary": "Unload the gcode",
-      "allowedDuring": "idle",
+      "allowedDuring": "noJob",
       "via": "action",
       "schema": "schemas/actions/clearGCode.json"
     },

@@ -12,6 +12,7 @@ import main
 from Actions.actions import Actions
 from Background import UIProcessor as ui_processor_module
 from Background.UIProcessor import UIProcessor
+from DataStructures.data import GCODE_LOCKED_MESSAGE
 from conftest import REPO
 from helpers import NAMESPACE, drain, messages
 
@@ -70,21 +71,61 @@ def test_every_listed_socket_event_has_a_handler():
 
 
 def process_action_commands():
-    """(command, allowedDuring) in the order processAction tests them, split by its two uploadFlag gates."""
-    phase, found = "always", []
-    for line in inspect.getsource(Actions.processAction).splitlines():
-        if "self.data.uploadFlag == 1" in line:
-            phase = "idleOrPaused"
-        elif "self.data.uploadFlag > 1" in line:
-            phase = "idle"
-        elif not line.strip().startswith("#"):
-            found += [(command, phase) for command in re.findall(r'msg\["data"\]\["command"\] == "(\w+)"', line)]
-    return found
+    """Every command name Actions.processAction tests for, outside comments."""
+    return {
+        command
+        for line in inspect.getsource(Actions.processAction).splitlines()
+        if not line.strip().startswith("#")
+        for command in re.findall(r'msg\["data"\]\["command"\] == "(\w+)"', line)
+    }
 
 
-def test_process_action_handles_exactly_the_listed_actions_with_their_run_state_gates():
-    listed = {command: spec["allowedDuring"] for command, spec in INDEX["actions"].items()}
-    assert dict(process_action_commands()) == listed
+def test_process_action_handles_exactly_the_listed_actions():
+    assert process_action_commands() == set(INDEX["actions"])
+
+
+RUN_STATES = {
+    "streaming": {"uploadFlag": 1, "jobInProgress": True, "manualZAxisAdjust": False},
+    "paused": {"uploadFlag": 2, "jobInProgress": True, "manualZAxisAdjust": False},
+    "controllerPaused": {"uploadFlag": 0, "jobInProgress": True, "manualZAxisAdjust": False},
+    "toolChange": {"uploadFlag": 0, "jobInProgress": False, "manualZAxisAdjust": True},
+    "idle": {"uploadFlag": 0, "jobInProgress": False, "manualZAxisAdjust": False},
+}
+REFUSED_IN = {
+    "always": set(),
+    "idleOrPaused": {"streaming"},
+    "idle": {"streaming", "paused"},
+    "noJob": {"streaming", "paused", "controllerPaused", "toolChange"},
+}
+REFUSALS_TEXT = ("Cannot issue command while", GCODE_LOCKED_MESSAGE)
+
+
+@pytest.fixture
+def stubbed_actions(data, monkeypatch):
+    """processAction with every handler it calls replaced by a success, so only its gates decide."""
+    for name, _ in inspect.getmembers(Actions, inspect.isfunction):
+        if name != "processAction":
+            monkeypatch.setattr(data.actions, name, lambda *args, **kwargs: True)
+    for flag in RUN_STATES["idle"]:
+        monkeypatch.setattr(data, flag, getattr(data, flag))
+    return data
+
+
+def refused_states(data, command):
+    refused = set()
+    for state, flags in RUN_STATES.items():
+        for flag, value in flags.items():
+            setattr(data, flag, value)
+        data.actions.processAction({"data": {"command": command, "arg": "", "arg1": ""}})
+        if any(text in raw for raw in drain(data.ui_queue1) for text in REFUSALS_TEXT):
+            refused.add(state)
+    return refused
+
+
+@pytest.mark.parametrize("command", sorted(INDEX["actions"]))
+def test_each_action_is_refused_in_exactly_the_run_states_its_gate_lists(stubbed_actions, command):
+    gate = INDEX["actions"][command]["allowedDuring"]
+    assert refused_states(stubbed_actions, command) == REFUSED_IN[gate]
 
 
 def test_each_action_schema_names_its_command():

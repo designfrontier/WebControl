@@ -25,9 +25,18 @@ generated files by hand.
 | `schemas/payloads/*.json`             | What the gzip payloads of `gcodeUpdateCompressed` / `boardCutDataUpdateCompressed` inflate to |
 | `schemas/websocket/frame.json`        | One frame of the plain-WebSocket transport (below)                                   |
 
-In `index.json`, `actions.<command>.allowedDuring` is the run-state gate (`always`; `idleOrPaused`, refused while gcode
-streams; `idle`, also refused while paused) and `via` says how the UI reaches it (`action` event, `opticalCalibration`
-event, `POST /api/system/pid-test`, or `none`). HTTP `family` is `api` (JSON for this UI), `classic` (old form routes
+In `index.json`, `actions.<command>.allowedDuring` is the run-state gate and `via` says how the UI reaches it (`action`
+event, `opticalCalibration` event, `POST /api/system/pid-test`, or `none`). The gates, by the run state they refuse in:
+
+| Run state                                                         | `always` | `idleOrPaused` | `idle`  | `noJob` |
+| ----------------------------------------------------------------- | -------- | -------------- | ------- | ------- |
+| Streaming gcode                                                   | runs     | refused        | refused | refused |
+| Paused with Pause                                                 | runs     | runs           | refused | refused |
+| Job paused by the controller (e.g. an M0), until Stop or the end  | runs     | runs           | runs    | refused |
+| Waiting for a tool change                                         | runs     | runs           | runs    | refused |
+| No job                                                            | runs     | runs           | runs    | runs    |
+
+`noJob` matches the classic gcode routes' 409: the loaded gcode cannot change while a job is in progress. HTTP `family` is `api` (JSON for this UI), `classic` (old form routes
 the UI reuses, with their old shapes) or `static`.
 
 Schemas describe the wire: what is actually sent, before the UI coerces anything. Objects do not forbid extra

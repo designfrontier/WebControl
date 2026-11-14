@@ -4,10 +4,10 @@ import { actionArg, numberLike } from "./core";
 import type { ActionCommand } from "./index";
 
 /**
- * When processAction runs a command: "always"; "idleOrPaused" refuses while gcode streams (uploadFlag 1);
- * "idle" also refuses while a job is paused. A refusal is an Alert, never an error reply.
+ * When processAction runs a command: "always"; "idleOrPaused" refuses while gcode streams; "idle" also while Pause
+ * holds the job; "noJob" also while the controller paused it or a tool change waits. A refusal is an Alert.
  */
-export type AllowedDuring = "always" | "idleOrPaused" | "idle";
+export type AllowedDuring = "always" | "idleOrPaused" | "idle" | "noJob";
 
 /** How the UI reaches processAction for a command; most go through the `action` socket event. */
 export type ActionRoute = "action" | "opticalCalibration" | "POST /api/system/pid-test" | "none";
@@ -43,6 +43,7 @@ const spec = (
 const always = (summary: string, args?: Parameters<typeof spec>[2]) => spec("always", summary, args);
 const notRunning = (summary: string, args?: Parameters<typeof spec>[2]) => spec("idleOrPaused", summary, args);
 const idle = (summary: string, args?: Parameters<typeof spec>[2]) => spec("idle", summary, args);
+const noJob = (summary: string, args?: Parameters<typeof spec>[2]) => spec("noJob", summary, args);
 
 const direction = z.enum(["upLeft", "up", "upRight", "left", "right", "downLeft", "down", "downRight"]);
 const opticalCamera = { arg: opticalSettingsSchema, via: "opticalCalibration" as const };
@@ -101,7 +102,7 @@ export const actionSpecs = {
   }),
   testMotors: idle("Run each motor in both directions"),
   wipeEEPROM: idle("Erase controller EEPROM", { arg: z.enum(["All", "Settings", "Maslow"]) }),
-  clearGCode: idle("Unload the gcode"),
+  clearGCode: noJob("Unload the gcode"),
   setSprockets: idle("Turn a sprocket by an angle", { arg: motor, arg1: z.number().describe("Degrees, signed") }),
   rotateSprocket: idle("Run a motor at full speed for a time", {
     arg: motor,
