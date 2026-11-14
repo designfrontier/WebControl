@@ -373,12 +373,7 @@ class SerialPortThread(MakesmithInitFuncs):
         if self.bufferSpace == self.bufferSize:
             if self.data.gcode_queue.empty() != True:
                 if self.machineIsReadyForData:
-                    command = self.data.gcode_queue.get_nowait()# + " "
-                    # filter out comments
-                    # replace mach3 style gcode comments with newline
-                    filtersparsed = re.sub(r'\(([^)]*)\)', '', command)
-                    # replace standard ; initiated gcode comments with ''
-                    command = re.sub(r';([^\n]*)?', '', filtersparsed)
+                    command = self._stripComments(self.data.gcode_queue.get_nowait())
                     # if there's something left..
                     if len(command) != 0:
                         command = command + " "
