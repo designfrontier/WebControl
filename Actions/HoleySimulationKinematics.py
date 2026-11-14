@@ -99,19 +99,10 @@ class Kinematics(MakesmithInitFuncs):
     isQuadKinematics = True
 
     def _verifyValidTarget(self, xTarget, yTarget):
-        # If the target point is beyond one of the edges of the board, the machine stops at the edge
-
-        if (xTarget < -self.machineWidth / 2):
-            xTarget = -self.machineWidth / 2
-
-        elif (xTarget > self.machineWidth / 2):
-            xTarget = self.machineWidth / 2
-
-        elif (yTarget > self.machineHeight / 2):
-            yTarget = self.machineHeight / 2
-
-        elif (yTarget < -self.machineHeight / 2):
-            yTarget = -self.machineHeight / 2
+        # Clamps each axis on its own, as Kinematics::_verifyValidTarget does in every firmware buildFirmware.sh pins.
+        halfWidth = self.machineWidth / 2
+        halfHeight = self.machineHeight / 2
+        return min(max(xTarget, -halfWidth), halfWidth), min(max(yTarget, -halfHeight), halfHeight)
 
     def recomputeGeometry(self):
         '''
@@ -126,18 +117,18 @@ class Kinematics(MakesmithInitFuncs):
         self._xCordOfMotor = self.D / 2
         self._yCordOfMotor = self.machineHeight / 2 + self.motorOffsetY
 
-    def inverse(self, xTarget, yTarget):
+    def inverse(self, xTarget, yTarget, clamp=True):
         '''
 
         Compute the lengths of chain needed to reach a target XY position
 
         '''
         if self.isQuadKinematics:
-            return self.quadrilateralInverse(xTarget, yTarget)
+            return self.quadrilateralInverse(xTarget, yTarget, clamp)
         else:
-            return self.triangularInverse(xTarget, yTarget)
+            return self.triangularInverse(xTarget, yTarget, clamp)
 
-    def triangularInverse(self, xTarget, yTarget):
+    def triangularInverse(self, xTarget, yTarget, clamp=True):
         '''
 
         The inverse kinematics (relating an xy coordinate pair to the required chain lengths to hit that point)
@@ -147,7 +138,8 @@ class Kinematics(MakesmithInitFuncs):
         '''
 
         # Confirm that the coordinates are on the wood
-        self._verifyValidTarget(xTarget, yTarget)
+        if clamp:
+            xTarget, yTarget = self._verifyValidTarget(xTarget, yTarget)
 
         Motor1Distance = math.sqrt(
             math.pow((-1 * self._xCordOfMotor - xTarget), 2) + math.pow((self._yCordOfMotor - yTarget), 2))
@@ -243,7 +235,7 @@ class Kinematics(MakesmithInitFuncs):
 
         return Chain1, Chain2
 
-    def quadrilateralInverse(self, xTarget, yTarget):
+    def quadrilateralInverse(self, xTarget, yTarget, clamp=True):
 
         '''
 
@@ -252,7 +244,8 @@ class Kinematics(MakesmithInitFuncs):
         '''
 
         # Confirm that the coordinates are on the wood
-        self._verifyValidTarget(xTarget, yTarget)
+        if clamp:
+            xTarget, yTarget = self._verifyValidTarget(xTarget, yTarget)
 
         # coordinate shift to put (0,0) in the center of the plywood from the left sprocket
         self.x = (self.D / 2.0) + xTarget
@@ -323,7 +316,8 @@ class Kinematics(MakesmithInitFuncs):
             buildOutJac = self._moment(self.Y1Plus + self.DeltaY, self.Y2Plus, self.Phi, self.MySinPhi, self.SinPsi1,
                                        self.CosPsi1, self.SinPsi2, self.CosPsi2) + self.Crit[0]
 
-            self._MatSolv()  # solves the matrix equation Jx=-Criterion
+            if not self._MatSolv():  # solves the matrix equation Jx=-Criterion
+                return math.nan, math.nan
 
             # update the variables with the new estimate
 
@@ -387,44 +381,37 @@ class Kinematics(MakesmithInitFuncs):
 
         return aChainLength, bChainLength
 
+    MaxForwardGuesses = 5000
+    ForwardGiveUpError = 0.1
+
     def forward(self, chainALength, chainBLength, xGuess = -10, yGuess = 10):
         '''
-
-        Take the chain lengths and return an XY position
-
+        Take the chain lengths and return an XY position, or None if no position comes within 0.1 mm of them
         '''
-        # print("Chain Sag Correction:")
-        # print(self.chainSagCorrection)
-        # print("")
         # apply any offsets for slipped links
         chainALength = chainALength + (self.chain1Offset * self.R)
         chainBLength = chainBLength + (self.chain2Offset * self.R)
 
-        guessCount = 0
-
-        while (1):
-
-            # check our guess
-            guessLengthA, guessLengthB = self.inverse(xGuess, yGuess)
+        for guessCount in range(self.MaxForwardGuesses + 2):
+            try:
+                # Unclamped, or every guess past an edge would match the chain lengths of the edge itself.
+                guessLengthA, guessLengthB = self.inverse(xGuess, yGuess, clamp=False)
+            except (ArithmeticError, ValueError):
+                return None
 
             aChainError = chainALength - guessLengthA
             bChainError = chainBLength - guessLengthB
+            if not (math.isfinite(aChainError) and math.isfinite(bChainError)):
+                return None
+            if abs(aChainError) < .000000001 and abs(bChainError) < .000000001:
+                return xGuess, yGuess
+            if guessCount > self.MaxForwardGuesses:
+                # The quadrilateral solver's own tolerance can leave a residual above 1e-9; the firmware accepts 0.1 mm.
+                closeEnough = abs(aChainError) < self.ForwardGiveUpError and abs(bChainError) < self.ForwardGiveUpError
+                return (xGuess, yGuess) if closeEnough else None
 
-            # print 'guess {:7.3f} {:7.3f} error {:7.3f} {:7.3f} guesslength {:7.3f} {:7.3f} '.format(xGuess,yGuess,aChainError,bChainError,guessLengthA, guessLengthB)
-
-            # if we've converged on the point...or it's time to give up, exit the loop
-            if ((abs(aChainError) < .000000001 and abs(bChainError) < .000000001) or guessCount > 5000):
-                if (guessCount > 5000):
-                    print
-                    "Message: Unable to find valid machine position. Please calibrate chain lengths.", aChainError, bChainError, xGuess, yGuess
-                    return xGuess, yGuess
-                else:
-                    return xGuess, yGuess
-            else:
-                # adjust the guess based on the result
-                xGuess = xGuess + .1 * aChainError - .1 * bChainError
-                yGuess = yGuess - .1 * aChainError - .1 * bChainError
-                guessCount = guessCount + 1
+            xGuess = xGuess + .1 * aChainError - .1 * bChainError
+            yGuess = yGuess - .1 * aChainError - .1 * bChainError
 
     def _MatSolv(self):
         Sum = 0
@@ -457,6 +444,8 @@ class Kinematics(MakesmithInitFuncs):
             KK = -1
             K = 0
             while (K < L):
+                if self.Jac[JJ + J] == 0:
+                    return False
                 fact = self.Jac[KK + J] / self.Jac[JJ + J];
                 M = 1
                 while (M <= J):
@@ -469,6 +458,8 @@ class Kinematics(MakesmithInitFuncs):
 
         # Lower triangular matrix solver
 
+        if self.Jac[0] == 0:
+            return False
         self.Solution[0] = self.Crit[0] / self.Jac[0]
         ii = N - 1
 
@@ -482,10 +473,13 @@ class Kinematics(MakesmithInitFuncs):
                 Sum = Sum - self.Jac[ii + J] * self.Solution[J - 1];
                 J = J + 1
 
+            if self.Jac[ii + i] == 0:
+                return False
             self.Solution[i - 1] = Sum / self.Jac[ii + i];
             ii = ii + N;
 
             i = i + 1
+        return True
 
     def _moment(self, Y1Plus, Y2Plus, Phi, MSinPhi, MSinPsi1, MCosPsi1, MSinPsi2,
                 MCosPsi2):  # computes net moment about center of mass
@@ -549,43 +543,41 @@ class Kinematics(MakesmithInitFuncs):
                     self.y + YPlus - self.h * math.sin(Psi)) / Denominator)
         return Temp
 
-    def updateSetting(self, firmwareKey, value):
+    FLOAT_SETTINGS = {
+        2: "D",
+        1: "machineHeight",
+        0: "machineWidth",
+        3: "motorOffsetY",
+        40: "leftChainTolerance",
+        41: "rightChainTolerance",
+        45: "chainElasticity",
+        46: "sledWeight",
+        8: "rotationDiskRadius",
+        37: "chainSagCorrection",
+    }
 
-        if firmwareKey == 2:
-            self.D = float(value)
+    def updateSetting(self, firmwareKey, value):
+        # Settings arrive as the stored strings; a bad one must not abort the settings save that called this.
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            if getattr(self, "data", None) is not None:
+                self.data.console_queue.put(f"Simulator ignored ${firmwareKey}={value!r}")
+            return
+        if firmwareKey in self.FLOAT_SETTINGS:
+            setattr(self, self.FLOAT_SETTINGS[firmwareKey], number)
         elif firmwareKey == 13:
-            self.R = float(value/3.141592/2)
-        elif firmwareKey == 1:
-            self.machineHeight = float(value)
-        elif firmwareKey == 0:
-            self.machineWidth = float(value)
-        elif firmwareKey == 3:
-            self.motorOffsetY = float(value)
-        elif firmwareKey == 40:
-            self.leftChainTolerance = float(value)
-        elif firmwareKey == 41:
-            self.rightChainTolerance = float(value)
-        elif firmwareKey == 45:
-            self.chainElasticity = float(value)
-        elif firmwareKey == 46:
-            self.sledWeight = float(value)
-        elif firmwareKey == 8:
-            self.rotationDiskRadius = float(value)
-        elif firmwareKey == 37:
-            self.chainSagCorrection = float(value)
+            self.R = number / math.pi / 2
         elif firmwareKey == 38:
-            self.chainOverSprocket = int(value)
+            self.chainOverSprocket = int(number)
         elif firmwareKey == 7:
-            if int(value) == 1:
-                self.isQuadKinematics = True
-            else:
-                self.isQuadKinematics = False
+            self.isQuadKinematics = int(number) == 1
         self._xCordOfMotor = self.D / 2
         self._yCordOfMotor = self.machineHeight / 2 + self.motorOffsetY
 
     def initializeSettings(self):
         self.D = float(self.data.config.getValue("Maslow Settings","motorSpacingX"))
-        self.R = float(self.data.config.getValue("Computed Settings","distPerRot"))/3.141592/2
+        self.R = float(self.data.config.getValue("Computed Settings","distPerRot"))/math.pi/2
         self.machineHeight = float(self.data.config.getValue("Maslow Settings","bedHeight"))
         self.machineWidth = float(self.data.config.getValue("Maslow Settings", "bedWidth"))
         self.motorOffsetY = float(self.data.config.getValue("Maslow Settings", "motorOffsetY"))

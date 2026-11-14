@@ -85,11 +85,19 @@ class OpticalCalibration(MakesmithInitFuncs):
                 self.data.gcode_queue.queue.clear()
             self.inAutoMode = False
             self.inMeasureOnlyMode = False
+            self.restoreUnits()
             return True
         except Exception as e:
             self.data.console_queue.put(str(e))
             return False
 
+
+    def restoreUnits(self):
+        """Switches back to the units the scan started in; HomeIn moves in inches."""
+        if self.oldUnits == "MM" and self.data.units != "MM":
+            self.data.actions.updateSetting("toMM", 0, True)
+            self.data.gcode_queue.put("G21 ")
+        self.oldUnits = None
 
     def midpoint(self, ptA, ptB):
         return ((ptA[0] + ptB[0]) * 0.5, (ptA[1] + ptB[1]) * 0.5)
@@ -186,7 +194,7 @@ class OpticalCalibration(MakesmithInitFuncs):
             )
         self.data.console_queue.put("message")
 
-        if self.oldUnits != "INCHES":
+        if self.data.units != "INCHES":
             self.data.actions.updateSetting("toInches", 0, True)
         #self.data.units = "INCHES"
         self.data.gcode_queue.put("G20 ")
@@ -209,10 +217,16 @@ class OpticalCalibration(MakesmithInitFuncs):
         falseCounter = 0
         xA=0
         yA=0
+        gray = None
+        frameCount = None
         time.sleep(1)
         while True:
-            #(grabbed, image) = self.camera.read()
-            image = self.camera.read()
+            image, frameCount = self.camera.readNewFrame(frameCount)
+            if image is None:
+                falseCounter += 1
+                if falseCounter == 10:
+                    break
+                continue
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             gray = cv2.GaussianBlur(
                 gray, (self.gaussianBlurValue, self.gaussianBlurValue), 0
@@ -220,17 +234,13 @@ class OpticalCalibration(MakesmithInitFuncs):
             edged = cv2.Canny(gray, self.cannyLowValue, self.cannyHighValue)
             edged = cv2.dilate(edged, None, iterations=1)
             edged = cv2.erode(edged, None, iterations=1)
-            cnts = cv2.findContours(
+            found = cv2.findContours(
                 edged.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
             )
-            #assume its not cv2
-            #cnts = cnts[0] if imutils.is_cv2() else cnts[1]
-            cnts = cnts[1]
-            #self.data.console_queue.put(str(imutils.is_cv2()))
-            try:
-               (cnts, _) = self.sort_contours(cnts)
-            except Exception as e:
-               self.data.console_queue.put(str(e))
+            # OpenCV 3 returns (image, contours, hierarchy); OpenCV 2 and 4 return (contours, hierarchy).
+            cnts = found[0] if len(found) == 2 else found[1]
+            if len(cnts) > 0:
+                (cnts, _) = self.sort_contours(cnts)
             height, width, channels = image.shape
             if self.opticalCenter[0] == 0 or self.opticalCenter[1] == 0:
                 xA = int(width / 2)
@@ -238,12 +248,8 @@ class OpticalCalibration(MakesmithInitFuncs):
             else:
                 xA, yA = self.opticalCenter
 
-            maxArea = 0
-            for cTest in cnts:
-                if cv2.contourArea(cTest) > maxArea:
-                    maxArea = cv2.contourArea(cTest)
-                    c = cTest
-            if cv2.contourArea(c) > 1000:
+            c = max(cnts, key=cv2.contourArea) if len(cnts) > 0 else None
+            if c is not None and cv2.contourArea(c) > 1000:
                 orig = image.copy()
                 # approximate to a square (i.e., four contour segments)
                 cv2.drawContours(orig, [c.astype("int")], -1, (255, 255, 0), 2)
@@ -390,8 +396,8 @@ class OpticalCalibration(MakesmithInitFuncs):
                 self.HomingPosY = minY
                 self.HomingScanDirection = 1
                 self.inAutoMode = True
-                self.HomeIn()
                 self.oldUnits = self.data.units
+                self.HomeIn()
             else:
                 # note, the self.HomingX and self.HomingY are not reinitialzed here
                 # The rationale is that the offset for the previous registration point is
@@ -413,6 +419,7 @@ class OpticalCalibration(MakesmithInitFuncs):
                         self.HomeIn()
                     else:
                         self.inAutoMode = False
+                        self.restoreUnits()
                         self.data.console_queue.put("Stopping Camera")
                         self.camera.stop()
                         #self.camera=None
@@ -443,6 +450,7 @@ class OpticalCalibration(MakesmithInitFuncs):
                         self.HomeIn()
                     else:
                         self.inAutoMode = False
+                        self.restoreUnits()
                         self.data.console_queue.put("Stopping Camera")
                         self.camera.stop()
                         #self.camera=None
@@ -507,10 +515,11 @@ class OpticalCalibration(MakesmithInitFuncs):
             else:
                 return True
         else:
-            imgencode = cv2.imencode(".png", image)[1]
-            stringData = base64.b64encode(imgencode).decode()
-            self.data.opticalCalibrationTestImage = stringData
-            self.data.opticalCalibrationTestImageUpdated = True
+            if image is not None:
+                imgencode = cv2.imencode(".png", image)[1]
+                stringData = base64.b64encode(imgencode).decode()
+                self.data.opticalCalibrationTestImage = stringData
+                self.data.opticalCalibrationTestImageUpdated = True
             if findCenter:
                 return None, None
             else:

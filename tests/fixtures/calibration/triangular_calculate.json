@@ -1,0 +1,76 @@
+{
+  "geometry": {
+    "Maslow Settings": {
+      "bedWidth": "2438.4",
+      "bedHeight": "1219.2",
+      "motorSpacingX": "2978.4",
+      "motorOffsetY": "463",
+      "sledWeight": "97.9"
+    },
+    "Advanced Settings": {
+      "rotationRadius": "139.1",
+      "chainSagCorrection": "33",
+      "leftChainTolerance": "0",
+      "rightChainTolerance": "0",
+      "chainOverSprocket": "Bottom",
+      "gearTeeth": "10",
+      "chainPitch": "6.35",
+      "chainElasticity": "5.1685e-6",
+      "kinematicsType": "Triangular"
+    }
+  },
+  "tolerance": 1e-06,
+  "cases": [
+    {
+      "inputs": {
+        "cut12": 1930,
+        "cut34": 1930,
+        "cut5": 300,
+        "bitDiameter": 6.35
+      },
+      "expected": {
+        "motorYoffsetEst": 400.6,
+        "rotationRadiusEst": 138.8,
+        "chainSagCorrectionEst": 33.443549,
+        "cut34YoffsetEst": -0.13581977784474475
+      }
+    },
+    {
+      "inputs": {
+        "cut12": 1925.5,
+        "cut34": 1932,
+        "cut5": 310,
+        "bitDiameter": 6.35
+      },
+      "expected": {
+        "motorYoffsetEst": 381.9,
+        "rotationRadiusEst": 133.2,
+        "chainSagCorrectionEst": 6.482489,
+        "cut34YoffsetEst": -3.250009375904483
+      }
+    },
+    {
+      "inputs": {
+        "cut12": 1940,
+        "cut34": 1921.5,
+        "cut5": 290.5,
+        "bitDiameter": 3.175
+      },
+      "expected": {
+        "motorYoffsetEst": 432.9,
+        "rotationRadiusEst": 152.9,
+        "chainSagCorrectionEst": 115.185105,
+        "cut34YoffsetEst": 7.607696949888748
+      }
+    },
+    {
+      "inputs": {
+        "cut12": 3000,
+        "cut34": 1930,
+        "cut5": 300,
+        "bitDiameter": 6.35
+      },
+      "expected": null
+    }
+  ]
+}

@@ -1223,49 +1223,26 @@ class Actions(MakesmithInitFuncs):
         Sends form data for triangular calibration to the triangular calibration routine to calculate and then return
         results to the UI client
         :param result:
-        :return:
+        :return: (motorYoffset, rotationRadius, chainSagCorrection, cut34Yoffset), or None if it failed
         '''
         try:
-            motorYoffsetEst, rotationRadiusEst, chainSagCorrectionEst, cut34YoffsetEst = self.data.triangularCalibration.calculate(
-                result
-            )
-            if not motorYoffsetEst:
-                # if something didn't go correctly, motorYoffsetEst would have been returned as none
-                return False
-            return (
-                motorYoffsetEst,
-                rotationRadiusEst,
-                chainSagCorrectionEst,
-                cut34YoffsetEst,
-            )
+            return self.data.triangularCalibration.calculate(result)
         except Exception as e:
             self.data.console_queue.put(str(e))
-            return False
+            return None
 
     def holeyCalibrate(self, result):
         '''
-        Sends form data for holey calibration to the triangular calibration routine to calculate and then return
+        Sends form data for holey calibration to the holey calibration routine to calculate and then return
         results to the UI client
         :param result:
-        :return:
+        :return: (motorYoffset, distanceBetweenMotors, leftChainTolerance, rightChainTolerance, error), or None
         '''
         try:
-            motorYoffsetEst, distanceBetweenMotors, leftChainTolerance, rightChainTolerance, calibrationError = self.data.holeyCalibration.Calibrate(
-                result
-            )
-            if not motorYoffsetEst:
-                # if something didn't go correctly, motorYoffsetEst would have been returned as none
-                return False
-            return (
-                motorYoffsetEst,
-                distanceBetweenMotors,
-                leftChainTolerance,
-                rightChainTolerance,
-                calibrationError,
-            )
+            return self.data.holeyCalibration.Calibrate(result)
         except Exception as e:
             self.data.console_queue.put(str(e))
-            return False
+            return None
 
 
     def sendGCode(self, gcode):

@@ -18,10 +18,15 @@ const row = (name: string) =>
     .getAllByRole("cell")
     .map((cell) => cell.textContent);
 
+const saved = { motorYoffset: 400.6, rotationRadius: 138.8, chainSagCorrection: 33.443549 };
+const posted = (fetch: ReturnType<typeof fakeFetch>) =>
+  fetch.mock.calls.filter(([, init]) => init?.method === "POST").map(([path]) => path);
+
 const triangular = (routes = {}) => {
   const fetch = fakeFetch({
     "/api/calibration/triangular": current,
     "POST /api/calibration/triangular": calculated,
+    "POST /api/calibration/triangular/accept": saved,
     ...routes,
   });
   return { ...renderApp("/calibration/triangular", { fetch }), fetch };
@@ -60,9 +65,25 @@ describe("triangular calibration", () => {
     expect(status()).toHaveTextContent("Review the calculated values");
 
     await user.click(screen.getByRole("button", { name: "Accept results" }));
-    expect(socket.actions()).toEqual([["acceptTriangularCalibrationResults", 0, 0]]);
-    expect(status()).toHaveTextContent("Accepted.");
+    await waitFor(() => expect(status()).toHaveTextContent("Accepted."));
+    expect(posted(fetch)).toEqual(["/api/calibration/triangular", "/api/calibration/triangular/accept"]);
+    expect(socket.actions()).toEqual([]);
     expect(row("Height of motors")).toEqual(["400.6", "—"]);
+    expect(screen.getByRole("button", { name: "Accept results" })).toBeDisabled();
+  });
+
+  it("shows the server's refusal to accept and asks for a new calculation", async () => {
+    const { user } = triangular({
+      "POST /api/calibration/triangular/accept": () =>
+        jsonResponse({ error: "There is no calculated result to accept." }, 409),
+    });
+    await user.click(screen.getByRole("button", { name: "Calculate" }));
+    await waitFor(() => expect(row("Height of motors")).toEqual(["463", "400.6"]));
+    await user.click(screen.getByRole("button", { name: "Accept results" }));
+
+    await waitFor(() => expect(status()).toHaveTextContent("There is no calculated result to accept."));
+    expect(status()).toHaveAttribute("data-tone", "error");
+    expect(row("Height of motors")).toEqual(["463", "—"]);
     expect(screen.getByRole("button", { name: "Accept results" })).toBeDisabled();
   });
 
@@ -137,6 +158,12 @@ describe("holey calibration", () => {
         rightChainTolerance: -0.08,
         calibrationError: 1.5,
       },
+      "POST /api/calibration/holey/accept": {
+        motorYoffset: 468.4,
+        distanceBetweenMotors: 3601.2,
+        leftChainTolerance: 0.12,
+        rightChainTolerance: -0.08,
+      },
     });
     const { user, socket } = renderApp("/calibration/holey", { fetch });
     expect(screen.getAllByRole("textbox")).toHaveLength(12);
@@ -151,9 +178,8 @@ describe("holey calibration", () => {
 
     await user.click(screen.getByRole("button", { name: "Cut calibration pattern" }));
     await user.click(screen.getByRole("button", { name: "Accept results" }));
-    expect(socket.actions()).toEqual([
-      ["cutHoleyCalibrationPattern", "", ""],
-      ["acceptHoleyCalibrationResults", 0, 0],
-    ]);
+    await waitFor(() => expect(row("Distance between motors")).toEqual(["3601.2", "—"]));
+    expect(posted(fetch)).toEqual(["/api/calibration/holey", "/api/calibration/holey/accept"]);
+    expect(socket.actions()).toEqual([["cutHoleyCalibrationPattern", "", ""]]);
   });
 });

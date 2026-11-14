@@ -1,4 +1,4 @@
-import { calculateTriangular, getTriangular } from "./api";
+import { acceptTriangular, calculateTriangular, getTriangular } from "./api";
 import { MeasurementCalibration } from "./MeasurementCalibration";
 import type { MeasurementConfig } from "./MeasurementCalibration";
 
@@ -11,7 +11,7 @@ const config: MeasurementConfig = {
     </p>
   ),
   cutAction: "cutTriangularCalibrationPattern",
-  acceptAction: "acceptTriangularCalibrationResults",
+  accept: acceptTriangular,
   acceptNote: "Accepting saves the values and moves the sled to the center of the work area.",
   image: {
     src: "/static/images/triangularCalibration/triangularCalibration.png",

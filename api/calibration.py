@@ -144,12 +144,13 @@ def get_triangular():
 def calculate_triangular():
     data = current_app.data
     data.logger.resetIdler()
+    data.triangularCalibration.hasResult = False
     try:
         values = triangular_inputs(_body(), data)
     except InvalidInput as error:
         return _error(str(error), 400)
     result = data.actions.calibrate(values)
-    if result is False:
+    if result is None:
         return _error("The machine could not be calibrated. Check the work area dimensions and try again.", 422)
     motor_y_offset, rotation_radius, chain_sag_correction, calibration_error = result
     return jsonify(
@@ -179,15 +180,37 @@ def get_holey():
 def calculate_holey():
     data = current_app.data
     data.logger.resetIdler()
+    data.holeyCalibration.hasResult = False
     try:
         values = holey_inputs(_body())
     except InvalidInput as error:
         return _error(str(error), 400)
     result = data.actions.holeyCalibrate(values)
-    if result is False:
+    if result is None:
         return _error("The calibration could not be calculated from these measurements.", 422)
     keys = ["motorYoffset", "distanceBetweenMotors", "leftChainTolerance", "rightChainTolerance", "calibrationError"]
     return jsonify({key: float(value) for key, value in zip(keys, result)})
+
+
+NOTHING_TO_ACCEPT = "There is no calculated result to accept. Enter the measurements and press Calculate first."
+
+
+@blueprint.post("/triangular/accept")
+def accept_triangular():
+    data = current_app.data
+    data.logger.resetIdler()
+    if not data.triangularCalibration.acceptTriangularCalibrationResults():
+        return _error(NOTHING_TO_ACCEPT, 409)
+    return get_triangular()
+
+
+@blueprint.post("/holey/accept")
+def accept_holey():
+    data = current_app.data
+    data.logger.resetIdler()
+    if not data.holeyCalibration.acceptCalibrationResults():
+        return _error(NOTHING_TO_ACCEPT, 409)
+    return get_holey()
 
 
 @blueprint.get("/optical")

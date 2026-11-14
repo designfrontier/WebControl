@@ -8,6 +8,7 @@ class TriangularCalibration(MakesmithInitFuncs):
     motorYoffsetEst = 0
     chainSagCorrectionEst = 0
     rotationRadiusEst = 0
+    hasResult = False
 
     def cutTriangularCalibrationPattern(self):
         """
@@ -85,6 +86,8 @@ class TriangularCalibration(MakesmithInitFuncs):
         Takes the measured distance and uses it to iteratively calculate the rotationDiskRadius and yMotorOffset
         """
 
+        self.hasResult = False
+
         # Validate user inputs
 
         workspaceHeight = float(
@@ -99,7 +102,7 @@ class TriangularCalibration(MakesmithInitFuncs):
             self.data.message_queue.put(
                 "Message: Please enter a number for the distance between cut 1 and cut 2."
             )
-            return False
+            return None
 
         try:
             distBetweenCuts34 = float(result["cut34"])
@@ -108,7 +111,7 @@ class TriangularCalibration(MakesmithInitFuncs):
             self.data.message_queue.put(
                 "Message: Please enter a number for the distance between cut 3 and cut 4."
             )
-            return False
+            return None
 
         try:
             distWorkareaTopToCut5 = float(result["cut5"])
@@ -117,7 +120,7 @@ class TriangularCalibration(MakesmithInitFuncs):
             self.data.message_queue.put(
                 "Message: Please enter a number for the distance between the top of the work area and cut 5."
             )
-            return False
+            return None
 
         try:
             bitDiameter = float(result["bitDiameter"])
@@ -126,7 +129,7 @@ class TriangularCalibration(MakesmithInitFuncs):
             self.data.message_queue.put(
                 "Message: Please enter a number for the bit diameter."
             )
-            return False
+            return None
 
         if True:
             if (distBetweenCuts12 > workspaceWidth) or (
@@ -137,7 +140,7 @@ class TriangularCalibration(MakesmithInitFuncs):
                     + str(distBetweenCuts12)
                     + " mm seems wrong.\n\nPlease check the number and enter it again."
                 )
-                return False
+                return None
             if (distBetweenCuts34 > workspaceWidth) or (
                 distBetweenCuts34 < (workspaceWidth / 2)
             ):
@@ -146,7 +149,7 @@ class TriangularCalibration(MakesmithInitFuncs):
                     + str(distBetweenCuts34)
                     + " mm seems wrong.\n\nPlease check the number and enter it again."
                 )
-                return False
+                return None
             if (distWorkareaTopToCut5 > (workspaceHeight / 2)) or (
                 distWorkareaTopToCut5 < 0
             ):
@@ -155,14 +158,14 @@ class TriangularCalibration(MakesmithInitFuncs):
                     + str(distWorkareaTopToCut5)
                     + " mm seems wrong.\n\nPlease check the number and enter it again."
                 )
-                return False
+                return None
             if (bitDiameter > 25.4) or (bitDiameter < 0):
                 self.data.message_queue.put(
                     "Message: The bit diameter value of "
                     + str(bitDiameter)
                     + " mm seems wrong.\n\nPlease check the number and enter it again."
                 )
-                return False
+                return None
 
         # Configure iteration parameters
 
@@ -588,7 +591,7 @@ class TriangularCalibration(MakesmithInitFuncs):
             )
             self.data.console_queue.put("Machine parameters could not be determined")
 
-            return False
+            return None
 
         self.data.console_queue.put("Machine parameters found:")
 
@@ -614,6 +617,7 @@ class TriangularCalibration(MakesmithInitFuncs):
         self.motorYoffsetEst = motorYoffsetEst
         self.rotationRadiusEst = rotationRadiusEst
         self.chainSagCorrectionEst = chainSagCorrectionEst
+        self.hasResult = True
 
         return (
             motorYoffsetEst,
@@ -627,6 +631,10 @@ class TriangularCalibration(MakesmithInitFuncs):
         Saves the values that were calculated.
         :return:
         """
+        if not self.hasResult:
+            self.data.console_queue.put("No triangular calibration result to accept; press Calculate first.")
+            return False
+        self.hasResult = False
         self.data.config.setValue(
             "Maslow Settings", "motorOffsetY", str(self.motorYoffsetEst)
         )

@@ -26,6 +26,7 @@ class HoleyCalibration(MakesmithInitFuncs):
     Opt_leftChainTolerance = 0
     Opt_rightChainTolerance = 0
     Opt_sledWeight = 97.9  # N
+    hasResult = False
 
     # Chain lengths @ each hole
     ChainLengths = []
@@ -61,12 +62,7 @@ class HoleyCalibration(MakesmithInitFuncs):
         self.kin.leftChainTolerance = self.SP_leftChainTolerance + DeltaArray[2]
         self.kin.rightChainTolerance = self.SP_rightChainTolerance + DeltaArray[3]
         self.kin.recomputeGeometry()
-        CalculatedPositions = []
-        for LeftChainLength, RightChainLength in self.ChainLengths:
-            CalculatedPositions.append(
-                self.kin.forward(LeftChainLength, RightChainLength)
-            )
-
+        CalculatedPositions = self.HolePositionsFromChainLengths()
         return self.MeasuredLengthArray - self.CalculateMeasurements(
             CalculatedPositions
         )
@@ -90,12 +86,13 @@ class HoleyCalibration(MakesmithInitFuncs):
         self.data.gcode_queue.put("G90")  # Switch to absolute mode
         self.data.gcode_queue.put("G40")
         self.data.gcode_queue.put("G17")
+        self.data.gcode_queue.put("G0 Z5")
         self.data.gcode_queue.put("M3")
         for idx in self.CutOrder:
             x, y = self.IdealCoordinates[idx]
             self.data.console_queue.put(f"cutting index: {idx + 1}")
             self.data.gcode_queue.put("G0 X" + str(x) + " Y" + str(y))
-            self.data.gcode_queue.put("G0 Z-5")
+            self.data.gcode_queue.put("G1 Z-5 F500")
             self.data.gcode_queue.put("G0 Z5")
 
         self.data.gcode_queue.put("G0 X0 Y0")
@@ -183,17 +180,29 @@ class HoleyCalibration(MakesmithInitFuncs):
         self.MeasuredLengthArray = numpy.array(Measurements)
 
     def Calibrate(self, result):
+        self.hasResult = False
         self.InitializeIdealXyCoordinates()
         measurements = self.processMeasurements(result)
+        if measurements is False:
+            return None
         self.SetMeasurements(measurements)
-        self.OptimizationOutput = least_squares(
-            self.LengthDeltaFromIdeal,
-            numpy.array([0, 0, 0, 0]),
-            jac="2-point",
-            diff_step=0.1,
-            ftol=1e-11,
-        )
+        try:
+            self.OptimizationOutput = least_squares(
+                self.LengthDeltaFromIdeal,
+                numpy.array([0, 0, 0, 0]),
+                jac="2-point",
+                diff_step=0.1,
+                ftol=1e-11,
+            )
+        except (ArithmeticError, ValueError) as error:
+            self.data.message_queue.put(
+                "Message: The calibration could not be calculated from these measurements. " + str(error)
+            )
+            return None
         Deltas = self.OptimizationOutput.x
+        if not numpy.all(numpy.isfinite(Deltas)):
+            self.data.message_queue.put("Message: The calibration could not be calculated from these measurements.")
+            return None
         self.Opt_D = round(Deltas[0] + self.SP_D, 5)
         self.Opt_motorOffsetY = round(Deltas[1] + self.SP_motorOffsetY, 5)
         self.Opt_leftChainTolerance = round(Deltas[2] + self.SP_leftChainTolerance, 5)
@@ -204,6 +213,7 @@ class HoleyCalibration(MakesmithInitFuncs):
         self.kin.rightChainTolerance = self.Opt_rightChainTolerance
         self.kin.recomputeGeometry()
         totalError = self.ReportCalibration()
+        self.hasResult = True
         return (
             self.Opt_motorOffsetY,
             self.Opt_D,
@@ -255,9 +265,9 @@ class HoleyCalibration(MakesmithInitFuncs):
         return self.OptimizationOutput.fun
 
     def HolePositionsFromChainLengths(self):
-        HolePositions = []
-        for LeftChainLength, RightChainLength in self.ChainLengths:
-            HolePositions.append(self.kin.forward(LeftChainLength, RightChainLength))
+        HolePositions = [self.kin.forward(left, right) for left, right in self.ChainLengths]
+        if None in HolePositions:
+            raise ValueError("No sled position matches these machine parameters.")
         return HolePositions
 
     def SimulateMeasurement(
@@ -400,6 +410,10 @@ class HoleyCalibration(MakesmithInitFuncs):
         return math.sqrt(math.pow(x1 - x2, 2) + math.pow(y1 - y2, 2))
 
     def acceptCalibrationResults(self):
+        if not self.hasResult:
+            self.data.console_queue.put("No holey calibration result to accept; press Calculate first.")
+            return False
+        self.hasResult = False
         self.data.config.setValue(
             "Maslow Settings", "motorOffsetY", str(self.Opt_motorOffsetY)
         )

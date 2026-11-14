@@ -3,6 +3,8 @@ import threading
 import time
 
 import cv2
+from gevent import get_hub
+from gevent.lock import Semaphore
 
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
 
@@ -19,6 +21,7 @@ class WebcamVideoStream(MakesmithInitFuncs):
     videoSize = "640x480"
     cameraSleep = 0.01
     debugCamera = False
+    frameCount = 0
     
     def __init__(self, src=0):
         # initialize the video camera stream and read the first frame
@@ -31,6 +34,8 @@ class WebcamVideoStream(MakesmithInitFuncs):
         # be stopped
         #self.stopped = True
         #self.suspended = False
+        # Held across each threadpool capture so stop never releases the stream under a read in flight.
+        self.streamLock = Semaphore()
         print("Camera initialized")
 
     def getSettings(self, src=0):
@@ -70,8 +75,8 @@ class WebcamVideoStream(MakesmithInitFuncs):
         # start the thread to read frames from the video stream
         print("Starting camera thread")
         if self.stream is None:
-            self.stream = cv2.VideoCapture(src)
-            (self.grabbed, self.frame) = self.stream.read()
+            self.stream = get_hub().threadpool.apply(cv2.VideoCapture, (src,))
+            self._grab()
 
             #self.setVideoSize()
             #self.setFPS()
@@ -92,42 +97,61 @@ class WebcamVideoStream(MakesmithInitFuncs):
         # keep looping infinitely until the thread is stopped
         while True:
             time.sleep(self.cameraSleep)
+            # if the thread indicator variable is set, stop the thread
+            if self.stopped:
+                with self.streamLock:
+                    if self.stream is not None:
+                        self.stream.release()
+                    self.stream = None
+                self.data.ui_queue1.put("Action", "updateCamera", "off")
+                return
             if not self.data.continuousCamera or time.time()-self.lastCameraRead < 20:
-                (self.grabbed, self.frame) = self.stream.read()
+                self._grab()
                 self.suspended = False
             else:
                 if self.suspended == False:
-                    #self.data.ui_queue.put("Action:updateCamera_off")
                     self.data.ui_queue1.put("Action", "updateCamera", "off")
                 self.suspended=True
-            # if the thread indicator variable is set, stop the thread
-            if self.stopped:
-                self.stream.release()
-                self.stream = None
-                #self.data.ui_queue.put("Action:updateCamera_off")
-                self.data.ui_queue1.put("Action", "updateCamera", "off")
+
+    def _grab(self):
+        # The "thread" running update() is a greenlet under monkey-patching, so blocking cv2 calls go to a real thread.
+        with self.streamLock:
+            if self.stream is None:
                 return
-            # otherwise, read the next frame from the stream
-            if self.frame is not None:
-                small = cv2.resize(self.frame, (256,192))
-                imgencode = cv2.imencode(".png",small )[1]
-                stringData = base64.b64encode(imgencode).decode()
-                self.data.cameraImage = stringData
-                self.data.cameraImageUpdated = True
+            (self.grabbed, self.frame, encoded) = get_hub().threadpool.apply(self._captureAndEncode)
+        if encoded is not None:
+            self.frameCount += 1
+            self.data.cameraImage = encoded
+            self.data.cameraImageUpdated = True
+
+    def _captureAndEncode(self):
+        grabbed, frame = self.stream.read()
+        if frame is None:
+            return grabbed, None, None
+        small = cv2.resize(frame, (256, 192))
+        return grabbed, frame, base64.b64encode(cv2.imencode(".png", small)[1]).decode()
 
     def read(self):
         # return the frame most recently read
-        #print("Reading camera frame")
         if self.suspended:
-            (self.grabbed, self.frame) = self.stream.read()
+            self._grab()
             self.suspended = False
-            #self.data.ui_queue.put("Action:updateCamera_on")
             self.data.ui_queue1.put("Action", "updateCamera", "on")
         self.lastCameraRead = time.time()
         
         if self.stopped:
             self.start()
         return self.frame
+
+    def readNewFrame(self, previousCount, timeout=5.0):
+        """Returns (frame, frameCount) once a frame newer than previousCount arrives, or (None, previousCount)."""
+        self.read()
+        deadline = time.time() + timeout
+        while self.frameCount == previousCount:
+            if time.time() >= deadline:
+                return None, previousCount
+            time.sleep(self.cameraSleep)
+        return self.frame, self.frameCount
 
     def stop(self):
         # indicate that the thread should be stopped
@@ -156,7 +180,7 @@ class WebcamVideoStream(MakesmithInitFuncs):
                 self.cameraSleep = value
                 if self.stream is not None:
                     self.stopped = True
-                    self.stream.join()
+                    self.th.join()
                     self.start()
 
     def setFPS(self):

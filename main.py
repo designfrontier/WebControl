@@ -506,15 +506,9 @@ def sendGcode():
 def triangularCalibration():
     app.data.logger.resetIdler()
     if request.method == "POST":
-        result = request.form
-        (
-            motorYoffsetEst,
-            rotationRadiusEst,
-            chainSagCorrectionEst,
-            cut34YoffsetEst,
-        ) = app.data.actions.calibrate(result)
-        # print(returnVal)
-        if motorYoffsetEst:
+        calculated = app.data.actions.calibrate(request.form)
+        if calculated is not None:
+            motorYoffsetEst, rotationRadiusEst, chainSagCorrectionEst, cut34YoffsetEst = calculated
             message = {
                 "status": 200,
                 "data": {
@@ -538,16 +532,9 @@ def triangularCalibration():
 def holeyCalibration():
     app.data.logger.resetIdler()
     if request.method == "POST":
-        result = request.form
-        (
-            motorYoffsetEst,
-            distanceBetweenMotors,
-            leftChainTolerance,
-            rightChainTolerance,
-            calibrationError,
-        ) = app.data.actions.holeyCalibrate(result)
-        # print(returnVal)
-        if motorYoffsetEst:
+        calculated = app.data.actions.holeyCalibrate(request.form)
+        if calculated is not None:
+            motorYoffsetEst, distanceBetweenMotors, leftChainTolerance, rightChainTolerance, calibrationError = calculated
             message = {
                 "status": 200,
                 "data": {

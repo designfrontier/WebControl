@@ -1,0 +1,235 @@
+{
+  "geometry": {
+    "Maslow Settings": {
+      "bedWidth": "2438.4",
+      "bedHeight": "1219.2",
+      "motorSpacingX": "2978.4",
+      "motorOffsetY": "463",
+      "sledWeight": "97.9"
+    },
+    "Advanced Settings": {
+      "rotationRadius": "139.1",
+      "chainSagCorrection": "33",
+      "leftChainTolerance": "0",
+      "rightChainTolerance": "0",
+      "chainOverSprocket": "Bottom",
+      "gearTeeth": "10",
+      "chainPitch": "6.35",
+      "chainElasticity": "5.1685e-6",
+      "kinematicsType": "Triangular"
+    }
+  },
+  "kinematics": {
+    "D": 2978.4,
+    "R": 10.2,
+    "machineWidth": 2438.4,
+    "machineHeight": 1219.2,
+    "motorOffsetY": 463.0,
+    "rotationDiskRadius": 139.1,
+    "sledWeight": 97.9,
+    "chainDensity": 0.0013,
+    "chainElasticity": 5.1685e-06,
+    "leftChainTolerance": 0.0,
+    "rightChainTolerance": 0.0,
+    "chainOverSprocket": 2,
+    "l": 310.0,
+    "s": 139.0,
+    "h3": 79.0,
+    "isQuadKinematics": false
+  },
+  "trueMachine": {
+    "D": 2990.0,
+    "motorOffsetY": 470.0,
+    "leftChainTolerance": 0.3,
+    "rightChainTolerance": -0.2
+  },
+  "tolerance": 1e-06,
+  "keyTolerance": {
+    "Opt_D": 0.001,
+    "Opt_motorOffsetY": 0.001,
+    "Opt_leftChainTolerance": 0.001,
+    "Opt_rightChainTolerance": 0.001
+  },
+  "cases": [
+    {
+      "name": "ideal measurements of the configured geometry",
+      "measurements": [
+        965.2,
+        965.2,
+        965.2,
+        965.2,
+        711.2,
+        711.2,
+        711.2,
+        1198.923050074524,
+        1198.923050074524,
+        1198.923050074524,
+        1198.923050074524,
+        254.0
+      ],
+      "expected": {
+        "Opt_D": 2978.4,
+        "Opt_motorOffsetY": 463.0,
+        "Opt_leftChainTolerance": 0.0,
+        "Opt_rightChainTolerance": 0.0,
+        "totalError": 2.211135455490603e-09
+      }
+    },
+    {
+      "name": "exact measurements of a machine that differs from the configuration",
+      "measurements": [
+        960.9242083288528,
+        964.0186384275198,
+        960.9585475691367,
+        963.9879238631204,
+        717.3748800254469,
+        716.9463219735615,
+        712.0441811345578,
+        1198.6994084312225,
+        1199.406084172014,
+        1195.5807127538533,
+        1204.236822778533,
+        236.6252639918855
+      ],
+      "expected": {
+        "Opt_D": 2990.0,
+        "Opt_motorOffsetY": 470.0,
+        "Opt_leftChainTolerance": 0.3,
+        "Opt_rightChainTolerance": -0.2,
+        "totalError": 7.558597203142139e-10
+      }
+    },
+    {
+      "name": "configured geometry, uniform noise +-0.5 mm, seed 1",
+      "measurements": [
+        964.83,
+        965.55,
+        965.46,
+        964.96,
+        711.2,
+        711.15,
+        711.35,
+        1199.21,
+        1198.52,
+        1198.45,
+        1199.26,
+        253.93
+      ],
+      "expected": {
+        "Opt_D": 2978.67949,
+        "Opt_motorOffsetY": 462.74492,
+        "Opt_leftChainTolerance": 0.00043,
+        "Opt_rightChainTolerance": -0.00205,
+        "totalError": 0.9449373556096914
+      }
+    },
+    {
+      "name": "configured geometry, uniform noise +-1 mm, seed 2",
+      "measurements": [
+        966.11,
+        966.1,
+        964.31,
+        964.37,
+        711.87,
+        711.67,
+        711.54,
+        1198.54,
+        1199.13,
+        1199.14,
+        1199.09,
+        253.32
+      ],
+      "expected": {
+        "Opt_D": 2979.29161,
+        "Opt_motorOffsetY": 463.30539,
+        "Opt_leftChainTolerance": 0.02807,
+        "Opt_rightChainTolerance": 0.0012,
+        "totalError": 1.9109602590483408
+      }
+    },
+    {
+      "name": "differing machine, uniform noise +-0.5 mm, seed 3",
+      "measurements": [
+        960.66,
+        964.06,
+        960.83,
+        964.09,
+        717.5,
+        716.51,
+        711.56,
+        1199.04,
+        1199.17,
+        1195.32,
+        1204.73,
+        236.6
+      ],
+      "expected": {
+        "Opt_D": 2989.8699,
+        "Opt_motorOffsetY": 470.0158,
+        "Opt_leftChainTolerance": 0.31186,
+        "Opt_rightChainTolerance": -0.21946,
+        "totalError": 0.9084320084434139
+      }
+    },
+    {
+      "name": "differing machine, uniform noise +-1 mm, seed 4",
+      "measurements": [
+        960.4,
+        963.22,
+        960.75,
+        963.3,
+        716.51,
+        716.75,
+        712.88,
+        1199.3,
+        1199.94,
+        1195.02,
+        1204.31,
+        236.18
+      ],
+      "expected": {
+        "Opt_D": 2990.30522,
+        "Opt_motorOffsetY": 469.66672,
+        "Opt_leftChainTolerance": 0.26102,
+        "Opt_rightChainTolerance": -0.18414,
+        "totalError": 1.6353243205609174
+      }
+    },
+    {
+      "name": "M5 missing: refused",
+      "measurements": [
+        965.2,
+        965.2,
+        965.2,
+        965.2,
+        null,
+        711.2,
+        711.2,
+        1198.923050074524,
+        1198.923050074524,
+        1198.923050074524,
+        1198.923050074524,
+        254.0
+      ],
+      "expected": null
+    },
+    {
+      "name": "M12 not a number: refused",
+      "measurements": [
+        965.2,
+        965.2,
+        965.2,
+        965.2,
+        711.2,
+        711.2,
+        711.2,
+        1198.923050074524,
+        1198.923050074524,
+        1198.923050074524,
+        1198.923050074524,
+        "abc"
+      ],
+      "expected": null
+    }
+  ]
+}
