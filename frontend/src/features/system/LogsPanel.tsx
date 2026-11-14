@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef } from "react";
 import type { UIEvent } from "react";
-import type { SocketLike } from "../../socket/client";
+import type { Transport as SocketLike } from "../../transport";
 import { LOG_LINE_LIMIT, connectLogSocket, useLogStream } from "./logStream";
 import type { LogEvent, LogName, LogView } from "./logStream";
 
