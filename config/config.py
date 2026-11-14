@@ -59,14 +59,29 @@ class Config(MakesmithInitFuncs):
             print("creating "+self.home+"/.WebControl/boards directory")
             os.mkdir(self.home+"/.WebControl/boards")
         self.settings, recovered = self.loadSettingsFile()
-        # load default and see if there is anything missing.. if so, add it
+        updated = self.addMissingDefaults()
+        if recovered:
+            self.setAsideCorruptSettings()
+        if updated or recovered:
+            self.saveSettings()
+
         '''
-        This portion scans the webcontrol.json file and sees if anything is missing in comparison to
-        the defaultwebcontrol.json file.  Changes to the defaultwebcontrol.json file are automatically
-        ADDED to the webcontrol.json file.  This function does not DELETE entries in the webcontrol.json
-        file if they do not appear in the defaultwebcontrol.json file.
+        Delete any copies of webcontrol in the downloads directory to cleanup the file system
         '''
-        # TODO: add DELETE function to this to clean up unneeded entries
+        home = self.home
+        dirName = home + "/.WebControl/downloads"
+        if os.path.exists(dirName):
+            dir = os.listdir(dirName)
+            for item in dir:
+                if item.startswith("webcontrol"):
+                    if item.endswith("gz") or item.endswith("zip") or item.endswith("dmg"):
+                        print("Removing file:"+item)
+                        os.remove(os.path.join(dirName, item))
+
+    def addMissingDefaults(self):
+        '''
+        Adds any setting in defaultwebcontrol.json that the loaded settings lack; returns True if any was added.
+        '''
         with open(self.home1+"/defaultwebcontrol.json", "r") as infile:
             self.defaults = json.load(infile)
         updated = False
@@ -116,23 +131,7 @@ class Config(MakesmithInitFuncs):
         If there was a change to webcontrol.json file due to differences with
         defaultwebcontrol.json, then the config is reloaded.
         '''
-        if recovered:
-            self.setAsideCorruptSettings()
-        if updated or recovered:
-            self.saveSettings()
-
-        '''
-        Delete any copies of webcontrol in the downloads directory to cleanup the file system
-        '''
-        home = self.home
-        dirName = home + "/.WebControl/downloads"
-        if os.path.exists(dirName):
-            dir = os.listdir(dirName)
-            for item in dir:
-                if item.startswith("webcontrol"):
-                    if item.endswith("gz") or item.endswith("zip") or item.endswith("dmg"):
-                        print("Removing file:"+item)
-                        os.remove(os.path.join(dirName, item))
+        return updated
 
     def settingsPath(self):
         return self.home + "/.WebControl/webcontrol.json"
@@ -815,6 +814,9 @@ class Config(MakesmithInitFuncs):
         try:
             with open(self.settingsPath(), "r") as infile:
                 self.settings = json.load(infile)
+            if self.addMissingDefaults():
+                self.saveSettings()
+            self.computeSettings(None, None, None, True)
             return True
         except (OSError, ValueError) as e:
             print("error reloading WebControlJSON: " + str(e))

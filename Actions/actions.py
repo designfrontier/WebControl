@@ -2160,11 +2160,13 @@ class Actions(MakesmithInitFuncs):
     def restoreWebControl(self, fileName):
         try:
             with zipfile.ZipFile(fileName, 'r') as zipObj:
-                # Extract all the contents of zip file in different directory
-                zipObj.extractall(self.data.config.home+'/.Webcontrol')
-                retval = self.data.config.reloadWebControlJSON()
-                if retval is True:
-                    self.data.gcode_queue.put("$$")
+                if "webcontrol.json" not in zipObj.namelist():
+                    self.data.console_queue.put("Restore file has no webcontrol.json")
+                    return False
+                zipObj.extractall(os.path.join(self.data.config.home, ".WebControl"))
+            retval = self.data.config.reloadWebControlJSON()
+            if retval is True:
+                self.data.gcode_queue.put("$$")
             return retval
         except Exception as e:
             self.data.console_queue.put(str(e))
