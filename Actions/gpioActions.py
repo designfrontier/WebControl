@@ -1,5 +1,23 @@
+import warnings
+
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
-from gpiozero import Button, LED
+from gpiozero import Button, Device, LED, PinFactoryFallback
+from gpiozero.pins.mock import MockFactory
+
+
+def selectPinFactory(data):
+    '''
+    Uses the Pi's real GPIO (or GPIOZERO_PIN_FACTORY) when it loads, and simulated pins anywhere else.
+    '''
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", PinFactoryFallback)
+            Device.pin_factory = Device._default_pin_factory()
+        data.console_queue.put("GPIO pin factory: " + type(Device.pin_factory).__name__)
+    # A factory named by GPIOZERO_PIN_FACTORY raises its own errors rather than BadPinFactory.
+    except Exception as e:
+        Device.pin_factory = MockFactory()
+        data.console_queue.put("GPIO pin factory: MockFactory (no GPIO available, pins are simulated: " + str(e) + ")")
 
 
 class GPIOActions(MakesmithInitFuncs):
@@ -30,7 +48,7 @@ class GPIOActions(MakesmithInitFuncs):
         return self.actionList
 
     def setup(self):
-        # self.setGPIOAction(2,"Stop")
+        selectPinFactory(self.data)
         setValues = self.data.config.getJSONSettingSection("GPIO Settings")
         # print(setValues)
         for setting in setValues:

@@ -11,15 +11,11 @@ import re
 import zipfile
 import subprocess
 from subprocess import call
-from gpiozero.pins.mock import MockFactory
-from gpiozero import Device
 
 '''
 This class does most of the heavy lifting in processing messages from the UI client.
 '''
 class Actions(MakesmithInitFuncs):
-
-    Device.pin_factory = MockFactory()
 
     def processAction(self, msg):
         '''
