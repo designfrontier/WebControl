@@ -121,3 +121,30 @@ def test_read_new_frame_gives_up_without_a_new_capture(camera, monkeypatch):
     camera.stream = SlowCapture(camera, reads_before_stop=99, delay=0)
     camera._grab()
     assert camera.readNewFrame(camera.frameCount, 0.05) == (None, camera.frameCount)
+
+
+def test_stopping_waits_for_a_capture_in_flight(camera, data, monkeypatch):
+    class TrackedCapture:
+        reading = False
+        released_mid_read = None
+
+        def read(self):
+            self.reading = True
+            real_sleep(0.2)
+            self.reading = False
+            return True, numpy.zeros((48, 64, 3), numpy.uint8)
+
+        def release(self):
+            self.released_mid_read = self.reading
+
+    stream = TrackedCapture()
+    camera.stream = stream
+    camera.suspended = True
+    monkeypatch.setattr(camera, "start", lambda: None)
+    reader = gevent.spawn(camera.read)
+    gevent.sleep(0.05)
+    camera.stop()
+    gevent.spawn(camera.update).join(timeout=5)
+    reader.join(timeout=5)
+    assert stream.released_mid_read is False
+    assert camera.stream is None

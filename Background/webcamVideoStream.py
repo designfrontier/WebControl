@@ -4,6 +4,7 @@ import time
 
 import cv2
 from gevent import get_hub
+from gevent.lock import Semaphore
 
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
 
@@ -33,6 +34,8 @@ class WebcamVideoStream(MakesmithInitFuncs):
         # be stopped
         #self.stopped = True
         #self.suspended = False
+        # Held across each threadpool capture so stop never releases the stream under a read in flight.
+        self.streamLock = Semaphore()
         print("Camera initialized")
 
     def getSettings(self, src=0):
@@ -96,8 +99,10 @@ class WebcamVideoStream(MakesmithInitFuncs):
             time.sleep(self.cameraSleep)
             # if the thread indicator variable is set, stop the thread
             if self.stopped:
-                self.stream.release()
-                self.stream = None
+                with self.streamLock:
+                    if self.stream is not None:
+                        self.stream.release()
+                    self.stream = None
                 self.data.ui_queue1.put("Action", "updateCamera", "off")
                 return
             if not self.data.continuousCamera or time.time()-self.lastCameraRead < 20:
@@ -110,7 +115,10 @@ class WebcamVideoStream(MakesmithInitFuncs):
 
     def _grab(self):
         # The "thread" running update() is a greenlet under monkey-patching, so blocking cv2 calls go to a real thread.
-        (self.grabbed, self.frame, encoded) = get_hub().threadpool.apply(self._captureAndEncode)
+        with self.streamLock:
+            if self.stream is None:
+                return
+            (self.grabbed, self.frame, encoded) = get_hub().threadpool.apply(self._captureAndEncode)
         if encoded is not None:
             self.frameCount += 1
             self.data.cameraImage = encoded
