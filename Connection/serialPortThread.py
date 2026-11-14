@@ -150,6 +150,7 @@ class SerialPortThread(MakesmithInitFuncs):
             self.managePause(line)
             self.manageToolChange(line)
             if not line.isspace(): # if all spaces, don't send.  likely a comment.
+                positioningMode = self._positioningModeOf(line)
                 line = self._shiftToHome(line)
                 self._write(line)
                 # if there is a units change, then update the UI client so position messages are processed correctly.
@@ -164,8 +165,8 @@ class SerialPortThread(MakesmithInitFuncs):
                 # track current target Z-Axis position
                 z = re.search("Z(?=.)(([ ]*)?[+-]?([0-9]*)(\.([0-9]+))?)", line)
                 if z:
-                    self.data.currentZTarget = float(z.groups()[0])
-                    #self.data.currentZTargetUnits = self.data.units
+                    zWord = float(z.groups()[0])
+                    self.data.currentZTarget = zWord if positioningMode == 0 else self.data.currentZTarget + zWord
 
             # increment gcode index
             if self.data.gcodeIndex + 1 < len(self.data.gcode):

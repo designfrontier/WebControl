@@ -228,3 +228,17 @@ def test_an_absolute_move_is_home_shifted_when_g90_shares_its_line(data, serial)
 
     assert "X110" in sent[0]
     assert data.positioningMode == 0
+
+
+def test_the_z_target_stays_absolute_through_relative_moves(data, serial):
+    send_lines(data, serial, ["G0 Z5 ", "G91 ", "G0 Z-2 ", "G1 X3 Z-1.5 ", "G90 G0 Z4 ", "G91 G0 Z1 "])
+
+    assert data.currentZTarget == 5
+
+
+def test_the_z_target_follows_absolute_moves(data, serial):
+    data.currentZTarget = 9
+
+    send_lines(data, serial, ["G0 Z5 ", "G1 X1 Y1 ", "G0 Z-0.5 "])
+
+    assert data.currentZTarget == -0.5
