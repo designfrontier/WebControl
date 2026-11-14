@@ -8,6 +8,7 @@ class TriangularCalibration(MakesmithInitFuncs):
     motorYoffsetEst = 0
     chainSagCorrectionEst = 0
     rotationRadiusEst = 0
+    hasResult = False
 
     def cutTriangularCalibrationPattern(self):
         """
@@ -84,6 +85,8 @@ class TriangularCalibration(MakesmithInitFuncs):
         """
         Takes the measured distance and uses it to iteratively calculate the rotationDiskRadius and yMotorOffset
         """
+
+        self.hasResult = False
 
         # Validate user inputs
 
@@ -614,6 +617,7 @@ class TriangularCalibration(MakesmithInitFuncs):
         self.motorYoffsetEst = motorYoffsetEst
         self.rotationRadiusEst = rotationRadiusEst
         self.chainSagCorrectionEst = chainSagCorrectionEst
+        self.hasResult = True
 
         return (
             motorYoffsetEst,
@@ -627,6 +631,10 @@ class TriangularCalibration(MakesmithInitFuncs):
         Saves the values that were calculated.
         :return:
         """
+        if not self.hasResult:
+            self.data.console_queue.put("No triangular calibration result to accept; press Calculate first.")
+            return False
+        self.hasResult = False
         self.data.config.setValue(
             "Maslow Settings", "motorOffsetY", str(self.motorYoffsetEst)
         )

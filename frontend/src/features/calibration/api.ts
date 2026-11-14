@@ -48,10 +48,16 @@ export const getTriangular = (fetchImpl: Fetch) =>
 export const calculateTriangular = (fetchImpl: Fetch, measurements: Record<string, number>) =>
   submit(fetchImpl, "POST", "/calibration/triangular", measurements, triangularResultSchema);
 
+export const acceptTriangular = (fetchImpl: Fetch) =>
+  submit(fetchImpl, "POST", "/calibration/triangular/accept", {}, triangularParametersSchema);
+
 export const getHoley = (fetchImpl: Fetch) => getJson(fetchImpl, "/calibration/holey", holeyParametersSchema);
 
 export const calculateHoley = (fetchImpl: Fetch, measurements: number[]) =>
   submit(fetchImpl, "POST", "/calibration/holey", { measurements }, holeyResultSchema);
+
+export const acceptHoley = (fetchImpl: Fetch) =>
+  submit(fetchImpl, "POST", "/calibration/holey/accept", {}, holeyParametersSchema);
 
 export const getOptical = (fetchImpl: Fetch) => getJson(fetchImpl, "/calibration/optical", opticalStateSchema);
 

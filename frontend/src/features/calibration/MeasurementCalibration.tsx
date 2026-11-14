@@ -17,7 +17,7 @@ export interface MeasurementConfig {
   title: string;
   intro: ReactNode;
   cutAction: ActionCommand;
-  acceptAction: ActionCommand;
+  accept: (fetchImpl: Fetch) => Promise<Outcome<Values>>;
   acceptNote?: string;
   image: { src: string; alt: string };
   fields: MeasurementField[];
@@ -63,11 +63,17 @@ export const MeasurementCalibration = ({ config }: { config: MeasurementConfig }
     );
   };
 
-  const accept = () => {
-    client.sendAction(config.acceptAction, 0, 0);
-    setAccepted(result);
+  const accept = async () => {
+    setBusy(true);
+    const outcome = await config.accept(fetchImpl);
+    setBusy(false);
     setResult(null);
-    setStatus({ tone: "ok", message: "Accepted. The calculated values are now the machine settings." });
+    if (outcome.ok) setAccepted(outcome.data);
+    setStatus(
+      outcome.ok
+        ? { tone: "ok", message: "Accepted. The calculated values are now the machine settings." }
+        : { tone: "error", message: outcome.error },
+    );
   };
 
   const currentValues = accepted ?? (current.status === "ready" ? current.data : undefined);

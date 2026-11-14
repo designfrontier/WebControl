@@ -190,6 +190,27 @@ def calculate_holey():
     return jsonify({key: float(value) for key, value in zip(keys, result)})
 
 
+NOTHING_TO_ACCEPT = "There is no calculated result to accept. Enter the measurements and press Calculate first."
+
+
+@blueprint.post("/triangular/accept")
+def accept_triangular():
+    data = current_app.data
+    data.logger.resetIdler()
+    if not data.triangularCalibration.acceptTriangularCalibrationResults():
+        return _error(NOTHING_TO_ACCEPT, 409)
+    return get_triangular()
+
+
+@blueprint.post("/holey/accept")
+def accept_holey():
+    data = current_app.data
+    data.logger.resetIdler()
+    if not data.holeyCalibration.acceptCalibrationResults():
+        return _error(NOTHING_TO_ACCEPT, 409)
+    return get_holey()
+
+
 @blueprint.get("/optical")
 def get_optical():
     data = current_app.data

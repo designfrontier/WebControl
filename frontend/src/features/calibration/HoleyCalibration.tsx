@@ -1,5 +1,5 @@
 import type { Fetch } from "../../api/http";
-import { calculateHoley, getHoley } from "./api";
+import { acceptHoley, calculateHoley, getHoley } from "./api";
 import { MeasurementCalibration } from "./MeasurementCalibration";
 import type { MeasurementConfig } from "./MeasurementCalibration";
 
@@ -18,7 +18,7 @@ const config: MeasurementConfig = {
     </p>
   ),
   cutAction: "cutHoleyCalibrationPattern",
-  acceptAction: "acceptHoleyCalibrationResults",
+  accept: acceptHoley,
   image: {
     src: "/static/images/holeyCalibration/holeyCalibration.png",
     alt: "Six holes in two rows of three. M1 to M4 run horizontally, M5 to M7 vertically, M8 to M11 diagonally, and M12 from the top edge of the sheet to the top middle hole.",
