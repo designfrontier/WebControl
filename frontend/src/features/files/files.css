@@ -69,7 +69,8 @@
 
 .fb button.danger {
   border-color: var(--danger);
-  color: var(--danger);
+  background: var(--danger);
+  color: var(--danger-ink);
 }
 
 .fb .field {
@@ -244,7 +245,7 @@
   }
 
   .fb .trim-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-areas:
       "top bottom"
       "left right";
