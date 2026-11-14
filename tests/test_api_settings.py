@@ -103,6 +103,9 @@ def test_describe_setting_handles_missing_fields_and_custom_flags(data):
         ("nan", False),
         ("inf", False),
         ("1_000", False),
+        ("1e999", False),
+        ("-1e400", False),
+        ("\u0663", False),
         (float("nan"), False),
     ],
 )
@@ -159,11 +162,15 @@ def test_changing_the_port_while_connected_closes_the_serial_link(client, data, 
     assert config.getValue("Maslow Settings", "COMport") == "/dev/tty.other"
 
 
-def test_non_finite_numbers_never_reach_the_controller(client, data, config):
+@pytest.mark.parametrize("key", ["motorSpacingX", "sledWeight"])
+@pytest.mark.parametrize("value", ["nan", "1e999", "-1e400"])
+def test_non_finite_numbers_never_reach_the_controller(client, data, config, key, value):
     drain(data.gcode_queue)
-    response = client.put("/api/settings/maslow", json={"values": {"motorSpacingX": "nan"}})
-    assert response.get_json() == {"errors": {"motorSpacingX": "Must be a number"}}
+    saved = config.getValue("Maslow Settings", key)
+    response = client.put("/api/settings/maslow", json={"values": {key: value}})
+    assert response.get_json() == {"errors": {key: "Must be a number"}}
     assert drain(data.gcode_queue) == []
+    assert config.getValue("Maslow Settings", key) == saved
 
 
 def test_camera_changes_reach_the_running_camera(client, data, config):

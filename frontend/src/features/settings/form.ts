@@ -8,6 +8,9 @@ export type Control = "checkbox" | "select" | "port" | "text";
 const NUMBER = /^\s*[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?\s*$/;
 const WHOLE_NUMBER = /^\s*[-+]?\d+\s*$/;
 
+/** The regex alone lets "1e999" through, which Number() turns into Infinity. */
+const isFiniteNumber = (value: string) => NUMBER.test(value) && Number.isFinite(Number(value));
+
 export const isChecked = (value: Setting["value"]) => value === true || value === 1 || value === "1" || value === "on";
 
 export const initialValues = (settings: Setting[]): FormValues =>
@@ -50,7 +53,7 @@ export const validateValue = (setting: Setting, value: FieldValue): string | und
     ? undefined
     : setting.type === "int" && !WHOLE_NUMBER.test(value)
       ? "Enter a whole number"
-      : setting.numeric && !NUMBER.test(value)
+      : setting.numeric && !isFiniteNumber(value)
         ? "Enter a number"
         : undefined;
 

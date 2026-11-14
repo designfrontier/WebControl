@@ -18,8 +18,8 @@ SECTIONS = {
 CUSTOM_FIRMWARE_VERSION = 100
 
 
-# Matches the frontend's check; float() alone would also accept "nan", "inf" and "1_000".
-NUMBER = re.compile(r"^\s*[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?\s*$")
+# Matches the frontend's check; float() alone would also accept "nan", "inf", "1_000" and non-ASCII digits.
+NUMBER = re.compile(r"^\s*[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?\s*$", re.ASCII)
 
 
 def is_number(value):
@@ -27,7 +27,7 @@ def is_number(value):
         return False
     if isinstance(value, (int, float)):
         return math.isfinite(value)
-    return isinstance(value, str) and NUMBER.match(value) is not None
+    return isinstance(value, str) and NUMBER.match(value) is not None and math.isfinite(float(value))
 
 
 def is_int(value):
