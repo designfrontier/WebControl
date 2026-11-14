@@ -91,7 +91,21 @@ def test_describe_setting_handles_missing_fields_and_custom_flags(data):
     }
 
 
-@pytest.mark.parametrize("value, expected", [("1.5", True), (-2, True), ("", False), (None, False), (True, False)])
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        ("1.5", True),
+        (" -2e3 ", True),
+        (-2, True),
+        ("", False),
+        (None, False),
+        (True, False),
+        ("nan", False),
+        ("inf", False),
+        ("1_000", False),
+        (float("nan"), False),
+    ],
+)
 def test_is_number(value, expected):
     assert is_number(value) is expected
 
@@ -143,6 +157,20 @@ def test_changing_the_port_while_connected_closes_the_serial_link(client, data, 
     client.put("/api/settings/maslow", json={"values": {"COMport": "/dev/tty.other"}})
     assert data.requestSerialClose is True
     assert config.getValue("Maslow Settings", "COMport") == "/dev/tty.other"
+
+
+def test_non_finite_numbers_never_reach_the_controller(client, data, config):
+    drain(data.gcode_queue)
+    response = client.put("/api/settings/maslow", json={"values": {"motorSpacingX": "nan"}})
+    assert response.get_json() == {"errors": {"motorSpacingX": "Must be a number"}}
+    assert drain(data.gcode_queue) == []
+
+
+def test_camera_changes_reach_the_running_camera(client, data, config):
+    saved_fps = data.camera.fps
+    client.put("/api/settings/camera", json={"values": {"fps": "7"}})
+    assert data.camera.fps == 7.0
+    data.camera.fps = saved_fps
 
 
 def test_gpio_assignment_is_saved(client, config):

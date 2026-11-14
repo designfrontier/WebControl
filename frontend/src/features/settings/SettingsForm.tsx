@@ -50,7 +50,7 @@ export const SettingsForm = ({ section, onSaved }: Props) => {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    const found = validate(section, values);
+    const found = validate(section, changes);
     setErrors(found);
     if (Object.keys(found).length > 0) return setNotice({ tone: "bad", text: "Fix the highlighted settings." });
     setSaving(true);

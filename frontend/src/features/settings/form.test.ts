@@ -119,6 +119,10 @@ describe("validation", () => {
       webPort: "Enter a whole number",
     });
   });
+
+  it("leaves settings that were not changed alone", () => {
+    expect(validate(maslowSection({ settings: [numeric, whole] }), { webPort: "80" })).toEqual({});
+  });
 });
 
 describe("changedValues", () => {

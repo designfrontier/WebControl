@@ -54,11 +54,11 @@ export const validateValue = (setting: Setting, value: FieldValue): string | und
         ? "Enter a number"
         : undefined;
 
-/** Validation errors for the editable settings, keyed by setting key. */
+/** Errors for the editable settings present in `values` (the changes), keyed by setting key. */
 export const validate = (section: SettingsSection, values: FormValues): FormErrors =>
   Object.fromEntries(
     section.settings
-      .filter((setting) => !isLocked(setting, section.enableCustom))
+      .filter((setting) => setting.key in values && !isLocked(setting, section.enableCustom))
       .flatMap((setting) => {
         const error = validateValue(setting, values[setting.key]);
         return error ? [[setting.key, error]] : [];

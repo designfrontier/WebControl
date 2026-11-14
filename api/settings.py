@@ -1,4 +1,7 @@
 """Settings screens for the new frontend: one JSON section per old settings modal, saved through Config.updateSettings."""
+import math
+import re
+
 from flask import Blueprint, abort, current_app, jsonify, request
 
 blueprint = Blueprint("settings", __name__)
@@ -15,14 +18,16 @@ SECTIONS = {
 CUSTOM_FIRMWARE_VERSION = 100
 
 
+# Matches the frontend's check; float() alone would also accept "nan", "inf" and "1_000".
+NUMBER = re.compile(r"^\s*[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?\s*$")
+
+
 def is_number(value):
     if isinstance(value, bool):
         return False
-    try:
-        float(value)
-        return True
-    except (TypeError, ValueError):
-        return False
+    if isinstance(value, (int, float)):
+        return math.isfinite(value)
+    return isinstance(value, str) and NUMBER.match(value) is not None
 
 
 def is_int(value):
