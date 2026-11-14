@@ -81,16 +81,16 @@ class Actions(MakesmithInitFuncs):
                     self.data.ui_queue1.put("Alert", "Alert", "Error with initiating Z-Axis move.")
             elif msg["data"]["command"] == "setMaxZ":
                 if not self.setMaxZ():
-                    self.data.ui.queue1.put("Alert", "Alert", "Error with setting Z-Axis Maximum")
+                    self.data.ui_queue1.put("Alert", "Alert", "Error with setting Z-Axis Maximum")
             elif msg["data"]["command"] == "setMinZ":
                 if not self.setMinZ():
-                    self.data.ui.queue1.put("Alert", "Alert", "Error with setting Z-Axis Minimum")
+                    self.data.ui_queue1.put("Alert", "Alert", "Error with setting Z-Axis Minimum")
             elif msg["data"]["command"] == "clearZ":
                 if not self.clearZ():
-                    self.data.ui.queue1.put("Alert", "Alert", "Error with clearing Z-Axis Min and Max")
+                    self.data.ui_queue1.put("Alert", "Alert", "Error with clearing Z-Axis Min and Max")
             elif msg["data"]["command"] == "getZlimits":
                 if not self.getZlimits():
-                    self.data.ui.queue1.put("Alert", "Alert", "Error with clearing Z-Axis Min and Max")
+                    self.data.ui_queue1.put("Alert", "Alert", "Error with clearing Z-Axis Min and Max")
             elif msg["data"]["command"] == "reportSettings":
                 self.data.gcode_queue.put("$$")
             elif msg["data"]["command"] == "home":
@@ -726,7 +726,7 @@ class Actions(MakesmithInitFuncs):
             safeHeightMM = float(
                 self.data.config.getValue("Maslow Settings", "zAxisSafeHeight")
             )
-            safeHeightInches = safeHeightMM / 24.5
+            safeHeightInches = safeHeightMM / 25.4
             if self.data.units == "INCHES":
                 self.data.gcode_queue.put("G00 Z" + "%.3f" % (safeHeightInches))
             else:
@@ -1681,14 +1681,13 @@ class Actions(MakesmithInitFuncs):
                                     zpos = zpos+float(_zpos.groups()[0])
                                 else:
                                     zpos = float(_zpos.groups()[0])
-                            if line.find("G4") != -1:
-                                dwell = line[3:]
-                            if line.find("G04") != -1:
-                                dwell = line[4:]
+                            _dwell = re.match(r"G0*4(?![0-9.])", line)
+                            if _dwell:
+                                dwell = line[_dwell.end():].strip()
                             if line.find("F") != -1:
                                 _feedRate = re.search("F(?=.)(([ ]*)?[+-]?([0-9]*)(\.([0-9]+))?)", line)
                                 _feedRateFloat = float(_feedRate.groups()[0])
-                                if line.find("X") != -1 or line.find("Y") == -1:
+                                if line.find("X") != -1 or line.find("Y") != -1:
                                     xyAxisFeedRate = _feedRateFloat
                                 if line.find("Z") != -1:
                                     zAxisFeedRate = _feedRateFloat

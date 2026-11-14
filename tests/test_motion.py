@@ -1,7 +1,7 @@
 """Gcode the motion actions queue for the controller: restarting mid-file, pause/resume, jogs and home."""
 import pytest
 
-from helpers import drain
+from helpers import decode_ui_message, drain
 
 SAFE_Z_MM = "G0 Z5.0 F12.8"
 FEED = " F800.0"
@@ -80,3 +80,62 @@ def test_restart_converts_home_not_the_current_position_when_the_file_switches_u
     job.actions.processGCode()
 
     assert drain(job.gcode_queue)[3] == "G0 X2.0 Y3.0" + FEED
+
+
+def test_return_to_center_converts_the_safe_height_to_inches(job):
+    set_machine_units(job, "INCHES")
+
+    job.actions.returnToCenter()
+
+    assert drain(job.gcode_queue) == ["G90  ", "G00 Z0.197", "G00 X0.0 Y0.0 "]
+
+
+@pytest.mark.parametrize(
+    "line, xy_feed, z_feed",
+    [("G1 Y10 F300", "F300.0", "F12.8"), ("G1 Z-1 F100", "F800.0", "F100.0"), ("G1 X10 F300", "F300.0", "F12.8")],
+)
+def test_restart_takes_the_xy_feed_from_any_xy_move_and_the_z_feed_from_z_moves(job, line, xy_feed, z_feed):
+    load(job, ["G90", line, "G1 X1"], 2)
+
+    job.actions.processGCode()
+
+    queued = drain(job.gcode_queue)
+    assert queued[2].endswith(z_feed)
+    assert queued[3].endswith(xy_feed)
+
+
+@pytest.mark.parametrize("word", ["G40", "G41 D1", "G43 H1"])
+def test_restart_does_not_mistake_other_g4x_words_for_a_dwell(job, word):
+    load(job, ["G90", word, "G1 X1"], 2)
+
+    job.actions.processGCode()
+
+    assert not any(line.startswith("G4") for line in drain(job.gcode_queue))
+
+
+@pytest.mark.parametrize("word", ["G4 P2", "G04 P2"])
+def test_restart_repeats_the_last_dwell(job, word):
+    load(job, ["G90", word, "G1 X1"], 2)
+
+    job.actions.processGCode()
+
+    assert "G4 P2" in drain(job.gcode_queue)
+
+
+@pytest.mark.parametrize(
+    "command, alert",
+    [
+        ("setMaxZ", "Error with setting Z-Axis Maximum"),
+        ("setMinZ", "Error with setting Z-Axis Minimum"),
+        ("clearZ", "Error with clearing Z-Axis Min and Max"),
+        ("getZlimits", "Error with clearing Z-Axis Min and Max"),
+    ],
+)
+def test_z_limit_failures_raise_an_alert(job, monkeypatch, command, alert):
+    job.uploadFlag = 0
+    drain(job.ui_queue1)
+    monkeypatch.setattr(job.actions, command, lambda: False)
+
+    job.actions.processAction({"data": {"command": command, "arg": "", "arg1": ""}})
+
+    assert [decode_ui_message(raw) for raw in drain(job.ui_queue1)] == [("Alert", "Alert", alert)]
