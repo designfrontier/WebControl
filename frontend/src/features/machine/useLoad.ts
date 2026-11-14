@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Fetch } from "../../api/http";
-import { useFetch, useMachine } from "../../app/context";
+import { useFetch, useMachine, useServerMessage } from "../../app/context";
 import { getMachineSetup } from "./api";
 
 export type Load<T> = { status: "loading" } | { status: "ready"; data: T } | { status: "error"; error: Error };
@@ -31,8 +31,13 @@ export const useLoad = <T>(load: (fetchImpl: Fetch) => Promise<T>, refreshKey: u
   return [state, retry] as const;
 };
 
-/** Machine setup facts, refetched when the controller (re)connects since they depend on its firmware. */
+/**
+ * Machine setup facts, refetched on connect and again when the controller reports its firmware version,
+ * which the server answers with clearAlarm some seconds after connectionStatus.
+ */
 export const useMachineSetup = () => {
   const controller = useMachine((s) => s.controller.status);
-  return useLoad(getMachineSetup, controller);
+  const [firmwareReports, setFirmwareReports] = useState(0);
+  useServerMessage("clearAlarm", () => setFirmwareReports((n) => n + 1));
+  return useLoad(getMachineSetup, `${controller}:${firmwareReports}`);
 };
