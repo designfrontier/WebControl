@@ -36,7 +36,7 @@ test("optical calibration loads, validates and saves its settings", async ({ pag
   const tolerance = page.getByRole("textbox", { name: "Position tolerance" });
   await tolerance.fill("abc");
   await page.getByRole("button", { name: "Save settings" }).click();
-  await expect(status(page)).toHaveText("Check the highlighted settings.");
+  await expect(status(page)).toHaveText("Check these settings: Position tolerance.");
 
   await tolerance.fill("0.2");
   await page.getByRole("button", { name: "Save settings" }).click();
