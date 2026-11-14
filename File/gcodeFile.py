@@ -87,6 +87,7 @@ class GCodeFile(MakesmithInitFuncs):
             self.canvasScaleFactor = self.MILLIMETERS
         else:
             self.canvasScaleFactor = self.INCHES
+        self.data.gcodeFileUnits = self.data.units
 
         if gcode == "":
             filename = self.data.gcodeFile.filename
@@ -651,17 +652,12 @@ class GCodeFile(MakesmithInitFuncs):
         if gString == "G18":
             self.data.console_queue.put("G18 not supported")
 
+        # Machine units change only when the controller is sent G20/G21, never when a file is drawn.
         if gString == "G20":
-            #print(fullString)
-            if self.data.units != "INCHES":
-                self.data.actions.updateSetting("toInches", 0, True) # value = doesn't matter
             self.canvasScaleFactor = self.INCHES
             self.data.gcodeFileUnits = "INCHES"
 
         if gString == "G21":
-           # print(fullString)
-            if self.data.units != "MM":
-                self.data.actions.updateSetting("toMM", 0, True) #value = doesn't matter
             self.data.gcodeFileUnits = "MM"
             self.canvasScaleFactor = self.MILLIMETERS
 
