@@ -189,3 +189,16 @@ def test_clearing_gcode_while_idle_still_works(job):
     action(job, "clearGCode")
 
     assert job.gcode == []
+
+
+def test_a_start_that_fails_part_way_leaves_no_job_in_progress(job, monkeypatch):
+    def broken_led(*args):
+        raise RuntimeError("gpio unavailable")
+
+    monkeypatch.setattr(job.gpioActions, "causeAction", broken_led)
+    job.gcode = list(JOB)
+    job.gcodeIndex = 0
+
+    action(job, "startRun")
+
+    assert (job.uploadFlag, job.jobInProgress, job.gcodeIndex) == (0, False, 0)
