@@ -1,5 +1,6 @@
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
 from File.safePaths import libraryRoot, resolveInside
+from Actions import firmware
 
 import os
 import sys
@@ -1423,12 +1424,11 @@ class Actions(MakesmithInitFuncs):
         :return:
         '''
         try:
-            # if this is a pyinstaller release, find out where the root is... it could be a temp directory if single
-            # file
-            if self.data.platform == "PYINSTALLER":
-                home = os.path.join(self.data.platformHome)
-            else:
-                home = "."
+            home = firmware.installRoot(self.data)
+            port = str(self.data.comport)
+            if not firmware.isSerialPortName(port, self.data.comPorts):
+                self.data.ui_queue1.put("Alert", "Alert", "Cannot upgrade firmware: '" + port + "' is not a serial port.")
+                return False
             if version == 0:
                 self.data.ui_queue1.put("SpinnerMessage", "", "Custom Firmware Update in Progress, Please Wait.")
                 path = home+"/firmware/beta/*.hex"
@@ -1455,14 +1455,8 @@ class Actions(MakesmithInitFuncs):
             if portClosed:
                 # works if there is only only valid hex file in the directory
                 for filename in glob.glob(path):
-                    port = self.data.comport
-                    # this was commented out below. probably not needed.  Todo: cleanup
-                    #if home != "":
-                    #    cmd = "\"C:\\Program Files (x86)\\Arduino\\hardware\\tools\\avr\\bin\\avrdude\" -Cavr/avrdude.conf -v -patmega2560 -cwiring -P" + port + " -b115200 -D -Uflash:w:" + filename + ":i"
-                    #else:
-                    cmd = home+"/tools/avrdude -C"+home+"/tools/avrdude.conf -v -patmega2560 -cwiring -P"+port+" -b115200 -D -Uflash:w:"+filename+":i"
-                    # I think this is blocking..
-                    x = subprocess.run(cmd, shell=True, stderr=subprocess.STDOUT, stdout=subprocess.PIPE)
+                    cmd = firmware.avrdudeCommand(home, port, filename)
+                    x = subprocess.run(cmd, stderr=subprocess.STDOUT, stdout=subprocess.PIPE)
                     if x.returncode > 0:
                         print("Error upgrading:"+str(x.stdout,'utf-8'))
                         self.data.ui_queue1.put("Action", "closeModals", "Notification:")

@@ -33,6 +33,7 @@ from DataStructures.data import Data
 from Connection.nonVisibleWidgets import NonVisibleWidgets
 from WebPageProcessor.webPageProcessor import WebPageProcessor
 from File.safePaths import UnsafePathError, libraryRoot, resolveInside
+from Actions.firmware import isSerialPortName
 from api import init_api
 from next_ui import init_next_ui
 
@@ -190,6 +191,9 @@ def maslowSettings():
     app.data.logger.resetIdler()
     if request.method == "POST":
         result = request.form
+        port = result.get("COMport", "")
+        if port != "" and not isSerialPortName(port, app.data.comPorts):
+            return jsonify({"status": 400, "error": "COMport is not a serial port"}), 400
         app.data.config.updateSettings("Maslow Settings", result)
         message = {"status": 200}
         resp = jsonify(message)
