@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { fakeFetch, jsonResponse, startupState } from "../test/fakeFetch";
-import { ApiError, getJson, sendJson } from "./http";
+import { ApiError, getJson, requestJson, sendJson } from "./http";
 import { getStartupState } from "./state";
 
 const thing = z.object({ id: z.number() });
@@ -39,6 +39,18 @@ describe("sendJson", () => {
   it("does not fall back to GET routes for other methods", async () => {
     const fetch = fakeFetch({ "/api/things": { id: 1 } });
     await expect(sendJson(fetch, "DELETE", "/things", {}, thing)).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+describe("requestJson", () => {
+  it("keeps the caller's headers alongside its own", async () => {
+    const fetch = fakeFetch({ "PUT /api/things": { id: 2 } });
+    await requestJson(fetch, "/things", thing, { method: "PUT", body: "{}", headers: { "X-Client": "next" } });
+    expect(fetch).toHaveBeenCalledWith("/api/things", {
+      method: "PUT",
+      body: "{}",
+      headers: { Accept: "application/json", "Content-Type": "application/json", "x-client": "next" },
+    });
   });
 });
 

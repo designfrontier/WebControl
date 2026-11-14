@@ -22,7 +22,11 @@ export const requestJson = async <S extends z.ZodType>(
   const method = init.method ?? "GET";
   const response = await fetchImpl(`/api${path}`, {
     ...init,
-    headers: { Accept: "application/json", ...(init.body ? { "Content-Type": "application/json" } : {}) },
+    headers: {
+      Accept: "application/json",
+      ...(init.body ? { "Content-Type": "application/json" } : {}),
+      ...Object.fromEntries(new Headers(init.headers)),
+    },
   });
   if (!response.ok) throw new ApiError(response.status, `${method} /api${path} failed with ${response.status}`);
   const parsed = schema.safeParse(await response.json());
