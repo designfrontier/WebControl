@@ -62,10 +62,22 @@ describe("Trim board", () => {
     expect(trim.calls).toEqual([]);
   });
 
+  it("refuses metric trims that the server's rounding to 0.01 in would make the whole width", async () => {
+    const { user, trim } = setup(recorder(), boardDetails({ units: "mm", width: 609.6, height: 1219.2 }));
+    await screen.findByLabelText("Trim top");
+    await enter(user, "Trim left", "304.7");
+    await enter(user, "Trim right", "304.8");
+    await user.click(screen.getByRole("button", { name: "Trim board" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("must be less than the board's width");
+    expect(trim.calls).toEqual([]);
+  });
+
   it("explains a failed trim", async () => {
     const { user } = setup(recorder(500));
     await user.click(await screen.findByRole("button", { name: "Trim board" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Could not trim the board.");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not trim the board. If you resized it, clear its cut data first.",
+    );
     await expectPath("/boards/trim");
   });
 });

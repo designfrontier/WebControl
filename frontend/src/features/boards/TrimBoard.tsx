@@ -27,12 +27,17 @@ const edgeProblems = (trims: Trims): Partial<Record<keyof Trims, string>> =>
     }),
   );
 
-/** Trims that leave nothing of the board, which would corrupt its cut record. */
+const inInches = (value: number, units: BoardDetails["units"]) => (units === "mm" ? value / 25.4 : value);
+const hundredths = (value: number) => Math.round(value * 100) / 100;
+
+/** Mirrors the server, which rounds each trim to 0.01 in; a board left with no width would corrupt its cut record. */
 const sizeProblem = (trims: Trims, board: BoardDetails) => {
-  const amount = (name: keyof Trims) => parseNumber(trims[name]) ?? 0;
-  return amount("trimLeft") + amount("trimRight") >= board.width
+  const amount = (name: keyof Trims) => hundredths(inInches(parseNumber(trims[name]) ?? 0, board.units));
+  const remains = (size: number, a: keyof Trims, b: keyof Trims) =>
+    hundredths(inInches(size, board.units) - amount(a) - amount(b)) > 0;
+  return !remains(board.width, "trimLeft", "trimRight")
     ? "Left and right trims together must be less than the board's width."
-    : amount("trimTop") + amount("trimBottom") >= board.height
+    : !remains(board.height, "trimTop", "trimBottom")
       ? "Top and bottom trims together must be less than the board's height."
       : null;
 };
@@ -54,7 +59,7 @@ const TrimForm = ({ board }: { board: BoardDetails }) => {
     return run(async () => {
       await trimBoard(fetchImpl, trims, board.units);
       navigate("/boards");
-    }, "Could not trim the board.");
+    }, "Could not trim the board. If you resized it, clear its cut data first.");
   };
 
   return (
