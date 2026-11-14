@@ -156,6 +156,7 @@ def test_an_avrdude_failure_is_alerted_and_clears_the_spinner(data, flash):
     assert any("can't open device" in alert for alert in alerts(data, messages))
     assert spinner_cleared(messages)
     assert data.serialPort.serialPortRequest == ""
+    assert data.connectionStatus == 0
 
 
 def test_a_missing_hex_file_is_alerted_and_clears_the_spinner(data, flash):
@@ -165,6 +166,17 @@ def test_a_missing_hex_file_is_alerted_and_clears_the_spinner(data, flash):
     assert flash.runs == []
     assert any("No firmware file" in alert for alert in alerts(data, messages))
     assert spinner_cleared(messages)
+    assert data.connectionStatus == 1, "the port was never closed, so the connection is left alone"
+    assert data.serialPort.serialPortRequest != "requestToClose"
+
+
+def test_a_port_that_never_closes_is_released_afterwards(data, flash, monkeypatch):
+    monkeypatch.setattr(
+        data.serialPort, "closeConnection", lambda: setattr(data.serialPort, "serialPortRequest", "requestToClose")
+    )
+    data.actions.upgradeFirmware(1)
+    assert data.serialPort.serialPortRequest == ""
+    assert data.connectionStatus == 0
 
 
 def test_a_missing_avrdude_is_alerted_and_clears_the_spinner(data, flash, monkeypatch):
