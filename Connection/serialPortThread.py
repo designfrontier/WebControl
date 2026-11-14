@@ -273,115 +273,132 @@ class SerialPortThread(MakesmithInitFuncs):
             self._requestSettingsUpdate()
             self.data.currentTool = 0  # This is necessary since the controller will have reset tool to zero.
 
-            while True:
+            handedToFirmwareUpgrade = False
+            try:
+                handedToFirmwareUpgrade = self._serviceConnection()
+            finally:
+                if not handedToFirmwareUpgrade:
+                    self.data.connectionStatus = 0
 
-                # Read serial line from machine if available
-                # -------------------------------------------------------------------------------------
-                lineFromMachine = ""
+    def _serviceConnection(self):
+        '''
+        Runs the read/write loop until the connection is lost or closed.
+        :return: True if the port was handed to a firmware upgrade, which then owns connectionStatus.
+        '''
+        while True:
+            # check to see if the serial port needs to be closed (for firmware upgrade)
+            if self.data.serialPort.serialPortRequest == "requestToClose":
+                print("processing request to close")
+                self.closeConnection()
+                return True
 
-                # check to see if the serail port needs to be closed (for firmware upgrade)
-                if self.data.serialPort.serialPortRequest == "requestToClose":
-                    print("processing request to close")
-                    self.closeConnection()
-                    # do not change status just yet...
-                    return
+            try:
+                self._exchangeLines()
+            except Exception as e:
+                self.data.console_queue.put("Serial loop error: " + str(e))
 
+            # Check for serial connection loss
+            # -------------------------------------------------------------------------------------
+            if time.time() - self.lastMessageTime > 5:
+                self.data.console_queue.put("Connection Timed Out")
+                if self.data.uploadFlag > 0:
+                    self.data.ui_queue1.put("Alert", "Connection Lost",
+                                            "Message: USB connection lost. This has likely caused the machine to loose it's calibration, which can cause erratic behavior. It is recommended to stop the program, remove the sled, and perform the chain calibration process. Press Continue to override and proceed with the cut.")
+                else:
+                    self.data.ui_queue1.put("SendAlarm", "Alarm: Connection Failed or Invalid Firmware", "")
+                self.data.connectionStatus = 0
+                self.serialInstance.close()
+                return False
+
+            if self.data.requestSerialClose:
+                # close down the serial port.
+                self.data.requestSerialClose = False
+                self.data.connectionStatus = 0
+                self.serialInstance.close()
+
+            time.sleep(0.01)
+
+    def _exchangeLines(self):
+        '''
+        Reads one line from the controller if available, then writes whatever the controller has room for.
+        '''
+        lineFromMachine = ""
+
+        try:
+            if self.serialInstance.in_waiting > 0:
+                # the need for the .decode() at the end MIGHT be a python3 thing.  ground control doesn't have
+                # it.
+                lineFromMachine = self.serialInstance.readline().decode()
+                self.lastMessageTime = time.time()
+                self.data.message_queue.put(lineFromMachine)
+        except:
+            pass
+
+        # Check if a line has been completed
+        if lineFromMachine == "ok\r\n" or (len(lineFromMachine) >= 6 and lineFromMachine[0:6] == "error:"):
+            self.machineIsReadyForData = True
+            if bool(self.lengthOfLastLineStack) is True:  # if we've sent lines to the machine
+                # free up that space in the buffer
+                self.bufferSpace = (self.bufferSpace + self.lengthOfLastLineStack.pop())
+
+
+        # Write to the machine if ready
+        # -------------------------------------------------------------------------------------
+
+        # send any emergency instructions to the machine if there are any
+        if self.data.quick_queue.empty() != True:
+            command = self.data.quick_queue.get_nowait()
+            self._write(command, True)
+
+        # send regular instructions to the machine if there are any
+        #print("bSpace="+str(self.bufferSpace)+", bSize="+str(self.bufferSize)+", ready="+str(self.machineIsReadyForData))
+        if self.bufferSpace == self.bufferSize:
+            if self.data.gcode_queue.empty() != True:
+                if self.machineIsReadyForData:
+                    command = self.data.gcode_queue.get_nowait()# + " "
+                    # filter out comments
+                    # replace mach3 style gcode comments with newline
+                    filtersparsed = re.sub(r'\(([^)]*)\)', '', command)
+                    # replace standard ; initiated gcode comments with ''
+                    command = re.sub(r';([^\n]*)?', '', filtersparsed)
+                    # if there's something left..
+                    if len(command) != 0:
+                        command = command + " "
+                        self.manageToolChange(command)
+                        self._write(command)
+                        # if units have changed, update settings and notify UI clients to stay in sync
+                        if command.find("G20") != -1:
+                            if self.data.units != "INCHES":
+                                self.data.actions.updateSetting("toInches", 0, True)  # value = doesn't matter
+                        if command.find("G21") != -1:
+                            if self.data.units != "MM":
+                                self.data.actions.updateSetting("toMM", 0, True)  # value = doesn't matter
+                        # send updated gcode position to UI clients
+                        self.data.actions.sendGCodePositionUpdate(self.data.gcodeIndex, recalculate=True)
+        # Send the next line of gcode to the machine if we're running a program and uploadFlag is enabled. Will
+        # send lines to buffer if there is space and the feature is turned on
+        # Also, don't send if there's still data in gcode_queue.
+        if self.data.uploadFlag == 1 and len(self.data.gcode) > 0 and self.data.gcode_queue.empty():
+            if self.weAreBufferingLines:
                 try:
-                    if self.serialInstance.in_waiting > 0:
-                        # the need for the .decode() at the end MIGHT be a python3 thing.  ground control doesn't have
-                        # it.
-                        lineFromMachine = self.serialInstance.readline().decode()
-                        self.lastMessageTime = time.time()
-                        self.data.message_queue.put(lineFromMachine)
-                except:
-                    pass
-
-                # Check if a line has been completed
-                if lineFromMachine == "ok\r\n" or (len(lineFromMachine) >= 6 and lineFromMachine[0:6] == "error:"):
-                    self.machineIsReadyForData = True
-                    if bool(self.lengthOfLastLineStack) is True:  # if we've sent lines to the machine
-                        # free up that space in the buffer
-                        self.bufferSpace = (self.bufferSpace + self.lengthOfLastLineStack.pop())
-
-
-                # Write to the machine if ready
-                # -------------------------------------------------------------------------------------
-
-                # send any emergency instructions to the machine if there are any
-                if self.data.quick_queue.empty() != True:
-                    command = self.data.quick_queue.get_nowait()
-                    self._write(command, True)
-
-                # send regular instructions to the machine if there are any
-                #print("bSpace="+str(self.bufferSpace)+", bSize="+str(self.bufferSize)+", ready="+str(self.machineIsReadyForData))
-                if self.bufferSpace == self.bufferSize:
-                    if self.data.gcode_queue.empty() != True:
-                        if self.machineIsReadyForData:
-                            command = self.data.gcode_queue.get_nowait()# + " "
-                            # filter out comments
-                            # replace mach3 style gcode comments with newline
-                            filtersparsed = re.sub(r'\(([^)]*)\)', '', command)
-                            # replace standard ; initiated gcode comments with ''
-                            command = re.sub(r';([^\n]*)?', '', filtersparsed)
-                            # if there's something left..
-                            if len(command) != 0:
-                                command = command + " "
-                                self.manageToolChange(command)
-                                self._write(command)
-                                # if units have changed, update settings and notify UI clients to stay in sync
-                                if command.find("G20") != -1:
-                                    if self.data.units != "INCHES":
-                                        self.data.actions.updateSetting("toInches", 0, True)  # value = doesn't matter
-                                if command.find("G21") != -1:
-                                    if self.data.units != "MM":
-                                        self.data.actions.updateSetting("toMM", 0, True)  # value = doesn't matter
-                                # send updated gcode position to UI clients
-                                self.data.actions.sendGCodePositionUpdate(self.data.gcodeIndex, recalculate=True)
-                # Send the next line of gcode to the machine if we're running a program and uploadFlag is enabled. Will
-                # send lines to buffer if there is space and the feature is turned on
-                # Also, don't send if there's still data in gcode_queue.
-                if self.data.uploadFlag == 1 and len(self.data.gcode) > 0 and self.data.gcode_queue.empty():
-                    if self.weAreBufferingLines:
-                        try:
-                            # todo: clean this up because the line gets filtered twice.. once to make sure its not too
-                            # long, and the second in the sendNextLine command.. bit redundant.
-                            line = self.data.gcode[self.data.gcodeIndex]
-                            # replace mach3 style gcode comments with newline
-                            filtersparsed = re.sub(r'\(([^)]*)\)', '', line)
-                            # replace standard ; initiated gcode comments with newline
-                            line = re.sub(r';([^\n]*)?', '', filtersparsed)
-                            # if there is space in the buffer send line
-                            if self.bufferSpace > len(line):
-                                self.sendNextLine()
-                        except IndexError:
-                            self.data.console_queue.put("index error when reading gcode")
-                            # we don't want the whole serial thread to close if the gcode can't be sent because of an
-                            # index error (file deleted...etc)
-                    else:
-                        if (self.bufferSpace == self.bufferSize and self.machineIsReadyForData ):
-                            # if the receive buffer is empty and the machine has acked the last line complete...
-                            self.sendNextLine()
-
-                # Check for serial connection loss
-                # -------------------------------------------------------------------------------------
-                if time.time() - self.lastMessageTime > 5:
-                    self.data.console_queue.put("Connection Timed Out")
-                    if self.data.uploadFlag > 0:
-                        self.data.ui_queue1.put("Alert", "Connection Lost",
-                                                "Message: USB connection lost. This has likely caused the machine to loose it's calibration, which can cause erratic behavior. It is recommended to stop the program, remove the sled, and perform the chain calibration process. Press Continue to override and proceed with the cut.")
-                    else:
-                        self.data.ui_queue1.put("SendAlarm", "Alarm: Connection Failed or Invalid Firmware", "")
-                    self.data.connectionStatus = 0
-                    self.serialInstance.close()
-                    return
-
-                if self.data.requestSerialClose:
-                    # close down the serial port.
-                    self.data.requestSerialClose = False
-                    self.data.connectionStatus = 0
-                    self.serialInstance.close()
-
-                time.sleep(0.01)
+                    # todo: clean this up because the line gets filtered twice.. once to make sure its not too
+                    # long, and the second in the sendNextLine command.. bit redundant.
+                    line = self.data.gcode[self.data.gcodeIndex]
+                    # replace mach3 style gcode comments with newline
+                    filtersparsed = re.sub(r'\(([^)]*)\)', '', line)
+                    # replace standard ; initiated gcode comments with newline
+                    line = re.sub(r';([^\n]*)?', '', filtersparsed)
+                    # if there is space in the buffer send line
+                    if self.bufferSpace > len(line):
+                        self.sendNextLine()
+                except IndexError:
+                    self.data.console_queue.put("index error when reading gcode")
+                    # we don't want the whole serial thread to close if the gcode can't be sent because of an
+                    # index error (file deleted...etc)
+            else:
+                if (self.bufferSpace == self.bufferSize and self.machineIsReadyForData ):
+                    # if the receive buffer is empty and the machine has acked the last line complete...
+                    self.sendNextLine()
 
     def extractGcodeValue(self, readString, target, defaultReturn):
         # Reads a string and returns the value of number following the target character.
