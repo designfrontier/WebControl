@@ -8,8 +8,8 @@ const status = () => within(screen.getByRole("list", { name: "Status" }));
 describe("StatusBar", () => {
   it("shows connecting before the socket connects", () => {
     renderApp("/", { connect: false });
-    expect(status().getByText("Server: connecting…")).toBeInTheDocument();
-    expect(status().getByText("Controller: unknown")).toBeInTheDocument();
+    expect(status().getByText("Server: connecting…")).not.toHaveAttribute("data-tone");
+    expect(status().getByText("Controller: unknown")).not.toHaveAttribute("data-tone");
   });
 
   it("shows the host address from /api/state once connected", async () => {
@@ -26,16 +26,16 @@ describe("StatusBar", () => {
   it("shows not connected after the socket drops", () => {
     const { socket } = renderApp("/");
     socket.serverDisconnect();
-    expect(status().getByText("Server: not connected")).toBeInTheDocument();
+    expect(status().getByText("Server: not connected")).toHaveAttribute("data-tone", "bad");
   });
 
   it("follows the controller connection", () => {
     const { socket } = renderApp("/");
     socket.serverMessage("connectionStatus", { status: "disconnected", port: "none", fakeServoStatus: false });
-    expect(status().getByText("Controller: not connected")).toBeInTheDocument();
+    expect(status().getByText("Controller: not connected")).toHaveAttribute("data-tone", "bad");
 
     socket.serverMessage("connectionStatus", { status: "connected", port: "COM3", fakeServoStatus: false });
-    expect(status().getByText("Controller: COM3")).toBeInTheDocument();
+    expect(status().getByText("Controller: COM3")).toHaveAttribute("data-tone", "ok");
 
     socket.serverMessage("connectionStatus", { status: "connected", port: "COM3", fakeServoStatus: true });
     expect(status().getByText("Controller: COM3 / fake servo on")).toBeInTheDocument();

@@ -15,6 +15,9 @@ const controllerText = ({ status, port, fakeServo }: MachineState["controller"])
       ? "Controller: not connected"
       : "Controller: unknown";
 
+const toneFor = (status: MachineState["controller"]["status"]) =>
+  status === "connected" ? "ok" : status === "disconnected" ? "bad" : undefined;
+
 export const StatusBar = () => {
   const socket = useMachine((s) => s.socket);
   const hostAddress = useMachine((s) => s.hostAddress);
@@ -23,10 +26,10 @@ export const StatusBar = () => {
 
   return (
     <ul className="status-bar" aria-label="Status">
-      <li className="chip" data-tone={socket === "connected" ? "ok" : "bad"}>
+      <li className="chip" data-tone={socket === "connected" ? "ok" : socket === "connecting" ? undefined : "bad"}>
         {serverText({ socket, hostAddress })}
       </li>
-      <li className="chip" data-tone={controller.status === "connected" ? "ok" : "bad"}>
+      <li className="chip" data-tone={toneFor(controller.status)}>
         {controllerText(controller)}
       </li>
       {health && <li className="chip">CPU {Math.round(health.cpuUsage)}%</li>}
