@@ -29,7 +29,7 @@ from flask_mobility.decorators import mobile_template
 
 from Background.UIProcessor import UIProcessor  # do this after socketio is declared
 from Background.LogStreamer import LogStreamer  # do this after socketio is declared
-from DataStructures.data import Data
+from DataStructures.data import GCODE_LOCKED_MESSAGE, Data
 from Connection.nonVisibleWidgets import NonVisibleWidgets
 from WebPageProcessor.webPageProcessor import WebPageProcessor
 from File.safePaths import UnsafePathError, libraryRoot, resolveInside
@@ -258,11 +258,8 @@ def handleUnsafePath(error):
     return jsonify({"status": 400, "error": "Path is outside the library"}), 400
 
 
-GCODE_LOCKED_MESSAGE = "Cannot load gcode while a job is running or paused. Stop the job first."
-
-
 def gcodeLockedResponse():
-    if app.data.uploadFlag == 0 and not app.data.manualZAxisAdjust:
+    if not app.data.gcodeLocked():
         return None
     resp = jsonify({"status": 409, "error": GCODE_LOCKED_MESSAGE})
     # The classic UI alerts the reason phrase (jQuery's errorThrown), so it carries the message too.
