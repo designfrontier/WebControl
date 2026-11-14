@@ -89,7 +89,7 @@ export const ActionsPanel = ({ info }: { info: SystemInfo | null }) => {
                 <Link className="button-link" to="/system/pid">
                   PID tuning (advanced)
                 </Link>
-                <button type="button" onClick={() => setOpen({ kind: "fakeServo" })}>
+                <button type="button" disabled={busy} onClick={() => setOpen({ kind: "fakeServo" })}>
                   Fake servo (advanced)…
                 </button>
               </>

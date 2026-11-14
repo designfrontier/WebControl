@@ -9,7 +9,14 @@ import { errorText, useLoad } from "./useLoad";
 
 type Release = Releases["releases"][number];
 
-const ReleaseItem = ({ release, releases, onPick }: { release: Release; releases: Releases; onPick: () => void }) => {
+interface ItemProps {
+  release: Release;
+  releases: Releases;
+  busy: boolean;
+  onPick: () => void;
+}
+
+const ReleaseItem = ({ release, releases, busy, onPick }: ItemProps) => {
   const current = release.tag === releases.current;
   const latest = release.tag === releases.latest;
   return (
@@ -23,7 +30,7 @@ const ReleaseItem = ({ release, releases, onPick }: { release: Release; releases
           </span>
         )}
         {!current && (
-          <button type="button" className={latest ? "button-primary" : undefined} onClick={onPick}>
+          <button type="button" className={latest ? "button-primary" : undefined} disabled={busy} onClick={onPick}>
             Install {release.tag}
           </button>
         )}
@@ -38,6 +45,7 @@ export const ReleasesPanel = ({ updateAvailable }: { updateAvailable: boolean })
   const client = useClient();
   const runState = useMachine(selectRunState);
   const releases = useLoad(getReleases);
+  const busy = runState === "running" || runState === "paused";
   const [picked, setPicked] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
 
@@ -58,6 +66,11 @@ export const ReleasesPanel = ({ updateAvailable }: { updateAvailable: boolean })
       <p className="system-status" role="status">
         {notice}
       </p>
+      {busy && (
+        <p className="system-note">
+          A job is {runState}. Installing stays disabled until it is stopped, as the server would refuse.
+        </p>
+      )}
       {releases.status === "loading" && <p role="status">Loading releases…</p>}
       {releases.status === "error" && (
         <div className="system-error" role="alert">
@@ -81,6 +94,7 @@ export const ReleasesPanel = ({ updateAvailable }: { updateAvailable: boolean })
                   key={release.tag}
                   release={release}
                   releases={releases.data}
+                  busy={busy}
                   onPick={() => setPicked(release.tag)}
                 />
               ))}
@@ -99,7 +113,7 @@ export const ReleasesPanel = ({ updateAvailable }: { updateAvailable: boolean })
             WebControl downloads {picked}, installs it and restarts. Every connected browser loses its connection
             meanwhile.
           </p>
-          {runState !== "idle" && runState !== "unknown" && (
+          {busy && (
             <p className="system-error">A job is {runState}; the server will refuse to update until it is stopped.</p>
           )}
         </ConfirmDialog>

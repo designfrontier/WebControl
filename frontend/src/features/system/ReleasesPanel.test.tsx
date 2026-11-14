@@ -2,7 +2,7 @@ import { screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { jsonResponse } from "../../test/fakeFetch";
 import { renderApp } from "../../test/render";
-import { releases, systemFetch } from "./systemFixtures";
+import { releases, systemFetch } from "../../test/systemFixtures";
 
 const release = (name: string) => within(screen.getByRole("heading", { name, level: 3 }).closest("li")!);
 
@@ -35,13 +35,23 @@ describe("ReleasesPanel", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("warns in the dialog while a job runs, and cancels cleanly", async () => {
-    const { user, socket } = renderReleases(
-      {},
-      { machine: { status: { uploadFlag: 1, positioningMode: 0, currentTool: 0 } } },
-    );
+  it.each([
+    [1, "running"],
+    [2, "paused"],
+  ])("disables installing while a job is %s, as the server would refuse", async (uploadFlag, state) => {
+    renderReleases({}, { machine: { status: { uploadFlag, positioningMode: 0, currentTool: 0 } } });
+    expect(await screen.findByRole("button", { name: "Install v0.94" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Install v0.96" })).toBeDisabled();
+    expect(
+      screen.getByText(`A job is ${state}. Installing stays disabled until it is stopped, as the server would refuse.`),
+    ).toBeInTheDocument();
+  });
+
+  it("warns in an open dialog when a job starts, and cancels cleanly", async () => {
+    const { user, socket } = renderReleases();
     await user.click(await screen.findByRole("button", { name: "Install v0.94" }));
-    expect(screen.getByRole("dialog")).toHaveTextContent("A job is running; the server will refuse to update");
+    socket.serverMessage("statusMessage", { uploadFlag: 1, positioningMode: 0, currentTool: 0 });
+    expect(await screen.findByRole("dialog")).toHaveTextContent("A job is running; the server will refuse to update");
     await user.click(screen.getByRole("button", { name: "Cancel" }));
     expect(socket.actions()).toEqual([]);
   });

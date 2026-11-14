@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMachine } from "../../app/context";
+import { selectRunState } from "../../state/machine";
 import { Dialog } from "./Dialog";
 
 /** The classic UI's deliberate speed bump for enabling fake servo. */
@@ -12,6 +13,8 @@ interface Props {
 
 export const FakeServoDialog = ({ onClose, onSet }: Props) => {
   const fakeServo = useMachine((s) => s.controller.fakeServo);
+  const runState = useMachine(selectRunState);
+  const busy = runState === "running" || runState === "paused";
   const [code, setCode] = useState("");
 
   return (
@@ -23,13 +26,13 @@ export const FakeServoDialog = ({ onClose, onSet }: Props) => {
           <button type="button" onClick={onClose}>
             Cancel
           </button>
-          <button type="button" onClick={() => onSet(false)}>
+          <button type="button" disabled={busy} onClick={() => onSet(false)}>
             Disable fake servo
           </button>
           <button
             type="button"
             className="button-danger"
-            disabled={code.trim() !== FAKE_SERVO_CODE}
+            disabled={busy || code.trim() !== FAKE_SERVO_CODE}
             onClick={() => onSet(true)}
           >
             Enable fake servo
@@ -38,6 +41,9 @@ export const FakeServoDialog = ({ onClose, onSet }: Props) => {
       }
     >
       <p>Fake servo is {fakeServo ? "on" : "off"}.</p>
+      {busy && (
+        <p className="system-note">A job is {runState}; the server refuses fake servo changes until it is stopped.</p>
+      )}
       <p>If fake servo is reported as enabled and you did not mean it to be, disable it.</p>
       <label className="field">
         Secret code to enable
