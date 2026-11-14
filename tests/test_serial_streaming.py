@@ -242,3 +242,18 @@ def test_the_z_target_follows_absolute_moves(data, serial):
     send_lines(data, serial, ["G0 Z5 ", "G1 X1 Y1 ", "G0 Z-0.5 "])
 
     assert data.currentZTarget == -0.5
+
+
+def test_a_failure_after_writing_a_line_does_not_send_it_again(data, serial, monkeypatch):
+    def broken_update(*args, **kwargs):
+        raise RuntimeError("ui update failed")
+
+    monkeypatch.setattr(data.actions, "sendGCodePositionUpdate", broken_update)
+    data.gcode = ["G1 X1 ", "G1 X2 ", "G1 X3 "]
+    data.uploadFlag = 1
+    skip_startup_commands = once_after(serial.clock, 0, lambda port: drain(data.gcode_queue))
+
+    port = serial.run(on_poll=skip_startup_commands)
+
+    assert port.sent == ["G1 X1.0  ", "G1 X2.0  ", "G1 X3.0  "]
+    assert data.uploadFlag == 0

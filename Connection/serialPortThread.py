@@ -153,20 +153,11 @@ class SerialPortThread(MakesmithInitFuncs):
                 positioningMode = self._positioningModeOf(line)
                 line = self._shiftToHome(line)
                 self._write(line)
-                # if there is a units change, then update the UI client so position messages are processed correctly.
-                if line.find("G20") != -1:
-                    if self.data.units != "INCHES":
-                        self.data.actions.updateSetting("toInches", 0, True)  # value = doesn't matter
-                if line.find("G21") != -1:
-                    if self.data.units != "MM":
-                        self.data.actions.updateSetting("toMM", 0, True)  # value = doesn't matter
-                # send a gcode update to UI client.
-                self.data.actions.sendGCodePositionUpdate(self.data.gcodeIndex)
-                # track current target Z-Axis position
-                z = re.search("Z(?=.)(([ ]*)?[+-]?([0-9]*)(\.([0-9]+))?)", line)
-                if z:
-                    zWord = float(z.groups()[0])
-                    self.data.currentZTarget = zWord if positioningMode == 0 else self.data.currentZTarget + zWord
+                try:
+                    self._afterLineSent(line, positioningMode)
+                except Exception as e:
+                    # The line is already written, so the index must still advance or the line goes out again.
+                    self.data.console_queue.put("Error after sending gcode line: " + str(e))
 
             # increment gcode index
             if self.data.gcodeIndex + 1 < len(self.data.gcode):
@@ -175,6 +166,22 @@ class SerialPortThread(MakesmithInitFuncs):
                 self.data.uploadFlag = 0
                 self.data.gcodeIndex = 0
                 self.data.console_queue.put("Gcode Ended")
+
+    def _afterLineSent(self, line, positioningMode):
+        # track current target Z-Axis position
+        z = re.search("Z(?=.)(([ ]*)?[+-]?([0-9]*)(\.([0-9]+))?)", line)
+        if z:
+            zWord = float(z.groups()[0])
+            self.data.currentZTarget = zWord if positioningMode == 0 else self.data.currentZTarget + zWord
+        # if there is a units change, then update the UI client so position messages are processed correctly.
+        if line.find("G20") != -1:
+            if self.data.units != "INCHES":
+                self.data.actions.updateSetting("toInches", 0, True)  # value = doesn't matter
+        if line.find("G21") != -1:
+            if self.data.units != "MM":
+                self.data.actions.updateSetting("toMM", 0, True)  # value = doesn't matter
+        # send a gcode update to UI client.
+        self.data.actions.sendGCodePositionUpdate(self.data.gcodeIndex)
 
     def managePause(self, line):
         if line.find("M0 ") != -1 or line.find("M00") != -1 or line.find("M1 ") != -1 or line.find("M01") != -1:
