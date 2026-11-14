@@ -1,15 +1,21 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { jsonResponse } from "../../test/fakeFetch";
+import { topLayer } from "../../test/dialogPolyfill";
 import { renderApp } from "../../test/render";
 import { systemFetch, systemInfo } from "../../test/systemFixtures";
 
 const group = (name: string) => within(screen.getByRole("region", { name }));
-const dialog = () => screen.getByRole("dialog");
+/** The dialog on top: a confirm or form opened from the Actions modal. */
+const dialog = () => topLayer().at(-1) as HTMLElement;
+const onlyActionsOpen = () =>
+  expect(
+    topLayer().map((open) => open.getAttribute("aria-labelledby") && open.querySelector("h2")?.textContent),
+  ).toEqual(["Actions"]);
 const notice = () => group("Actions").getByRole("status");
 
 const renderActions = (options: Parameters<typeof renderApp>[1] = {}) =>
-  renderApp("/system", { fetch: systemFetch(), ...options });
+  renderApp("/actions", { fetch: systemFetch(), ...options });
 
 describe("ActionsPanel", () => {
   it("lists the classic action menu, firmware versions included once info loads", async () => {
@@ -50,7 +56,7 @@ describe("ActionsPanel", () => {
 
     await user.click(within(dialog()).getByRole("button", { name: "Wipe controller EEPROM" }));
     expect(socket.actions()).toEqual([["wipeEEPROM", "All", ""]]);
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    onlyActionsOpen();
   });
 
   it.each([
@@ -70,50 +76,27 @@ describe("ActionsPanel", () => {
     const trigger = screen.getByRole("button", { name: "Upgrade stock firmware" });
     await user.click(trigger);
     await user.keyboard("{Escape}");
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    onlyActionsOpen();
     expect(trigger).toHaveFocus();
 
     await user.click(screen.getByRole("button", { name: "Clear log files" }));
-    await user.click(document.querySelector(".dialog-backdrop")!);
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await user.click(within(dialog()).getByRole("button", { name: "Cancel" }));
+    onlyActionsOpen();
 
     await user.click(screen.getByRole("button", { name: "Return to center" }));
     expect(socket.actions()).toEqual([["returnToCenter", "", ""]]);
   });
 
-  it("keeps Tab inside the dialog and makes the page behind it inert", async () => {
+  it("stacks the confirm over the Actions modal and gives focus back on Escape", async () => {
     const { user } = renderActions();
     const trigger = screen.getByRole("button", { name: "Wipe controller EEPROM" });
     await user.click(trigger);
-    const cancel = within(dialog()).getByRole("button", { name: "Cancel" });
-    const wipe = within(dialog()).getByRole("button", { name: "Wipe controller EEPROM" });
-    expect(trigger.closest("[inert]")).not.toBeNull();
-    expect(screen.getByRole("navigation", { name: "Primary", hidden: true }).closest("[inert]")).not.toBeNull();
-    expect(dialog().closest("[inert]")).toBeNull();
-
-    await user.tab();
-    expect(wipe).toHaveFocus();
-    await user.tab();
-    expect(cancel).toHaveFocus();
-    await user.tab({ shift: true });
-    expect(wipe).toHaveFocus();
+    expect(topLayer()).toHaveLength(2);
+    expect(dialog()).toHaveAccessibleName("Wipe controller EEPROM?");
 
     await user.keyboard("{Escape}");
-    expect(document.querySelector("[inert]")).toBeNull();
+    onlyActionsOpen();
     expect(trigger).toHaveFocus();
-  });
-
-  it("closes on Escape and pulls Tab back in after focus leaves the dialog", async () => {
-    const { user } = renderActions();
-    await user.click(screen.getByRole("button", { name: "Clear log files" }));
-    await user.click(within(dialog()).getByText(/./, { selector: ".dialog-body p" }));
-    expect(document.body).toHaveFocus();
-    await user.tab();
-    expect(within(dialog()).getByRole("button", { name: "Cancel" })).toHaveFocus();
-
-    await user.click(within(dialog()).getByRole("heading"));
-    await user.keyboard("{Escape}");
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("disables actions the server would refuse while a job runs", () => {
@@ -143,11 +126,17 @@ describe("ActionsPanel", () => {
     expect(screen.getByRole("link", { name: "Back up WebControl" })).toHaveAttribute("target", "_blank");
   });
 
-  it("links to PID tuning and the sections that own calibration", async () => {
+  it("links to PID tuning, machine setup and the calibration pages", async () => {
     const { user } = renderActions();
-    expect(group("Positioning").getByRole("link", { name: "Calibration" })).toHaveAttribute("href", "/calibration");
+    const setup = group("Calibration and setup");
+    expect(setup.getByRole("link", { name: "Holey calibration" })).toHaveAttribute("href", "/calibration/holey");
+    expect(setup.getByRole("link", { name: "Reset chains" })).toHaveAttribute("href", "/machine/reset-chains");
+    expect(setup.getByRole("link", { name: "Import groundcontrol.ini file" })).toHaveAttribute(
+      "href",
+      "/files/import/groundcontrol",
+    );
     await user.click(screen.getByRole("link", { name: "PID tuning (advanced)" }));
-    expect(screen.getByRole("heading", { name: "PID tuning", level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "PID Tuning" })).toBeInTheDocument();
   });
 });
 
@@ -164,7 +153,7 @@ describe("Restore dialog", () => {
     await user.upload(within(dialog()).getByLabelText("Backup file"), zip);
     await user.click(restore);
 
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => onlyActionsOpen());
     expect(notice()).toHaveTextContent("Backup restored.");
     expect(fetch).toHaveBeenCalledWith("/importRestoreWebControl", expect.objectContaining({ method: "POST" }));
   });
@@ -179,7 +168,7 @@ describe("Restore dialog", () => {
     expect(await within(dialog()).findByRole("alert")).toHaveTextContent("Restore failed with 500");
     expect(within(dialog()).getByRole("button", { name: "Restore backup" })).toBeEnabled();
     await user.click(within(dialog()).getByRole("button", { name: "Cancel" }));
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    onlyActionsOpen();
   });
 
   it("does nothing without a file", async () => {
@@ -235,6 +224,6 @@ describe("Fake servo dialog", () => {
     const { user } = renderActions();
     await user.click(screen.getByRole("button", { name: "Fake servo (advanced)…" }));
     await user.click(within(dialog()).getByRole("button", { name: "Cancel" }));
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    onlyActionsOpen();
   });
 });

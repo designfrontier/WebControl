@@ -7,7 +7,7 @@ import { releases, systemFetch } from "../../test/systemFixtures";
 const release = (name: string) => within(screen.getByRole("heading", { name, level: 3 }).closest("li")!);
 
 const renderReleases = (routes = {}, options: Parameters<typeof renderApp>[1] = {}) =>
-  renderApp("/system/updates", { fetch: systemFetch(routes), ...options });
+  renderApp("/updates", { fetch: systemFetch(routes), ...options });
 
 describe("ReleasesPanel", () => {
   it("lists releases, marking the installed and latest ones", async () => {
@@ -32,7 +32,7 @@ describe("ReleasesPanel", () => {
     await user.click(dialog.getByRole("button", { name: "Install v0.96" }));
     expect(socket.actions()).toEqual([["update", "v0.96", ""]]);
     expect(screen.getByText(/Installing v0\.96/)).toBeInTheDocument();
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Install v0.96?" })).not.toBeInTheDocument();
   });
 
   it.each([
@@ -51,7 +51,9 @@ describe("ReleasesPanel", () => {
     const { user, socket } = renderReleases();
     await user.click(await screen.findByRole("button", { name: "Install v0.94" }));
     socket.serverMessage("statusMessage", { uploadFlag: 1, positioningMode: 0, currentTool: 0 });
-    expect(await screen.findByRole("dialog")).toHaveTextContent("A job is running; the server will refuse to update");
+    expect(await screen.findByRole("dialog", { name: /^Install/ })).toHaveTextContent(
+      "A job is running; the server will refuse to update",
+    );
     await user.click(screen.getByRole("button", { name: "Cancel" }));
     expect(socket.actions()).toEqual([]);
   });

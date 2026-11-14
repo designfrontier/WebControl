@@ -3,8 +3,7 @@ import type { SystemInfo } from "../../protocol";
 const REPO = "https://github.com/WebControlCNC/WebControl/";
 
 export const AboutPanel = ({ info }: { info: SystemInfo | null }) => (
-  <section aria-labelledby="about-title" className="system-panel about">
-    <h2 id="about-title">About WebControl</h2>
+  <section aria-label="About WebControl" className="system-panel about">
     <dl className="facts">
       <dt>Version</dt>
       <dd>{info ? `v${info.version}` : "…"}</dd>

@@ -25,7 +25,7 @@ const FIRST_STEPS = helpPage(
 const article = () => within(document.querySelector("article")!);
 const index = () => within(screen.getByRole("navigation", { name: "Help pages" }));
 
-const renderHelp = (route = "/system/help", routes = {}) =>
+const renderHelp = (route = "/help", routes = {}) =>
   renderApp(route, {
     fetch: systemFetch({ "/api/system/help?path=GettingStarted%2FfirstSteps.md": FIRST_STEPS, ...routes }),
   });
@@ -36,9 +36,9 @@ describe("HelpPanel", () => {
     expect(await article().findByRole("heading", { name: "WebControl" })).toBeInTheDocument();
     expect(index().getByRole("link", { name: "First Steps" })).toHaveAttribute(
       "href",
-      "/system/help/GettingStarted/firstSteps.md",
+      "/help/GettingStarted/firstSteps.md",
     );
-    expect(index().getByRole("link", { name: "Home" })).toHaveAttribute("href", "/system/help");
+    expect(index().getByRole("link", { name: "Home" })).toHaveAttribute("href", "/help");
   });
 
   it("scrolls to the page only after a link is followed, home included", async () => {
@@ -61,12 +61,12 @@ describe("HelpPanel", () => {
   it("follows doc links client-side and renders tables, images and external links", async () => {
     const { user } = renderHelp();
     await user.click(await index().findByRole("link", { name: "First Steps" }));
-    expect(currentPath()).toBe("/system/help/GettingStarted/firstSteps.md");
+    expect(currentPath()).toBe("/help/GettingStarted/firstSteps.md");
 
     expect(await article().findByRole("heading", { name: "First Steps" })).toBeInTheDocument();
     expect(article().getByRole("link", { name: "triangular calibration" })).toHaveAttribute(
       "href",
-      "/system/help/Actions/Calibration-Setup/triangularCalibration.md",
+      "/help/Actions/Calibration-Setup/triangularCalibration.md",
     );
     expect(article().getByRole("link", { name: "Maslow" })).toHaveAttribute("target", "_blank");
     expect(article().getByRole("link", { name: "Download" })).toHaveAttribute("href", "files/x.zip");
@@ -79,7 +79,7 @@ describe("HelpPanel", () => {
   });
 
   it("keeps absolute image URLs as they are", async () => {
-    renderHelp("/system/help/GettingStarted/firstSteps.md", {
+    renderHelp("/help/GettingStarted/firstSteps.md", {
       "/api/system/help?path=GettingStarted%2FfirstSteps.md": helpPage("x", "![Logo](https://example.com/l.png)"),
     });
     expect(await article().findByRole("img", { name: "Logo" })).toHaveAttribute("src", "https://example.com/l.png");
@@ -88,7 +88,7 @@ describe("HelpPanel", () => {
   it("reports a missing page and retries", async () => {
     let missing = true;
     const respond = () => (missing ? jsonResponse({ error: "nope" }, 404) : jsonResponse(helpPage("x", "# Found")));
-    const { user } = renderHelp("/system/help/Gone.md", { "/api/system/help?path=Gone.md": respond });
+    const { user } = renderHelp("/help/Gone.md", { "/api/system/help?path=Gone.md": respond });
     expect(await article().findByRole("alert")).toHaveTextContent("Could not load Gone.md");
     missing = false;
     await user.click(article().getByRole("button", { name: "Retry" }));
@@ -96,7 +96,7 @@ describe("HelpPanel", () => {
   });
 
   it("says so when the index cannot load", async () => {
-    renderHelp("/system/help", { "/api/system/help?path=assets%2FhelpPages.md": () => jsonResponse({}, 500) });
+    renderHelp("/help", { "/api/system/help?path=assets%2FhelpPages.md": () => jsonResponse({}, 500) });
     expect(await index().findByText("The help index is unavailable.")).toBeInTheDocument();
   });
 });

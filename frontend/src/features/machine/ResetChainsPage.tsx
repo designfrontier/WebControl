@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router";
+import { useCloseModal } from "../../app/modalHistory";
 import { useClient } from "../../app/context";
 import { LoadStatus } from "./LoadStatus";
 import { Screen } from "./Screen";
@@ -7,7 +7,7 @@ import { useMachineSetup } from "./useLoad";
 
 export const ResetChainsPage = () => {
   const client = useClient();
-  const navigate = useNavigate();
+  const close = useCloseModal();
   const [setup, retry] = useMachineSetup();
   const ready = setup.status === "ready" ? setup.data : null;
 
@@ -31,7 +31,7 @@ export const ResetChainsPage = () => {
         className="primary wide"
         onClick={() => {
           client.sendAction("setSprocketsDefault");
-          navigate("/machine");
+          close();
         }}
       >
         I have reset both chains with the marked link on the vertical tooth

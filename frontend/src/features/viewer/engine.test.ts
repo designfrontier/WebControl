@@ -4,7 +4,7 @@ import type * as ThreeModule from "three";
 import type * as OrbitModule from "three/addons/controls/OrbitControls.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createViewerEngine } from "./engine";
-import { DEFAULT_MACHINE } from "./shapes";
+import { DEFAULT_MACHINE, bedViewFrame } from "./shapes";
 
 const renderer = vi.hoisted(() => ({
   instances: [] as {
@@ -96,7 +96,7 @@ describe("createViewerEngine", () => {
 
   it("frames the whole bed in an orthographic top view", async () => {
     const { engine, flush, lastCamera } = setup();
-    engine.fit(DEFAULT_MACHINE);
+    engine.fit(bedViewFrame(DEFAULT_MACHINE));
     await flush();
     const camera = lastCamera() as OrthographicCamera;
     expect(camera).toBeInstanceOf(OrthographicCamera);

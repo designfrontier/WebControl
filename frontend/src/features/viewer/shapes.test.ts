@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_MACHINE,
   bedFrame,
+  bedViewFrame,
   chainSegments,
   circleSegments,
   crosshair,
@@ -13,6 +14,7 @@ import {
   machineFromSnapshot,
   motorPositions,
   polylineSegments,
+  viewFrame,
 } from "./shapes";
 import type { Segments } from "./shapes";
 
@@ -177,15 +179,26 @@ describe("cutCellTriangles", () => {
 
 describe("camera fitting", () => {
   it("fits the bed width on tall screens and the height on wide ones", () => {
-    const narrow = fitOrthographic(DEFAULT_MACHINE, 1);
+    const bed = bedViewFrame(DEFAULT_MACHINE);
+    const narrow = fitOrthographic(bed, 1);
     expect(narrow.halfWidth).toBeCloseTo(48 * 1.08);
     expect(narrow.halfHeight).toBeCloseTo(48 * 1.08);
-    const wide = fitOrthographic(DEFAULT_MACHINE, 4);
+    const wide = fitOrthographic(bed, 4);
     expect(wide.halfHeight).toBeCloseTo(24 * 1.08);
     expect(wide.halfWidth).toBeCloseTo(96 * 1.08);
   });
 
   it("backs the perspective camera off far enough to show the same area", () => {
-    expect(fitPerspectiveDistance(DEFAULT_MACHINE, 2, 90)).toBeCloseTo(24 * 1.08);
+    expect(fitPerspectiveDistance(bedViewFrame(DEFAULT_MACHINE), 2, 90)).toBeCloseTo(24 * 1.08);
+  });
+
+  it("frames just the bed when the toolpath stays on it", () => {
+    const inside = Float32Array.from([0, 0, 0, 10, 10, 0]);
+    expect(viewFrame(DEFAULT_MACHINE, [inside], { x: 0, y: 0 })).toEqual({ x: 0, y: 0, width: 96, height: 48 });
+  });
+
+  it("grows the frame to take in toolpath that runs off the bed, relative to home", () => {
+    const offBed = [40, 0, 0, 60, 30, 0];
+    expect(viewFrame(DEFAULT_MACHINE, [offBed], { x: 10, y: 0 })).toEqual({ x: 11, y: 3, width: 118, height: 54 });
   });
 });

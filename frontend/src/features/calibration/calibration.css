@@ -3,10 +3,6 @@
   --chart-2: var(--ok);
   --chart-3: var(--warn);
   --chart-4: var(--danger);
-  --chart-5: #b07cff;
-  --chart-6: #2fc4c4;
-  --chart-7: #f07ab8;
-  --chart-8: #c8cdd5;
 
   display: grid;
   gap: var(--space-4);
@@ -167,7 +163,7 @@
 .diagram {
   width: 100%;
   max-width: 560px;
-  background: #fff;
+  background: var(--paper);
 }
 
 .results {

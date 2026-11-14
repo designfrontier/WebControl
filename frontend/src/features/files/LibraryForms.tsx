@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { Link } from "react-router";
+import { CloseButton } from "../../app/CloseButton";
 import type { CreatedDirectory, Library, LibraryFile } from "../../protocol";
 import { useSubmit } from "./hooks";
 import { fileNameProblem, filesIn, initialDirectory, initialFile } from "./library";
@@ -11,11 +11,10 @@ interface OpenProps {
   library: Library;
   legend: string;
   open: (file: LibraryFile) => Promise<void>;
-  cancelTo: string;
 }
 
 /** Choose a file from a library (gcode or boards) and open it. */
-export const OpenFromLibrary = ({ library, legend, open, cancelTo }: OpenProps) => {
+export const OpenFromLibrary = ({ library, legend, open }: OpenProps) => {
   const [directory, setDirectory] = useState(() => initialDirectory(library));
   const [selected, setSelected] = useState(() => initialFile(library, initialDirectory(library)));
   const { busy, error, setError, run } = useSubmit();
@@ -44,9 +43,7 @@ export const OpenFromLibrary = ({ library, legend, open, cancelTo }: OpenProps) 
         <button type="submit" className="primary" disabled={busy}>
           {busy ? "Opening…" : "Open"}
         </button>
-        <Link className="button" to={cancelTo}>
-          Cancel
-        </Link>
+        <CloseButton>Cancel</CloseButton>
       </div>
     </form>
   );
@@ -57,11 +54,10 @@ interface SaveProps {
   legend: string;
   save: (directory: string, fileName: string) => Promise<void>;
   createDirectory: (name: string) => Promise<CreatedDirectory>;
-  cancelTo: string;
 }
 
 /** Choose a directory and file name (picking an existing file fills its name in) and save there. */
-export const SaveToLibrary = ({ library, legend, save, createDirectory, cancelTo }: SaveProps) => {
+export const SaveToLibrary = ({ library, legend, save, createDirectory }: SaveProps) => {
   const [listing, setListing] = useState<Listing>(library);
   const [directory, setDirectory] = useState(() => initialDirectory(library));
   const [fileName, setFileName] = useState(library.lastFile);
@@ -110,9 +106,7 @@ export const SaveToLibrary = ({ library, legend, save, createDirectory, cancelTo
           <button type="submit" className="primary" disabled={busy}>
             {busy ? "Saving…" : "Save"}
           </button>
-          <Link className="button" to={cancelTo}>
-            Cancel
-          </Link>
+          <CloseButton>Cancel</CloseButton>
         </div>
       </form>
       <NewDirectoryForm create={createDirectory} onCreated={created} />

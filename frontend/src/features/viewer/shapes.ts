@@ -136,12 +136,47 @@ export const cutCellTriangles = (board: BoardInfo, cells: readonly unknown[]): n
 
 const VIEW_MARGIN = 1.08;
 
-/** Half extents of an orthographic view that shows the whole bed at this aspect ratio. */
-export const fitOrthographic = ({ bedWidth, bedHeight }: MachineGeometry, aspect: number) => {
-  const halfHeight = Math.max(bedHeight / 2, bedWidth / 2 / aspect) * VIEW_MARGIN;
+/** The area the default view frames: its centre and size in inches. */
+export interface ViewFrame extends Point {
+  width: number;
+  height: number;
+}
+
+/** Half extents of an orthographic view that shows the whole frame at this aspect ratio. */
+export const fitOrthographic = ({ width, height }: ViewFrame, aspect: number) => {
+  const halfHeight = Math.max(height / 2, width / 2 / aspect) * VIEW_MARGIN;
   return { halfWidth: halfHeight * aspect, halfHeight };
 };
 
-/** Camera distance at which a perspective camera with this vertical FOV shows the whole bed. */
-export const fitPerspectiveDistance = (machine: MachineGeometry, aspect: number, fovDegrees: number) =>
-  fitOrthographic(machine, aspect).halfHeight / Math.tan(((fovDegrees / 2) * Math.PI) / 180);
+/** Camera distance at which a perspective camera with this vertical FOV shows the whole frame. */
+export const fitPerspectiveDistance = (frame: ViewFrame, aspect: number, fovDegrees: number) =>
+  fitOrthographic(frame, aspect).halfHeight / Math.tan(((fovDegrees / 2) * Math.PI) / 180);
+
+type Bounds = [left: number, bottom: number, right: number, top: number];
+
+const segmentBounds = (bounds: Bounds, segments: ArrayLike<number>, home: Point): Bounds =>
+  Array.from({ length: Math.floor(segments.length / 3) }).reduce<Bounds>(([left, bottom, right, top], _, i) => {
+    const [x, y] = [segments[i * 3] + home.x, segments[i * 3 + 1] + home.y];
+    return [Math.min(left, x), Math.min(bottom, y), Math.max(right, x), Math.max(top, y)];
+  }, bounds);
+
+/** The bed, grown to take in any of the toolpath (drawn relative to `home`) that runs off it. */
+export const viewFrame = (
+  { bedWidth, bedHeight }: MachineGeometry,
+  toolpath: ArrayLike<number>[],
+  home: Point,
+): ViewFrame => {
+  const bed: Bounds = [-bedWidth / 2, -bedHeight / 2, bedWidth / 2, bedHeight / 2];
+  const [left, bottom, right, top] = toolpath.reduce<Bounds>(
+    (bounds, segments) => segmentBounds(bounds, segments, home),
+    bed,
+  );
+  return { x: (left + right) / 2, y: (bottom + top) / 2, width: right - left, height: top - bottom };
+};
+
+export const bedViewFrame = ({ bedWidth, bedHeight }: MachineGeometry): ViewFrame => ({
+  x: 0,
+  y: 0,
+  width: bedWidth,
+  height: bedHeight,
+});

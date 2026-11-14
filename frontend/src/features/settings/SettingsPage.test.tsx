@@ -36,13 +36,13 @@ describe("SettingsPage", () => {
     const { fetch } = settingsServer();
     renderApp("/settings", { fetch });
     expect(screen.getByText("Loading settings…")).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "Maslow", level: 2 })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Maslow", level: 3 })).toBeInTheDocument();
 
     const tabs = within(screen.getByRole("navigation", { name: "Settings sections" }));
     expect(tabs.getAllByRole("link").map((link) => link.textContent)).toEqual([
       "Maslow",
       "Advanced",
-      "WebControl app",
+      "WebControl",
       "Camera",
       "GPIO",
     ]);

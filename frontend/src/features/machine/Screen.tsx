@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { Link } from "react-router";
 import { useMachine } from "../../app/context";
 
 interface Props {
@@ -7,13 +6,9 @@ interface Props {
   children: ReactNode;
 }
 
-/** One machine setup screen under the section's "Machine" heading: a link back to the list, its title and content. */
+/** One machine setup screen, shown in a modal that supplies its heading. */
 export const Screen = ({ title, children }: Props) => (
-  <section className="machine-screen" aria-labelledby="machine-screen-title">
-    <p className="crumb">
-      <Link to="/machine">← All machine setup</Link>
-    </p>
-    <h2 id="machine-screen-title">{title}</h2>
+  <section className="machine-screen" aria-label={title}>
     {children}
   </section>
 );

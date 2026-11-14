@@ -20,7 +20,7 @@ export interface FakeSocket extends SocketLike {
   /** Pushes a raw `message` payload, for envelopes that are not JSON-encoded or are malformed. */
   serverRaw(payload: unknown): void;
   emittedEvents<E extends ClientEvent>(event: E): ClientEvents[E][];
-  /** The processAction calls the client made, as [command, arg, arg1]. */
+  /** The processAction calls the client made, as [command, arg, arg1], minus the viewer's statusRequest on connect. */
   actions(): [ActionCommand, string | number, string | number][];
   clearEmitted(): void;
 }
@@ -79,10 +79,11 @@ export const createFakeSocket = ({ connected = false, id = "client-1" } = {}): F
     actions: () =>
       emitted
         .filter((e) => e.event === "action")
-        .map((e) => {
+        .map((e): [ActionCommand, string | number, string | number] => {
           const { command, arg, arg1 } = (e.payload as ClientEvents["action"]).data;
           return [command as ActionCommand, arg, arg1];
-        }),
+        })
+        .filter(([command]) => command !== "statusRequest"),
     clearEmitted: () => {
       emitted.length = 0;
     },

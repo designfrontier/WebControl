@@ -10,17 +10,15 @@ export const ControllerConsole = () => {
   }, [messages]);
 
   return (
-    <section className="panel console" aria-labelledby="console-title">
-      <h2 id="console-title">Machine messages</h2>
-      {messages.length === 0 ? (
-        <p className="muted">No messages yet.</p>
-      ) : (
-        <ol ref={log} role="log" aria-labelledby="console-title">
-          {messages.map((message, index) => (
-            <li key={index}>{message}</li>
-          ))}
-        </ol>
-      )}
+    <section className="console" aria-labelledby="console-title">
+      <h2 id="console-title">Controller Messages</h2>
+      <ol ref={log} role="log" aria-labelledby="console-title" tabIndex={0}>
+        {messages.length === 0 ? (
+          <li className="muted">No messages yet.</li>
+        ) : (
+          messages.map((message, index) => <li key={index}>{message}</li>)
+        )}
+      </ol>
     </section>
   );
 };

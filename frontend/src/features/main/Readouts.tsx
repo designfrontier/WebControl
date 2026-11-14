@@ -1,63 +1,51 @@
 import type { ReactNode } from "react";
 import { useMachine } from "../../app/context";
+import { selectJobState } from "../../state/machine";
 import { fixed, positioningModeLabel } from "./controls";
 
-const MOTOR_POWER_MAX = 255;
-const MOTORS = [
-  ["left", "Left"],
-  ["right", "Right"],
-  ["z", "Z"],
-] as const;
-
-const Row = ({ term, children }: { term: string; children: ReactNode }) => (
-  <div>
+const Row = ({ term, wide = false, children }: { term: string; wide?: boolean; children: ReactNode }) => (
+  <div className={wide ? "wide" : undefined}>
     <dt>{term}</dt>
     <dd>{children}</dd>
   </div>
 );
 
-export const Readouts = () => {
+/** The classic readout block: line, sled, chain error, home, gcode target, progress, tool and positioning mode. */
+export const Readouts = ({ lineIndex }: { lineIndex: number | null }) => {
   const position = useMachine((s) => s.position);
   const home = useMachine((s) => s.homePosition);
   const gcode = useMachine((s) => s.gcodePosition);
   const status = useMachine((s) => s.status);
   const error = useMachine((s) => s.positionError);
-  const units = useMachine((s) => s.units);
+  const job = useMachine(selectJobState);
 
   return (
-    <section className="panel" aria-labelledby="readouts-title">
-      <h2 id="readouts-title">Position</h2>
-      <dl className="readouts">
-        <Row term="Sled">{position ? `X ${fixed(position.x)} Y ${fixed(position.y)} Z ${fixed(position.z)}` : "—"}</Row>
-        <Row term="Velocity">
-          {position ? `${fixed(position.velocity)} / ${fixed(position.requestedVelocity)}` : "—"}
-        </Row>
-        <Row term="Home">{home ? `X ${fixed(home.x)} Y ${fixed(home.y)}` : "—"}</Row>
-        <Row term="Gcode target">{gcode ? `X ${fixed(gcode.x)} Y ${fixed(gcode.y)} Z ${fixed(gcode.z)}` : "—"}</Row>
-        <Row term="Complete">{position?.percentComplete || "—"}</Row>
-        <Row term="State">{position?.state || "—"}</Row>
-        <Row term="Tool">{status ? status.currentTool : "—"}</Row>
-        <Row term="Positioning">{status ? positioningModeLabel(status.positioningMode) : "—"}</Row>
-        <Row term="Units">{units ?? "—"}</Row>
-        {error?.computed && <Row term="Computed">{`X ${fixed(error.computed.x)} Y ${fixed(error.computed.y)}`}</Row>}
-      </dl>
-      <div className="meters">
-        <label>
-          Left chain error
-          <meter min={0} max={100} high={50} value={error ? error.left * 100 : 0} />
-        </label>
-        <label>
-          Right chain error
-          <meter min={0} max={100} high={50} value={error ? error.right * 100 : 0} />
-        </label>
-        {position &&
-          MOTORS.map(([motor, name]) => (
-            <label key={motor}>
-              {name} motor power
-              <meter min={0} max={MOTOR_POWER_MAX} high={240} value={position.power[motor]} />
-            </label>
-          ))}
-      </div>
-    </section>
+    <dl className="readouts" aria-label="Machine readouts">
+      <Row term="Job" wide>
+        <span className="job-state" data-state={job ?? "unknown"}>
+          {job ?? "—"}
+        </span>
+      </Row>
+      <Row term="Line" wide>
+        {lineIndex === null ? "—" : lineIndex + 1}
+      </Row>
+      <Row term="Sled" wide>
+        {position ? `X ${fixed(position.x)} Y ${fixed(position.y)} Z ${fixed(position.z)}` : "—"}
+      </Row>
+      <Row term="Error" wide>
+        <meter aria-label="Left chain error" min={0} max={100} high={50} value={error ? error.left * 100 : 0} />
+        <meter aria-label="Right chain error" min={0} max={100} high={50} value={error ? error.right * 100 : 0} />
+      </Row>
+      <Row term="Home" wide>
+        {home ? `X ${fixed(home.x)} Y ${fixed(home.y)}` : "—"}
+      </Row>
+      <Row term="GCode" wide>
+        {gcode ? `X ${fixed(gcode.x)} Y ${fixed(gcode.y)} Z ${fixed(gcode.z)}` : "—"}
+      </Row>
+      <Row term="Complete">{position?.percentComplete || "—"}</Row>
+      <Row term="State">{position?.state || "—"}</Row>
+      <Row term="Tool">{status ? status.currentTool : "—"}</Row>
+      <Row term="Positioning">{status ? positioningModeLabel(status.positioningMode) : "—"}</Row>
+    </dl>
   );
 };

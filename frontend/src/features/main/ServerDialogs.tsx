@@ -1,12 +1,13 @@
-import { useEffect, useEffectEvent, useReducer, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import { useReducer } from "react";
 import { useClient, useServerMessage } from "../../app/context";
-import { trapTab } from "../../app/modal";
+import { Dialog } from "../../app/Dialog";
 import { dialogReducer, initialDialogState } from "./dialogs";
-import type { ServerDialog } from "./dialogs";
 
-/** Hosts server-pushed alerts over `children`, which go inert while one is open; closing never round-trips. */
-export const ServerDialogs = ({ children }: { children: ReactNode }) => {
+/**
+ * Server-pushed alerts and notifications, one at a time from a queue, always stacked above any open user modal.
+ * Closing never round-trips through the server.
+ */
+export const ServerDialogs = () => {
   const client = useClient();
   const [{ dialogs }, dispatch] = useReducer(dialogReducer, initialDialogState);
   useServerMessage("activateModal", (modal) => dispatch({ type: "open", modal }));
@@ -14,107 +15,51 @@ export const ServerDialogs = ({ children }: { children: ReactNode }) => {
   useServerMessage("closeAlertModals", ({ title }) => dispatch({ type: "close", kind: "alert", title }));
 
   const current = dialogs[0];
-  const dismiss = (dialog: ServerDialog) => dispatch({ type: "dismiss", id: dialog.id });
-  const act = (dialog: ServerDialog, command: "resumeRun" | "stopRun") => {
+  if (!current) return null;
+
+  const dismiss = () => dispatch({ type: "dismiss", id: current.id });
+  const act = (command: "resumeRun" | "stopRun") => {
     client.sendAction(command);
-    dismiss(dialog);
+    dismiss();
   };
+  const bodyId = `server-dialog-${current.id}-body`;
+  const pending = dialogs.length - 1;
 
   return (
-    <>
-      <div className="dialog-host" inert={current !== undefined}>
-        {children}
-      </div>
-      {current && (
-        <DialogView
-          dialog={current}
-          pending={dialogs.length - 1}
-          onClose={() => dismiss(current)}
-          onResume={() => act(current, "resumeRun")}
-          onClear={() => act(current, "stopRun")}
-        />
-      )}
-    </>
-  );
-};
-
-interface ViewProps {
-  dialog: ServerDialog;
-  pending: number;
-  onClose: () => void;
-  onResume: () => void;
-  onClear: () => void;
-}
-
-const DialogView = ({ dialog, pending, onClose, onResume, onClear }: ViewProps) => {
-  const firstButton = useRef<HTMLButtonElement>(null);
-  const container = useRef<HTMLDivElement>(null);
-  // Read during render: once the page behind goes inert, browsers move focus to <body>.
-  const [opener] = useState(() => document.activeElement);
-
-  useEffect(
-    () => () => {
-      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
-    },
-    [opener],
-  );
-
-  useEffect(() => {
-    firstButton.current?.focus();
-  }, [dialog.id]);
-
-  const onKeyDown = useEffectEvent((event: KeyboardEvent) => {
-    if (event.key === "Escape") onClose();
-    if (event.key === "Tab" && container.current) trapTab(event, container.current);
-  });
-
-  useEffect(() => {
-    const listener = (event: KeyboardEvent) => onKeyDown(event);
-    document.addEventListener("keydown", listener);
-    return () => document.removeEventListener("keydown", listener);
-  }, []);
-
-  const titleId = `server-dialog-${dialog.id}-title`;
-  const bodyId = `server-dialog-${dialog.id}-body`;
-  const primary = dialog.resume ? "resume" : dialog.clear ? "clear" : "close";
-
-  return (
-    <div className="dialog-backdrop" data-testid="dialog-backdrop">
-      <div
-        className="server-dialog"
-        role={dialog.kind === "alert" ? "alertdialog" : "dialog"}
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={bodyId}
-        data-kind={dialog.kind}
-        ref={container}
-      >
-        <header>
-          <h2 id={titleId}>{dialog.title.replace(/:$/, "")}</h2>
-          {pending > 0 && <p className="muted">{pending} more waiting</p>}
-        </header>
-        <p id={bodyId} className="server-dialog-message">
-          {dialog.message}
-          {dialog.count > 1 && <span className="muted"> (×{dialog.count})</span>}
-        </p>
-        {dialog.progress === "spinner" && <p className="spinner" role="status" aria-label="Working" />}
-        {dialog.progress === "bar" && <progress aria-label="Progress" />}
-        <footer>
-          {dialog.resume && (
-            <button type="button" className="primary" ref={firstButton} onClick={onResume}>
+    <Dialog
+      key={current.id}
+      layer="server"
+      role={current.kind === "alert" ? "alertdialog" : "dialog"}
+      kind={current.kind}
+      title={current.title.replace(/:$/, "")}
+      onClose={dismiss}
+      closeButton={false}
+      describedBy={bodyId}
+      header={pending > 0 && <p className="muted">{pending} more waiting</p>}
+      actions={
+        <>
+          {current.resume && (
+            <button type="button" className="primary" data-autofocus onClick={() => act("resumeRun")}>
               Resume
             </button>
           )}
-          {dialog.clear && (
-            <button type="button" className="primary" ref={firstButton} onClick={onClear}>
+          {current.clear && (
+            <button type="button" className="primary" data-autofocus onClick={() => act("stopRun")}>
               Clear alert
             </button>
           )}
-          <button type="button" ref={primary === "close" ? firstButton : undefined} onClick={onClose}>
+          <button type="button" data-autofocus={(!current.resume && !current.clear) || undefined} onClick={dismiss}>
             Close
           </button>
-        </footer>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <p id={bodyId} className="server-dialog-message">
+        {current.message}
+        {current.count > 1 && <span className="muted"> (×{current.count})</span>}
+      </p>
+      {current.progress === "spinner" && <p className="spinner" role="status" aria-label="Working" />}
+      {current.progress === "bar" && <progress aria-label="Progress" />}
+    </Dialog>
   );
 };

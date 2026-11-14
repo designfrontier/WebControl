@@ -14,7 +14,7 @@ const step = () => screen.getByRole("textbox", { name: "Step" });
 describe("ZAxisPage", () => {
   it("raises and lowers by the step from /api/state", async () => {
     const { socket, user } = renderZAxis();
-    expect(screen.getByRole("heading", { level: 2, name: "Z-axis" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Set Z-Axis" })).toBeInTheDocument();
     await waitFor(() => expect(step()).toHaveValue("1"));
 
     await user.click(screen.getByRole("button", { name: "↑ Raise" }));
