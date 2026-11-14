@@ -1620,7 +1620,7 @@ class Actions(MakesmithInitFuncs):
             filtersparsed = re.sub(r';([^\n]*)?', '\n', filtersparsed)  # replace standard ; initiated gcode comments with nothing
             if not filtersparsed.isspace():  # if all spaces, don't send.  likely a comment. #self.data.gcode[x][0] != "(":
                 #lines = self.data.gcode[x].split(" ")
-                lines = filtersparsed.split(" ")
+                lines = re.sub(r"^\s*N[0-9]+", "", filtersparsed).split(" ")
                 if lines:
                     finalLines = []
                     # I think this splits everything up and reassembles them so that each line starts with a M, G or T
@@ -1633,7 +1633,8 @@ class Actions(MakesmithInitFuncs):
                                 finalLines[-1] = finalLines[-1] + " " + line
                     # start processing the lines, keeping track of the state variables.
                     for line in finalLines:
-                        if line[0]=='G':
+                        # A line of bare axis words (X10 Y5) continues the modal move.
+                        if line[0] in "GXYZF":
                             gCodes = gcodeNumbers("G", line)
                             if 90 in gCodes:
                                 positioning = "G90 "
@@ -1673,7 +1674,7 @@ class Actions(MakesmithInitFuncs):
                             if line.find("F") != -1:
                                 _feedRate = re.search("F(?=.)(([ ]*)?[+-]?([0-9]*)(\.([0-9]+))?)", line)
                                 _feedRateFloat = float(_feedRate.groups()[0])
-                                if line.find("X") != -1 or line.find("Y") != -1:
+                                if line.find("X") != -1 or line.find("Y") != -1 or line.find("Z") == -1:
                                     xyAxisFeedRate = _feedRateFloat
                                 if line.find("Z") != -1:
                                     zAxisFeedRate = _feedRateFloat

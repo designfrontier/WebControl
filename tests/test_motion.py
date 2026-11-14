@@ -262,3 +262,35 @@ def test_restart_converts_z_and_feeds_when_the_file_switches_units(job):
     queued = drain(job.gcode_queue)
     assert queued[2:4] == ["G0 Z0.1969 F10.0", "G0 X1.0 Y0.0 F20.0"]
     assert queued[4] == "G0 Z-0.1 "
+
+
+def test_restart_follows_modal_moves_without_a_g_word(job):
+    load(job, ["G90", "G1 X10 Y20 F300", "X30 Y40", "Y50", "G1 Z-1"], 4)
+
+    job.actions.processGCode()
+
+    assert drain(job.gcode_queue)[3] == "G0 X30.0 Y50.0 F300.0"
+
+
+def test_resume_returns_to_a_modal_move_without_a_g_word(job):
+    pause_at(job, ["G90", "G1 Z-3 F100", "G1 X10 Y20 F300", "X30 Y40", "X50"], 4, -3.0)
+
+    job.actions.resumeRun()
+
+    assert drain(job.gcode_queue)[3] == "G0 X30.0 Y40.0 F300.0"
+
+
+def test_restart_takes_a_bare_feed_word_as_the_xy_feed(job):
+    load(job, ["G90", "G1 F450", "G1 X10 Y20", "G1 X30"], 3)
+
+    job.actions.processGCode()
+
+    assert drain(job.gcode_queue)[3] == "G0 X10.0 Y20.0 F450.0"
+
+
+def test_restart_follows_numbered_modal_moves(job):
+    load(job, ["N1 G90", "N2 G1 X10 Y20 F300", "N3 X30 Y40", "N4 G1 Z-1"], 3)
+
+    job.actions.processGCode()
+
+    assert drain(job.gcode_queue)[3] == "G0 X30.0 Y40.0 F300.0"
