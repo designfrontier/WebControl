@@ -3,6 +3,7 @@ import type { FormEvent, ReactNode } from "react";
 import { Link } from "react-router";
 import type { CreatedDirectory } from "../../protocol";
 import { useSubmit } from "./hooks";
+import type { Resource } from "./hooks";
 import { directoryLabel, filesIn } from "./library";
 import type { Listing } from "./library";
 
@@ -34,10 +35,8 @@ export const FormError = ({ message }: { message: string | null }) =>
     </p>
   ) : null;
 
-type Loadable<T> = { status: "loading" } | { status: "ready"; data: T } | { status: "error" };
-
 interface LoadedProps<T> {
-  resource: Loadable<T>;
+  resource: Resource<T>;
   what: string;
   children: (data: T) => ReactNode;
 }

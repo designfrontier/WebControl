@@ -4,6 +4,7 @@ import { Link } from "react-router";
 import type { CreatedDirectory, Library, LibraryFile } from "../../protocol";
 import { useSubmit } from "./hooks";
 import { fileNameProblem, filesIn, initialDirectory, initialFile } from "./library";
+import type { Listing } from "./library";
 import { FormError, LibraryPicker, NewDirectoryForm } from "./ui";
 
 interface OpenProps {
@@ -61,7 +62,7 @@ interface SaveProps {
 
 /** Choose a directory and file name (picking an existing file fills its name in) and save there. */
 export const SaveToLibrary = ({ library, legend, save, createDirectory, cancelTo }: SaveProps) => {
-  const [listing, setListing] = useState<Pick<Library, "directories" | "files">>(library);
+  const [listing, setListing] = useState<Listing>(library);
   const [directory, setDirectory] = useState(() => initialDirectory(library));
   const [fileName, setFileName] = useState(library.lastFile);
   const { busy, error, setError, run } = useSubmit();

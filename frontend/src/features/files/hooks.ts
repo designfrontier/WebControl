@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { Fetch } from "../../api/http";
 import { useFetch } from "../../app/context";
 
-type Resource<T> = { status: "loading" } | { status: "ready"; data: T } | { status: "error" };
+export type Resource<T> = { status: "loading" } | { status: "ready"; data: T } | { status: "error" };
 
 /** Loads `load` on mount and on each `reload()`; `load` must be a stable (module-level) function. */
 export const useResource = <T>(load: (fetchImpl: Fetch) => Promise<T>) => {
