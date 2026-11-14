@@ -813,7 +813,10 @@ class Config(MakesmithInitFuncs):
         '''
         try:
             with open(self.settingsPath(), "r") as infile:
-                self.settings = json.load(infile)
+                settings = json.load(infile)
+            if not isinstance(settings, dict):
+                raise ValueError("not a settings object")
+            self.settings = settings
             if self.addMissingDefaults():
                 self.saveSettings()
             self.computeSettings(None, None, None, True)

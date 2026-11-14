@@ -59,3 +59,30 @@ def test_a_restore_without_settings_fails(data, tmp_path):
     with zipfile.ZipFile(archive, "w") as handle:
         handle.writestr("notes.txt", "")
     assert data.actions.restoreWebControl(str(archive)) is False
+
+
+@pytest.mark.parametrize("contents", ["[]", '"settings"', "{not json"])
+def test_a_restore_with_unusable_settings_changes_nothing(data, tmp_path, contents):
+    webcontrol = os.path.join(data.config.getHome(), ".WebControl")
+    on_disk = open(os.path.join(webcontrol, "webcontrol.json")).read()
+    live = copy.deepcopy(data.config.settings)
+    archive = tmp_path / "bad.zip"
+    with zipfile.ZipFile(archive, "w") as handle:
+        handle.writestr("webcontrol.json", contents)
+    assert data.actions.restoreWebControl(str(archive)) is False
+    assert data.config.settings == live
+    assert open(os.path.join(webcontrol, "webcontrol.json")).read() == on_disk
+
+
+def test_reloading_a_settings_file_that_is_not_an_object_keeps_the_live_settings(data):
+    path = data.config.settingsPath()
+    on_disk = open(path).read()
+    live = copy.deepcopy(data.config.settings)
+    try:
+        with open(path, "w") as handle:
+            handle.write("[]")
+        assert data.config.reloadWebControlJSON() is False
+        assert data.config.settings == live
+    finally:
+        with open(path, "w") as handle:
+            handle.write(on_disk)

@@ -2171,6 +2171,9 @@ class Actions(MakesmithInitFuncs):
                 if "webcontrol.json" not in zipObj.namelist():
                     self.data.console_queue.put("Restore file has no webcontrol.json")
                     return False
+                if not isinstance(json.loads(zipObj.read("webcontrol.json")), dict):
+                    self.data.console_queue.put("Restore file's webcontrol.json holds no settings")
+                    return False
                 zipObj.extractall(os.path.join(self.data.config.home, ".WebControl"))
             retval = self.data.config.reloadWebControlJSON()
             if retval is True:
