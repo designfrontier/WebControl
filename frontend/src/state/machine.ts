@@ -14,6 +14,8 @@ export interface MachineState {
   /** The controller's firmware version, or null until it reports one. */
   firmwareVersion: number | null;
   status: { uploadFlag: number; currentTool: number; positioningMode: number } | null;
+  /** Whether a job is running or paused, which uploadFlag alone loses on controller pauses. */
+  job: { inProgress: boolean; manualZAxisAdjust: boolean };
   position:
     | (Point & {
         z: number;
@@ -70,6 +72,7 @@ export const initialMachineState: MachineState = {
   health: null,
   firmwareVersion: null,
   status: null,
+  job: { inProgress: false, manualZAxisAdjust: false },
   position: null,
   positionError: null,
   homePosition: null,
@@ -126,8 +129,17 @@ const applyMessage = (state: MachineState, event: Extract<MachineEvent, { type: 
           controllerFirmwareVersion === undefined ? state.firmwareVersion : reportedVersion(controllerFirmwareVersion),
       };
     }
-    case "statusMessage":
-      return { ...state, status: { ...event.data } };
+    case "statusMessage": {
+      const { uploadFlag, positioningMode, currentTool, jobInProgress, manualZAxisAdjust } = event.data;
+      return {
+        ...state,
+        status: { uploadFlag, positioningMode, currentTool },
+        job: {
+          inProgress: jobInProgress ?? state.job.inProgress,
+          manualZAxisAdjust: manualZAxisAdjust ?? state.job.manualZAxisAdjust,
+        },
+      };
+    }
     case "positionMessage": {
       const { xval, yval, zval, vel, rqvel, pcom, state: machineState, lpwr, rpwr, zpwr } = event.data;
       return {
@@ -187,9 +199,12 @@ export const machineReducer = (state: MachineState, event: MachineEvent): Machin
         hostAddress,
         macros,
         controllerFirmwareVersion,
+        jobInProgress,
+        manualZAxisAdjust,
       } = event.state;
       return {
         ...state,
+        job: { inProgress: jobInProgress, manualZAxisAdjust },
         firmwareVersion: reportedVersion(controllerFirmwareVersion),
         units,
         unitsZ,
@@ -208,12 +223,28 @@ export const machineReducer = (state: MachineState, event: MachineEvent): Machin
 
 export type RunState = "unknown" | "idle" | "running" | "paused";
 
-/** uploadFlag is 1 while gcode streams, 0 when idle, and anything else while a run is paused. */
+/**
+ * uploadFlag is 1 while gcode streams and anything but 0 while a run is paused; a controller pause drops it to 0,
+ * so a job still in progress counts as paused.
+ */
 export const selectRunState = (state: MachineState): RunState => {
   if (!state.status) return "unknown";
   const { uploadFlag } = state.status;
-  return uploadFlag === 0 ? "idle" : uploadFlag === 1 ? "running" : "paused";
+  return uploadFlag === 1 ? "running" : uploadFlag !== 0 || state.job.inProgress ? "paused" : "idle";
 };
+
+export type JobState = "Idle" | "Running" | "Paused" | "Waiting for tool change";
+
+export const selectJobState = (state: MachineState): JobState | null => {
+  const run = selectRunState(state);
+  if (run === "unknown") return null;
+  if (state.job.manualZAxisAdjust) return "Waiting for tool change";
+  return run === "running" ? "Running" : run === "paused" ? "Paused" : "Idle";
+};
+
+/** Mirrors the server's gcodeLocked(): no loading, clearing or editing gcode until the job is stopped. */
+export const selectGcodeLocked = (state: MachineState) =>
+  state.job.inProgress || state.job.manualZAxisAdjust || (state.status !== null && state.status.uploadFlag !== 0);
 
 export interface MachineStore {
   getState(): MachineState;

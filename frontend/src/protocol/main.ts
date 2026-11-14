@@ -28,7 +28,15 @@ export const mainMessages = {
     bufferSize: z.number(),
     controllerFirmwareVersion: z.number().optional(),
   }),
-  statusMessage: z.object({ uploadFlag: z.number(), positioningMode: z.number(), currentTool: z.number() }),
+  statusMessage: z.object({
+    uploadFlag: z.number(),
+    positioningMode: z.number(),
+    currentTool: z.number(),
+    /** Set from Play until Stop or the end of the file, through every kind of pause. */
+    jobInProgress: z.boolean().optional(),
+    /** The job waits for a tool change or a manual Z adjustment. */
+    manualZAxisAdjust: z.boolean().optional(),
+  }),
   positionMessage: z.object({
     xval: z.number(),
     yval: z.number(),
@@ -104,6 +112,8 @@ export const startupStateSchema = z.object({
   distToMoveZ: z.number(),
   homePosition: z.object({ x: z.number(), y: z.number() }),
   pauseButtonSetting: z.enum(["Pause", "Resume"]),
+  jobInProgress: z.boolean().default(false),
+  manualZAxisAdjust: z.boolean().default(false),
   hostAddress: z.string(),
   /** 0 until the controller reports its version on connect. */
   controllerFirmwareVersion: z.number().default(0),
