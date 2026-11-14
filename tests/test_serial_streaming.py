@@ -202,3 +202,29 @@ def test_buffered_streaming_never_overfills_the_controller_buffer(data, serial):
 
     assert port.sent[0].startswith("G1 X1001.1234")
     assert sum(len(line) for line in port.written) <= SerialPortThread.bufferSize
+
+
+def send_lines(data, serial, lines):
+    data.gcode = lines
+    thread = serial.thread()
+    [thread.sendNextLine() for _ in lines]
+    return serial.port.sent
+
+
+def test_a_relative_move_is_not_home_shifted_when_g91_shares_its_line(data, serial):
+    data.gcodeShift = [100.0, 50.0]
+
+    sent = send_lines(data, serial, ["G91 G0 X10 "])
+
+    assert "X10 " in sent[0]
+    assert data.positioningMode == 1
+
+
+def test_an_absolute_move_is_home_shifted_when_g90_shares_its_line(data, serial):
+    data.gcodeShift = [100.0, 50.0]
+    data.positioningMode = 1
+
+    sent = send_lines(data, serial, ["G90 G0 X10 "])
+
+    assert "X110" in sent[0]
+    assert data.positioningMode == 0

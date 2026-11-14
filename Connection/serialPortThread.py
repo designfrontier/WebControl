@@ -69,20 +69,7 @@ class SerialPortThread(MakesmithInitFuncs):
             '''
             Monitor gcode for positioning mode change requests
             '''
-            positioningMode = None
-            findG90 = message.rfind("G90")
-            findG91 = message.rfind("G91")
-
-            if findG90 != -1 and findG91 != -1:
-                if findG90 > findG91:
-                    positioningMode = 0
-                else:
-                    positioningMode = 1
-            else:
-                if findG90 != -1:
-                    positioningMode = 0
-                if findG91 != -1:
-                    positioningMode = 1
+            positioningMode = self._positioningModeSetBy(message)
 
             message = message.encode()
 
@@ -133,11 +120,25 @@ class SerialPortThread(MakesmithInitFuncs):
         filtersparsed = re.sub(r'\(([^)]*)\)', '', line)  # mach3 style ( ) comments
         return re.sub(r';([^\n]*)?', '', filtersparsed)  # standard ; comments
 
+    def _positioningModeSetBy(self, line):
+        '''
+        :return: 0 if the line switches to absolute (G90), 1 if to relative (G91), None if it does neither.
+        '''
+        findG90 = line.rfind("G90")
+        findG91 = line.rfind("G91")
+        if findG90 == findG91:
+            return None
+        return 0 if findG90 > findG91 else 1
+
+    def _positioningModeOf(self, line):
+        mode = self._positioningModeSetBy(line)
+        return self.data.positioningMode if mode is None else mode
+
     def _shiftToHome(self, line):
         '''
         Applies the gcode home shift, which only makes sense for absolute (G90) moves.
         '''
-        return self.data.gcodeFile.moveLine(line) if self.data.positioningMode == 0 else line
+        return self.data.gcodeFile.moveLine(line) if self._positioningModeOf(line) == 0 else line
 
     def sendNextLine(self):
         """
