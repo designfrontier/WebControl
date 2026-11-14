@@ -54,3 +54,10 @@ def test_main_app_mounts_next_without_touching_the_classic_routes(app):
     rules = {rule.rule for rule in app.url_map.iter_rules()}
     assert {"/next/", "/next/<path:path>"} <= rules
     assert {"/", "/controls", "/text", "/logs", "/uploadGCode"} <= rules
+
+
+def test_does_not_serve_files_outside_dist(dist):
+    (dist.parent / "secret.txt").write_text("nope")
+    response = client_for(dist).get("/next/..%2Fsecret.txt")
+    assert response.status_code == 404
+    assert b"nope" not in response.data
