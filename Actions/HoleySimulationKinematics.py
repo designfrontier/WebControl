@@ -99,18 +99,10 @@ class Kinematics(MakesmithInitFuncs):
     isQuadKinematics = True
 
     def _verifyValidTarget(self, xTarget, yTarget):
-        # Same else-if chain as the firmware's Kinematics::_verifyValidTarget, so at most one axis is clamped.
+        # Clamps each axis on its own, as Kinematics::_verifyValidTarget does in every firmware buildFirmware.sh pins.
         halfWidth = self.machineWidth / 2
         halfHeight = self.machineHeight / 2
-        if xTarget < -halfWidth:
-            return -halfWidth, yTarget
-        if xTarget > halfWidth:
-            return halfWidth, yTarget
-        if yTarget > halfHeight:
-            return xTarget, halfHeight
-        if yTarget < -halfHeight:
-            return xTarget, -halfHeight
-        return xTarget, yTarget
+        return min(max(xTarget, -halfWidth), halfWidth), min(max(yTarget, -halfHeight), halfHeight)
 
     def recomputeGeometry(self):
         '''

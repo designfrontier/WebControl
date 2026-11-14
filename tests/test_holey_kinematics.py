@@ -123,8 +123,11 @@ def test_clamp_returns_the_target_on_the_edge_of_the_work_area():
     assert kinematics.inverse(5000.0, 10.0) == kinematics.inverse(1219.2, 10.0)
 
 
-def test_clamp_moves_one_axis_like_the_firmware():
-    assert triangular()._verifyValidTarget(-5000.0, 5000.0) == (-1219.2, 5000.0)
+def test_clamp_moves_both_axes_like_the_firmware():
+    kinematics = triangular()
+    assert kinematics._verifyValidTarget(-5000.0, 5000.0) == (-1219.2, 609.6)
+    assert kinematics._verifyValidTarget(5000.0, -5000.0) == (1219.2, -609.6)
+    assert kinematics.inverse(-5000.0, 5000.0) == kinematics.inverse(-1219.2, 609.6)
 
 
 def test_singular_quadrilateral_jacobian_does_not_raise():
