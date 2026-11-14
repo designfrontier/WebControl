@@ -149,7 +149,7 @@ def calculate_triangular():
     except InvalidInput as error:
         return _error(str(error), 400)
     result = data.actions.calibrate(values)
-    if result is False:
+    if result is None:
         return _error("The machine could not be calibrated. Check the work area dimensions and try again.", 422)
     motor_y_offset, rotation_radius, chain_sag_correction, calibration_error = result
     return jsonify(
@@ -184,7 +184,7 @@ def calculate_holey():
     except InvalidInput as error:
         return _error(str(error), 400)
     result = data.actions.holeyCalibrate(values)
-    if result is False:
+    if result is None:
         return _error("The calibration could not be calculated from these measurements.", 422)
     keys = ["motorYoffset", "distanceBetweenMotors", "leftChainTolerance", "rightChainTolerance", "calibrationError"]
     return jsonify({key: float(value) for key, value in zip(keys, result)})

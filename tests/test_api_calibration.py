@@ -78,7 +78,7 @@ def test_triangular_treats_a_non_object_body_as_empty(client, data):
 
 
 def test_triangular_reports_when_it_cannot_converge(client, data, monkeypatch):
-    monkeypatch.setattr(data.actions, "calibrate", lambda values: False)
+    monkeypatch.setattr(data.actions, "calibrate", lambda values: None)
     response = client.post("/api/calibration/triangular", json=TRIANGULAR)
     assert response.status_code == 422
     assert "could not be calibrated" in response.get_json()["error"]
@@ -120,7 +120,7 @@ def test_holey_rejects_bad_measurements(client, data, body, message):
 
 
 def test_holey_reports_a_failed_fit(client, data, monkeypatch):
-    monkeypatch.setattr(data.actions, "holeyCalibrate", lambda values: False)
+    monkeypatch.setattr(data.actions, "holeyCalibrate", lambda values: None)
     response = client.post("/api/calibration/holey", json={"measurements": [1] * 12})
     assert response.status_code == 422
 
