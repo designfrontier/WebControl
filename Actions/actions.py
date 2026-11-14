@@ -12,6 +12,14 @@ import zipfile
 import subprocess
 from subprocess import call
 
+
+def gcodeNumbers(letter, line):
+    '''
+    The numbers of the letter's words in line, so M3 and M03 give 3 while M30 gives 30 and G91.1 gives 91.1.
+    '''
+    return {float(number) for number in re.findall(letter + r"\s*([0-9]+(?:\.[0-9]+)?)", line)}
+
+
 '''
 This class does most of the heavy lifting in processing messages from the UI client.
 '''
@@ -1625,11 +1633,12 @@ class Actions(MakesmithInitFuncs):
                     # start processing the lines, keeping track of the state variables.
                     for line in finalLines:
                         if line[0]=='G':
-                            if line.find("G90") != -1:
+                            gCodes = gcodeNumbers("G", line)
+                            if 90 in gCodes:
                                 positioning = "G90 "
-                            if line.find("G91") != -1:
+                            if 91 in gCodes:
                                 positioning = "G91 "
-                            if line.find("G20") != -1:
+                            if 20 in gCodes:
                                 units = "G20 "
                                 if previousUnits != units: #previous metrics now imperial
                                     homeX = homeX / 25.4
@@ -1637,7 +1646,7 @@ class Actions(MakesmithInitFuncs):
                                     xpos = xpos / 25.4
                                     ypos = ypos / 25.4
                                     previousUnits = units
-                            if line.find("G21") != -1:
+                            if 21 in gCodes:
                                 units = "G21 "
                                 if previousUnits != units: #previous imperial now metrics
                                     homeX = homeX * 25.4
@@ -1663,9 +1672,8 @@ class Actions(MakesmithInitFuncs):
                                     zpos = zpos+float(_zpos.groups()[0])
                                 else:
                                     zpos = float(_zpos.groups()[0])
-                            _dwell = re.match(r"G0*4(?![0-9.])", line)
-                            if _dwell:
-                                dwell = line[_dwell.end():].strip()
+                            if 4 in gCodes:
+                                dwell = re.sub(r"^G0*4", "", line).strip()
                             if line.find("F") != -1:
                                 _feedRate = re.search("F(?=.)(([ ]*)?[+-]?([0-9]*)(\.([0-9]+))?)", line)
                                 _feedRateFloat = float(_feedRate.groups()[0])
@@ -1674,18 +1682,10 @@ class Actions(MakesmithInitFuncs):
                                 if line.find("Z") != -1:
                                     zAxisFeedRate = _feedRateFloat
                         if line[0] == 'M':
-                            if line.find("M3") != -1 or line.find("M03") != -1:
-                                spindle = "M3 "
-                            if line.find("M4") != -1 or line.find("M05") != -1:
-                                spindle = "M4 "
-                            if line.find("M5") != -1 or line.find("M05") != -1:
-                                spindle = "M5 "
-                            if line.find("M106") != -1:
-                                laser = "M106 "
-                            if line.find("M107") != -1:
-                                laser = "M107 "
-                            if line.find("M16") != -1:
-                                laser = "M107 "
+                            mCodes = gcodeNumbers("M", line)
+                            spindle = next((f"M{code} " for code in (3, 4, 5) if code in mCodes), spindle)
+                            laser = "M106 " if 106 in mCodes else laser
+                            laser = "M107 " if 107 in mCodes or 16 in mCodes else laser
                         if line[0] == 'T':
                             tool = line[1:] #slice off the T
         return {

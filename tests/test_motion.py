@@ -215,3 +215,31 @@ def test_z_limit_failures_raise_an_alert(job, monkeypatch, command, alert):
     job.actions.processAction({"data": {"command": command, "arg": "", "arg1": ""}})
 
     assert [decode_ui_message(raw) for raw in drain(job.ui_queue1)] == [("Alert", "Alert", alert)]
+
+
+@pytest.mark.parametrize("word", ["M30", "M300"])
+def test_restart_does_not_mistake_longer_m_codes_for_spindle_on(job, word):
+    load(job, ["G90", "G0 X1", word, "G1 X2"], 3)
+
+    job.actions.processGCode()
+
+    assert "M3 " not in drain(job.gcode_queue)
+
+
+@pytest.mark.parametrize("word, spindle", [("M04", "M4 "), ("M4", "M4 "), ("M05", "M5 "), ("M03 S1000", "M3 ")])
+def test_restart_restores_the_spindle_direction(job, word, spindle):
+    load(job, ["G90", word, "G1 X2"], 2)
+
+    job.actions.processGCode()
+
+    assert spindle in drain(job.gcode_queue)
+
+
+def test_restart_does_not_mistake_g91_1_arc_centres_for_relative_moves(job):
+    load(job, ["G90", "G91.1", "G0 X10 Y20", "G0 X30 Y40", "G1 Z-1"], 5)
+
+    job.actions.processGCode()
+
+    queued = drain(job.gcode_queue)
+    assert queued[3] == "G0 X30.0 Y40.0" + FEED
+    assert queued[-1] == "G90 "
