@@ -361,7 +361,6 @@ def openBoard():
             "Computed Settings", "lastSelectedBoardDirectory", tDir[0]
         )
         home = app.data.config.getHome()
-        app.data.gcodeFile.filename = home + "/.WebControl/boards/" + f
         app.data.config.setValue("Maslow Settings", "openBoardFile", tDir[1])
         returnVal = app.data.boardManager.loadBoard(home + "/.WebControl/boards/" + f)
         if returnVal:

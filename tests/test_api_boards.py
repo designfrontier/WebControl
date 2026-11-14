@@ -110,3 +110,17 @@ def test_classic_edit_route_round_trips_through_the_current_board(client, data, 
     body = current_board(data)
     assert body["boardID"] == "Bench"
     assert body["width"] == pytest.approx(1219.2, abs=0.3)
+
+
+def test_opening_a_board_keeps_the_loaded_gcode_name(client, data, board, boards_root):
+    _, write = boards_root
+    write("shelf.brd")
+    saved = (data.gcode, data.gcodeFile.filename)
+    data.gcode = ["G0 X0", "G1 X1"]
+    data.gcodeFile.filename = data.config.getHome() + "/.WebControl/gcode/leg.nc"
+    try:
+        client.post("/openBoard", data={"selectedBoard": "./shelf.brd"})
+        loaded = client.get("/api/files/gcode/loaded").get_json()
+    finally:
+        data.gcode, data.gcodeFile.filename = saved
+    assert loaded == {"directory": ".", "name": "leg.nc", "lineCount": 2}
