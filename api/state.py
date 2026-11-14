@@ -24,6 +24,7 @@ def startup_state(data):
         },
         "pauseButtonSetting": "Pause" if data.uploadFlag in (0, 1) else "Resume",
         "hostAddress": data.hostAddress,
+        "controllerFirmwareVersion": _number(data.controllerFirmwareVersion),
         "macros": [
             {"command": f"macro{n}", "title": str(config.getValue("Maslow Settings", f"macro{n}_title") or "")}
             for n in (1, 2)

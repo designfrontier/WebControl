@@ -23,7 +23,11 @@ export const mainMessages = {
     port: z.string(),
     fakeServoStatus: z.boolean().optional(),
   }),
-  healthMessage: z.object({ cpuUsage: z.number(), bufferSize: z.number() }),
+  healthMessage: z.object({
+    cpuUsage: z.number(),
+    bufferSize: z.number(),
+    controllerFirmwareVersion: z.number().optional(),
+  }),
   statusMessage: z.object({ uploadFlag: z.number(), positioningMode: z.number(), currentTool: z.number() }),
   positionMessage: z.object({
     xval: z.number(),
@@ -101,6 +105,8 @@ export const startupStateSchema = z.object({
   homePosition: z.object({ x: z.number(), y: z.number() }),
   pauseButtonSetting: z.enum(["Pause", "Resume"]),
   hostAddress: z.string(),
+  /** 0 until the controller reports its version on connect. */
+  controllerFirmwareVersion: z.number().default(0),
   macros: z.array(z.object({ command: z.enum(["macro1", "macro2"]), title: z.string() })),
 });
 export type StartupState = z.infer<typeof startupStateSchema>;

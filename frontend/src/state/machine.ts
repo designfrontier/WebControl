@@ -11,6 +11,8 @@ export interface MachineState {
   hostAddress: string | null;
   controller: { status: "unknown" | "connected" | "disconnected"; port: string | null; fakeServo: boolean };
   health: { cpuUsage: number; bufferSize: number } | null;
+  /** The controller's firmware version, or null until it reports one. */
+  firmwareVersion: number | null;
   status: { uploadFlag: number; currentTool: number; positioningMode: number } | null;
   position:
     | (Point & {
@@ -66,6 +68,7 @@ export const initialMachineState: MachineState = {
   hostAddress: null,
   controller: { status: "unknown", port: null, fakeServo: false },
   health: null,
+  firmwareVersion: null,
   status: null,
   position: null,
   positionError: null,
@@ -80,6 +83,8 @@ export const initialMachineState: MachineState = {
   alarm: null,
   controllerMessages: [],
 };
+
+const reportedVersion = (version: number) => (version > 0 ? version : null);
 
 const asUnits = (value: unknown): Units | null => (value === "MM" || value === "INCHES" ? value : null);
 const asNumber = (value: unknown) => (Number.isFinite(Number(value)) ? Number(value) : null);
@@ -112,8 +117,15 @@ const applyMessage = (state: MachineState, event: Extract<MachineEvent, { type: 
           fakeServo: event.data.fakeServoStatus ?? false,
         },
       };
-    case "healthMessage":
-      return { ...state, health: { cpuUsage: event.data.cpuUsage, bufferSize: event.data.bufferSize } };
+    case "healthMessage": {
+      const { cpuUsage, bufferSize, controllerFirmwareVersion } = event.data;
+      return {
+        ...state,
+        health: { cpuUsage, bufferSize },
+        firmwareVersion:
+          controllerFirmwareVersion === undefined ? state.firmwareVersion : reportedVersion(controllerFirmwareVersion),
+      };
+    }
     case "statusMessage":
       return { ...state, status: { ...event.data } };
     case "positionMessage": {
@@ -165,10 +177,20 @@ export const machineReducer = (state: MachineState, event: MachineEvent): Machin
         ? { ...state, socket: event.status }
         : { ...state, socket: event.status, controller: initialMachineState.controller, health: null };
     case "startup": {
-      const { units, unitsZ, distToMove, distToMoveZ, homePosition, pauseButtonSetting, hostAddress, macros } =
-        event.state;
+      const {
+        units,
+        unitsZ,
+        distToMove,
+        distToMoveZ,
+        homePosition,
+        pauseButtonSetting,
+        hostAddress,
+        macros,
+        controllerFirmwareVersion,
+      } = event.state;
       return {
         ...state,
+        firmwareVersion: reportedVersion(controllerFirmwareVersion),
         units,
         unitsZ,
         distToMove,

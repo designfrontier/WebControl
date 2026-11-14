@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from Background.UIProcessor import UIProcessor
@@ -43,3 +45,17 @@ def test_an_exception_in_one_pass_does_not_end_the_loop(app, ui, data, monkeypat
 
     with pytest.raises(StopLoop):
         ui.start(app)
+
+
+@pytest.mark.parametrize("version, reported", [(51.27, 51.27), (0, 0.0), ("garbled", 0.0)])
+def test_the_health_check_reports_the_controller_firmware_version(ui, data, monkeypatch, version, reported):
+    emitted = []
+    monkeypatch.setattr("Background.UIProcessor.socketio.emit", lambda *args, **kwargs: emitted.append(args))
+    monkeypatch.setattr(ui, "performStatusCheck", lambda *args: None)
+    monkeypatch.setattr(data, "controllerFirmwareVersion", version)
+    ui.lastHealthCheck = 0
+
+    ui.performHealthCheck()
+
+    health = json.loads(next(payload["data"] for _, payload in emitted if payload["command"] == "healthMessage"))
+    assert health["controllerFirmwareVersion"] == reported

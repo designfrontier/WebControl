@@ -16,6 +16,13 @@ This class is not MakesmithInitFuncs inherited, so it doesn't have direct access
 passed the app.  
 '''
 
+def _firmware_version(data):
+    try:
+        return float(data.controllerFirmwareVersion)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 class UIProcessor:
     app = None
     lastCameraTime = 0
@@ -652,6 +659,7 @@ class UIProcessor:
             healthData = {
                 "cpuUsage": load,
                 "bufferSize": bufferSize,
+                "controllerFirmwareVersion": _firmware_version(self.app.data),
             }
             socketio.emit("message", {"command": "healthMessage", "data": json.dumps(healthData), "dataFormat": "json"},
                           namespace="/MaslowCNC")

@@ -64,6 +64,20 @@ describe("machineReducer messages", () => {
     expect(state.status).toEqual({ uploadFlag: 1, positioningMode: 0, currentTool: 2 });
   });
 
+  it("tracks the firmware version from startup state and health reports", () => {
+    const unknown = apply([{ type: "startup", state: startupState({ controllerFirmwareVersion: 0 }) }]);
+    expect(unknown.firmwareVersion).toBeNull();
+
+    const loaded = apply([{ type: "startup", state: startupState({ controllerFirmwareVersion: 1.26 }) }]);
+    expect(loaded.firmwareVersion).toBe(1.26);
+
+    const reported = apply([
+      message("healthMessage", { cpuUsage: 1, bufferSize: -1, controllerFirmwareVersion: 51.27 }),
+    ]);
+    expect(reported.firmwareVersion).toBe(51.27);
+    expect(apply([message("healthMessage", { cpuUsage: 1, bufferSize: -1 })], reported).firmwareVersion).toBe(51.27);
+  });
+
   it("maps sled, home and gcode positions", () => {
     const state = apply([
       message("positionMessage", {

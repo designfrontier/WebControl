@@ -15,6 +15,7 @@ export const startupState = (over: Partial<StartupState> = {}): StartupState => 
   homePosition: { x: 0, y: 0 },
   pauseButtonSetting: "Pause",
   hostAddress: "192.168.1.20:5000",
+  controllerFirmwareVersion: 0,
   macros: [
     { command: "macro1", title: "Macro 1" },
     { command: "macro2", title: "Macro 2" },
