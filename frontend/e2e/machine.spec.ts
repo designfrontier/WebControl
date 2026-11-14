@@ -2,8 +2,9 @@ import { expect, test } from "@playwright/test";
 
 test("quick configure saves to the server and reloads", async ({ page }) => {
   await page.goto("/next/machine");
-  await expect(page.getByRole("heading", { level: 1, name: "Machine" })).toBeVisible();
-  await page.getByRole("link", { name: "Quick configure" }).click();
+  await expect(page).toHaveURL(/\/next\/actions$/);
+  await page.getByRole("dialog", { name: "Actions" }).getByRole("link", { name: "Quick configure" }).click();
+  await expect(page.getByRole("dialog", { name: "Quick Configure" })).toBeVisible();
 
   const kit = page.getByRole("combobox", { name: "Kit" });
   await expect(kit).toBeVisible();
@@ -53,8 +54,8 @@ test("Z-axis and sprocket screens drive the machine with no controller attached"
   await page.getByRole("button", { name: "↑ Raise" }).click();
   await expect(page.getByRole("button", { name: "Touch off Z" })).toBeDisabled();
 
-  await page.getByRole("link", { name: "← All machine setup" }).click();
-  await page.getByRole("link", { name: "Sprockets and chains" }).click();
+  await page.goto("/next/machine/sprockets");
+  await expect(page.getByRole("dialog", { name: "Set Sprockets & Chains" })).toBeVisible();
   const extendLeft = page.getByRole("button", { name: /^Extend left chain to \d+ mm$/ });
   await expect(extendLeft).toBeDisabled();
   await page.getByRole("button", { name: "Define zero" }).click();
