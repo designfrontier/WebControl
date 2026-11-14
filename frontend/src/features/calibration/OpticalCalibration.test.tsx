@@ -91,7 +91,7 @@ describe("optical calibration", () => {
     await user.click(button("Test"));
 
     expect(field("Vertical size of marker")).toHaveAccessibleDescription("Enter a number");
-    expect(status()).toHaveTextContent("Check the highlighted settings.");
+    expect(status()).toHaveTextContent("Check these settings: Vertical size of marker.");
     expect(socket.emittedEvents("opticalCalibration")).toEqual([]);
     expect(fetch.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
   });
@@ -102,7 +102,7 @@ describe("optical calibration", () => {
     await user.clear(field("Position tolerance"));
     await user.type(field("Position tolerance"), "0.2");
     await user.click(button("Test"));
-    expect(status()).toHaveTextContent("Taking a test image…");
+    expect(status()).toHaveTextContent("Asked for a test image.");
     await user.click(button("Find center"));
     await user.click(button("Start automatic calibration"));
 
@@ -121,10 +121,12 @@ describe("optical calibration", () => {
   });
 
   it("shows the test and calibration images as they arrive", async () => {
-    const { ready, socket } = setup();
+    const { user, ready, socket } = setup();
     await ready;
     expect(screen.getByText("Test image: none yet.")).toBeInTheDocument();
+    await user.click(button("Test"));
     socket.serverMessage("updateCalibrationImage", { command: "OpticalCalibrationTestImageUpdated", data: "VEVTVA==" });
+    expect(status()).toHaveTextContent("Test image updated.");
     socket.serverMessage("updateCalibrationImage", { command: "OpticalCalibrationImageUpdated", data: "QUNUSVZF" });
     expect(screen.getByRole("img", { name: "Test image" })).toHaveAttribute("src", "data:image/png;base64,VEVTVA==");
     expect(screen.getByRole("img", { name: "Latest calibration image" })).toHaveAttribute(

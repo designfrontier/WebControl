@@ -59,12 +59,18 @@ export const BLUR_SIZES = ["1", "3", "5", "7", "9", "11"].map((value) => ({ valu
 export const isCustomExtents = (extents: string) =>
   !EXTENTS.some((option) => option.value === extents && option.corners);
 
-/** Form text for each setting; an extents name the select does not offer becomes Custom. */
+const nearestBlur = (value: number) =>
+  BLUR_SIZES.reduce((best, option) =>
+    Math.abs(Number(option.value) - value) < Math.abs(Number(best.value) - value) ? option : best,
+  ).value;
+
+/** Form text for each setting; values the selects do not offer become Custom extents and the nearest blur size. */
 export const toForm = (settings: OpticalSettings): OpticalForm => ({
   ...(Object.fromEntries(Object.entries(settings).map(([key, value]) => [key, String(value)])) as OpticalForm),
   calibrationExtents: EXTENTS.some((option) => option.value === settings.calibrationExtents)
     ? settings.calibrationExtents
     : "Custom",
+  gaussianBlurValue: nearestBlur(settings.gaussianBlurValue),
 });
 
 /** Choosing a preset fills in its corners, as the old page's select did; Custom leaves them for editing. */
@@ -75,6 +81,9 @@ export const chooseExtents = (form: OpticalForm, extents: string): OpticalForm =
 };
 
 const NUMBER_FIELDS = [...CONFIGURATION_FIELDS, ...CORNER_FIELDS, ...RECOGNITION_FIELDS];
+
+export const fieldLabels = (keys: string[]) =>
+  NUMBER_FIELDS.filter((field) => keys.includes(field.key)).map((field) => field.label);
 
 const fieldError = (field: NumberField, value: number | null) => {
   if (value === null) return "Enter a number";

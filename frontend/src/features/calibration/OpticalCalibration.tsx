@@ -14,6 +14,7 @@ import {
   RECOGNITION_FIELDS,
   SCAN_DIRECTIONS,
   chooseExtents,
+  fieldLabels,
   isCustomExtents,
   parseOpticalForm,
   toForm,
@@ -29,8 +30,8 @@ const CLEARED_ERROR: OpticalError = { errorX: [], errorY: [] };
 const ADJUST_STEP_MM = 5;
 
 const CAMERA_STATUS: Record<OpticalCameraCommand, string> = {
-  testOpticalCalibration: "Taking a test image…",
-  findCenterOpticalCalibration: "Looking for the center of the marker…",
+  testOpticalCalibration: "Asked for a test image. If none arrives, check the console.",
+  findCenterOpticalCalibration: "Asked the camera to find the marker center. If nothing changes, check the console.",
   optical_Calibrate: "Automatic calibration started. Stop halts it.",
 };
 
@@ -55,11 +56,11 @@ const Workbench = ({ initial }: { initial: OpticalState }) => {
     }));
     setStatus({ tone: "ok", message: "Found the center. Save the settings to keep it." });
   });
-  useServerMessage("updateCalibrationImage", ({ command, data }) =>
-    setImages((previous) =>
-      command === "OpticalCalibrationImageUpdated" ? { ...previous, active: data } : { ...previous, test: data },
-    ),
-  );
+  useServerMessage("updateCalibrationImage", ({ command, data }) => {
+    const active = command === "OpticalCalibrationImageUpdated";
+    setImages((previous) => (active ? { ...previous, active: data } : { ...previous, test: data }));
+    if (!active) setStatus({ tone: "ok", message: "Test image updated." });
+  });
 
   const change = (key: OpticalKey, value: string) => setForm((previous) => ({ ...previous, [key]: value }));
 
@@ -67,7 +68,10 @@ const Workbench = ({ initial }: { initial: OpticalState }) => {
     const parsed = parseOpticalForm(form);
     setErrors("errors" in parsed ? parsed.errors : {});
     if ("settings" in parsed) return parsed.settings;
-    setStatus({ tone: "error", message: "Check the highlighted settings." });
+    setStatus({
+      tone: "error",
+      message: `Check these settings: ${fieldLabels(Object.keys(parsed.errors)).join(", ")}.`,
+    });
     return null;
   };
 

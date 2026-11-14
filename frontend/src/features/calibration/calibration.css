@@ -1,8 +1,8 @@
 .calibration {
-  --chart-1: #4fa3ff;
-  --chart-2: #3fb67a;
-  --chart-3: #e0a83a;
-  --chart-4: #e5534b;
+  --chart-1: var(--accent);
+  --chart-2: var(--ok);
+  --chart-3: var(--warn);
+  --chart-4: var(--danger);
   --chart-5: #b07cff;
   --chart-6: #2fc4c4;
   --chart-7: #f07ab8;
@@ -183,7 +183,7 @@
   text-align: left;
 }
 
-.visually-hidden {
+.calibration .visually-hidden {
   position: absolute;
   width: 1px;
   height: 1px;

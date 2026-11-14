@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { opticalSettings } from "./fixtures";
-import { chooseExtents, isCustomExtents, parseOpticalForm, toForm } from "./opticalForm";
+import { chooseExtents, fieldLabels, isCustomExtents, parseOpticalForm, toForm } from "./opticalForm";
 
 describe("toForm", () => {
   it("turns every setting into field text", () => {
@@ -8,6 +8,12 @@ describe("toForm", () => {
     expect(form.scaleX).toBe("1.0028");
     expect(form.tlX).toBe("-15");
     expect(form.calibrationExtents).toBe("Full Area");
+  });
+
+  it("picks the nearest blur size the select offers", () => {
+    expect(toForm(opticalSettings({ gaussianBlurValue: 0 })).gaussianBlurValue).toBe("1");
+    expect(toForm(opticalSettings({ gaussianBlurValue: 8 })).gaussianBlurValue).toBe("7");
+    expect(toForm(opticalSettings({ gaussianBlurValue: 40 })).gaussianBlurValue).toBe("11");
   });
 
   it("treats an extents name the select does not offer as Custom", () => {
@@ -48,5 +54,14 @@ describe("parseOpticalForm", () => {
         brY: "Enter a whole number from -7 to 7",
       },
     });
+  });
+});
+
+describe("fieldLabels", () => {
+  it("names the fields in form order", () => {
+    expect(fieldLabels(["cannyLowValue", "markerY", "calibrationExtents"])).toEqual([
+      "Vertical size of marker",
+      "Canny low value",
+    ]);
   });
 });
