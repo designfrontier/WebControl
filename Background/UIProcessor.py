@@ -31,135 +31,144 @@ class UIProcessor:
         with self.app.app_context():
             while True:
                 time.sleep(0.001)
-                # send health message
-                self.performHealthCheck()
-                # send status message
-                self.performStatusCheck()
-                # send message to UI client if this is the first time webcontrol is being run.
-                if self.app.data.config.firstRun:
-                    self.app.data.config.firstRun = False
-                    # I *think* this was added to give time for the browser to open up.
-                    time.sleep(2)
-                    self.activateModal("Notification:",
-                                       "New installation detected.  If you have an existing groundcontrol.ini file you would like to import, please do so now by pressing Actions->Import groundcontrol.ini file before doing anything else.",
-                                       "notification")
-                # This sends an updated camera image from optical calibration if available (optical)
-                if self.app.data.opticalCalibrationImageUpdated is True:
-                    self.sendCalibrationImage(
-                        "OpticalCalibrationImageUpdated",
-                        self.app.data.opticalCalibrationImage,
-                    )
-                    self.app.data.opticalCalibrationImageUpdated = False
-                # This sends an updated camera image if available (camera)
-                if self.app.data.cameraImageUpdated is True:
-                    if time.time() - self.lastCameraTime > .25:
-                        self.sendCameraMessage(
-                            "cameraImageUpdated",
-                            self.app.data.cameraImage,
-                        )
-                        self.app.data.cameraImageUpdated = False
-                        self.lastCameraTime = time.time()
-                # This sends an updated camera 'test' image from optical calibration (optical).. test image is the
-                # image used to calibrate the camera.
-                if self.app.data.opticalCalibrationTestImageUpdated is True:
-                    self.sendCalibrationImage(
-                        "OpticalCalibrationTestImageUpdated",
-                        self.app.data.opticalCalibrationTestImage,
-                    )
-                    self.app.data.opticalCalibrationTestImageUpdated = False
-                # function is run while queues are not empty
-                while (
-                        not self.app.data.ui_controller_queue.empty() or not self.app.data.ui_queue1.empty()):  # if there is new data to be read
-                    # ui_controller_queue are messages from the controller.
-                    if not self.app.data.ui_controller_queue.empty():
-                        message = self.app.data.ui_controller_queue.get()
-                        if message != "":
-                            if message[0] == "<":
-                                #call function to parse position message and update UI clients
-                                self.setPosOnScreen(message)
-                            elif message[0:20] == "Upper limit set to":
-                                pass
-                            elif message[0:19] == "Lower limit set to":
-                                pass
-                            elif message[0:7] == "Z-Axis":
-                                pass
-                            elif message[0] == "[":
-                                # call function to parse position error message and update UI clients
-                                if message[1:4] == "PE:":
-                                    self.setErrorOnScreen(message)
-                            elif message[0:13] == "Maslow Paused":
-                                # Maslow has been paused.  set uploadFlag to 0 and update the pause button on the
-                                # UI clients.  In reality, uploadFlag should already be set to 0 by serialPortThread
-                                # that is, the controller shouldn't be pausing without webcontrol already know it's
-                                # going to pause.
-                                self.app.data.uploadFlag = 0
-                                # Send '~' upon receiveing the "Maslow Paused" notification.  This
-                                # operation is to issue this 'un-pause' command which then lets two ok's to come back
-                                # (one for the tool change and one for the ~)  Without this, serialThread won't see
-                                # that the bufferSize = bufferSpace and therefore won't issue any commands.
-                                ## new stuff
-                                # self.app.data.quick_queue.put("~")
-                                ## end new stuff
-                                self.app.data.pausedUnits = self.app.data.units
-                                data = json.dumps({"setting": "pauseButtonSetting", "value": "Resume"})
-                                socketio.emit("message",
-                                              {"command": "requestedSetting", "data": data, "dataFormat": "json"},
-                                              namespace="/MaslowCNC", )
-                            elif message[0:12] == "Tool Change:":
-                                # Tool change message detected.
-                                # not sure what manualzaxisadjust is.. ###
-                                self.app.data.manualZAxisAdjust = True
-                                # keep track of whether upload flag was set... can't remember why.
-                                self.app.data.previousUploadStatus = self.app.data.uploadFlag
-                                # remember the current z value so it can be returned to.
-                                self.app.data.pausedzval = self.app.data.zval
-                                # remember the current units because user might switch them to zero the zaxis.
-                                self.app.data.pausedUnits = self.app.data.units
-                                # Remember current positioning mode.
-                                self.app.data.pausedPositioningMode = self.app.data.positioningMode
-                                self.app.data.console_queue.put("found tool change in message")
-                                # send unpause
-                                self.app.data.quick_queue.put("~")
-                                # notify user
-                                self.activateModal("Notification:", message[13:], "notification", resume="resume")
-                            elif message[0:8] == "Message:":
-                                # message received from controller
-                                if message.find("adjust Z-Axis") != -1:
-                                    # manual z-axis adjustment requested.
-                                    self.app.data.console_queue.put("found adjust Z-Axis in message")
-                                    self.app.data.pausedUnits = self.app.data.units
-                                    self.activateModal("Notification:", message[9:], "notification", resume="resume")
-                                elif message.find("Unable to find valid") != -1:
-                                    # position alarm detected.. chain lengths do not allow for forward kinematic.
-                                    # This could occur during the set sprockets to zero process.. so ignore alarm
-                                    # if either sprocket distance is zero.
-                                    if not self.isChainLengthZero(message):
-                                        self.sendAlarm(message);
-                                else:
-                                    # something other than above..
-                                    self.activateModal("Notification:", message[9:], "notification")
-                            elif message[0:6] == "ALARM:":
-                                # alarm received from controller
-                                if message.find("The sled is not keeping up") != -1:
-                                    self.sendAlarm("Alarm: Sled Not Keeping Up")
-                                elif message.find("Position Lost") != -1:
-                                    self.sendAlarm("Alarm: Position Lost.  Reset Chains.")
-                                else:
-                                    self.sendAlarm(message);
-                            elif message[0:6] == "Unable to":
-                                # not sure what this is for.. probably legacy or something.. TODO: cleanup
-                                if message.find("The sled is not keeping up") != -1:
-                                    pass
-                                self.sendAlarm("Alarm: Sled Not Keeping Up")
-                            elif message == "ok\r\n":
-                                pass  # displaying all the 'ok' messages clutters up the display
-                            else:
-                                #if something else, send it to the UI to figure out.
-                                self.sendControllerMessage(message)
-                    if not self.app.data.ui_queue1.empty():
-                        # webcontrol generated messages to be sent to UI client
-                        message = self.app.data.ui_queue1.get()
-                        self.processMessage(message)
+                try:
+                    self.processPass()
+                except Exception as e:
+                    self.app.data.console_queue.put("UIProcessor error: " + str(e))
+
+    def processPass(self):
+        '''
+        Sends health and status, any updated images, then every queued message to the UI clients.
+        '''
+        # send health message
+        self.performHealthCheck()
+        # send status message
+        self.performStatusCheck()
+        # send message to UI client if this is the first time webcontrol is being run.
+        if self.app.data.config.firstRun:
+            self.app.data.config.firstRun = False
+            # I *think* this was added to give time for the browser to open up.
+            time.sleep(2)
+            self.activateModal("Notification:",
+                               "New installation detected.  If you have an existing groundcontrol.ini file you would like to import, please do so now by pressing Actions->Import groundcontrol.ini file before doing anything else.",
+                               "notification")
+        # This sends an updated camera image from optical calibration if available (optical)
+        if self.app.data.opticalCalibrationImageUpdated is True:
+            self.sendCalibrationImage(
+                "OpticalCalibrationImageUpdated",
+                self.app.data.opticalCalibrationImage,
+            )
+            self.app.data.opticalCalibrationImageUpdated = False
+        # This sends an updated camera image if available (camera)
+        if self.app.data.cameraImageUpdated is True:
+            if time.time() - self.lastCameraTime > .25:
+                self.sendCameraMessage(
+                    "cameraImageUpdated",
+                    self.app.data.cameraImage,
+                )
+                self.app.data.cameraImageUpdated = False
+                self.lastCameraTime = time.time()
+        # This sends an updated camera 'test' image from optical calibration (optical).. test image is the
+        # image used to calibrate the camera.
+        if self.app.data.opticalCalibrationTestImageUpdated is True:
+            self.sendCalibrationImage(
+                "OpticalCalibrationTestImageUpdated",
+                self.app.data.opticalCalibrationTestImage,
+            )
+            self.app.data.opticalCalibrationTestImageUpdated = False
+        # function is run while queues are not empty
+        while (
+                not self.app.data.ui_controller_queue.empty() or not self.app.data.ui_queue1.empty()):  # if there is new data to be read
+            # ui_controller_queue are messages from the controller.
+            if not self.app.data.ui_controller_queue.empty():
+                message = self.app.data.ui_controller_queue.get()
+                if message != "":
+                    if message[0] == "<":
+                        #call function to parse position message and update UI clients
+                        self.setPosOnScreen(message)
+                    elif message[0:20] == "Upper limit set to":
+                        pass
+                    elif message[0:19] == "Lower limit set to":
+                        pass
+                    elif message[0:7] == "Z-Axis":
+                        pass
+                    elif message[0] == "[":
+                        # call function to parse position error message and update UI clients
+                        if message[1:4] == "PE:":
+                            self.setErrorOnScreen(message)
+                    elif message[0:13] == "Maslow Paused":
+                        # Maslow has been paused.  set uploadFlag to 0 and update the pause button on the
+                        # UI clients.  In reality, uploadFlag should already be set to 0 by serialPortThread
+                        # that is, the controller shouldn't be pausing without webcontrol already know it's
+                        # going to pause.
+                        self.app.data.uploadFlag = 0
+                        # Send '~' upon receiveing the "Maslow Paused" notification.  This
+                        # operation is to issue this 'un-pause' command which then lets two ok's to come back
+                        # (one for the tool change and one for the ~)  Without this, serialThread won't see
+                        # that the bufferSize = bufferSpace and therefore won't issue any commands.
+                        ## new stuff
+                        # self.app.data.quick_queue.put("~")
+                        ## end new stuff
+                        self.app.data.pausedUnits = self.app.data.units
+                        data = json.dumps({"setting": "pauseButtonSetting", "value": "Resume"})
+                        socketio.emit("message",
+                                      {"command": "requestedSetting", "data": data, "dataFormat": "json"},
+                                      namespace="/MaslowCNC", )
+                    elif message[0:12] == "Tool Change:":
+                        # Tool change message detected.
+                        # not sure what manualzaxisadjust is.. ###
+                        self.app.data.manualZAxisAdjust = True
+                        # keep track of whether upload flag was set... can't remember why.
+                        self.app.data.previousUploadStatus = self.app.data.uploadFlag
+                        # remember the current z value so it can be returned to.
+                        self.app.data.pausedzval = self.app.data.zval
+                        # remember the current units because user might switch them to zero the zaxis.
+                        self.app.data.pausedUnits = self.app.data.units
+                        # Remember current positioning mode.
+                        self.app.data.pausedPositioningMode = self.app.data.positioningMode
+                        self.app.data.console_queue.put("found tool change in message")
+                        # send unpause
+                        self.app.data.quick_queue.put("~")
+                        # notify user
+                        self.activateModal("Notification:", message[13:], "notification", resume="resume")
+                    elif message[0:8] == "Message:":
+                        # message received from controller
+                        if message.find("adjust Z-Axis") != -1:
+                            # manual z-axis adjustment requested.
+                            self.app.data.console_queue.put("found adjust Z-Axis in message")
+                            self.app.data.pausedUnits = self.app.data.units
+                            self.activateModal("Notification:", message[9:], "notification", resume="resume")
+                        elif message.find("Unable to find valid") != -1:
+                            # position alarm detected.. chain lengths do not allow for forward kinematic.
+                            # This could occur during the set sprockets to zero process.. so ignore alarm
+                            # if either sprocket distance is zero.
+                            if not self.isChainLengthZero(message):
+                                self.sendAlarm(message);
+                        else:
+                            # something other than above..
+                            self.activateModal("Notification:", message[9:], "notification")
+                    elif message[0:6] == "ALARM:":
+                        # alarm received from controller
+                        if message.find("The sled is not keeping up") != -1:
+                            self.sendAlarm("Alarm: Sled Not Keeping Up")
+                        elif message.find("Position Lost") != -1:
+                            self.sendAlarm("Alarm: Position Lost.  Reset Chains.")
+                        else:
+                            self.sendAlarm(message);
+                    elif message[0:6] == "Unable to":
+                        # not sure what this is for.. probably legacy or something.. TODO: cleanup
+                        if message.find("The sled is not keeping up") != -1:
+                            pass
+                        self.sendAlarm("Alarm: Sled Not Keeping Up")
+                    elif message == "ok\r\n":
+                        pass  # displaying all the 'ok' messages clutters up the display
+                    else:
+                        #if something else, send it to the UI to figure out.
+                        self.sendControllerMessage(message)
+            if not self.app.data.ui_queue1.empty():
+                # webcontrol generated messages to be sent to UI client
+                message = self.app.data.ui_queue1.get()
+                self.processMessage(message)
 
     def setPosOnScreen(self, message):
         '''
@@ -232,7 +241,7 @@ class UIProcessor:
         velocity = (1-self.app.data.velocity_filter) * self.app.data.velocity_prev  + self.app.data.velocity_filter * math.sqrt(xdiff*xdiff + ydiff*ydiff + zdiff*zdiff) / (self.app.data.time - self.app.data.time_prev) * 60.0
 
         # compute percentage of gcode that's been completed.
-        percentComplete = '%.1f' % math.fabs(100 * (self.app.data.gcodeIndex / (len(self.app.data.gcode) - 1))) + "%"
+        percentComplete = '%.1f' % math.fabs(100 * (self.app.data.gcodeIndex / max(len(self.app.data.gcode) - 1, 1))) + "%"
 
         # if the sled has moved more than a very, very small amount, then go ahead and send.  Cuts down on network
         # traffic.
