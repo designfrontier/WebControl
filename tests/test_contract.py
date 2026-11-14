@@ -36,8 +36,19 @@ INDEX = load("index.json")
 MESSAGES = INDEX["socket"]["namespaces"][NAMESPACE]["serverToClient"]["message"]["commands"]
 
 
+def closed(schema):
+    """The schema with every object that lists its properties forbidding others, so unlisted fields fail."""
+    if isinstance(schema, list):
+        return [closed(item) for item in schema]
+    if not isinstance(schema, dict):
+        return schema
+    result = {key: closed(value) for key, value in schema.items()}
+    lists_properties = result.get("type") == "object" and "properties" in result
+    return {"additionalProperties": False, **result} if lists_properties else result
+
+
 def validate(schema_path, value):
-    errors = [error.message for error in Draft202012Validator(load(schema_path)).iter_errors(value)]
+    errors = [error.message for error in Draft202012Validator(closed(load(schema_path))).iter_errors(value)]
     assert errors == [], f"{schema_path}: {errors}"
 
 

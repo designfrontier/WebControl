@@ -40,7 +40,8 @@ event, `opticalCalibration` event, `POST /api/system/pid-test`, or `none`). The 
 the UI reuses, with their old shapes) or `static`.
 
 Schemas describe the wire: what is actually sent, before the UI coerces anything. Objects do not forbid extra
-properties; ignore unknown fields. Fields marked as numbers-or-numeric-text really do arrive both ways.
+properties; ignore unknown fields. A backend still sends none: `tests/test_contract.py` fails on a field the
+schema does not list, so a new one goes into `frontend/src/protocol/` first. Fields marked as numbers-or-numeric-text really do arrive both ways.
 
 ## Regenerating and checking
 
