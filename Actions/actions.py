@@ -1610,16 +1610,12 @@ class Actions(MakesmithInitFuncs):
         zAxisSafeHeight = float(self.data.config.getValue("Maslow Settings", "zAxisSafeHeight"))
         zAxisFeedRate = 12.8  # currently hardcoded, but Todo: Add setting
         xyAxisFeedRate = float(self.data.config.getValue("Advanced Settings", "maxFeedrate"))
-        self.data.feedRate - xyAxisFeedRate
         positioning = "G90 "
-        units = "G20 "
         homeX = float(self.data.config.getValue("Advanced Settings", "homeX"))
         homeY = float(self.data.config.getValue("Advanced Settings", "homeY"))
-        previousUnits = self.data.config.getValue("Computed Settings", "units")
-        if previousUnits == "INCHES":
-            previousUnits = "G20 "
-        else:
-            previousUnits = "G21 "
+        # homeX/homeY are stored in machine units, so a file without G20/G21 runs in them too.
+        units = "G20 " if self.data.units == "INCHES" else "G21 "
+        previousUnits = units
         xpos = homeX
         ypos = homeY
         zpos = 0
