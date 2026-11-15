@@ -197,3 +197,29 @@ def test_refuses_to_run_as_a_different_user_than_v094(tmp_path, user_line):
 def test_runs_as_the_same_user_as_v094(tmp_path):
     unit = v094_unit_file(tmp_path, f"User={subprocess.check_output(['id', '-un'], text=True).strip()}")
     source_install_script(tmp_path, fake_systemd(tmp_path, unit) + "check_same_user")
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+def test_updating_a_running_service_does_not_restart_it_mid_cut(tmp_path):
+    source_install_script(tmp_path, fake_systemd(tmp_path, "", active=["webcontrol"]) + "install_unit")
+    log = (tmp_path / "sudo.log").read_text()
+    assert "install -m 644" in log
+    assert "restart" not in log and "enable" not in log
+
+
+def activate_log(tmp_path, active):
+    body = fake_systemd(tmp_path, "", active=active) + "wait_for_server() { :; }; write_unit; activate"
+    source_install_script(tmp_path, body)
+    return (tmp_path / "sudo.log").read_text().splitlines()
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+def test_activate_stops_a_v094_copy_that_was_started_by_hand(tmp_path):
+    assert "sudo systemctl disable --now webcontrol-v094" in activate_log(tmp_path, active=["webcontrol-v094"])
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+def test_activate_restarts_the_new_service_onto_updated_code(tmp_path):
+    log = activate_log(tmp_path, active=["webcontrol"])
+    assert "sudo systemctl restart webcontrol" in log
+    assert not any("webcontrol-v094" in line for line in log)

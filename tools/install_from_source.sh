@@ -8,9 +8,9 @@ usage() {
 Usage: tools/install_from_source.sh [--activate]
 
   (no option)  Create .venv (Python 3.9), install the requirements, check frontend/dist and install
-               webcontrol.service. Never stops a WebControl that is already running.
+               webcontrol.service. Never stops or restarts a WebControl that is already running.
   --activate   Stop the old WebControl service (v0.94), keeping it as webcontrol-v094.service for
-               rollback, then enable and start this one.
+               rollback, then enable and (re)start this one. Run it only with the machine idle.
 EOF
 }
 
@@ -235,8 +235,8 @@ install_unit() {
   sudo install -m 644 "$staged" "$unit"
   sudo systemctl daemon-reload
   if systemctl is-active --quiet webcontrol; then
-    sudo systemctl restart webcontrol
-    echo "Restarted webcontrol.service on the updated code."
+    echo "webcontrol.service keeps running the previous code, so a cut in progress carries on."
+    echo "When the machine is idle, restart it on the new code with: tools/install_from_source.sh --activate"
   elif port_busy; then
     echo "Port $port is in use (see above), so webcontrol.service was installed but not enabled or started."
     print_switch_help
@@ -249,14 +249,14 @@ install_unit() {
 wait_for_server() {
   say "Waiting for http://localhost:$port/"
   local attempt
-  for attempt in $(seq 1 60); do
+  for attempt in $(seq 1 120); do
     if curl -fsS -o /dev/null "http://localhost:$port/next/"; then
       echo "WebControl is up after ${attempt}s: http://$(hostname -I | awk '{print $1}'):$port/ and /next/"
       return 0
     fi
     sleep 1
   done
-  die "WebControl did not answer within 60s. Check: journalctl -u webcontrol -n 100"
+  die "WebControl did not answer within 120s. Check: journalctl -u webcontrol -n 100"
 }
 
 activate() {
@@ -268,7 +268,7 @@ activate() {
     say "Stopping and disabling the v0.94 webcontrol.service"
     sudo systemctl disable --now webcontrol
   fi
-  if systemctl list-unit-files webcontrol-v094.service --no-legend 2>/dev/null | grep -q enabled; then
+  if systemctl is-active --quiet webcontrol-v094 || systemctl is-enabled --quiet webcontrol-v094; then
     sudo systemctl disable --now webcontrol-v094
   fi
   sudo install -m 644 "$staged" "$unit"
@@ -278,7 +278,8 @@ activate() {
     die "port $port is still in use by something other than a systemd unit. Stop it (see above) and re-run --activate."
   fi
   say "Starting the new webcontrol.service"
-  sudo systemctl enable --now webcontrol
+  sudo systemctl enable webcontrol
+  sudo systemctl restart webcontrol
   wait_for_server
 }
 

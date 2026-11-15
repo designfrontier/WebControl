@@ -100,8 +100,8 @@ as a different user than the one running the script, because the settings live i
 cd ~/webcontrol-source && tools/install_from_source.sh --activate
 ```
 
-This stops and disables v0.94's `webcontrol.service`, installs the new unit under the same name, enables and starts
-it, and waits until `/next/` answers. To do the same by hand:
+This stops and disables v0.94's `webcontrol.service` (and `webcontrol-v094.service`, if it is running), installs the
+new unit under the same name, enables and starts it, and waits until `/next/` answers. To do the same by hand:
 
 ```sh
 sudo systemctl disable --now webcontrol
@@ -147,8 +147,9 @@ To return to the new build later, run `tools/install_from_source.sh --activate` 
 
 ## Updating the new build later
 
-On the Mac, repeat step 2. Then run `tools/install_from_source.sh` on the Pi. It updates `.venv` and restarts
-`webcontrol.service` on the new code.
+On the Mac, repeat step 2. Then run `tools/install_from_source.sh` on the Pi. It updates `.venv` and the unit but
+leaves the running service alone, so a cut in progress carries on. With the machine idle, run
+`tools/install_from_source.sh --activate` to restart `webcontrol.service` on the new code.
 
 ## A PyInstaller release instead (optional)
 
