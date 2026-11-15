@@ -294,6 +294,14 @@ def test_bookworm_and_trixie_get_uv_for_python_3_9(tmp_path, python_minor):
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+def test_a_failed_uv_install_stops_before_apt_with_the_manual_command(tmp_path):
+    prelude = uv_prelude(tmp_path, 13) + "sh() { :; }; "
+    result = run_install_script(tmp_path, prelude + "ensure_uv; echo reached-apt", machine="aarch64")
+    assert result.returncode != 0 and "reached-apt" not in result.stdout
+    assert "uv did not install" in result.stderr and "https://astral.sh/uv/install.sh | sh" in result.stderr
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
 def test_bullseye_uses_its_own_python_3_9_without_uv(tmp_path):
     source_install_script(tmp_path, uv_prelude(tmp_path, 9) + "ensure_uv", machine="aarch64")
     assert not (tmp_path / "curl.log").exists()
