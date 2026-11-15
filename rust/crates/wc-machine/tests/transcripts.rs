@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use serde_json::{Map, Value};
 use wc_config::{Settings, python_str};
+use wc_machine::calibration::{Kind, calculate};
 use wc_machine::{Effect, Event, Machine, Request};
 use wc_protocol::{Action, Namespace};
 use wc_testkit::contract::Contract;
@@ -18,6 +19,7 @@ const PASSING: &[&str] = &[
     "connect_settings_sync_adopts_unknown_keys",
     "connect_without_a_reset_handshakes_after_3_s",
     "define_home_from_sled_then_home",
+    "holey_calibration_accept_writes_settings",
     "home_at_safe_height_mm",
     "jog_each_direction_inches",
     "jog_each_direction_mm",
@@ -54,6 +56,10 @@ impl MachineBackend {
     fn new() -> MachineBackend {
         let machine = Machine::new("127.0.0.1:5000", Settings::defaults());
         MachineBackend { machine, now: Duration::ZERO, unread: Vec::new(), written: Vec::new(), messages: Vec::new() }
+    }
+
+    fn settings(&self) -> Settings {
+        (*self.machine.snapshot().settings).clone()
     }
 
     fn apply(&mut self, event: Event) {
@@ -119,6 +125,13 @@ impl SerialBackend for MachineBackend {
             }
             ("POST", "/api/machine/quick-configure") => Request::QuickConfigure(body),
             ("POST", "/api/system/pid-test") => Request::PidTest(body),
+            ("POST", _) if path.starts_with("/api/calibration/") => match &path["/api/calibration/".len()..] {
+                "triangular" => Request::Calibrated(calculate(Kind::Triangular, &self.settings(), &body)),
+                "holey" => Request::Calibrated(calculate(Kind::Holey, &self.settings(), &body)),
+                "triangular/accept" => Request::AcceptCalibration(Kind::Triangular),
+                "holey/accept" => Request::AcceptCalibration(Kind::Holey),
+                _ => return 404,
+            },
             _ => return 404,
         };
         let effects = self.machine.handle(Event::Request { id: 1, request }, self.now);
@@ -235,4 +248,7 @@ fn http_writes_the_machine_does_not_answer_are_404() {
     let quick = serde_json::json!({});
     assert_eq!(backend.http("POST", "/api/machine/quick-configure", Some(&quick), None), 400);
     assert_eq!(backend.http("POST", "/api/system/pid-test", None, None), 400);
+    assert_eq!(backend.http("POST", "/api/calibration/optical", None, None), 404);
+    assert_eq!(backend.http("POST", "/api/calibration/triangular", None, None), 400);
+    assert_eq!(backend.http("POST", "/api/calibration/triangular/accept", None, None), 409);
 }

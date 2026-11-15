@@ -1,4 +1,4 @@
-//! The contract test for M1's and M2's items (plan §3.2): every message the link produces validates against its
+//! The contract test for M1's, M2's and M5's items (plan §3.2): every message the link produces validates against its
 //! closed schema, each action is refused while streaming exactly when its gate says, and every client event decodes.
 
 mod rig;
@@ -66,6 +66,13 @@ const M2_ACTIONS: [&str; 12] = [
     "executeVelocityPIDTest",
     "executePositionPIDTest",
 ];
+/// M5's calibration actions.
+const M5_ACTIONS: [&str; 4] = [
+    "cutTriangularCalibrationPattern",
+    "acceptTriangularCalibrationResults",
+    "cutHoleyCalibrationPattern",
+    "acceptHoleyCalibrationResults",
+];
 const SENDING: &str = "Cannot issue command while sending gcode.";
 
 #[test]
@@ -114,9 +121,9 @@ fn m2_produces_the_pid_results_message_within_its_closed_schema() {
 }
 
 #[test]
-fn m1_and_m2_actions_are_refused_while_streaming_exactly_as_their_gates_say() {
+fn m1_m2_and_m5_actions_are_refused_while_streaming_exactly_as_their_gates_say() {
     let actions = Contract::shared().actions();
-    M1_ACTIONS.iter().chain(&M2_ACTIONS).for_each(|command| {
+    M1_ACTIONS.iter().chain(&M2_ACTIONS).chain(&M5_ACTIONS).for_each(|command| {
         let gate = actions.get(*command).unwrap_or_else(|| panic!("{command} is not a contract action"));
         let mut rig = Rig::connected();
         rig.machine.load_gcode("G0 X1\nG0 X2\nG0 X3\n");
