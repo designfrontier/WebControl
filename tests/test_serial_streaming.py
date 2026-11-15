@@ -351,3 +351,51 @@ def test_a_stop_while_a_line_is_being_written_leaves_the_index_at_the_start(data
     thread.sendNextLine()
 
     assert (data.gcodeIndex, data.uploadFlag) == (0, 0)
+
+
+@pytest.mark.parametrize("buffer", [False, True])
+def test_a_line_with_an_unclosed_comment_pauses_the_run(data, serial, buffer):
+    port = stream(data, serial, ["G1 X0 ", "G1 X1 (rough pass", "G1 X2 "], buffer=buffer)
+
+    assert port.sent == ["G1 X0  "]
+    assert (data.uploadFlag, data.gcodeIndex) == (2, 1)
+    assert ("Line Unclosed Comment", "Line 2 has an unclosed comment, which hangs the controller. "
+            "Edit the file and resume or stop.") in alerts(serial)
+
+
+def test_a_queued_command_with_an_unclosed_comment_is_refused(data, serial):
+    def queue_commands(port):
+        drain(data.gcode_queue)
+        data.gcode_queue.put("G0 X1 (note")
+        data.gcode_queue.put("G0 X2 (closed) ; and done (")
+
+    port = serial.run(on_poll=once_after(serial.clock, 0, queue_commands))
+
+    assert port.sent == ["G0 X2   "]
+    assert ("Command Unclosed Comment", "That command has an unclosed comment, which hangs the controller.") in alerts(serial)
+
+
+def test_realtime_and_control_characters_are_removed_from_streamed_lines(data, serial):
+    port = stream(data, serial, ["G1 X1! Y2~ Z`3? F4\x18\x00 "])
+
+    assert port.sent == ["G1 X1 Y2 Z3 F4  "]
+
+
+def test_realtime_and_control_characters_are_removed_from_queued_commands(data, serial):
+    def queue_commands(port):
+        drain(data.gcode_queue)
+        data.gcode_queue.put("G0 X1!~`?\x18\x7f")
+
+    port = serial.run(on_poll=once_after(serial.clock, 0, queue_commands))
+
+    assert port.sent == ["G0 X1 "]
+
+
+def test_realtime_commands_sent_on_purpose_still_go_out(data, serial):
+    def queue_commands(port):
+        drain(data.gcode_queue)
+        data.quick_queue.put("~")
+
+    port = serial.run(on_poll=once_after(serial.clock, 0, queue_commands))
+
+    assert "~" in port.sent

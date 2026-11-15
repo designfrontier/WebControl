@@ -120,6 +120,12 @@ class SerialPortThread(MakesmithInitFuncs):
         filtersparsed = re.sub(r'\(([^)]*)\)', '', line)  # mach3 style ( ) comments
         return re.sub(r';([^\n]*)?', '', filtersparsed)  # standard ; comments
 
+    def _sanitise(self, line):
+        '''
+        Strips comments, and the characters the firmware acts on as realtime commands anywhere in a line.
+        '''
+        return re.sub(r'[!~`?\x00-\x1f\x7f]', '', self._stripComments(line))
+
     def _positioningModeSetBy(self, line):
         '''
         :return: 0 if the line switches to absolute (G90), 1 if to relative (G91), None if it does neither.
@@ -145,6 +151,10 @@ class SerialPortThread(MakesmithInitFuncs):
         :param line: the line exactly as it will be written, without its newline.
         :return: (title, reason, advice) if the controller can't safely take the line, else None.
         '''
+        if "(" in line:
+            # 51.27 loops forever on a comment.
+            return ("Unclosed Comment", "has an unclosed comment, which hangs the controller.",
+                    "Edit the file and resume or stop.")
         written = len(line) + 1
         if written > self.bufferSize:
             # The firmware's ring overflows and it then runs the line's unread tail as a command.
@@ -168,7 +178,7 @@ class SerialPortThread(MakesmithInitFuncs):
         """
         if self.data.gcodeIndex < len(self.data.gcode):
             runGeneration = self.data.runGeneration
-            line = self._stripComments(self.data.gcode[self.data.gcodeIndex])
+            line = self._sanitise(self.data.gcode[self.data.gcodeIndex])
             problem = self._streamProblem(line)
             if problem is not None:
                 return self._refuseStreamLine(problem)
@@ -413,7 +423,7 @@ class SerialPortThread(MakesmithInitFuncs):
         if self.data.uploadFlag == 1 and len(self.data.gcode) > 0 and self.data.gcode_queue.empty():
             if self.weAreBufferingLines:
                 try:
-                    line = self._stripComments(self.data.gcode[self.data.gcodeIndex])
+                    line = self._sanitise(self.data.gcode[self.data.gcodeIndex])
                     # sendNextLine refuses a problem line at once, so it needn't wait for room.
                     fits = (line.isspace() or self._streamProblem(line) is not None
                             or self.bufferSpace >= len(self._shiftToHome(line) + "\n"))
@@ -427,7 +437,7 @@ class SerialPortThread(MakesmithInitFuncs):
                 self.sendNextLine()
 
     def _sendQueuedCommand(self, command):
-        command = self._stripComments(command)
+        command = self._sanitise(command)
         if len(command) == 0:
             return
         command = command + " "
