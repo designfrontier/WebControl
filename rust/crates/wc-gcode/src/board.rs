@@ -61,6 +61,8 @@ pub enum BoardError {
     /// No cut data to save, after a clear.
     NoCutData,
     BadFile(String),
+    /// A grid with more cells than a board could need, which Python would exhaust memory building.
+    TooLarge,
 }
 
 impl fmt::Display for BoardError {
@@ -70,6 +72,7 @@ impl fmt::Display for BoardError {
             BoardError::CutDataMismatch => f.write_str("the cut data does not fit the board"),
             BoardError::NoCutData => f.write_str("the board has no cut data"),
             BoardError::BadFile(reason) => write!(f, "not a board file: {reason}"),
+            BoardError::TooLarge => f.write_str("the board is too large to grid"),
         }
     }
 }
@@ -125,6 +128,15 @@ fn inches(text: &str, scale: f64) -> Option<Dim> {
 /// `math.ceil`, which raises on NaN and infinity.
 fn ceil(value: f64) -> Result<i64, BoardError> {
     value.is_finite().then(|| value.ceil() as i64).ok_or(BoardError::NotANumber)
+}
+
+/// About a 340-foot square board in 1-inch cells.
+const MAX_CELLS: i64 = 1 << 24;
+
+/// Python's `range(columns * rows)`, empty when the product is negative.
+fn cell_count(columns: i64, rows: i64) -> Result<usize, BoardError> {
+    let cells = columns.checked_mul(rows).filter(|&cells| cells <= MAX_CELLS).ok_or(BoardError::TooLarge)?;
+    Ok(usize::try_from(cells).unwrap_or(0))
 }
 
 /// Python's `list[index]`, negative indices counting from the end.
@@ -235,7 +247,7 @@ impl Board {
         let old_columns = ceil(width)?;
         let columns = ceil(width - left - right)?;
         let rows = ceil(height - top - bottom)?;
-        let mut cells = vec![Cell::Cut(false); usize::try_from(columns * rows).unwrap_or(0)];
+        let mut cells = vec![Cell::Cut(false); cell_count(columns, rows)?];
         if !self.cut_points.is_empty() {
             let (skip_x, skip_y) = (left as i64, bottom as i64);
             for (x, y) in (0..columns).flat_map(|x| (0..rows).map(move |y| (x, y))) {
@@ -335,7 +347,7 @@ impl CutGrid {
             rows,
             offset: (columns as f64 / 2.0 - centre_x, rows as f64 / 2.0 - centre_y),
             home: (gcode_shift.0 * scale, gcode_shift.1 * scale),
-            cells: vec![false; usize::try_from(columns * rows).unwrap_or(0)],
+            cells: vec![false; cell_count(columns, rows)?],
         })
     }
 
@@ -561,10 +573,19 @@ mod tests {
     }
 
     #[test]
+    fn a_grid_too_large_to_hold_is_refused() {
+        let mut huge = board(1e10, 1e10, (0.0, 0.0));
+        assert_eq!(huge.process_gcode(&[], (0.0, 0.0), Units::Inches), Err(BoardError::TooLarge));
+        let trim = BoardTrim { top: "0", bottom: "0", left: "-1e10", right: "0", units: "inches" };
+        assert_eq!(board(4.0, 1e10, (0.0, 0.0)).trim(&trim), Err(BoardError::TooLarge));
+    }
+
+    #[test]
     fn errors_read_as_sentences() {
         assert_eq!(BoardError::NotANumber.to_string(), "a board dimension is not a number");
         assert_eq!(BoardError::CutDataMismatch.to_string(), "the cut data does not fit the board");
         assert_eq!(BoardError::NoCutData.to_string(), "the board has no cut data");
         assert_eq!(BoardError::BadFile("x".into()).to_string(), "not a board file: x");
+        assert_eq!(BoardError::TooLarge.to_string(), "the board is too large to grid");
     }
 }
