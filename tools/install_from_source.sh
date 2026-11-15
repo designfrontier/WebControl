@@ -25,6 +25,7 @@ port=5000
 settings="$HOME/.WebControl/webcontrol.json"
 settings_v094="$settings.v094"
 piwheels=https://www.piwheels.org/simple
+uv_installer=https://astral.sh/uv/install.sh
 os_release=/etc/os-release
 
 say() { printf '\n==> %s\n' "$*"; }
@@ -42,16 +43,32 @@ port_busy() { ss -ltnH "sport = :$port" 2>/dev/null | grep -q .; }
 find_uv() { command -v uv || { [ -x "$HOME/.local/bin/uv" ] && echo "$HOME/.local/bin/uv"; } || true; }
 # dpkg reports the userland, which is 32-bit on some Pis whose kernel uname calls aarch64.
 deb_arch() { dpkg --print-architecture 2>/dev/null || uname -m; }
+is_arm64() { case "$(deb_arch)" in arm64 | aarch64) return 0 ;; *) return 1 ;; esac; }
 is_pi32() { case "$(deb_arch)" in armhf | armel | armv7l | armv6l) return 0 ;; *) return 1 ;; esac; }
 # shellcheck source=/dev/null
 os_codename() { (. "$os_release" 2>/dev/null && echo "${VERSION_CODENAME:-unknown}") || echo unknown; }
 is_py39() { "$1" -c 'import sys; sys.exit(sys.version_info[:2] != (3, 9))' 2>/dev/null; }
 
+system_py39() {
+  local candidate
+  for candidate in python3.9 python3; do
+    command -v "$candidate" >/dev/null && is_py39 "$candidate" && { echo "$candidate"; return 0; }
+  done
+  return 0
+}
+
 explain_python() {
-  die "Python 3.9 was not found, and WebControl's pinned requirements need it.
-  Raspberry Pi OS 11 (Bullseye) ships Python 3.9 as python3. 64-bit Buster has 3.7 and Bookworm 3.11.
-  On those, install uv, open a new shell, and re-run this script; uv downloads its own Python 3.9:
-    curl -LsSf https://astral.sh/uv/install.sh | sh"
+  die "uv could not create a Python 3.9 .venv, and WebControl's pinned requirements need 3.9.
+  uv downloads Python 3.9 from GitHub, so check the Pi is online and re-run this script."
+}
+
+# Only Bullseye ships Python 3.9; elsewhere uv downloads it.
+ensure_uv() {
+  [ -z "$(find_uv)" ] || return 0
+  [ -z "$(system_py39)" ] || return 0
+  say "Installing uv, which downloads the Python 3.9 this release lacks ($(python3 -V 2>&1))"
+  curl -LsSf "$uv_installer" | sh
+  [ -n "$(find_uv)" ] || die "uv did not install. Install it by hand and re-run: curl -LsSf $uv_installer | sh"
 }
 
 report_old_webcontrol() {
@@ -111,7 +128,11 @@ apt_packages() {
     # PyPI's opencv-python wheel loads libGL and GLib, which Raspberry Pi OS Lite leaves out.
     packages+=(libgl1 libglib2.0-0)
   fi
-  case "$(deb_arch)" in arm64 | aarch64) packages+=(gcc python3-dev) ;; esac
+  # psutil 5.9.4 has no aarch64 wheel, so it is built here; uv's Python brings its own headers.
+  if is_arm64; then
+    packages+=(gcc libc6-dev)
+    [ -n "$(find_uv)" ] || packages+=(python3-dev)
+  fi
   say "Installing system packages: ${packages[*]}"
   sudo apt-get update
   sudo apt-get install -y --no-install-recommends "${packages[@]}"
@@ -135,14 +156,10 @@ create_venv() {
     "$uv" venv --python 3.9 "$venv" || explain_python
     return 0
   fi
-  for candidate in python3.9 python3; do
-    if command -v "$candidate" >/dev/null && is_py39 "$candidate"; then
-      say "Creating .venv with $candidate -m venv"
-      "$candidate" -m venv "$venv"
-      return 0
-    fi
-  done
-  explain_python
+  candidate="$(system_py39)"
+  [ -n "$candidate" ] || explain_python
+  say "Creating .venv with $candidate -m venv"
+  "$candidate" -m venv "$venv"
 }
 
 # piwheels lacks some pinned versions for armv7, so those pins are swapped for requirements-pi-overrides.txt.
@@ -253,7 +270,7 @@ wait_for_server() {
   local path="${1:-/next/}" attempt
   say "Waiting for http://localhost:$port$path"
   for attempt in $(seq 1 120); do
-    if curl -fsS -o /dev/null "http://localhost:$port$path"; then
+    if curl -fs -o /dev/null "http://localhost:$port$path"; then
       echo "WebControl is up after ${attempt}s: http://$(hostname -I | awk '{print $1}'):$port$path"
       return 0
     fi
@@ -280,7 +297,7 @@ activate() {
     say "Stopping and disabling the v0.94 webcontrol.service"
     sudo systemctl disable --now webcontrol
   fi
-  if systemctl is-active --quiet webcontrol-v094 || systemctl is-enabled --quiet webcontrol-v094; then
+  if systemctl is-active --quiet webcontrol-v094 || systemctl is-enabled --quiet webcontrol-v094 2>/dev/null; then
     sudo systemctl disable --now webcontrol-v094
   fi
   if [ "$from_v094" = 1 ] || { [ -f "$old_unit" ] && [ ! -f "$settings_v094" ]; }; then
@@ -333,6 +350,7 @@ main() {
   check_platform
   report_old_webcontrol
   id -nG | tr ' ' '\n' | grep -qx dialout || echo "WARNING: $(id -un) is not in the dialout group, so /dev/ttyACM0 may be unreadable: sudo usermod -aG dialout $(id -un)"
+  ensure_uv
   apt_packages
   create_venv
   install_requirements

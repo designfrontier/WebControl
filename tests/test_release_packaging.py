@@ -271,6 +271,47 @@ def test_rollback_needs_the_saved_v094_unit(tmp_path):
     assert not (tmp_path / "sudo.log").exists()
 
 
+def uv_prelude(tmp_path, python_minor):
+    """Bash that hides any real uv and fakes python3 as 3.<python_minor> and the uv installer."""
+    (tmp_path / "home").mkdir(exist_ok=True)
+    py39 = "return 0" if python_minor == 9 else "return 1"
+    return (
+        f'export HOME="{tmp_path}/home" PATH=/usr/bin:/bin; '
+        f'python3() {{ [ "$1" = -V ] && echo "Python 3.{python_minor}" || {py39}; }}; python3.9() {{ {py39}; }}; '
+        'curl() { echo "curl $*" >>"$repo/curl.log"; }; '
+        'sh() { mkdir -p "$HOME/.local/bin" && printf "#!/bin/sh\\n" >"$HOME/.local/bin/uv" '
+        '&& chmod +x "$HOME/.local/bin/uv"; }; '
+    )
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+@pytest.mark.parametrize("python_minor", [11, 13])
+def test_bookworm_and_trixie_get_uv_for_python_3_9(tmp_path, python_minor):
+    out = source_install_script(tmp_path, uv_prelude(tmp_path, python_minor) + "ensure_uv; find_uv", machine="aarch64")
+    assert (tmp_path / "curl.log").read_text().split() == ["curl", "-LsSf", "https://astral.sh/uv/install.sh"]
+    assert out.strip().endswith(f"{tmp_path}/home/.local/bin/uv")
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+def test_bullseye_uses_its_own_python_3_9_without_uv(tmp_path):
+    source_install_script(tmp_path, uv_prelude(tmp_path, 9) + "ensure_uv", machine="aarch64")
+    assert not (tmp_path / "curl.log").exists()
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+def test_64_bit_pi_os_gets_a_compiler_for_psutil_but_no_system_python_headers_with_uv(tmp_path):
+    source_install_script(tmp_path, "find_uv() { echo uv; }; apt_packages", machine="aarch64", userland="arm64")
+    packages = installed_packages(tmp_path)
+    assert {"gcc", "libc6-dev"} <= set(packages)
+    assert "python3-dev" not in packages and "python3-venv" not in packages
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+def test_64_bit_bullseye_without_uv_gets_venv_and_headers_for_its_python(tmp_path):
+    source_install_script(tmp_path, "find_uv() { :; }; apt_packages", machine="aarch64", userland="arm64")
+    assert {"python3-venv", "python3-dev", "gcc", "libc6-dev"} <= set(installed_packages(tmp_path))
+
+
 def test_the_runtime_requirements_pin_setuptools_because_uv_venvs_lack_pkg_resources():
     with open(os.path.join(REPO, "requirements.txt")) as handle:
         assert "setuptools==75.3.0" in handle.read().splitlines()
