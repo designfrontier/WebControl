@@ -736,6 +736,8 @@ class Config(MakesmithInitFuncs):
             loggingTimeout = self.getValue("WebControl Settings", "loggingTimeout")
 
             self.data.logger.setLoggingTimeout(loggingTimeout)
+        if key == "recordSerial" or doAll is True:
+            self.data.serialRecorder.setEnabled(int(self.getValue("WebControl Settings", "recordSerial") or 0))
         if key == "kinematicsType" or doAll is True:
             if doAll is True:
                 value = self.getValue("Advanced Settings", "kinematicsType")

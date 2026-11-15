@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { SettingsSection } from "../../protocol";
 import { fakeFetch, jsonResponse } from "../../test/fakeFetch";
 import { currentPath, renderApp } from "../../test/render";
-import { gpioSection, maslowSection, setting } from "./fixtures";
+import { gpioSection, maslowSection, setting, webcontrolSection } from "./fixtures";
 
 const sentBody = (init: RequestInit | undefined) =>
   JSON.parse(String(init?.body)) as { values: Record<string, unknown> };
@@ -249,6 +249,21 @@ describe("SettingsPage", () => {
     await user.selectOptions(pin, "Stop");
     await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(puts).toEqual([{ gpio2: "Stop" }]));
+  });
+
+  it("turns on serial recording from the WebControl tab", async () => {
+    const { fetch, puts } = settingsServer(webcontrolSection());
+    const { user } = renderApp("/settings/webcontrol", { fetch });
+    await screen.findByRole("form", { name: "WebControl Settings" });
+
+    const record = screen.getByLabelText("Record serial traffic");
+    expect(record).not.toBeChecked();
+    expect(record).toHaveAccessibleDescription(/serial-recordings/);
+    await user.click(record);
+    await user.click(saveButton());
+
+    await waitFor(() => expect(puts).toEqual([{ recordSerial: true }]));
+    expect(screen.getByLabelText("Record serial traffic")).toBeChecked();
   });
 
   it("switches sections from the tabs", async () => {

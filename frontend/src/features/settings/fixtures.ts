@@ -32,6 +32,22 @@ export const maslowSection = (over: Partial<SettingsSection> = {}): SettingsSect
   ...over,
 });
 
+export const webcontrolSection = (): SettingsSection => ({
+  id: "webcontrol",
+  title: "WebControl Settings",
+  enableCustom: false,
+  settings: [
+    setting({ key: "loggingTimeout", title: "Logger Idle Timeout", type: "float", value: 0, numeric: true }),
+    setting({
+      key: "recordSerial",
+      title: "Record serial traffic",
+      desc: "Append every line sent to and received from the controller to ~/.WebControl/serial-recordings.",
+      type: "bool",
+      value: 0,
+    }),
+  ],
+});
+
 export const gpioSection = (): SettingsSection => ({
   id: "gpio",
   title: "GPIO Settings",
