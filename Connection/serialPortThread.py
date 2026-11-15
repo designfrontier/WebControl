@@ -4,7 +4,7 @@ import re
 
 import serial
 
-from Connection.firmwareGcode import changesTool, toolTheFirmwareReads, withToolWordFirst
+from Connection.firmwareGcode import changesTool, pausesFirmware, toolTheFirmwareReads, withToolWordFirst
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
 
 
@@ -189,13 +189,15 @@ class SerialPortThread(MakesmithInitFuncs):
         self.data.actions.sendGCodePositionUpdate(self.data.gcodeIndex)
 
     def managePause(self, line):
-        if line.find("M0 ") != -1 or line.find("M00") != -1 or line.find("M1 ") != -1 or line.find("M01") != -1:
-            print("found M command for pause")
+        '''
+        Stops streaming after an M0/M1 line; the firmware then waits for the "~" that Resume sends.
+        '''
+        if not pausesFirmware(line):
+            return
+        if self.data.uploadFlag == 1:
             self.data.uploadFlag = -1
-            self.data.pausedUnits = self.data.units
-            self.data.ui_queue1.put("Action", "setAsResume", "")
-            # clear machine out of pause mode
-            self.data.quick_queue.put("~")
+        self.data.pausedUnits = self.data.units
+        self.data.ui_queue1.put("Action", "setAsResume", "")
 
     def manageToolChange(self, line):
         '''

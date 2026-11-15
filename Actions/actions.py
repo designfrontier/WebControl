@@ -695,6 +695,9 @@ class Actions(MakesmithInitFuncs):
             elif self.data.uploadFlag == 1:
                 # A second Resume (double click, another client) must not lift and replunge mid-cut.
                 return True
+            elif self.data.uploadFlag == 0 and not self.data.jobInProgress:
+                # An M0 sent from the console paused the firmware with no job to carry on.
+                pass
             else:
                 # The user may have jogged, homed or moved the gcode index while paused, so return to the file's
                 # position at the current index at safe height before lowering the bit.
