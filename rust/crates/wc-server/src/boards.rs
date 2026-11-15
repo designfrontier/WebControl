@@ -127,7 +127,7 @@ pub(crate) async fn save(State(state): State<AppState>, request: Request) -> Res
         .await;
     let file_name = target.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let saved = match machine.request(Ask::SaveBoard(file_name)).await {
-        Reply::Text(text) => match std::fs::write(&target, text) {
+        Reply::Text(text) => match tokio::fs::write(&target, text).await {
             Ok(()) => true,
             Err(error) => {
                 tracing::warn!(%error, target = %target.display(), "could not save the board");

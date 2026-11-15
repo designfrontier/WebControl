@@ -121,8 +121,8 @@ pub fn restore(archive: &Path, dir: &Path) -> Result<Settings, String> {
     Ok(settings)
 }
 
-fn zip_response(path: &Path, attachment: bool) -> Response {
-    match std::fs::read(path) {
+async fn zip_response(path: &Path, attachment: bool) -> Response {
+    match tokio::fs::read(path).await {
         Ok(bytes) => {
             let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
             let disposition = format!("{}; filename={name}", if attachment { "attachment" } else { "inline" });
@@ -145,7 +145,7 @@ async fn blocking<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) 
 pub(crate) async fn download_backup(State(state): State<AppState>) -> Response {
     let home = state.paths.home();
     match blocking(move || backup(&home)).await {
-        Some(Ok(path)) => zip_response(&path, false),
+        Some(Ok(path)) => zip_response(&path, false).await,
         Some(Err(error)) => failed(&error.to_string()),
         None => failed("the backup stopped"),
     }
@@ -154,7 +154,7 @@ pub(crate) async fn download_backup(State(state): State<AppState>) -> Response {
 pub(crate) async fn download_diagnostics(State(state): State<AppState>) -> Response {
     let dir = state.paths.dir();
     match blocking(move || diagnostics(&dir)).await {
-        Some(Ok(path)) => zip_response(&path, true),
+        Some(Ok(path)) => zip_response(&path, true).await,
         Some(Err(error)) => failed(&error.to_string()),
         None => failed("the diagnostics stopped"),
     }
@@ -165,7 +165,10 @@ async fn saved_upload(request: Request, dir: PathBuf) -> Result<PathBuf, Respons
     let form = Form::read(request).await?;
     let upload = form.file("file")?;
     let target = dir.join(secure_filename(&upload.file_name));
-    let saved = std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(&target, &upload.bytes));
+    let saved = match tokio::fs::create_dir_all(&dir).await {
+        Ok(()) => tokio::fs::write(&target, &upload.bytes).await,
+        Err(error) => Err(error),
+    };
     saved.map(|_| target).map_err(|error| {
         tracing::warn!(%error, "could not save the upload");
         forms::status(500)

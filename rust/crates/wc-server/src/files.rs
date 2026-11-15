@@ -176,6 +176,14 @@ pub(crate) async fn open(State(state): State<AppState>, request: Request) -> Res
     reply_status(load_file(&state.machine, target, None, Origin::Open).await)
 }
 
+/// In order, stopping at the first that fails, as Python's loop does.
+async fn save_uploads(uploads: &[&forms::Upload], targets: &[PathBuf]) -> std::io::Result<()> {
+    for (upload, target) in uploads.iter().zip(targets) {
+        tokio::fs::write(target, &upload.bytes).await?;
+    }
+    Ok(())
+}
+
 pub(crate) async fn upload(State(state): State<AppState>, request: Request) -> Response {
     if let Some(refusal) = locked(&state) {
         return refusal;
@@ -203,9 +211,7 @@ pub(crate) async fn upload(State(state): State<AppState>, request: Request) -> R
     let Some(first) = uploads.first() else {
         return forms::status(500);
     };
-    let saved =
-        uploads.iter().zip(&targets[1..]).try_for_each(|(upload, target)| std::fs::write(target, &upload.bytes));
-    if let Err(error) = saved {
+    if let Err(error) = save_uploads(&uploads, &targets[1..]).await {
         tracing::warn!(%error, "could not save an upload");
         return forms::status(500);
     }
@@ -214,9 +220,9 @@ pub(crate) async fn upload(State(state): State<AppState>, request: Request) -> R
 }
 
 /// `GCodeFile.saveFile`: every line followed by a newline.
-fn write_lines(target: &Path, lines: &[String]) -> std::io::Result<()> {
+async fn write_lines(target: &Path, lines: &[String]) -> std::io::Result<()> {
     let text: String = lines.iter().map(|line| format!("{line}\n")).collect();
-    std::fs::write(target, text)
+    tokio::fs::write(target, text).await
 }
 
 pub(crate) async fn save(State(state): State<AppState>, request: Request) -> Response {
@@ -233,7 +239,7 @@ pub(crate) async fn save(State(state): State<AppState>, request: Request) -> Res
     };
     let machine = &state.machine;
     machine.request(Ask::SetSettings(vec![setting("Computed Settings", "lastSelectedDirectory", directory)])).await;
-    if let Err(error) = write_lines(&target, &machine.snapshot().gcode) {
+    if let Err(error) = write_lines(&target, &machine.snapshot().gcode).await {
         tracing::warn!(%error, target = %target.display(), "could not save the gcode");
         machine.request(Ask::Problem(Problem::GcodeUnsaved)).await;
         return forms::status(500);
