@@ -6,7 +6,7 @@
 
 ### Key directories
 
-- `.github/workflows/` — CI: frontend lint/typecheck/test/build, backend pytest, Playwright e2e
+- `.github/workflows/` — CI: frontend lint/typecheck/test/build, backend pytest, PyInstaller onedir smoke, Playwright e2e
 - `Actions/` — `actions.py` dispatches every UI action (jog, home, run/pause/stop, settings, firmware upgrade, backup); plus triangular, holey, optical calibration and GPIO actions
 - `api/` — JSON blueprint mounted at `/api` for the new frontend; every `api/<feature>.py` exposing `blueprint` auto-registers
 - `Background/` — long-running worker loops: controller message routing, UI socket push (`UIProcessor`), log streaming, webcam capture, console/WebMCP queue
@@ -56,8 +56,12 @@
 - `app.py` — creates Flask app, SocketIO and Mobility instances
 - `docs/index.md` — help site home
 - `main.py` — entry point: builds `Data`, starts worker threads, defines HTTP routes and socket handlers, runs the server
-- `main.spec` — PyInstaller build spec; it does not bundle `frontend/dist` yet, so packaged builds return 503 at
-  `/next`
+- `main.spec` / `main-onedir.spec` — PyInstaller onefile / onedir specs; both take their data files from
+  `pyinstaller_datas.py`, which bundles `frontend/dist` and refuses to build without it
+- `tools/build_release.sh` — frontend + firmware + PyInstaller onedir into
+  `releases/webcontrol-<version>-<platform>-singledirectory.tar.gz`; must run on the target architecture
+- `tools/install_from_source.sh` — Raspberry Pi source install as `webcontrol.service`; `spec/INSTALL-PI.md` is the
+  upgrade guide from v0.94
 - `next_ui.py` — serves `frontend/dist` at `/next` with SPA fallback
 - `tests/e2e_backend.py` — runs `main.py` on a throwaway `HOME` and port for Playwright
 

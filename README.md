@@ -37,6 +37,12 @@ At this point, WebControl has become the **de-facto beginner's tool for Maslow**
 
 See the [dedicated repository](https://github.com/WebControlCNC/webcontrol-pi).
 
+### Raspberry Pi from source, with the new UI
+
+`tools/install_from_source.sh` installs this repository as the `webcontrol.service` systemd service, with the new UI
+at `/next/` built off the Pi. [spec/INSTALL-PI.md](spec/INSTALL-PI.md) walks through it, including upgrading from a
+v0.94 release and rolling back. `tools/build_release.sh` builds a PyInstaller release on the machine it runs on.
+
 ### Raspberry Pi
 _Replace the version number with the latest release..._
 
