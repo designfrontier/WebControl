@@ -7,6 +7,7 @@ use wc_config::python_float_str;
 use wc_protocol::main::{HomePositionMessage, PauseButton, RequestedSetting, Units};
 use wc_protocol::{Action, float};
 
+use crate::clearance::Raise;
 use crate::commands;
 use crate::gates;
 use crate::job::Flow;
@@ -232,16 +233,22 @@ impl Machine {
             return Some("Error with returning to home.".into());
         };
         let text = |key: &str| self.settings.text("Advanced Settings", key).unwrap_or_default();
-        let lines = commands::home(self.units(), safe, &text("homeX"), &text("homeY"));
-        self.queue(lines);
+        let lines = commands::home(&text("homeX"), &text("homeY"));
+        self.queue_raised(safe, lines);
         None
+    }
+
+    fn queue_raised(&mut self, safe_height_mm: f64, travel: Vec<String>) {
+        self.queue([commands::BEFORE_RAISE.to_string()]);
+        self.queue_raise(Raise::Manual { units: self.units(), safe_height_mm });
+        self.queue(travel);
     }
 
     fn return_to_center(&mut self) -> Option<String> {
         let Some(safe) = self.safe_height() else {
             return Some("Error with returning to center".into());
         };
-        self.queue(commands::return_to_center(self.units(), safe));
+        self.queue_raised(safe, commands::return_to_center());
         None
     }
 

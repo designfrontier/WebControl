@@ -26,8 +26,14 @@ def test_transcript_replays_against_the_backend(app, path):
     jsonschema.validate(transcript, SCHEMA)
     assert transcript["meta"]["name"] == path.stem
     assert path.read_text() == serial_contract.dumps(transcript), "not in the recorder's layout"
+    if path.stem in serial_contract.RUST_ONLY:
+        pytest.skip("a Rust-intended deviation; only the Rust runner replays it")
 
     replay(app, transcript)
+
+
+def test_every_rust_only_transcript_exists():
+    assert serial_contract.RUST_ONLY <= {path.stem for path in TRANSCRIPTS}
 
 
 JOG = {

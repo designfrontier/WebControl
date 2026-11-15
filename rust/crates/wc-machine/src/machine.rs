@@ -169,6 +169,8 @@ pub(crate) enum Queued {
     Delay(Duration),
     /// The upgrade acts here once every line before it is answered.
     Mark(Mark),
+    /// Expanded once every line before it is answered, so the bit's height is known.
+    Raise(crate::clearance::Raise),
 }
 
 /// What readers see; every field is derived from the machine's state, never stored separately.
@@ -336,6 +338,7 @@ pub struct Machine {
     pub(crate) settings_dirty: bool,
     pub(crate) ports: Vec<String>,
     pub(crate) position: PositionTracker,
+    pub(crate) bit: crate::clearance::BitHeight,
     pub(crate) errors: ErrorTracker,
     pub(crate) reported_buffer: i64,
     pub(crate) last_status: Option<StatusMessage>,
@@ -391,6 +394,7 @@ impl Machine {
             settings_dirty: false,
             ports: Vec::new(),
             position: PositionTracker::default(),
+            bit: crate::clearance::BitHeight::new(units),
             errors: ErrorTracker::default(),
             reported_buffer: 127,
             last_status: None,

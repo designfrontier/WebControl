@@ -231,7 +231,7 @@ fn an_air_cut_against_the_simulator_runs_every_pause_and_ends_where_the_file_doe
     rig.run(3000);
     assert_eq!(state(&rig), (0, false, 0), "the restart and the rest of the file ran");
     let (_, written) = rig.take();
-    assert_eq!(written[..4], ["G21  ", "G90  ", "G0 Z5.0  ", "G0 X30.0 Y30.0  "]);
+    assert_eq!(written[..4], ["G21  ", "G90  ", "G0 Z15.01  ", "G0 X30.0 Y30.0  "], "the bit stayed 10 mm up");
     assert!(written.contains(&"G1 Z-1.0 F100.0  ".to_string()), "{written:?}");
     assert_eq!(rig.sim.position(), [0.0, 0.0, 5.0]);
     assert_eq!(rig.sim.overflows(), 0);

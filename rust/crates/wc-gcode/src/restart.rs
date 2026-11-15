@@ -31,6 +31,8 @@ pub struct GcodeState {
     pub motion: Option<u8>,
     pub tool: Option<i64>,
     pub spindle: Option<&'static str>,
+    /// The last S word, which 51.29x needs on a line of its own after M3 or M4.
+    pub spindle_speed: Option<f64>,
     pub laser: Option<&'static str>,
     pub dwell: Option<String>,
 }
@@ -78,6 +80,7 @@ impl StateParser {
             motion: None,
             tool: None,
             spindle: None,
+            spindle_speed: None,
             laser: None,
             dwell: None,
         };
@@ -94,6 +97,9 @@ impl StateParser {
             self.state.tool = self.next_tool;
         }
         let unnumbered = LINE_NUMBER.replace(&line, "");
+        if let Ok(Some(speed)) = words::value(&unnumbered, 'S') {
+            self.state.spindle_speed = Some(speed);
+        }
         group_words(&unnumbered).iter().try_for_each(|words| self.words(words))
     }
 
@@ -206,35 +212,60 @@ pub struct Restart {
     pub stopped_at_tool_change: bool,
 }
 
-/// `queueRestartSequence`: raise to safe height, move to the state's XY, restore tool, spindle, laser and dwell, lower
-/// the bit to `z_target` (the state's Z by default) at the plunge feed, then restore the file's modal G0/G1, feed and
-/// positioning. With `change_tool`, it stops after an M6 that changes from `current_tool`.
-pub fn sequence(
-    state: &GcodeState,
-    z_target: Option<f64>,
-    change_tool: bool,
-    current_tool: i64,
-    safe_height_mm: f64,
-) -> Restart {
+/// What a restart needs beyond the file's state.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Options {
+    /// Where to lower the bit to; the state's Z by default.
+    pub z_target: Option<f64>,
+    /// Stop after an M6 that changes from `current_tool`.
+    pub change_tool: bool,
+    pub current_tool: i64,
+    pub safe_height_mm: f64,
+    /// The bit's height before the restart, in mm, when known.
+    pub current_z_mm: Option<f64>,
+    /// 51.29x leaves the spindle's PWM at 0 after M3 or M4 until an S line.
+    pub speed_after_spindle: bool,
+}
+
+/// `value` rounded up to `digits` places, ignoring float noise below them.
+pub fn round_up(value: f64, digits: i32) -> f64 {
+    let scale = 10f64.powi(digits);
+    ((value * scale) - 1e-6).ceil() / scale
+}
+
+/// The height to travel at, in `units`: the safe height, or the bit's own height (rounded up) when that is higher.
+pub fn clearance(units: Units, safe_height_mm: f64, current_z_mm: Option<f64>) -> f64 {
+    let to_units = |mm: f64| if units == Units::Inches { mm / 25.4 } else { mm };
+    let safe_height = to_units(safe_height_mm);
+    current_z_mm.map(to_units).filter(|&z| z > safe_height).map_or(safe_height, |z| round_up(z, 4))
+}
+
+/// `queueRestartSequence`: rise to the travel height, move to the state's XY, restore tool, spindle, laser and dwell,
+/// lower the bit to its Z target at the plunge feed, then restore the file's modal G0/G1, feed and positioning.
+pub fn sequence(state: &GcodeState, options: &Options) -> Restart {
     let number = |value: f64| py::repr(py::round(value, 4));
-    let safe_height = if state.units == Units::Inches { safe_height_mm / 25.4 } else { safe_height_mm };
+    let travel_height = clearance(state.units, options.safe_height_mm, options.current_z_mm);
     let mut lines = vec![
         units_word(state.units).to_string(),
         "G90 ".to_string(),
         // G0 runs at the firmware's maximum and ignores F, but would still set the modal F.
-        format!("G0 Z{} ", number(safe_height)),
+        format!("G0 Z{} ", number(travel_height)),
         format!("G0 X{} Y{} ", number(state.x), number(state.y)),
     ];
-    if let Some(tool) = state.tool.filter(|_| change_tool) {
+    if let Some(tool) = state.tool.filter(|_| options.change_tool) {
         lines.push(format!("T{tool} M6 "));
         // Anything queued behind a pausing M6 would run, plunge included, as soon as a jog releases the firmware.
-        if tool != current_tool {
+        if tool != options.current_tool {
             return Restart { lines, stopped_at_tool_change: true };
         }
     }
-    lines.extend([state.spindle, state.laser].into_iter().flatten().map(str::to_string));
+    lines.extend(state.spindle.map(str::to_string));
+    let spindle_on = matches!(state.spindle, Some("M3 " | "M4 "));
+    let speed = state.spindle_speed.filter(|_| spindle_on && options.speed_after_spindle);
+    lines.extend(speed.map(|speed| format!("S{} ", number(speed))));
+    lines.extend(state.laser.map(str::to_string));
     lines.extend(state.dwell.iter().map(|dwell| format!("G4 {dwell}")));
-    let z = z_target.or(state.z);
+    let z = options.z_target.or(state.z);
     lines.extend(z.map(|z| format!("G1 Z{} F{} ", number(z), number(state.z_feed_rate))));
     // Bare axis words in the file continue its G0 or G1, not the restart's last move; an arc needs its own words.
     let motion = state.motion.filter(|&code| code < 2).map_or(String::new(), |code| format!("G{code} "));
@@ -267,7 +298,67 @@ mod tests {
 
     fn restart_with(lines: &[&str], index: usize, home: (f64, f64), units: Units, current_tool: i64) -> Vec<String> {
         let state = state_at(&file(lines), index, home.0, home.1, units).unwrap();
-        sequence(&state, None, true, current_tool, 5.0).lines
+        sequence(&state, &Options { current_tool, ..options() }).lines
+    }
+
+    fn options() -> Options {
+        Options {
+            z_target: None,
+            change_tool: true,
+            current_tool: 0,
+            safe_height_mm: 5.0,
+            current_z_mm: None,
+            speed_after_spindle: false,
+        }
+    }
+
+    fn resumed_from(lines: &[&str], index: usize, options: Options) -> Vec<String> {
+        sequence(&state_at(&file(lines), index, 0.0, 0.0, Units::Mm).unwrap(), &options).lines
+    }
+
+    #[test]
+    fn the_travel_height_never_lowers_the_bit() {
+        let at = |current_z_mm| resumed_from(&METRIC_FILE, 3, Options { current_z_mm, ..options() })[2].clone();
+        assert_eq!(at(Some(10.0)), "G0 Z10.0 ");
+        assert_eq!(at(Some(5.0)), SAFE_Z_MM);
+        assert_eq!(at(Some(-3.0)), SAFE_Z_MM);
+        assert_eq!(at(None), SAFE_Z_MM);
+        assert_eq!(at(Some(10.00001)), "G0 Z10.0001 ");
+    }
+
+    #[test]
+    fn the_travel_height_is_in_the_files_units() {
+        let lines = ["G20", "G90", "G0 X1 Y2", "G1 Z-0.1", "G1 X3"];
+        let raised = resumed_from(&lines, 4, Options { current_z_mm: Some(12.7), ..options() });
+        assert_eq!(raised[..4], ["G20 ", "G90 ", "G0 Z0.5 ", "G0 X1.0 Y2.0 "]);
+        assert_eq!(clearance(Units::Inches, 5.0, Some(1.0)), 5.0 / 25.4);
+        assert_eq!(clearance(Units::Inches, 5.0, Some(5.08)), 0.2);
+    }
+
+    #[test]
+    fn rounding_up_ignores_float_noise() {
+        assert_eq!(round_up(23.14, 4), 23.14);
+        assert_eq!(round_up(0.19685, 4), 0.1969);
+        assert_eq!(round_up(-1.00001, 4), -1.0);
+    }
+
+    #[test]
+    fn on_51_29x_the_spindle_gets_the_files_last_speed_on_its_own_line() {
+        let on_51_29 = Options { speed_after_spindle: true, ..options() };
+        let cases: [(&[&str], &[&str]); 5] = [
+            (&["G90", "M3 S12000", "G1 X1"], &["M3 ", "S12000.0 "]),
+            (&["G90", "S8000", "M4", "G1 X1"], &["M4 ", "S8000.0 "]),
+            (&["G90", "M3 S1000", "S2000.5", "G1 X1"], &["M3 ", "S2000.5 "]),
+            (&["G90", "M3 S1000", "M5", "G1 X1"], &["M5 "]),
+            (&["G90", "M3", "G1 X1"], &["M3 "]),
+        ];
+        cases.iter().for_each(|(lines, restored)| {
+            let queued = resumed_from(lines, lines.len() - 1, on_51_29.clone());
+            let spindle = queued.iter().filter(|line| line.starts_with(['M', 'S'])).collect::<Vec<_>>();
+            assert_eq!(spindle, *restored, "{lines:?}");
+        });
+        let elsewhere = resumed_from(&["G90", "M3 S12000", "G1 X1"], 2, options());
+        assert!(elsewhere.iter().all(|line| !line.starts_with('S')), "{elsewhere:?}");
     }
 
     fn restart(lines: &[&str], index: usize) -> Vec<String> {
@@ -432,7 +523,7 @@ mod tests {
     fn a_resume_lowers_to_its_own_z_target_and_never_changes_tool() {
         let lines = file(&["T2 M6", "G90", "G0 X10 Y20", "G1 X30"]);
         let state = state_at(&lines, 3, 0.0, 0.0, Units::Mm).unwrap();
-        let resumed = sequence(&state, Some(1.5), false, 0, 5.0);
+        let resumed = sequence(&state, &Options { z_target: Some(1.5), change_tool: false, ..options() });
         assert_eq!(resumed.lines[4], "G1 Z1.5 F12.8 ");
         assert!(resumed.lines.iter().all(|line| !line.contains("M6")));
         assert_eq!(state_at(&file(&["G91", "G0 X10 Y20", "G1 Z-3", "G1 X5"]), 3, 0.0, 0.0, Units::Mm).unwrap().z, None);
@@ -469,11 +560,11 @@ mod tests {
     #[test]
     fn a_restart_after_a_tool_change_stops_at_the_m6_and_stays_at_safe_height() {
         let state = state_at(&file(&TOOL_CHANGE_FILE), 9, 0.0, 0.0, Units::Mm).unwrap();
-        let restart = sequence(&state, None, true, 0, 5.0);
+        let restart = sequence(&state, &options());
         assert!(restart.stopped_at_tool_change);
         assert_eq!(restart.lines.last().unwrap(), "T2 M6 ");
         assert!(lowered_to(&restart.lines).is_empty());
-        assert!(lowered_to(&sequence(&state, None, false, 0, 5.0).lines).is_empty());
+        assert!(lowered_to(&sequence(&state, &Options { change_tool: false, ..options() }).lines).is_empty());
     }
 
     #[test]

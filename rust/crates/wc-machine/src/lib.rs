@@ -3,6 +3,7 @@
 
 mod actions;
 pub mod calibration;
+mod clearance;
 pub mod commands;
 mod edits;
 pub mod files;

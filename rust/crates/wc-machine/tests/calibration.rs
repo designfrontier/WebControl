@@ -199,6 +199,18 @@ fn holey_accept_saves_the_fit_and_writes_each_changed_setting_once() {
 }
 
 #[test]
+fn triangular_accept_never_lowers_the_bit_before_returning_to_the_centre() {
+    let mut rig = Rig::connected();
+    rig.act("defineZ0");
+    rig.act_with("moveZ", json!("raise"), json!("9.5"));
+    rig.run_to_quiet();
+    calculate_on(&mut rig, Kind::Triangular, triangular_body());
+    assert_eq!(accept_on(&mut rig, Kind::Triangular).status, 200);
+    let sent = rig.run_to_quiet();
+    assert_eq!(sent[sent.len() - 2..], ["G0 Z9.5", "G0 X0 Y0"]);
+}
+
+#[test]
 fn triangular_accept_saves_then_returns_to_the_centre_in_mm() {
     let mut rig = Rig::connected();
     let calculated = calculate_on(&mut rig, Kind::Triangular, triangular_body()).body;

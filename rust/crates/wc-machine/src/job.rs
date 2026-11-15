@@ -8,12 +8,13 @@ use serde_json::Value;
 use wc_config::python_float;
 use wc_gcode::firmware_gcode::{only_selects_tool, pauses_firmware, tool_change_line};
 use wc_gcode::position::{Position, line_target, word};
-use wc_gcode::restart::{Restart, sequence, state_at};
+use wc_gcode::restart::{Options, Restart, sequence, state_at};
 use wc_gcode::sanitise::{sanitise, stream_problem};
 use wc_gcode::shift::{HomeShift, positioning_set_by, shift_to_home};
 use wc_gcode::{Positioning, py};
 use wc_protocol::main::{ActivateModal, ClearAlarm, GcodePositionMessage, PauseButton, RequestedSetting, Units};
 
+use crate::clearance::Raise;
 use crate::gpio::Led;
 use crate::machine::{Effect, Machine, broadcast};
 
@@ -166,12 +167,24 @@ impl Machine {
         self.realtime("~", now, effects);
     }
 
-    fn restart(&self, z_target: Option<f64>, change_tool: bool) -> Option<Restart> {
+    /// Queues the restart, whose height is settled once the lines before it are answered; `None` if it cannot be built.
+    fn queue_restart(&mut self, z_target: Option<f64>, change_tool: bool) -> Option<Restart> {
         let number = |section: &str, key: &str| self.settings.value(section, key).and_then(python_float);
         let (home_x, home_y) = (number("Advanced Settings", "homeX")?, number("Advanced Settings", "homeY")?);
         let safe_height = number("Maslow Settings", "zAxisSafeHeight")?;
         let state = state_at(&self.gcode, self.index, home_x, home_y, self.units()).ok()?;
-        Some(sequence(&state, z_target, change_tool, self.job.tool, safe_height))
+        let version = self.firmware_version;
+        let options = Options {
+            z_target,
+            change_tool,
+            current_tool: self.job.tool,
+            safe_height_mm: safe_height,
+            current_z_mm: None,
+            speed_after_spindle: (51.29..51.3).contains(&version),
+        };
+        let restart = sequence(&state, &options);
+        self.queue_raise(Raise::Restart(Box::new((state, options))));
+        Some(restart)
     }
 
     /// Play: a job paused by the controller or a tool change resumes; otherwise the file starts at the index.
@@ -185,11 +198,10 @@ impl Machine {
         self.job.z_target = self.position.z;
         let mut flow = Flow::Streaming;
         if self.index > 0 {
-            let Some(restart) = self.restart(None, true) else {
+            let Some(restart) = self.queue_restart(None, true) else {
                 self.index = 0;
                 return Some("Error with starting run.".into());
             };
-            self.queue(restart.lines);
             self.push_gcode_position(effects);
             // The firmware pauses on the restart's M6; Resume after the change returns and streams.
             if restart.stopped_at_tool_change {
@@ -213,7 +225,7 @@ impl Machine {
     }
 
     /// Releases the firmware, then, unless it only asked for Z by hand, returns to the file's position at safe height
-    /// and lowers the bit only if it is still the bit that paused there.
+    /// or higher, and lowers the bit only if it is still the bit that paused there.
     pub(crate) fn resume_run(&mut self, now: Duration, effects: &mut Vec<Effect>) -> Option<String> {
         let tool_change = self.job.manual_z == Some(true);
         let manual = self.job.manual_z == Some(false);
@@ -230,10 +242,9 @@ impl Machine {
                 self.follow_units(units == Units::Inches, effects);
             }
             let paused_here = self.job.paused_at.filter(|&(index, _)| index == self.index && !tool_change);
-            let Some(restart) = self.restart(paused_here.map(|(_, z)| z), false) else {
+            if self.queue_restart(paused_here.map(|(_, z)| z), false).is_none() {
                 return Some("Error with resuming run.".into());
-            };
-            self.queue(restart.lines);
+            }
             self.job.paused_units = None;
             self.job.paused_at = None;
             self.push_gcode_position(effects);

@@ -79,7 +79,8 @@ def main(argv=None):
     parser.add_argument("--stdout", action="store_true", help="print instead of writing files")
     parser.add_argument("--out", default=str(serial_contract.CONTRACT / "transcripts"))
     args = parser.parse_args(argv)
-    names = args.names or sorted(SCENARIOS)
+    # Python would overwrite the Rust-intended transcripts with its own behaviour.
+    names = args.names or sorted(set(SCENARIOS) - serial_contract.RUST_ONLY)
     unknown = [name for name in names if name not in SCENARIOS]
     if unknown:
         parser.error("unknown scenario(s): " + ", ".join(unknown))

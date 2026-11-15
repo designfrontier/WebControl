@@ -12,6 +12,7 @@ use wc_protocol::calibration::{
 use wc_protocol::float;
 use wc_protocol::main::Units;
 
+use crate::clearance::Raise;
 use crate::edits::Response;
 use crate::machine::Machine;
 
@@ -211,7 +212,14 @@ impl Machine {
         accept.writes.iter().for_each(|write| {
             self.write_setting(write.section, write.key, &Value::from(write.value.clone()));
         });
-        self.queue(accept.gcode);
+        let safe_height_mm = self.settings.value(MASLOW, "zAxisSafeHeight").and_then(float).unwrap_or(f64::NAN);
+        let raise = Raise::Accept { safe_height_mm };
+        // Triangular Accept rises to the safe height before it travels; the raise is settled when it goes out.
+        let raise_at_safe_height = raise.lines(None);
+        accept.gcode.into_iter().for_each(|line| match raise_at_safe_height.contains(&line) {
+            true => self.queue_raise(raise.clone()),
+            false => self.queue([line]),
+        });
         Ok(())
     }
 

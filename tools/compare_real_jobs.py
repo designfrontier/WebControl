@@ -23,10 +23,10 @@ REPORT = CONTRACT / "real-jobs.md"
 
 HOME_DECIMALS = "Home-shifted X/Y printed at their own precision, not as float sums (#41, 3a58d71)"
 NO_AUTO_RESUME = "No `~` sent by itself when the firmware asks for a tool (A3, d43640b)"
-TOOL_RESUME = ("Resume or Play after a tool change returns to the file's XY at safe height (efc9d2c, 0bf6da8, "
+TOOL_RESUME = ("Resume or Play after a tool change returns to the file's XY at safe height or higher (efc9d2c, 0bf6da8, "
                "7fd6ce2); v0.94's Play restarted mid-file with `G0 Z5.0 F12.8`, a rapid to the XY, the M6 again, "
                "`G4` and `G0 Z0`")
-PAUSE_RESUME = ("Resume after a Pause returns at safe height, restores the spindle and plunges with G1 at the "
+PAUSE_RESUME = ("Resume after a Pause returns at safe height or higher, restores the spindle and plunges with G1 at the "
                 "file's plunge feed, then restores the file's F (#5, #17 b73f519, A4 1f6c0bd, c1400bd, 877dd8d); "
                 "v0.94 sent `G90` and `G0 Z<paused Z>`")
 
@@ -49,8 +49,9 @@ NOTES = [
     "- Resume after a Pause restores the spindle with a bare `M3` (the file said `M3 S5000`). On 51.27 with `$17=0` "
     "both do nothing (`setSpindlePower`, H27 `Spindle.cpp`). The one bare `M3` in the logs (v0.94's, "
     "20251221-000533 t=36) was never echoed or acked: the controller sent nothing for 16 s, then rebooted.",
-    "- Resume after a Pause rapids to the safe height (`G0 Z5.0`) before the XY move even when the bit is higher, "
-    "here 10 mm above a Z zero just redefined; v0.94 went straight to the paused Z.",
+    "- Resume never lowers the bit before the XY move (owner decision, 2026-11-15): after the Pause it travels at the "
+    "bit's 10 mm above a Z zero just redefined, and after each tool change at the reported 10.03 mm rounded up a step, "
+    "not at the 5 mm safe height; v0.94 went straight to the paused Z.",
 ]
 
 
