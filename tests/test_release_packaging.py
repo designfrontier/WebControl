@@ -8,7 +8,7 @@ from conftest import REPO
 from pyinstaller_datas import MISSING_DIST, bundle_datas
 
 SPECS = ["main.spec", "main-onedir.spec"]
-SCRIPTS = ["tools/build_release.sh", "buildLinux1.sh"]
+SCRIPTS = ["tools/build_release.sh", "tools/install_from_source.sh", "buildLinux1.sh"]
 
 
 @pytest.fixture
@@ -68,3 +68,37 @@ def test_release_scripts_parse(script):
 def test_buildLinux1_delegates_to_the_release_script():
     with open(os.path.join(REPO, "buildLinux1.sh")) as handle:
         assert "tools/build_release.sh" in handle.read()
+
+
+def source_install_script(tmp_path, body, machine="armv7l"):
+    """Runs body in bash after sourcing tools/install_from_source.sh with uname -m faked and repo/ in tmp_path."""
+    for name in ["requirements.txt", "requirements-pi-overrides.txt"]:
+        shutil.copy(os.path.join(REPO, name), tmp_path / name)
+    script = os.path.join(REPO, "tools", "install_from_source.sh")
+    prelude = f'source "{script}"; repo="{tmp_path}"; venv="$repo/.venv"; staged="$repo/build/webcontrol.service"; '
+    prelude += f'uname() {{ [ "$1" = -m ] && echo {machine} || command uname "$@"; }}; '
+    return subprocess.run(["bash", "-c", prelude + body], capture_output=True, text=True, check=True).stdout
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+def test_armv7_swaps_in_the_pi_overrides(tmp_path):
+    lines = open(source_install_script(tmp_path, "effective_requirements").strip()).read().splitlines()
+    assert "scipy==1.13.1" in lines
+    assert not any(line.startswith("scipy==1.9") for line in lines)
+    assert "numpy==1.23.5" in lines
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+def test_other_machines_install_requirements_unchanged(tmp_path):
+    path = source_install_script(tmp_path, "effective_requirements", machine="aarch64").strip()
+    assert open(path).read() == open(os.path.join(REPO, "requirements.txt")).read()
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+def test_the_service_runs_main_from_the_venv_as_the_invoking_user(tmp_path):
+    unit = source_install_script(tmp_path, 'write_unit; cat "$staged"')
+    assert unit.startswith("# Installed by WebControl tools/install_from_source.sh")
+    assert f"ExecStart={tmp_path}/.venv/bin/python {tmp_path}/main.py" in unit
+    assert f"WorkingDirectory={tmp_path}" in unit
+    assert f"User={subprocess.check_output(['id', '-un'], text=True).strip()}" in unit
+    assert "Restart=on-failure" in unit
