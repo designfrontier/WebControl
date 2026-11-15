@@ -1,8 +1,9 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { ApiError } from "../../api/http";
-import { useClient, useFetch, useServerMessage } from "../../app/context";
-import { settingsRejectionSchema } from "../../protocol";
+import { useClient, useFetch, useMachine, useServerMessage } from "../../app/context";
+import { errorBodySchema, settingsRejectionSchema } from "../../protocol";
+import { selectGcodeLocked } from "../../state/machine";
 import type { SettingsSection } from "../../protocol";
 import { saveSettingsSection } from "./api";
 import { changedValues, initialValues, isLocked, validate } from "./form";
@@ -16,10 +17,13 @@ interface Props {
 
 type Notice = { tone: "ok" | "bad"; text: string } | null;
 
+const serverReason = (error: Error) =>
+  (error instanceof ApiError && errorBodySchema.safeParse(error.body).data?.error) || error.message;
+
 const saveFailure = (error: Error) =>
   error instanceof ApiError && error.status === 400
     ? "The server rejected these values; nothing was saved."
-    : `Saving failed: ${error.message}`;
+    : `Saving failed: ${serverReason(error)}`;
 
 const serverErrors = (error: Error): FormErrors =>
   error instanceof ApiError && error.status === 400
@@ -35,6 +39,7 @@ export const SettingsForm = ({ section, onSaved }: Props) => {
   const [ports, setPorts] = useState(section.ports ?? []);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
+  const locked = useMachine(selectGcodeLocked);
 
   useServerMessage("updatePorts", setPorts);
 
@@ -83,6 +88,9 @@ export const SettingsForm = ({ section, onSaved }: Props) => {
           custom firmware (version 100 or later).
         </p>
       )}
+      {locked && (
+        <p className="settings-banner">A job is running or paused. Stop the job first to change the settings.</p>
+      )}
       <ul className="settings-list">
         {section.settings.map((setting) => (
           <SettingField
@@ -98,7 +106,7 @@ export const SettingsForm = ({ section, onSaved }: Props) => {
         ))}
       </ul>
       <div className="settings-actions">
-        <button type="submit" className="primary" disabled={!dirty || saving}>
+        <button type="submit" className="primary" disabled={!dirty || saving || locked}>
           {saving ? "Saving…" : "Save"}
         </button>
         <button type="button" onClick={discard} disabled={!dirty || saving}>

@@ -175,6 +175,21 @@ describe("MainPage jogging", () => {
     expect(socket.emittedEvents("updateSetting")).toEqual([{ data: { setting: "toMM", value: "254.000" } }]);
   });
 
+  it("keeps the unit switches disabled while a job is paused or a tool change waits", async () => {
+    const { socket } = await renderMain();
+    status(socket, 2);
+    expect(button("Units: mm")).toBeDisabled();
+    expect(button("Up")).toBeEnabled();
+    socket.serverMessage("statusMessage", {
+      uploadFlag: 0,
+      positioningMode: 0,
+      currentTool: 2,
+      jobInProgress: false,
+      manualZAxisAdjust: true,
+    });
+    expect(button("Units: mm")).toBeDisabled();
+  });
+
   it("converts the stored distance when the typed one is invalid", async () => {
     const { socket, user } = await renderMain();
     await user.type(screen.getByLabelText("Distance"), "x");
@@ -257,6 +272,14 @@ describe("Z-Axis modal", () => {
     await user.click(button("Raise"));
     expect(distance).toHaveFocus();
     expect(socket.actions()).toEqual([]);
+  });
+
+  it("keeps the Z unit switch disabled while a job is paused", async () => {
+    const { socket } = await renderZ();
+    status(socket, 2);
+    const zAxis = within(screen.getByRole("region", { name: "Z axis" }));
+    expect(zAxis.getByRole("button", { name: "Z units: mm" })).toBeDisabled();
+    expect(zAxis.getByRole("button", { name: "Raise" })).toBeEnabled();
   });
 
   it("switches Z units with two decimals like the old popup", async () => {

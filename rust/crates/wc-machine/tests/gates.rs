@@ -8,8 +8,9 @@ use std::collections::BTreeSet;
 use rig::sim::SimRig;
 use rig::{alerts, settings};
 use serde_json::json;
-use wc_machine::files::{GCODE_LOCKED, Request};
-use wc_machine::{Event, gate};
+use wc_config::Settings;
+use wc_machine::files::{GCODE_LOCKED, Reply, Request, SEND_LOCKED, SETTINGS_LOCKED};
+use wc_machine::{Effect, Event, Request as Edit, gate};
 use wc_testkit::contract::Contract;
 
 const REFUSALS: [&str; 2] = ["Cannot issue command while", GCODE_LOCKED];
@@ -107,4 +108,57 @@ fn the_machines_gate_table_is_the_contracts() {
         assert_eq!(gate(command).name(), spec["allowedDuring"], "{command}");
     });
     assert_eq!(gate("noSuchCommand").name(), "idle", "an unknown command falls through to the idle gate");
+}
+
+/// Decision 2: every way to change the settings or send lines outside the job, each as the browser sends it.
+fn writes() -> Vec<(&'static str, Event, &'static str)> {
+    let quick = json!({"kinematicsType": "Linkage", "rotationRadius": 273, "chainOverSprocket": "Top",
+        "motorSpacingX": 2938.05, "motorOffsetY": 470});
+    let section = |values| Edit::UpdateSettings { section: "maslow".into(), body: json!({ "values": values }) };
+    let edit = |request| Event::Edit { id: 9, request };
+    let ask = |request| Event::Request { id: 9, request };
+    let imported = json!({"Maslow Settings": [{"key": "motorSpacingX", "value": "3001"}]});
+    vec![
+        ("PUT /api/settings", edit(section(json!({"motorSpacingX": "3000"}))), SETTINGS_LOCKED),
+        ("COMport", edit(section(json!({"COMport": "/dev/ttyUSB0"}))), SETTINGS_LOCKED),
+        ("quick-configure", edit(Edit::QuickConfigure(quick)), SETTINGS_LOCKED),
+        ("updateSetting", Event::UpdateSetting { setting: "toInches".into(), value: json!("1") }, SETTINGS_LOCKED),
+        ("updateSetting Z", Event::UpdateSetting { setting: "toMMZ".into(), value: json!("1") }, SETTINGS_LOCKED),
+        ("/sendGCode", ask(Request::SendGcode("G0 X1".into())), SEND_LOCKED),
+        ("/importFile", ask(Request::ImportIni("[Maslow Settings]\nmotorSpacingX = 3001\n".into())), SETTINGS_LOCKED),
+        ("/importFileWCJSON", ask(Request::ImportWebControl(imported)), SETTINGS_LOCKED),
+        ("/importRestoreWebControl", ask(Request::RestoreSettings(Box::new(Settings::defaults()))), SETTINGS_LOCKED),
+    ]
+}
+
+/// The refusal a write met: a 409 body, a refused reply, or an alert.
+fn refusal(effects: &[Effect]) -> Option<String> {
+    let answered = effects.iter().find_map(|effect| match effect {
+        Effect::Respond { response, .. } if response.status == 409 => response.body["error"].as_str().map(String::from),
+        Effect::Reply { reply: Reply::Refused(error), .. } => Some(error.clone()),
+        _ => None,
+    });
+    answered.or_else(|| alerts(effects).into_iter().find(|alert| alert.contains("Stop the job first")))
+}
+
+#[test]
+fn settings_writes_sends_and_imports_are_refused_whenever_the_gcode_is_locked() {
+    let failures: Vec<String> = states()
+        .into_iter()
+        .flat_map(|(name, how, rig)| {
+            writes().into_iter().filter_map(move |(write, event, message)| {
+                let mut rig = rig.clone();
+                let settings = rig.machine.snapshot().settings.clone();
+                rig.take();
+                rig.send(event);
+                let (effects, written) = rig.take();
+                let refused = refusal(&effects);
+                let expected = (name != "idle").then(|| message.to_string());
+                let untouched = name == "idle" || (*rig.machine.snapshot().settings == *settings && written.is_empty());
+                (refused != expected || !untouched)
+                    .then(|| format!("{write} in {name} via {how}: refused {refused:?}, wrote {written:?}"))
+            })
+        })
+        .collect();
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }

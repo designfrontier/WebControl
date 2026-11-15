@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { useFetch } from "../../app/context";
+import { useFetch, useMachine } from "../../app/context";
+import { selectGcodeLocked } from "../../state/machine";
 import { CloseButton } from "../../app/CloseButton";
 import { getCustomGcode, sendGcode } from "./api";
 import { useResource, useSubmit } from "./hooks";
@@ -11,6 +12,7 @@ const SendForm = ({ initial }: { initial: string }) => {
   const [text, setText] = useState(initial);
   const [sent, setSent] = useState<number | null>(null);
   const { busy, error, setError, run } = useSubmit();
+  const locked = useMachine(selectGcodeLocked);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -34,12 +36,13 @@ const SendForm = ({ initial }: { initial: string }) => {
         }}
         hint="Each line goes straight to the controller."
       />
+      {locked && <p className="muted">A job is running or paused. Stop the job first to send gcode.</p>}
       <FormError message={error} />
       <p role="status" className="muted">
         {sent === null ? "" : `Sent ${sent} ${sent === 1 ? "line" : "lines"} to the controller.`}
       </p>
       <div className="actions">
-        <button type="submit" className="primary" disabled={busy}>
+        <button type="submit" className="primary" disabled={busy || locked}>
           {busy ? "Sending…" : "Send"}
         </button>
         <CloseButton>Done</CloseButton>
