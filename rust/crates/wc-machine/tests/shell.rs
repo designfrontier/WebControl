@@ -349,3 +349,66 @@ async fn create_directory_asks_the_host_and_lists_only_what_it_made() {
     assert_eq!(directory, json!("{\"directory\":\"jobs\"}"));
     assert_eq!(host.calls(), ["mkdir refused", "mkdir jobs"]);
 }
+
+/// A host whose directory creation hangs until the test lets it go, like a card stalled on its journal.
+struct StalledDisk {
+    release: Mutex<std::sync::mpsc::Receiver<()>>,
+}
+
+impl Host for StalledDisk {
+    fn list_ports(&self) -> Vec<String> {
+        Vec::new()
+    }
+    fn log(&self, _: &str) {}
+    fn clear_logs(&self) {}
+    fn power_off(&self) {}
+    fn exit(&self) {}
+    fn cpu_load(&self) -> f64 {
+        0.0
+    }
+    fn save_settings(&self, _: &Settings) {}
+    fn create_directory(&self, _: &str) -> bool {
+        self.release.lock().unwrap().recv().is_ok()
+    }
+}
+
+/// Asks for a directory on `mkdir`, and pushes a marker on Stop.
+struct MakesDirectories {
+    inner: Machine,
+}
+
+impl Core for MakesDirectories {
+    fn handle(&mut self, event: Event, _: Duration) -> Vec<Effect> {
+        match event {
+            Event::Action(a) if a.command == "mkdir" => vec![Effect::CreateDirectory("jobs".into())],
+            Event::Stop(_) => vec![Effect::Push(Push::message(Envelope::int("showFPSpinner", 7)))],
+            Event::DirectoryCreated(name) => vec![Effect::Push(Push::message(Envelope::int(&name, 1)))],
+            _ => Vec::new(),
+        }
+    }
+    fn snapshot(&self) -> Snapshot {
+        self.inner.snapshot()
+    }
+}
+
+async fn next_command(pushes: &mut tokio::sync::broadcast::Receiver<Push>) -> Value {
+    tokio::time::timeout(Duration::from_secs(2), pushes.recv()).await.expect("the machine task answered").unwrap().data
+        ["command"]
+        .clone()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_stalled_directory_never_holds_up_stop() {
+    let (release, stalled) = std::sync::mpsc::channel();
+    let host = Arc::new(StalledDisk { release: Mutex::new(stalled) });
+    let core = MakesDirectories { inner: Machine::new("h", Settings::defaults()) };
+    let (handle, _task) = spawn(core, Box::new(NoPort), host);
+    let mut pushes = handle.subscribe();
+    handle.send(Event::Action(action("mkdir")));
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    handle.send(Event::Action(action("stopRun")));
+    let stopped = tokio::time::timeout(Duration::from_secs(2), pushes.recv()).await;
+    release.send(()).unwrap();
+    assert_eq!(stopped.expect("Stop waited on the disk").unwrap().data["command"], "showFPSpinner");
+    assert_eq!(next_command(&mut pushes).await, "jobs", "the directory is still reported once made");
+}

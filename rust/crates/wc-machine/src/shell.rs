@@ -142,6 +142,22 @@ struct Task<C: Core> {
     started: Instant,
     requests: HashMap<u64, oneshot::Sender<Reply>>,
     next_request: u64,
+    directories: mpsc::UnboundedSender<String>,
+}
+
+/// Makes each directory in turn off the machine task, so a stalled card never holds up a Stop.
+async fn make_directories(
+    host: Arc<dyn Host>,
+    mut names: mpsc::UnboundedReceiver<String>,
+    made: mpsc::UnboundedSender<Event>,
+) {
+    while let Some(name) = names.recv().await {
+        let host = host.clone();
+        let created = tokio::task::spawn_blocking(move || host.create_directory(&name).then_some(name)).await;
+        if let Ok(Some(name)) = created {
+            let _ = made.send(Event::DirectoryCreated(name));
+        }
+    }
 }
 
 async fn read_lines(port: Box<dyn AsyncRead + Send + Unpin>, generation: u64, reads: mpsc::UnboundedSender<Read>) {
@@ -232,7 +248,8 @@ impl<C: Core> Task<C> {
                         None
                     }
                     Effect::CreateDirectory(name) => {
-                        self.host.create_directory(&name).then_some(Event::DirectoryCreated(name))
+                        let _ = self.directories.send(name);
+                        None
                     }
                     Effect::Reply { id, reply } => {
                         if let Some(answer) = self.requests.remove(&id) {
@@ -254,6 +271,9 @@ pub fn spawn<C: Core>(core: C, opener: Box<dyn PortOpener>, host: Arc<dyn Host>)
     let (commands, mut command_rx) = mpsc::unbounded_channel();
     let (realtime, mut realtime_rx) = mpsc::unbounded_channel();
     let (reads, mut read_rx) = mpsc::unbounded_channel::<Read>();
+    let (directories, directory_rx) = mpsc::unbounded_channel();
+    let (made, mut made_rx) = mpsc::unbounded_channel();
+    tokio::spawn(make_directories(host.clone(), directory_rx, made));
     let (pushes, _) = broadcast::channel(PUSH_BACKLOG);
     let (snapshot_tx, snapshot) = watch::channel(core.snapshot());
     let handle = MachineHandle { commands, realtime, pushes: pushes.clone(), snapshot };
@@ -270,6 +290,7 @@ pub fn spawn<C: Core>(core: C, opener: Box<dyn PortOpener>, host: Arc<dyn Host>)
         started: Instant::now(),
         requests: HashMap::new(),
         next_request: 0,
+        directories,
     };
     let join = tokio::spawn(async move {
         let mut clock = tokio::time::interval(TICK);
@@ -283,6 +304,7 @@ pub fn spawn<C: Core>(core: C, opener: Box<dyn PortOpener>, host: Arc<dyn Host>)
                     true => read,
                     false => continue,
                 },
+                Some(made) = made_rx.recv() => made,
                 command = command_rx.recv() => match command {
                     Some(Command::Event(event)) => event,
                     Some(Command::Request(request, answer)) => {
