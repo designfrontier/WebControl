@@ -3,6 +3,7 @@ import copy
 
 import pytest
 
+from Background.messageProcessor import MessageProcessor
 from helpers import drain
 from test_serial_streaming import serial  # noqa: F401
 
@@ -138,3 +139,21 @@ def test_saving_an_unknown_key_unchanged_sends_nothing_and_setting_it_sends_it(d
     config.setValue("Advanced Settings", "maxZRPM", "12.6", recursionBreaker=True)
     assert queued(data) == ["$18=12.6"]
 
+
+def test_an_eeprom_read_fail_restores_every_setting_and_tells_the_user(data, config):
+    set_value(config, "maxZRPM", "")
+    drain(data.ui_queue1)
+    processor = MessageProcessor()
+    processor.data = data
+
+    processor.processMessage("error: EEPROM read fail. Using default settings.\r\n")
+
+    sent = queued(data)
+    keys = [line.split("=")[0] for line in sent]
+    assert {"$13", "$18", "$9", "$28", "$36", "$0", "$2", "$45", "$46"} <= set(keys)
+    assert not {"$85", "$86", "$144", "$87"} & set(keys)
+    assert "$18=12.6" in sent
+    assert keys[-1] == "$$"
+    assert option(config, "maxZRPM")["value"] == "12.6"
+    assert len([message for message in drain(data.ui_queue1) if "lost its settings" in message]) == 1
+    drain(data.ui_controller_queue)

@@ -23,6 +23,9 @@ SETTING_REPLY = re.compile(r"^\$(\d+)=\s*(\S+)")
 INTEGER_FIRMWARE_KEYS = (9, 10, 11, 15)
 # Arduino's Serial.print(float, 8) resolution, which is all a $$ reply carries.
 PRINTED_RESOLUTION = 1e-8
+# The error array goes out as $O lines, and the firmware rejects $86 and $144.
+UNSENDABLE_FIRMWARE_KEYS = (85, 86, 144)
+OPTICAL_FIRMWARE_KEYS = tuple(range(87, 99))
 
 
 class Config(MakesmithInitFuncs):
@@ -688,6 +691,20 @@ class Config(MakesmithInitFuncs):
         self.saveSettings()
         return True
 
+    def restoreControllerSettings(self):
+        '''
+        Writes every setting to a controller that booted on its defaults, then reads them back.
+        '''
+        options = [option for section in self.settings.values() for option in section
+                   if option.get("firmwareKey") is not None]
+        [option.update(value=str(option["default"])) for option in options if option["value"] == ""]
+        skipped = UNSENDABLE_FIRMWARE_KEYS + (OPTICAL_FIRMWARE_KEYS if self.data.controllerFirmwareVersion < 100 else ())
+        keys = sorted({option["firmwareKey"] for option in options} - set(skipped))
+        [self.syncFirmwareKey(key, None, useStored=True) for key in keys]
+        self.data.gcode_queue.put("$$")
+        self.saveSettings()
+        self.data.ui_queue1.put("Alert", "Alert",
+                                "The controller lost its settings (EEPROM read fail), so WebControl restored them.")
 
     def reportedValue(self, text):
         '''

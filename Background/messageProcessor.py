@@ -34,6 +34,8 @@ class MessageProcessor(MakesmithInitFuncs):
             time.sleep(60)
 
     def processMessage(self, message):
+        if "EEPROM read fail" in message:
+            self.data.config.restoreControllerSettings()
         if message != "":
             if message[0] == "<":
                 # message to be processed by UIProcessor
