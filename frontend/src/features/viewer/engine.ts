@@ -12,9 +12,8 @@ export interface ViewerEngine {
   pick(clientX: number, clientY: number): Point | null;
   setRotate(enabled: boolean): void;
   setPerspective(enabled: boolean): void;
-  /** Frames this area and makes that the view Reset returns to. */
+  /** Frames this area, undoing any pan, zoom or rotation. */
   fit(frame: ViewFrame): void;
-  reset(): void;
   dispose(): void;
 }
 
@@ -107,10 +106,6 @@ export const createViewerEngine = (host: HTMLElement, scene: Scene): ViewerEngin
     fit: (next) => {
       view = next;
       home();
-      requestRender();
-    },
-    reset: () => {
-      controls.reset();
       requestRender();
     },
     dispose: () => {

@@ -141,14 +141,14 @@ describe("createViewerEngine", () => {
     expect(current()).toMatchObject({ enableRotate: false, touches: { ONE: TOUCH.PAN } });
   });
 
-  it("returns to the fitted view on reset", async () => {
+  it("undoes pan and zoom when fitted again", async () => {
     const { engine, flush, lastCamera } = setup();
     const camera = () => lastCamera() as OrthographicCamera;
     engine.requestRender();
     await flush();
     camera().position.set(30, 10, 100);
     camera().zoom = 3;
-    engine.reset();
+    engine.fit({ x: 0, y: 0, width: 96, height: 48 });
     await flush();
     const [x, y, z] = camera().position.toArray();
     expect([x, y, z].map((value) => Math.round(value * 1e6) / 1e6)).toEqual([0, 0, 100]);

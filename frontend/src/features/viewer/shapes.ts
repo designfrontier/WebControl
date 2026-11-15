@@ -180,3 +180,9 @@ export const bedViewFrame = ({ bedWidth, bedHeight }: MachineGeometry): ViewFram
   width: bedWidth,
   height: bedHeight,
 });
+
+const sum = (values: ArrayLike<number>) => Array.from(values).reduce((total, value) => total + value, 0);
+
+/** Changes when the bed or the loaded toolpath does, but not when the same file is resent after a home move. */
+export const fitKey = ({ bedWidth, bedHeight }: MachineGeometry, toolpath: ArrayLike<number>[]) =>
+  [`${bedWidth}x${bedHeight}`, ...toolpath.map((segments) => `${segments.length}:${sum(segments)}`)].join("|");

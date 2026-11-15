@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useReducer, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { useClient, useFetch, useMachine, useServerMessage } from "../../app/context";
 import { useTheme } from "../../app/themePreference";
@@ -13,7 +13,7 @@ import { createViewerScene, readPalette } from "./scene";
 import type { ViewerScene } from "./scene";
 import { ScreenActionDialog } from "./ScreenActionDialog";
 import type { ScreenAction } from "./ScreenActionDialog";
-import { isOnBed, viewFrame } from "./shapes";
+import { fitKey, isOnBed, viewFrame } from "./shapes";
 import type { Point } from "./shapes";
 import { fromInches, roundForAction, toInches, unitLabel } from "./units";
 import { decodeCutPayload, decodeGcodePayload, decodeSnapshot, initialViewerData, viewerReducer } from "./viewerState";
@@ -110,14 +110,20 @@ export const Viewer = ({ currentLine = "" }: { currentLine?: string }) => {
     };
   }, [socket, client, fetch]);
 
-  const frame = useMemo(() => {
-    const toolpath = data.gcode ? [data.gcode.cuts, data.gcode.rapids, data.gcode.plunges] : [];
+  const toolpath = useMemo(
+    () => (data.gcode ? [data.gcode.cuts, data.gcode.rapids, data.gcode.plunges] : []),
+    [data.gcode],
+  );
+  const fitView = () => {
     const home = { x: toInches(homePosition?.x ?? 0, units), y: toInches(homePosition?.y ?? 0, units) };
-    return viewFrame(data.machine, toolpath, home);
-  }, [data.machine, data.gcode, homePosition, units]);
+    withView(viewRef.current, (_, engine) => engine.fit(viewFrame(data.machine, toolpath, home)));
+  };
+  const fitOnChange = useEffectEvent(fitView);
+  const viewKey = useMemo(() => fitKey(data.machine, toolpath), [data.machine, toolpath]);
 
   useEffect(() => withView(viewRef.current, (scene) => scene.setMachine(data.machine)), [data.machine]);
-  useEffect(() => withView(viewRef.current, (_, engine) => engine.fit(frame)), [frame]);
+  // Re-framing mid-job would throw away the operator's zoom, so only a new file or bed size does it.
+  useEffect(() => fitOnChange(), [viewKey]);
   useEffect(
     () => withView(viewRef.current, (scene) => scene.setPalette(readPalette(document.documentElement))),
     [theme],
@@ -229,7 +235,7 @@ export const Viewer = ({ currentLine = "" }: { currentLine?: string }) => {
         <ToggleButton pressed={perspective} onToggle={() => setPerspective((on) => !on)}>
           Perspective
         </ToggleButton>
-        <button type="button" onClick={() => withView(viewRef.current, (_, engine) => engine.reset())}>
+        <button type="button" onClick={fitView}>
           Reset view
         </button>
         <output className="viewer-readout" aria-label="Cursor position">

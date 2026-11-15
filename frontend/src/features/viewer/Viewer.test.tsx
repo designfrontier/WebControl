@@ -235,7 +235,7 @@ describe("Viewer toolbar", () => {
     expect(current().setPerspective).toHaveBeenLastCalledWith(true);
 
     await user.click(button("Reset view"));
-    expect(current().reset).toHaveBeenCalled();
+    expect(current().fit).toHaveBeenLastCalledWith({ x: 0, y: 0, width: 96, height: 48 });
 
     expect(object("boardLayer").visible).toBe(false);
     await user.click(within(toolbar).getByRole("button", { name: /^Board: Shelf/ }));
@@ -382,6 +382,36 @@ describe("Viewer screen actions", () => {
     renderViewer({ viewer: snapshot({ gcode: offBed }) });
     await screen.findByText("1 cut and 0 rapid moves");
     expect(current().fit).toHaveBeenLastCalledWith({ x: 11, y: 0, width: 118, height: 48 });
+  });
+
+  it("keeps the operator's view when home moves or the file is resent, and frames the new home on Reset", async () => {
+    const offBed = [
+      line([
+        [0, 0, 0],
+        [70, 0, 0],
+      ]),
+    ];
+    const { socket, user } = renderViewer({ viewer: snapshot({ gcode: toBase64(gz(offBed)) }) });
+    await screen.findByText("1 cut and 0 rapid moves");
+    const fit = current().fit as ReturnType<typeof vi.fn>;
+    fit.mockClear();
+
+    socket.serverMessage("homePositionMessage", { xval: 254, yval: 0 });
+    socket.serverRaw({ command: "gcodeUpdateCompressed", data: asArrayBuffer(gz(offBed)), dataFormat: "base64" });
+    expect(fit).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Reset view" }));
+    expect(fit).toHaveBeenLastCalledWith({ x: 16, y: 0, width: 128, height: 48 });
+
+    fit.mockClear();
+    const moved = [
+      line([
+        [0, 0, 0],
+        [1, 0, 0],
+      ]),
+    ];
+    socket.serverRaw({ command: "gcodeUpdateCompressed", data: asArrayBuffer(gz(moved)), dataFormat: "base64" });
+    expect(fit).toHaveBeenLastCalledWith({ x: 0, y: 0, width: 96, height: 48 });
   });
 
   it("recolours the scene from the theme's tokens", async () => {
