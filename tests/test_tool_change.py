@@ -408,3 +408,12 @@ def test_stop_after_the_firmware_confirmed_the_tool_change_keeps_the_new_tool(ap
     action(tools, "stopRun")
 
     assert (tools.currentTool, tools.nextTool) == (2, 2)
+
+
+def test_the_t_added_to_an_m6_can_push_it_over_the_controllers_limit(tools, serial):  # noqa: F811
+    long_m6 = "M6" + " " * 121  # 125 bytes as written, 128 once led by "T2 "
+
+    sent = stream(tools, serial, ["T2 ", long_m6, "G1 X2 "])
+
+    assert sent == ["T2  "]
+    assert (tools.uploadFlag, tools.currentTool) == (2, 0)
