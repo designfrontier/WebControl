@@ -6,7 +6,8 @@
 
 ### Key directories
 
-- `.github/workflows/` — CI: frontend lint/typecheck/test/build, backend pytest, PyInstaller onedir smoke, Playwright e2e
+- `.github/workflows/` — CI: frontend lint/typecheck/test/build, backend pytest, PyInstaller onedir smoke, Playwright e2e,
+  and the Rust job (fmt, clippy, tests, 95% per-crate coverage, aarch64 cross-build, e2e smoke)
 - `Actions/` — `actions.py` dispatches every UI action (jog, home, run/pause/stop, settings, firmware upgrade, backup); plus triangular, holey, optical calibration and GPIO actions
 - `api/` — JSON blueprint mounted at `/api` for the new frontend; every `api/<feature>.py` exposing `blueprint` auto-registers
 - `Background/` — long-running worker loops: controller message routing, UI socket push (`UIProcessor`), log streaming, webcam capture, console/WebMCP queue
@@ -35,6 +36,7 @@
 - `frontend/` — the new React + TypeScript UI served at `/next` (see "New frontend" below)
 - `HelpManager/` — stub for fetching updated help pages from GitHub (mostly no-op)
 - `ReleaseManager/` — checks GitHub releases and self-updates PyInstaller builds
+- `rust/` — the Rust backend `webcontrol-rs` (`spec/RUST-PLAN.md`; crates, commands and Pi deploy in `rust/README.md`)
 - `static/` — browser assets served by Flask
 - `static/images/` — UI images
 - `static/images/gettingStarted/` — setup wizard images
@@ -83,9 +85,10 @@ events, per-client emits.
   run-state gate; `http.ts` catalogs every HTTP endpoint the UI calls with its request and response schemas
 - `frontend/src/contract/` — `buildContract()` turns the protocol into `contract/`; its tests fail when `contract/`
   is stale or a UI request is missing from `http.ts`. Regenerate with `npm run contract`
-- `frontend/src/transport/` — the `Transport` interface the app talks to; `connectTransport` in `index.ts` picks
-  socket.io (`socketio.ts`, the only file that may import `socket.io-client`) or, later, plain WebSockets
-  (`websocket.ts`, a stub)
+- `frontend/src/transport/` — the `Transport` interface the app talks to; `select.ts`'s `selectTransport(fetch)`
+  reads `backend` from `GET /api/state` and makes `connectTransport` use plain WebSockets (`websocket.ts`) for Rust or
+  socket.io (`socketio.ts`, the only file that may import `socket.io-client`) otherwise; `watchBackend` reloads the
+  page when the backend changes under it
 - `frontend/src/socket/` — `createClient(transport)`: validates messages, drops ones whose `client` field names
   another socket, `sendAction(command, arg?, arg1?)`, `requestSetting`, `updateSetting`, typed `emit`;
   `connect.ts` opens the `/MaslowCNC` and log connections

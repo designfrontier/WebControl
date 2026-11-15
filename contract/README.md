@@ -100,12 +100,15 @@ after that).
 
 ## Plain WebSocket transport (for the Rust backend)
 
-The same events and payloads, without socket.io. The frontend switches by changing `connectTransport` in
-`frontend/src/transport/index.ts` to the WebSocket implementation (`frontend/src/transport/websocket.ts`, a stub
-today).
+The same events and payloads, without socket.io. Before opening any connection the frontend reads `GET /api/state`
+and uses this transport (`frontend/src/transport/websocket.ts`) when `backend` is `"rust"`, socket.io otherwise
+(`frontend/src/transport/select.ts`). After three failed connects in a row it reads `/api/state` again and reloads
+the page if the backend changed.
 
 - **Endpoint**: `ws://<host>/ws?ns=<url-encoded namespace>` (`wss:` under https), one WebSocket per namespace. The UI
   opens `/MaslowCNC` and, while the log viewer is open, a second one for `/MaslowCNCLogs`.
+- **Origin**: the server answers 403 to an upgrade whose `Origin` header is not `http(s)://<Host>`, as socket.io's
+  same-origin default does, so another site's page cannot drive the machine.
 - **Frames**: UTF-8 text frames only, one JSON object per frame, `{"ns": "/MaslowCNC", "event": "...", "data": ...}`
   (`schemas/websocket/frame.json`). `data` is exactly the single argument socket.io would carry: the envelope for
   `message`, `{"data": {...}}` for client events. No acks, no batching, no binary frames.

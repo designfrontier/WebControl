@@ -113,3 +113,62 @@ jobs:
           name: playwright-results
           path: frontend/test-results
           retention-days: 7
+
+  rust:
+    name: Rust test, coverage, aarch64 build and e2e smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci && npm run build
+        working-directory: frontend
+      - uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: rust-${{ runner.os }}-${{ hashFiles('rust/Cargo.lock', 'rust/rust-toolchain.toml') }}
+          restore-keys: rust-${{ runner.os }}-
+      # rust-toolchain.toml names the toolchain, its components and the aarch64 target.
+      - run: rustup toolchain install
+      - name: Install zig, cargo-zigbuild and cargo-llvm-cov
+        run: |
+          python3 -m venv "$HOME/zig"
+          "$HOME/zig/bin/pip" install ziglang
+          echo "$HOME/zig/bin" >> "$GITHUB_PATH"
+          cargo install --locked cargo-zigbuild cargo-llvm-cov
+      - run: cargo fmt --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+      - name: Coverage, 95% lines for every crate
+        run: scripts/coverage.sh
+      - run: bash deploy/test.sh
+      - name: Cross-build for the Pi (aarch64, glibc 2.36)
+        run: cargo zigbuild --release --target aarch64-unknown-linux-gnu.2.36 -p wc-server
+      - uses: actions/upload-artifact@v7
+        with:
+          name: webcontrol-rs-aarch64
+          path: rust/target/aarch64-unknown-linux-gnu/release/webcontrol-rs
+          retention-days: 14
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: npm run test:e2e
+        working-directory: frontend
+        env:
+          E2E_BACKEND: rust
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-results-rust
+          path: frontend/test-results
+          retention-days: 7

@@ -10,6 +10,7 @@ export default defineConfig({
     proxy: {
       "/api": backend,
       "/socket.io": { target: backend, ws: true },
+      "/ws": { target: backend, ws: true },
       "/static": backend,
       // Classic form and download routes the Files and Boards screens reuse.
       "^/(openGCode|uploadGCode|saveGCode|editGCode|sendGCode|importFile|importFileWCJSON|importRestoreWebControl|downloadDiagnostics|backupWebControl|openBoard|saveBoard|editBoard|trimBoard)$":
