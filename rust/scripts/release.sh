@@ -64,7 +64,7 @@ package() {
   trap 'rm -rf "$stage"' EXIT
   mkdir -p "$stage/$name" "$out"
   install -m 755 "$binary" "$stage/$name/webcontrol-rs"
-  install -m 755 "$rust/install-pi.sh" "$rust/deploy/wc-switch" "$stage/$name/"
+  install -m 755 "$rust/install-pi.sh" "$rust/webcontrol-update" "$rust/deploy/wc-switch" "$stage/$name/"
   install -m 644 "$rust/deploy/webcontrol-rs.service" "$rust/deploy/webcontrol-conflicts.conf" \
     "$rust/deploy/webcontrol-rs.sudoers" "$rust/README.md" "$stage/$name/"
   cp -R "$repo/spec/rust-checklists" "$stage/$name/rust-checklists"

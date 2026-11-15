@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs on the Pi: installs webcontrol-rs beside the Python backend without starting it.
-#   bash install-pi.sh <dir with webcontrol-rs, the unit, the drop-in, wc-switch and the sudoers rule>
+#   bash install-pi.sh <dir with webcontrol-rs, the unit, the drop-in, wc-switch, webcontrol-update and the sudoers rule>
 # The Python webcontrol.service stays enabled and running; switch with `wc-switch rust`.
 set -euo pipefail
 
@@ -24,6 +24,7 @@ if [ -f "$opt/webcontrol-rs" ]; then "${SUDO[@]}" mv "$opt/webcontrol-rs" "$opt/
 sed "s/^User=.*/User=$user/" "$src/webcontrol-rs.service" | "${SUDO[@]}" tee "$units/webcontrol-rs.service" > /dev/null
 "${SUDO[@]}" install -m 644 "$src/webcontrol-conflicts.conf" "$units/webcontrol.service.d/conflicts.conf"
 "${SUDO[@]}" install -m 755 "$src/wc-switch" "$root/usr/local/bin/wc-switch"
+"${SUDO[@]}" install -m 755 "$src/webcontrol-update" "$root/usr/local/bin/webcontrol-update"
 # Power-off from the UI; a sudoers file that fails visudo would lock sudo out, so it is checked first.
 rule="$(mktemp)"
 sed "s/^pi /$user /" "$src/webcontrol-rs.sudoers" > "$rule"
@@ -36,3 +37,4 @@ command -v avrdude > /dev/null || "${APT[@]}"
 
 echo "Installed $("$opt/webcontrol-rs" --version 2> /dev/null || echo webcontrol-rs) for $user."
 echo "The Python backend is untouched. Try Rust with: wc-switch rust   (back with: wc-switch python)"
+echo "Later updates: webcontrol-update (from the latest published GitHub Release)"

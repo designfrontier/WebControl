@@ -106,6 +106,11 @@ install_stages_the_sudoers_rule() {
   deploy install pi@other.local > /dev/null && grep -q "scp .*webcontrol-rs.sudoers pi@other.local:" "$work/calls"
 }
 
+install_stages_the_updater() {
+  reset
+  deploy install pi@other.local > /dev/null && grep -q "scp .*/webcontrol-update .*pi@other.local:" "$work/calls"
+}
+
 push_to_maslow_local_by_default() {
   reset
   echo '{"jobInProgress":false}' > "$work/state"
@@ -125,13 +130,15 @@ rollback_swaps_prev_back() {
 }
 
 check "install stages the power-off sudoers rule" install_stages_the_sudoers_rule
+check "install stages webcontrol-update" install_stages_the_updater
 check "push copies to pi@maslow.local and restarts only a running Rust backend" push_to_maslow_local_by_default
 check "push refuses while a job is in progress" push_refuses_during_a_job
 check "rollback puts the previous binary back" rollback_swaps_prev_back
 
 stage="$work/stage"
 mkdir -p "$stage"
-cp "$here/webcontrol-rs.service" "$here/webcontrol-conflicts.conf" "$here/wc-switch" "$here/webcontrol-rs.sudoers" "$stage/"
+cp "$here/webcontrol-rs.service" "$here/webcontrol-conflicts.conf" "$here/wc-switch" "$here/webcontrol-rs.sudoers" \
+  "$here/../webcontrol-update" "$stage/"
 printf '#!/bin/sh\necho "webcontrol-rs test"\n' > "$stage/webcontrol-rs"
 printf '#!/bin/sh\necho "apt $*" >> "%s/apt"\n' "$work" > "$work/bin/apt"
 chmod +x "$work/bin/apt"
@@ -153,6 +160,8 @@ installs_beside_python_without_starting() {
     grep -q "^Conflicts=webcontrol.service$" "$work/root/etc/systemd/system/webcontrol-rs.service" &&
     grep -q "^Conflicts=webcontrol-rs.service$" "$work/root/etc/systemd/system/webcontrol.service.d/conflicts.conf" &&
     [ -x "$work/root/usr/local/bin/wc-switch" ] &&
+    cmp -s "$work/root/usr/local/bin/webcontrol-update" "$here/../webcontrol-update" &&
+    [ -x "$work/root/usr/local/bin/webcontrol-update" ] &&
     grep -qx "maker ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff" "$work/root/etc/sudoers.d/webcontrol-rs" &&
     [ "$(stat -c %a "$work/root/etc/sudoers.d/webcontrol-rs" 2> /dev/null ||
       stat -f %Lp "$work/root/etc/sudoers.d/webcontrol-rs")" = 440 ] &&
