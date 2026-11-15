@@ -156,6 +156,11 @@ impl Rig {
         Rig::connected_with(settings(&[]))
     }
 
+    /// Forgets the lines written so far, so the next `run_to_quiet` returns only what follows.
+    pub fn clear_written(&mut self) {
+        self.outbox.clear();
+    }
+
     /// Acks lines as they are written until the machine is quiet; returns what it wrote.
     pub fn run_to_quiet(&mut self) -> Vec<String> {
         self.answer_until_quiet("51.27")

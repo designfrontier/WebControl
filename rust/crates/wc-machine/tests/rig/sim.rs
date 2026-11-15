@@ -69,7 +69,11 @@ impl SimRig {
     }
 
     pub fn act(&mut self, command: &str) {
-        self.send(action(command, json!(""), json!("")));
+        self.act_with(command, json!(""), json!(""));
+    }
+
+    pub fn act_with(&mut self, command: &str, arg: serde_json::Value, arg1: serde_json::Value) {
+        self.send(action(command, arg, arg1));
     }
 
     /// Lets `ms` pass in 10 ms ticks, the simulator first in each.
