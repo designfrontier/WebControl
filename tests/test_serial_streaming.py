@@ -259,17 +259,62 @@ def test_a_failure_after_writing_a_line_does_not_send_it_again(data, serial, mon
     assert data.uploadFlag == 0
 
 
-def test_buffered_streaming_sends_a_line_too_long_for_the_buffer_once_it_drains(data, serial):
-    long_line = "G1 X1 Y1 " + "F100 " * 24
-    data.gcode = ["G1 X0 ", long_line, "G1 X2 "]
+def stream(data, serial, lines, buffer=False):
+    data.gcode = lines
     data.uploadFlag = 1
+    data.jobInProgress = True
     skip_startup_commands = once_after(serial.clock, 0, lambda port: drain(data.gcode_queue))
+    return serial.run(on_poll=skip_startup_commands, buffer=buffer)
 
-    port = serial.run(on_poll=skip_startup_commands, buffer=True)
 
-    assert len(port.written[1]) > SerialPortThread.bufferSize
-    assert port.sent[-1] == "G1 X2  "
+def alerts(serial):
+    return [(title, text) for command, title, text in serial.ui_messages() if command == "Alert"]
+
+
+# 129 characters; the home shift adds a space and the newline makes 131 bytes on the wire.
+LONG_LINE = "G1 X1 Y1 " + "F100 " * 24
+
+
+@pytest.mark.parametrize("buffer", [False, True])
+def test_a_line_too_long_for_the_controller_pauses_the_run_instead_of_going_out(data, serial, buffer):
+    port = stream(data, serial, ["G1 X0 ", LONG_LINE, "G1 X2 "], buffer=buffer)
+
+    assert port.sent == ["G1 X0  "]
+    assert (data.uploadFlag, data.jobInProgress, data.gcodeIndex) == (2, True, 1)
+    assert ("Line Too Long", "Line 2 is 131 characters; the controller accepts at most 126. Edit the file "
+            "(e.g. enable Truncate Floating Point Numbers) and resume or stop.") in alerts(serial)
+
+
+@pytest.mark.parametrize("buffer", [False, True])
+def test_a_line_that_just_fits_the_controller_buffer_goes_out(data, serial, buffer):
+    line = "G1 X1" + " " * 119  # the home shift appends a space, so 126 bytes are written
+
+    port = stream(data, serial, [line, "G1 X2 "], buffer=buffer)
+
+    assert [len(written) for written in port.written] == [126, 8]
     assert data.uploadFlag == 0
+
+
+def test_the_home_shift_can_push_a_line_over_the_limit(data, serial):
+    data.gcodeShift = [1000.1234, 1000.1234]
+    line = "G1 X1 Y1" + " " * 112
+
+    port = stream(data, serial, [line], buffer=True)
+
+    assert port.written == []
+    assert data.uploadFlag == 2
+
+
+def test_a_queued_command_too_long_for_the_controller_is_refused(data, serial):
+    def queue_commands(port):
+        drain(data.gcode_queue)
+        data.gcode_queue.put(LONG_LINE)
+        data.gcode_queue.put("G0 X1")
+
+    port = serial.run(on_poll=once_after(serial.clock, 0, queue_commands))
+
+    assert port.sent == ["G0 X1 "]
+    assert ("Command Too Long", "That command is 131 characters; the controller accepts at most 126.") in alerts(serial)
 
 
 def test_closing_the_port_mid_cut_pauses_the_run(data, serial):
