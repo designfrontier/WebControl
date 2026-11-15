@@ -126,8 +126,8 @@ entry in `app/modals.ts`; `protocol/index.ts` already imports every slice. Other
 and additive.
 
 New endpoints go in `api/<x>.py` (a module-level `blueprint`, auto-mounted under `/api`). Inside a Socket.IO handler,
-emit to just the requester with `api.client_emit.emit_to_client(command, data)`. It raises anywhere else: an HTTP
-route has no socket sid, so return the data in the response instead. A new socket event needs a
+emit to just the requester with `api.client_emit.emit_to_client(command, data)`. Anywhere else it raises unless you
+pass `sid=`; an HTTP route has no socket sid, so return the data in the response instead. A new socket event needs a
 `@socketio.on(..., namespace="/MaslowCNC")` handler in `main.py` or `api/`; the protocol contract test fails if an
 event has none. A new endpoint the UI calls also needs an entry in `protocol/http.ts`, then `npm run contract`;
 `tests/test_contract.py` checks Flask against `contract/`.
