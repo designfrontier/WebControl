@@ -9,7 +9,7 @@ license = "GPL-3.0-only"
 publish = false
 
 [workspace.dependencies]
-axum = { version = "0.8", features = ["ws"] }
+axum = { version = "0.8", features = ["ws", "multipart"] }
 base64 = "0.22"
 flate2 = "1"
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
@@ -30,6 +30,7 @@ tokio-tungstenite = "0.30"
 tower = { version = "0.5", features = ["util"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+unicode-normalization = "0.1"
 uuid = { version = "1", features = ["v4"] }
 wc-calibration = { path = "crates/wc-calibration" }
 wc-config = { path = "crates/wc-config" }
@@ -40,6 +41,7 @@ wc-machine = { path = "crates/wc-machine" }
 wc-protocol = { path = "crates/wc-protocol" }
 wc-sim = { path = "crates/wc-sim" }
 wc-testkit = { path = "crates/wc-testkit" }
+zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
 
 [profile.release]
 lto = "thin"

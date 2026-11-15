@@ -31,11 +31,11 @@ pub struct FirmwareOption {
 /// `webcontrol.json`: section name -> list of option objects, unknown fields kept as loaded.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
-    sections: Map<String, Value>,
-    source: Source,
+    pub(crate) sections: Map<String, Value>,
+    pub(crate) source: Source,
 }
 
-fn parse_object(text: &str) -> Option<Map<String, Value>> {
+pub(crate) fn parse_object(text: &str) -> Option<Map<String, Value>> {
     match serde_json::from_str(text) {
         Ok(Value::Object(map)) => Some(map),
         _ => None,
@@ -94,7 +94,7 @@ impl Settings {
         Settings { sections: defaults(), source: Source::Defaults }
     }
 
-    fn add_missing_defaults(&mut self) {
+    pub(crate) fn add_missing_defaults(&mut self) {
         for (name, section) in defaults() {
             let missing: Vec<Value> =
                 options(&section).filter(|o| !has_key(self.sections.get(&name), &o["key"])).map(copied).collect();

@@ -1,11 +1,14 @@
-//! `~/.WebControl` as the Python backend lays it out, and `webcontrol.json` read the way `config/config.py` reads
-//! it. Nothing here writes to the shared directory yet: changes live in memory until M2 adds the writer.
+//! `~/.WebControl` as the Python backend lays it out, `webcontrol.json` read and written the way `config/config.py`
+//! does, and the gcode and board libraries in it.
 
+pub mod library;
 mod python;
 mod settings;
+mod store;
 
 pub use python::{parse_number, python_float_str, python_str};
 pub use settings::{FirmwareOption, Settings, Source};
+pub use store::python_json;
 
 use std::path::{Path, PathBuf};
 
