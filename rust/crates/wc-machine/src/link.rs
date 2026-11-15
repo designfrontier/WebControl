@@ -204,6 +204,7 @@ impl Machine {
             Reply::Misread(text) => tracing::debug!(text, "misread controller report"),
             Reply::PositionError(error) => self.position_error(error, effects),
             Reply::Setting { key, value } => self.reported_setting(key, value),
+            Reply::Measured(mm) => self.measured(mm, now, effects),
             Reply::FakeServo(on) => self.fake_servo = on,
             Reply::MaslowPaused => effects.push(broadcast(&RequestedSetting {
                 setting: "pauseButtonSetting".into(),
@@ -232,7 +233,7 @@ impl Machine {
                 self.firmware_version = version.unwrap_or(self.firmware_version);
             }
             Reply::Error(_) | Reply::Other(_) => {
-                if !line.is_empty() {
+                if !self.pid_line(line, now, effects) && !line.is_empty() {
                     effects.push(controller_message(line));
                 }
             }
@@ -316,6 +317,7 @@ impl Machine {
             && controller.accounting.is_empty()
             && controller.ready
             && controller.resync_after.is_none()
+            && controller.hold_until.is_none_or(|until| now >= until)
             && controller.last_write.is_none_or(|at| now >= at + LINE_GAP)
     }
 
@@ -331,6 +333,10 @@ impl Machine {
                     false
                 }
                 Queued::Line { text, .. } => self.send_queued(&text, now, effects),
+                Queued::Delay(wait) => {
+                    self.controller.hold_until = Some(now + wait);
+                    false
+                }
             };
             if written {
                 return;
@@ -371,6 +377,11 @@ impl Machine {
             return false;
         }
         let id = self.write(&command, None, now, effects);
+        if command.starts_with("$RST") {
+            // The firmware never acks a reset of its EEPROM.
+            self.controller.accounting.acked();
+            self.controller.ready = true;
+        }
         if command.contains("G38.2") {
             self.controller.probe = Some(id);
             self.probing = true;
@@ -382,9 +393,10 @@ impl Machine {
         self.controller.queue.extend(lines.into_iter().map(|text| Queued::Line { text, boot: false }));
     }
 
-    /// Stop drops what the user queued; the boot's handshake and settings push still go out.
+    /// Stop drops what the user queued and any wait; the boot's handshake and settings push still go out.
     pub(crate) fn drop_user_commands(&mut self) {
-        self.controller.queue.retain(|queued| !matches!(queued, Queued::Line { boot: false, .. }));
+        self.controller.queue.retain(|queued| matches!(queued, Queued::Line { boot: true, .. } | Queued::SettingsPush));
+        self.controller.hold_until = None;
     }
 
     pub(crate) fn end_job(&mut self) {

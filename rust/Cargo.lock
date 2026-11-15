@@ -2017,6 +2017,7 @@ name = "wc-firmware"
 version = "0.1.0"
 dependencies = [
  "serde_json",
+ "tempfile",
  "wc-config",
 ]
 
@@ -2045,7 +2046,9 @@ dependencies = [
 name = "wc-machine"
 version = "0.1.0"
 dependencies = [
+ "serde",
  "serde_json",
+ "tempfile",
  "tokio",
  "tracing",
  "wc-config",

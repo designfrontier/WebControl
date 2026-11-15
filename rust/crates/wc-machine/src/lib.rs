@@ -3,10 +3,15 @@
 
 mod actions;
 pub mod commands;
+mod edits;
+pub mod forms;
 mod link;
 mod machine;
+mod pid;
+mod setup;
 mod shell;
 mod ui;
 
+pub use edits::{Request, Response};
 pub use machine::{Effect, Event, Machine, Shared, Snapshot};
 pub use shell::{Core, Host, MachineHandle, NoHost, NoPort, PortOpener, Serial, spawn};

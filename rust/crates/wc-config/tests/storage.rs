@@ -145,7 +145,8 @@ fn opening_fails_where_the_home_cannot_be_written() {
 
 #[test]
 fn the_format_is_pythons_json_dump_with_sorted_keys_and_four_spaces() {
-    let value = json!({"b": [1, 2.5, 5.1685e-06, 1e16, "Ünïcode \"q\"\n", true, null, [], {}], "a": {"z": 0.1, "y": -0.0}});
+    let value =
+        json!({"b": [1, 2.5, 5.1685e-06, 1e16, "Ünïcode \"q\"\n", true, null, [], {}], "a": {"z": 0.1, "y": -0.0}});
     let expected = "{\n    \"a\": {\n        \"y\": -0.0,\n        \"z\": 0.1\n    },\n    \"b\": [\n        1,\n        2.5,\n        \
                     5.1685e-06,\n        1e+16,\n        \"Ünïcode \\\"q\\\"\\n\",\n        true,\n        null,\n        \
                     [],\n        {}\n    ]\n}";

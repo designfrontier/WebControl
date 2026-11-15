@@ -1,5 +1,5 @@
-//! The contract test for M1's items (plan §3.2): every message the link produces validates against its closed
-//! schema, each M1 action is refused while streaming exactly when its gate says, and every client event decodes.
+//! The contract test for M1's and M2's items (plan §3.2): every message the link produces validates against its
+//! closed schema, each action is refused while streaming exactly when its gate says, and every client event decodes.
 
 mod rig;
 
@@ -51,6 +51,21 @@ const M1_ACTIONS: [&str; 24] = [
     "shutdown",
     "TurnOffRPI",
 ];
+/// M2's setup and PID actions.
+const M2_ACTIONS: [&str; 12] = [
+    "resetChainLengths",
+    "testMotors",
+    "wipeEEPROM",
+    "setSprockets",
+    "rotateSprocket",
+    "setSprocketAutomatic",
+    "setSprocketsZero",
+    "setSprocketsDefault",
+    "adjustChain",
+    "setFakeServo",
+    "executeVelocityPIDTest",
+    "executePositionPIDTest",
+];
 const SENDING: &str = "Cannot issue command while sending gcode.";
 
 #[test]
@@ -81,9 +96,27 @@ fn every_m1_message_is_produced_and_fits_its_closed_schema() {
 }
 
 #[test]
-fn m1_actions_are_refused_while_streaming_exactly_as_their_gates_say() {
+fn m2_produces_the_pid_results_message_within_its_closed_schema() {
+    let contract = Contract::load();
+    let mut rig = Rig::connected();
+    let pid = json!({"vMotor": "L", "vStart": "0", "vStop": "1", "vSteps": "1", "vVersion": "2", "KpV": "5",
+        "KiV": "0", "KdV": "0.28"});
+    let mut effects = rig.act_with("executeVelocityPIDTest", pid, json!(""));
+    ["--PID Velocity Test Start--", "12.0,11.5,30", "--PID Velocity Test Stop--"]
+        .iter()
+        .for_each(|line| effects.extend(rig.rx(line)));
+    effects.iter().for_each(|effect| {
+        if let Effect::Push(push) = effect {
+            contract.validate_frame(&push.frame().encode()).unwrap();
+        }
+    });
+    assert!(contract.seen_commands().contains("updatePIDData"));
+}
+
+#[test]
+fn m1_and_m2_actions_are_refused_while_streaming_exactly_as_their_gates_say() {
     let actions = Contract::shared().actions();
-    M1_ACTIONS.iter().for_each(|command| {
+    M1_ACTIONS.iter().chain(&M2_ACTIONS).for_each(|command| {
         let gate = actions.get(*command).unwrap_or_else(|| panic!("{command} is not a contract action"));
         let mut rig = Rig::connected();
         rig.machine.load_gcode("G0 X1\nG0 X2\nG0 X3\n");
@@ -99,16 +132,17 @@ fn sample(event: &str) -> Value {
     match event {
         "action" => json!({"data": {"command": "home", "arg": "", "arg1": ""}}),
         "settingRequest" => json!({"data": {"section": "Maslow Settings", "setting": "bedWidth"}}),
+        "updateSetting" => json!({"data": {"setting": "toMM", "value": "25.4"}}),
         _ => json!({"data": {}}),
     }
 }
 
 #[test]
-fn every_client_event_decodes_and_m1_handles_action_and_setting_request() {
+fn every_client_event_decodes_and_the_settings_events_are_handled() {
     Contract::shared().client_events("/MaslowCNC").iter().for_each(|event| {
         let frame = Frame { ns: "/MaslowCNC".into(), event: event.clone(), data: sample(event) };
         let decoded = ClientEvent::from_frame(&frame).unwrap_or_else(|| panic!("{event} does not decode"));
         let handled = !matches!(decoded, ClientEvent::Unhandled(_));
-        assert_eq!(handled, event == "action" || event == "settingRequest", "{event}");
+        assert_eq!(handled, ["action", "settingRequest", "updateSetting"].contains(&event.as_str()), "{event}");
     });
 }

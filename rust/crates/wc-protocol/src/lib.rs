@@ -3,6 +3,8 @@
 mod envelope;
 mod events;
 mod frame;
+#[path = "slices/machine.rs"]
+pub mod machine;
 #[path = "slices/main.rs"]
 pub mod main;
 #[path = "slices/settings.rs"]

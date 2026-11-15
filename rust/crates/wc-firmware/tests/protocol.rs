@@ -68,6 +68,16 @@ fn position_error_reports_are_parsed_by_their_field_count() {
     );
 }
 
+/// messageProcessor's `[Measure` branch: B10's chain length, the closing bracket dropped.
+#[test]
+fn a_chain_measurement_is_read_from_its_bracketed_reply() {
+    assert_eq!(classify("[Measure: 1651.25]"), Reply::Measured(1651.25));
+    assert_eq!(classify("[Measure:-3.5]"), Reply::Measured(-3.5));
+    ["[Measure: abc]", "[Measure]", "[Measure: nan]"]
+        .iter()
+        .for_each(|line| assert_eq!(classify(line), Reply::Other(line.to_string()), "{line}"));
+}
+
 #[test]
 fn a_glued_status_line_and_a_glued_ok_are_split_off() {
     assert_eq!(split_glued("<Idle,MPos:0,0,0>Motor test passed"), ["<Idle,MPos:0,0,0>", "Motor test passed"]);

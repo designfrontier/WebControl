@@ -1,44 +1,23 @@
 //! The `/api` GETs: each built from one machine snapshot, as `api/*.py` builds them from `data`.
 
 use axum::Json;
+use axum::body::Bytes;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use serde_json::{Map, Value, json};
-use wc_config::{Settings, parse_number};
+use serde_json::{Value, json};
+use wc_config::Settings;
 use wc_firmware::boot::supports_z_limits;
+use wc_machine::forms::{self, CUSTOM_FIRMWARE_VERSION};
+use wc_machine::{Request, Response as Answer};
+use wc_protocol::machine::{MachineSetup, QuickConfigure};
 use wc_protocol::main::{Backend, GcodeLine, Macro, MainScreen, Point, StartupState, Units};
-use wc_protocol::settings::{SettingField, SettingsSection};
-use wc_protocol::system::{BundledFirmware, SystemInfo, UpdateStatus};
+use wc_protocol::system::{BundledFirmware, PidSettings, SystemInfo, UpdateStatus};
 use wc_protocol::viewer::{MachineFrame, ViewerSnapshot};
 
 use crate::AppState;
 
 const MM_PER_INCH: f64 = 25.4;
-/// The settings screens disable custom-flagged settings below firmware 100.
-const CUSTOM_FIRMWARE_VERSION: f64 = 100.0;
-const SECTIONS: [(&str, &str); 5] = [
-    ("maslow", "Maslow Settings"),
-    ("advanced", "Advanced Settings"),
-    ("webcontrol", "WebControl Settings"),
-    ("camera", "Camera Settings"),
-    ("gpio", "GPIO Settings"),
-];
-/// `GPIOActions.actionList`: what a GPIO pin setting may be set to.
-pub const GPIO_ACTIONS: [&str; 12] = [
-    "Spindle On",
-    "Spindle Off",
-    "Shutdown",
-    "Stop",
-    "Pause",
-    "Play",
-    "Set Home",
-    "Go Home",
-    "Return to Center",
-    "PlayLED",
-    "PauseLED",
-    "StopLED",
-];
 
 /// `api/state.py`.
 pub(crate) async fn state(State(state): State<AppState>) -> Json<StartupState> {
@@ -112,55 +91,63 @@ pub(crate) async fn viewer(State(state): State<AppState>) -> Json<ViewerSnapshot
     })
 }
 
-/// `api/settings.py`'s `is_number`: finite numbers, and text the frontend's number check accepts.
-fn is_number(value: Option<&Value>) -> bool {
-    match value {
-        Some(Value::Number(n)) => n.as_f64().is_some_and(f64::is_finite),
-        Some(Value::String(text)) => parse_number(text).is_some(),
-        _ => false,
-    }
-}
-
-fn describe(section: &str, option: &Map<String, Value>) -> SettingField {
-    let text = |name: &str| option.get(name).and_then(Value::as_str).map(String::from);
-    let key = text("key").unwrap_or_default();
-    let kind = text("type").unwrap_or_else(|| "string".into());
-    let value = option.get("value").cloned().unwrap_or_else(|| Value::from(""));
-    // A setting not yet read from the controller is blank, but numeric all the same.
-    let value_or_default = if value == "" { option.get("default") } else { Some(&value) };
-    let options = match section {
-        "GPIO Settings" => Some(std::iter::once("").chain(GPIO_ACTIONS).map(String::from).collect()),
-        _ => option
-            .get("options")
-            .and_then(Value::as_array)
-            .map(|list| list.iter().map(|o| o.as_str().map(String::from).unwrap_or_else(|| o.to_string())).collect()),
-    };
-    SettingField {
-        title: text("title").unwrap_or_else(|| key.clone()),
-        desc: text("desc").unwrap_or_default(),
-        numeric: kind == "int" || kind == "float" || (kind == "string" && is_number(value_or_default)),
-        custom: option.get("custom") == Some(&Value::from(1)),
-        key,
-        kind,
-        value,
-        options,
-    }
-}
-
 /// `GET /api/settings/{sectionId}`; an unknown section is a JSON 404 (wart 9).
 pub(crate) async fn settings_section(State(state): State<AppState>, Path(id): Path<String>) -> Response {
-    let Some((id, section)) = SECTIONS.iter().find(|(known, _)| *known == id) else {
-        return (StatusCode::NOT_FOUND, Json(json!({"error": "Not found"}))).into_response();
-    };
     let snapshot = state.machine.snapshot();
-    Json(SettingsSection {
-        id: id.to_string(),
-        title: section.to_string(),
-        enable_custom: snapshot.controller_firmware_version >= CUSTOM_FIRMWARE_VERSION,
-        settings: snapshot.settings.section(section).into_iter().map(|option| describe(section, option)).collect(),
-        ports: (*id == "maslow").then(|| snapshot.ports.clone()),
-    })
-    .into_response()
+    match forms::section(&snapshot.settings, &id, snapshot.controller_firmware_version, &snapshot.ports) {
+        Some(section) => Json(section).into_response(),
+        None => not_found(),
+    }
+}
+
+fn not_found() -> Response {
+    (StatusCode::NOT_FOUND, Json(json!({"error": "Not found"}))).into_response()
+}
+
+/// The body as JSON, or null where Flask's `get_json(silent=True)` gives None.
+fn json_body(body: &Bytes) -> Value {
+    serde_json::from_slice(body).unwrap_or(Value::Null)
+}
+
+async fn answer(state: &AppState, request: Request) -> Response {
+    match state.machine.request(request).await {
+        Some(Answer { status, body }) => {
+            (StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR), Json(body)).into_response()
+        }
+        None => {
+            (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "WebControl is shutting down"}))).into_response()
+        }
+    }
+}
+
+/// `PUT /api/settings/{sectionId}`.
+pub(crate) async fn update_settings(State(state): State<AppState>, Path(id): Path<String>, body: Bytes) -> Response {
+    answer(&state, Request::UpdateSettings { section: id, body: json_body(&body) }).await
+}
+
+pub(crate) async fn machine_setup(State(state): State<AppState>) -> Json<MachineSetup> {
+    let snapshot = state.machine.snapshot();
+    let build = snapshot.firmware_build.as_deref();
+    Json(forms::machine_setup(&snapshot.settings, snapshot.controller_firmware_version, build))
+}
+
+pub(crate) async fn quick_configure(State(state): State<AppState>) -> Json<QuickConfigure> {
+    Json(forms::quick_configure(&state.machine.snapshot().settings))
+}
+
+pub(crate) async fn save_quick_configure(State(state): State<AppState>, body: Bytes) -> Response {
+    answer(&state, Request::QuickConfigure(json_body(&body))).await
+}
+
+pub(crate) async fn pid(State(state): State<AppState>) -> Json<PidSettings> {
+    let snapshot = state.machine.snapshot();
+    Json(forms::pid_settings(&snapshot.settings, snapshot.controller_firmware_version))
+}
+
+/// `POST /api/system/pid-test`; a body that is not JSON reads as `{}`, as Flask's `or {}` does.
+pub(crate) async fn pid_test(State(state): State<AppState>, body: Bytes) -> Response {
+    let body = Some(json_body(&body)).filter(|b| !b.is_null()).unwrap_or_else(|| json!({}));
+    answer(&state, Request::PidTest(body)).await
 }
 
 pub(crate) async fn system(State(state): State<AppState>) -> Json<SystemInfo> {

@@ -43,11 +43,16 @@ pub enum ClientEvent {
         section: String,
         setting: String,
     },
+    /// The front page's unit switches (`toInches`, `toMM`, `toInchesZ`, `toMMZ`) with the step converted.
+    UpdateSetting {
+        setting: String,
+        value: Value,
+    },
     /// A contract event this backend does not decode yet.
     Unhandled(String),
 }
 
-const LATER_EVENTS: [&str; 4] = ["updateSetting", "checkForGCodeUpdate", "checkForBoardUpdate", "opticalCalibration"];
+const LATER_EVENTS: [&str; 3] = ["checkForGCodeUpdate", "checkForBoardUpdate", "opticalCalibration"];
 
 impl ClientEvent {
     /// `None` for an unknown event or a malformed payload; the transport ignores those.
@@ -63,6 +68,11 @@ impl ClientEvent {
                 let data = frame.data.get("data")?;
                 let text = |name: &str| data.get(name)?.as_str().map(String::from);
                 Some(ClientEvent::SettingRequest { section: text("section")?, setting: text("setting")? })
+            }
+            "updateSetting" => {
+                let data = frame.data.get("data")?;
+                let value = data.get("value").filter(|v| v.is_string() || v.is_number())?.clone();
+                Some(ClientEvent::UpdateSetting { setting: data.get("setting")?.as_str()?.to_string(), value })
             }
             event if LATER_EVENTS.contains(&event) => Some(ClientEvent::Unhandled(event.into())),
             _ => None,

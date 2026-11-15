@@ -71,9 +71,12 @@ fn bool_value(value: &Value) -> Value {
 impl Settings {
     fn option_mut(&mut self, section: &str, key: &str) -> Option<&mut Map<String, Value>> {
         let wanted = key.to_lowercase();
-        self.sections.get_mut(section)?.as_array_mut()?.iter_mut().filter_map(Value::as_object_mut).find(|option| {
-            option.get("key").and_then(Value::as_str).is_some_and(|k| k.to_lowercase() == wanted)
-        })
+        self.sections
+            .get_mut(section)?
+            .as_array_mut()?
+            .iter_mut()
+            .filter_map(Value::as_object_mut)
+            .find(|option| option.get("key").and_then(Value::as_str).is_some_and(|k| k.to_lowercase() == wanted))
     }
 
     /// `Config.setValue`: converted by the option's `type`; `None` if it does not exist or Python's conversion
@@ -115,7 +118,11 @@ impl Settings {
     pub fn compute(&mut self) -> Vec<Stored> {
         let mut stored = Vec::new();
         let quadrilateral = self.value(ADVANCED, "kinematicsType") == Some(&Value::from("Quadrilateral"));
-        self.store_if_changed("kinematicsTypeComputed", Value::from(if quadrilateral { "1" } else { "2" }), &mut stored);
+        self.store_if_changed(
+            "kinematicsTypeComputed",
+            Value::from(if quadrilateral { "1" } else { "2" }),
+            &mut stored,
+        );
         let number = |key: &str| self.value(ADVANCED, key).and_then(python_float);
         if let Some(per_rotation) = number("gearTeeth").zip(number("chainPitch")).map(|(t, p)| t * p) {
             self.store_if_changed("distPerRot", Value::from(python_float_str(per_rotation)), &mut stored);

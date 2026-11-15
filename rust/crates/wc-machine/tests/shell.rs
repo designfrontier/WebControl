@@ -278,3 +278,57 @@ fn the_null_host_and_port_do_nothing() {
     assert_eq!(host.cpu_load(), 0.0);
     assert!(NoPort.open("/dev/ttyACM0").is_err());
 }
+
+/// Keeps every settings save it is handed, slowly, as an SD card might.
+#[derive(Default)]
+struct Disk {
+    saved: Mutex<Vec<Value>>,
+}
+
+impl Host for Disk {
+    fn list_ports(&self) -> Vec<String> {
+        Vec::new()
+    }
+    fn log(&self, _: &str) {}
+    fn clear_logs(&self) {}
+    fn power_off(&self) {}
+    fn exit(&self) {}
+    fn cpu_load(&self) -> f64 {
+        0.0
+    }
+    fn save_settings(&self, settings: &Settings) {
+        std::thread::sleep(Duration::from_millis(5));
+        let value = settings.value("Maslow Settings", "macro1_title").cloned().unwrap_or_default();
+        self.saved.lock().unwrap().push(value);
+    }
+}
+
+#[tokio::test]
+async fn a_request_is_answered_and_its_change_saved_before_the_task_ends() {
+    let disk = Arc::new(Disk::default());
+    let (handle, task) = spawn(Machine::new("h", Settings::defaults()), Box::new(NoPort), disk.clone());
+    let body = json!({"values": {"macro1_title": "Spindle"}});
+    let request = wc_machine::Request::UpdateSettings { section: "maslow".into(), body };
+    let response = handle.request(request).await.unwrap();
+    assert_eq!(response.status, 200);
+    let missing = handle.request(wc_machine::Request::UpdateSettings { section: "x".into(), body: json!({}) });
+    assert_eq!(missing.await.unwrap().status, 404);
+    drop(handle);
+    tokio::time::timeout(Duration::from_secs(5), task).await.unwrap().unwrap();
+    assert_eq!(disk.saved.lock().unwrap().last(), Some(&json!("Spindle")));
+    assert!(disk.list_ports().is_empty() && disk.cpu_load() == 0.0);
+    disk.log("x");
+    disk.clear_logs();
+    disk.power_off();
+    disk.exit();
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn the_default_host_saves_nothing_and_a_finished_task_answers_none() {
+    NoHost.save_settings(&Settings::defaults());
+    let (handle, task) = spawn(Machine::new("h", Settings::defaults()), Box::new(NoPort), Arc::new(NoHost));
+    let other = handle.clone();
+    task.abort();
+    let _ = task.await;
+    assert_eq!(other.request(wc_machine::Request::QuickConfigure(json!({}))).await, None);
+}

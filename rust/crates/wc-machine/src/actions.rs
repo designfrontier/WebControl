@@ -115,6 +115,8 @@ impl Machine {
                 None
             }
             "startRun" => self.start_run(),
+            _ if crate::setup::COMMANDS.contains(&command) => self.setup_action(action, effects),
+            _ if crate::pid::COMMANDS.contains(&command) => self.pid_action(action),
             _ => Some(format!("Function not currently implemented.. Sorry.[{command}]")),
         };
         if let Some(text) = failure {
@@ -124,12 +126,14 @@ impl Machine {
 
     fn stopped(&mut self, now: Duration, effects: &mut Vec<Effect>) {
         self.probing = false;
+        self.measure = None;
+        self.pid.end_tests();
         self.realtime("!", now, effects);
         self.drop_user_commands();
         self.end_job();
     }
 
-    fn stop_run(&mut self, now: Duration, effects: &mut Vec<Effect>) -> Option<String> {
+    pub(crate) fn stop_run(&mut self, now: Duration, effects: &mut Vec<Effect>) -> Option<String> {
         self.stopped(now, effects);
         effects.push(broadcast(&ClearAlarm::new()));
         effects.push(broadcast(&RequestedSetting {

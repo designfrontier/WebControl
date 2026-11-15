@@ -57,7 +57,7 @@ fn the_binary_prints_its_version_and_help() {
 }
 
 #[test]
-fn the_binary_serves_on_the_port_it_reports_and_leaves_the_home_alone() {
+fn the_binary_serves_on_the_port_it_reports_and_prepares_the_home_as_python_does() {
     let home = tempfile::tempdir().unwrap();
     let mut child = binary()
         .args(["--port", "0", "--home"])
@@ -80,7 +80,13 @@ fn the_binary_serves_on_the_port_it_reports_and_leaves_the_home_alone() {
     assert!(child.wait().unwrap().success(), "SIGTERM should shut down cleanly");
     assert!(reply.starts_with("HTTP/1.1 200"), "{reply}");
     assert!(reply.contains("\"backend\":\"rust\""), "{reply}");
-    assert_eq!(std::fs::read_dir(home.path()).unwrap().count(), 0, "the binary wrote to the home directory");
+    let dir = home.path().join(".WebControl");
+    let mut made: Vec<String> =
+        std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    made.sort();
+    assert_eq!(made, ["boards", "gcode", "imports", "webcontrol.json", "webcontrol.json.pre-rs"]);
+    let defaults = include_str!("../../../../defaultwebcontrol.json");
+    assert_eq!(std::fs::read_to_string(dir.join("webcontrol.json")).unwrap(), defaults);
 }
 
 #[test]
@@ -122,6 +128,23 @@ async fn the_simulated_binary_connects_and_shuts_down_from_the_ui() {
         panic!("the socket closed first");
     };
     tokio::time::timeout(Duration::from_secs(20), version).await.expect("the simulated controller's version");
+    let ask = r#"{"ns":"/MaslowCNC","event":"settingRequest","data":{"data":{"section":"Advanced Settings","setting":"maxZRPM"}}}"#;
+    let adopted = async {
+        loop {
+            socket.send(Message::text(ask)).await.unwrap();
+            while let Some(Ok(message)) = socket.next().await {
+                let text = message.to_text().unwrap_or_default().to_string();
+                if text.contains("requestedSetting") && text.contains("maxZRPM") {
+                    if text.contains("12.6") {
+                        return;
+                    }
+                    break;
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
+    };
+    tokio::time::timeout(Duration::from_secs(30), adopted).await.expect("$18 adopted from the boot's $$");
     let shutdown = r#"{"ns":"/MaslowCNC","event":"action","data":{"data":{"command":"shutdown","arg":"","arg1":""}}}"#;
     socket.send(Message::text(shutdown)).await.unwrap();
     let exited = async {
@@ -136,4 +159,6 @@ async fn the_simulated_binary_connects_and_shuts_down_from_the_ui() {
     assert!(status.success());
     let log = std::fs::read_to_string(home.path().join(".WebControl/webcontrol-rs.log")).unwrap();
     assert!(log.contains(": Sent: B05  \n"), "{log}");
+    let saved = wc_config::Settings::load(&wc_config::Paths::new(home.path()));
+    assert_eq!(saved.text("Advanced Settings", "maxZRPM").as_deref(), Some("12.6"), "adopted from $$ and saved");
 }

@@ -10,3 +10,6 @@ publish.workspace = true
 [dependencies]
 serde_json.workspace = true
 wc-config.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
