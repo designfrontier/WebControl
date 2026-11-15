@@ -106,7 +106,12 @@ a plunge the plunge's 12.8 mm/min stays the modal feed, so the file's next F-les
   selected, stops streaming after a tool-changing M6, and on Resume returns to the file's XY at safe height (Rust: or
   at the bit's height when that is higher).
 - Manual Z (`$16=0`): `Message: Please adjust Z-Axis…` then pause; handled correctly.
-- Alarms: "Sled not keeping up" stops the firmware with no acks; "Board invalid" hangs it.
+- Alarms: "Sled not keeping up" sets `sys.stop` (H27 and H292 `Report.cpp`): the running line gets no ack, the ring is
+  emptied, `loop()` reloads the position (`[Forward Calculating Position]`, `position loaded at:`) and then **takes
+  new lines again**, so anything the host sends after the alarm runs. "Board invalid" hangs it. No other `ALARM:` is
+  raised (the TLE9201 ones are compiled out; `Position Lost` and the gcode-parameter alarm are never reported).
+  `Message: Unable to find valid machine position` comes from forward kinematics (boot, after every stop, after a
+  geometry `$` write) and halts nothing, but means the position is not known.
 
 ## 8. Firmware upgrade
 
@@ -138,7 +143,7 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
 | A3 | Fixed | Tool change: `~` was auto-sent; `T`/`M6` on separate lines ran on without a tool change; `M6 T2` stalled; a race could make Resume a no-op. |
 | A4 | Fixed | Restart/resume plunged with G0 (at zMaxFeed) and left the modal F at the XY feed. |
 | A5 | Medium | Z-limit commands do nothing on 51.27/51.28, overwrite `$43`/`$44` on 51.291, store nothing on 51.292. |
-| A6 | Medium | When the firmware stops itself (ALARM, overflow), acks are lost and streaming blocks until Stop. |
+| A6 | Medium | When the firmware stops itself (ALARM, overflow), acks are lost and streaming blocks until Stop. v0.94's lost acks also held its manual queue, so a Home's tail waited for Stop; this fork's resync (35363b3) released it 0.25 s later (B17). |
 | A7 | Fixed | touchZ's `F1` left the modal feed at 1 mm/min; G38.2 ignores F anyway. Without F, G38.2 still clamps the modal feed to zMaxFeed until Resume restores it. |
 | A8 | Low | Holey calibration fits with R = distPerRot / (2 × 3.14159), but the firmware runs R = 10.1 until `$13` is written (§6); it ignores `$37` and `$7`. |
 | A9 | Low–Med | The version only reaches the console; all 51.29x builds report 51.29. |
@@ -195,6 +200,15 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
     answers, refuse every action that moves the machine (Resume included), except Stop. A `G38.2` streamed from a file
     is the same: stream nothing behind it, hold the job at the probe line on a miss, and take Z as 0 after a touch.
     An `ok` without `z axis zeroed` alerts that Z was not zeroed and pauses a job.
+
+17. Alarm hold (2026-11-15): after `ALARM:`, `Buffer overflow!` or `Message: Unable to find valid machine position`
+    (other than zero chain lengths), write nothing that can move the machine until the user clears it. Queued
+    commands are dropped except the boot handshake, `$` lines and lone `G20`/`G21`/`G90`/`B05`; a job is held at its
+    oldest unacknowledged line. Every action and HTTP write that reaches the controller is refused (an alert or a
+    409) except Stop, Stop Z, Pause, Resume's `~`, `$$` and settings writes. Stop or Stop Z clears it, and so does
+    Play (or Resume) on the held job, which returns as from any halt (B11). A reboot or reconnect keeps it, and B05's
+    reply shows the alarm again instead of clearing it. The unplaceable-sled message read during Stop's own resync is
+    shown but does not hold again, since Stop's reload repeats it. `alarm_mid_home_holds_the_plunge_until_stop`.
 
 ### C. One-click firmware upgrade
 
