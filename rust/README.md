@@ -7,6 +7,7 @@ WebSockets, and shares `~/.WebControl` with the Python install.
 | --- | --- |
 | `wc-protocol` | The browser wire: envelope, WebSocket frame, messages, events, `GET /api/state` |
 | `wc-config` | `~/.WebControl` layout and `webcontrol.json`, read like `config/config.py` (read-only so far) |
+| `wc-gcode` | Gcode load, sanitising, home shift, T rule, restart state, the 3D preview payload and boards, as Python does |
 | `wc-kinematics` | The holey firmware's triangular and quadrilateral inverse/forward, float for float with Python |
 | `wc-calibration` | Holey (`levenberg-marquardt`) and triangular calibration, test patterns, Accept's settings and `$` lines |
 | `wc-machine` | The sans-IO core (`Machine::handle(event, now) -> effects`) and the tokio shell; Stop has its own channel |
@@ -21,6 +22,8 @@ WebSockets, and shares `~/.WebControl` with the Python install.
   while testing
 - `cargo run -p wc-calibration --example calibrate -- <home> holey M1 … M12`: a calibration against a copy of
   `webcontrol.json`, printing the result and the `$` lines Accept would send
+- `cargo run --release -p wc-gcode --example gcode_timing -- <file.nc> [home_x home_y]`: times each step of opening
+  a gcode file, for the M3 time budget
 - `bash deploy/test.sh`: `wc-switch`, `deploy.sh` and `install-pi.sh` against stubs
 - `E2E_BACKEND=rust npm run test:e2e` in `frontend/`: the Playwright smoke against the binary
 
