@@ -40,6 +40,7 @@ JOB_LINES_HELD_MESSAGE = (
     "The controller paused with lines of the job still in its buffer, which would run before this move. "
     "Press Resume or STOP first."
 )
+ADJUST_Z_FIRST_MESSAGE = "The controller is waiting for Z to be adjusted by hand. Adjust it, then press Resume."
 TOOL_CHANGE_WAITS_MESSAGE = (
     "Cannot issue command while a tool change waits. Press Resume or STOP before setting home or running a PID test."
 )
@@ -64,6 +65,10 @@ class Actions(MakesmithInitFuncs):
             if self.data.firmwarePaused and self.data.uploadFlag != 1 and msg["data"]["command"] in MACHINE_COMMANDS:
                 if self.data.firmwareHoldsJobLines:
                     self.data.ui_queue1.put("Alert", "Alert", JOB_LINES_HELD_MESSAGE)
+                    return
+                # "~" here would tell the firmware Z was adjusted by hand ($16=0) and carry on with the line.
+                if self.data.manualZAxisAdjust and not self.data.toolChangeWaits:
+                    self.data.ui_queue1.put("Alert", "Alert", ADJUST_Z_FIRST_MESSAGE)
                     return
                 # Streaming stays held, so releasing the firmware lets the jog run now instead of on Resume.
                 self.releaseFirmwarePause()

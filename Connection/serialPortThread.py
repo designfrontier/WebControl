@@ -280,6 +280,9 @@ class SerialPortThread(MakesmithInitFuncs):
             self.data.gcode_queue.put("G90 ")
             self.data.currentTool = 0  # This is necessary since the controller will have reset tool to zero.
             self.data.nextTool = 0
+            # Opening the port resets the controller, which ends any pause.
+            self.data.firmwarePaused = False
+            self.data.firmwareHoldsJobLines = False
 
             handedToFirmwareUpgrade = False
             try:

@@ -330,3 +330,50 @@ def test_starting_mid_file_after_a_tool_change_queues_nothing_behind_its_m6(app,
     assert [line for line in sent if line.startswith("G1 Z")] == ["G1 Z-2.0 F100.0  "]
     assert sent.index("G00 Z5.0  ") < sent.index("G1 Z-2.0 F100.0  ")
     assert sent[-6:] == ["G0 Z5.0  ", "G0 X40.0 Y40.0  ", "G1 Z-2.0 F100.0  ", "G1 F100.0  ", "G90  ", "X50  "]
+
+
+def test_a_jog_does_not_confirm_a_manual_z_adjustment_outside_a_job(app, tools, serial):  # noqa: F811
+    tools.uploadFlag = 0
+    tools.jobInProgress = False
+    controller_says(app, tools, ["Message: Please adjust Z-Axis to a depth of -3.00 mm\r\n", "Maslow Paused\r\n"])
+    drain(tools.ui_queue1)
+
+    tools.actions.processAction({"data": {"command": "move", "arg": "right", "arg1": "10"}})
+
+    assert drain(tools.quick_queue) == []
+    assert drain(tools.gcode_queue) == []
+
+
+def test_resume_after_a_manual_z_prompt_carries_on_with_the_line_without_moving(app, tools, serial):  # noqa: F811
+    tools.gcode = ["G1 X1 ", "G1 Z-3 ", "G1 X2 "]
+    tools.gcodeIndex = 0
+    action(tools, "startRun")
+    thread = serial.thread()
+    [thread.sendNextLine() for _ in range(2)]
+    controller_says(app, tools, ["Message: Please adjust Z-Axis to a depth of -3.00 mm\r\n", "Maslow Paused\r\n"])
+
+    action(tools, "resumeRun")
+
+    assert drain(tools.quick_queue) == ["~"]
+    assert drain(tools.gcode_queue) == []
+    assert (tools.uploadFlag, tools.gcodeIndex, tools.manualZAxisAdjust) == (1, 2, False)
+
+
+def test_a_reconnect_forgets_that_the_firmware_was_paused(tools, serial):  # noqa: F811
+    tools.firmwarePaused = True
+    tools.firmwareHoldsJobLines = True
+
+    serial.run()
+
+    assert (tools.firmwarePaused, tools.firmwareHoldsJobLines) == (False, False)
+
+
+def test_an_m0_or_m6_outside_a_job_does_not_hold_streaming(tools, serial):  # noqa: F811
+    tools.uploadFlag = 0
+    tools.jobInProgress = False
+    thread = serial.thread()
+
+    thread.managePause("M0 ")
+    thread.manageToolChange("T2 M6 ")
+
+    assert tools.uploadFlag == 0
