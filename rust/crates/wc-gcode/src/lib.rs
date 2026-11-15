@@ -2,6 +2,7 @@
 //! the restart half of `Actions/actions.py`), and the board model (`Boards/`). Pure functions, no IO: every string
 //! that reaches the controller or a shared file matches Python's byte for byte (tests/fixtures/gcode).
 
+pub mod board;
 mod decimal;
 pub mod firmware_gcode;
 pub mod load;
