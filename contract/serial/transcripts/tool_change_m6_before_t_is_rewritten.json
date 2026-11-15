@@ -7,7 +7,7 @@
       "variant": "holey",
       "version": "51.27"
     },
-    "webcontrolCommit": "81ff3d4"
+    "webcontrolCommit": "5247e3e"
   },
   "setup": {
     "units": "MM",
@@ -23,6 +23,11 @@
         "M6 T2",
         "G0 X2"
       ]
+    },
+    "sled": {
+      "x": 0,
+      "y": 0,
+      "z": 0
     },
     "bootBanner": [
       "PCB v1.1 Detected",

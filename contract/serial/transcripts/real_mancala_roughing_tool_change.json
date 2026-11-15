@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "meta": {
     "name": "real_mancala_roughing_tool_change",
-    "description": "The first 150 lines of a 45,000-line adaptive roughing job: tool change, Resume, then the ramp in at 333 mm/min. From the owner's mancala/mancala.frd.roughing.25.endmill.nc (20261114-160443.jsonl).",
+    "description": "The first 150 lines of a 45,000-line adaptive roughing job: tool change, Resume, which waits for the status report the controller sends after the ~ (the bit's height is unknown) and travels at the 5 mm safe height above its -0.02 mm, then the ramp in at 333 mm/min. From the owner's mancala/mancala.frd.roughing.25.endmill.nc (20261114-160443.jsonl).",
     "firmware": {
       "variant": "holey",
       "version": "51.27"
@@ -68,7 +68,9 @@
     {"type": "tx", "bytes": "~\n", "realtime": true},
     {"type": "rx", "line": "ok"},
     {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "<Idle,MPos:41.68,60.14,-0.02,WPos:0.000,0.000,0.000>"},
     {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "[PE:-0.00,0.01,127,1721.19,1650.35]"},
     {"type": "rx", "line": "G21"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G90  \n"},

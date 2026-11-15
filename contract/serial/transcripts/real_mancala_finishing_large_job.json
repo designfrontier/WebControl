@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "meta": {
     "name": "real_mancala_finishing_large_job",
-    "description": "A 120,000-line finishing job, its first 150 lines and its last 40 (arcs, the retract, M5, M30) back to back. From the owner's mancala/mancala.finishing.best.25.ballnose.nc (20261114-233640.jsonl).",
+    "description": "A 120,000-line finishing job, its first 150 lines and its last 40 (arcs, the retract, M5, M30) back to back. Resume after the tool change waits for the status report the controller sends after the ~ (the bit's height is unknown) and travels at its 10.03 mm rounded up a step (Z10.04), never down to the 5 mm safe height. From the owner's mancala/mancala.finishing.best.25.ballnose.nc (20261114-233640.jsonl).",
     "firmware": {
       "variant": "holey",
       "version": "51.27"
@@ -68,14 +68,16 @@
     {"type": "tx", "bytes": "~\n", "realtime": true},
     {"type": "rx", "line": "ok"},
     {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "<Idle,MPos:-87.93,-90.38,10.03,WPos:0.000,0.000,0.000>"},
     {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "[PE:-0.01,-0.01,127,1702.14,1842.36]"},
     {"type": "rx", "line": "G21"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G90  \n"},
     {"type": "rx", "line": "G90"},
     {"type": "rx", "line": "ok"},
-    {"type": "tx", "bytes": "G0 Z5.0  \n"},
-    {"type": "rx", "line": "G0 Z5.0"},
+    {"type": "tx", "bytes": "G0 Z10.04  \n"},
+    {"type": "rx", "line": "G0 Z10.04"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G0 X41.6763 Y60.1447  \n"},
     {"type": "rx", "line": "G0 X41.6763 Y60.1447"},

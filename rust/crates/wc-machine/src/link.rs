@@ -14,6 +14,7 @@ use wc_gcode::sanitise::{problem_with, sanitise};
 use wc_gcode::shift::positioning_set_by;
 use wc_protocol::main::{ActivateModal, Alarm, ClearAlarm, ControllerMessage, PauseButton, Units};
 
+use crate::clearance::BitHeight;
 use crate::gpio::Led;
 use crate::job::{Flow, pause_button};
 use crate::machine::{Controller, Effect, Link, Machine, Probe, Queued, alert, broadcast};
@@ -51,6 +52,7 @@ impl Machine {
         self.controller.boot_deadline = Some(now + BOOT_WAIT);
         self.controller.buffering = self.settings.number("Maslow Settings", "bufferOn") != 0.0;
         self.job.controller_reset();
+        self.bit = BitHeight::new();
         effects.push(controller_message(&format!("Connected on port {port}")));
         self.link = Link::Connected { port };
         effects.push(broadcast(&self.connection_status()));
@@ -69,6 +71,7 @@ impl Machine {
             effects.push(broadcast(&Alarm { message: "Alarm: Connection Failed or Invalid Firmware".into() }));
         }
         self.probing = false;
+        self.bit.lost();
         self.link = Link::Disconnected { retry_at: now + RECONNECT };
         effects.push(Effect::ClosePort);
         effects.push(broadcast(&self.connection_status()));
@@ -132,6 +135,7 @@ impl Machine {
         self.controller = Controller { eeprom_reset, buffering, ..Controller::new(now) };
         self.rewrite_notice = false;
         self.job.controller_reset();
+        self.bit = BitHeight::new();
         self.probing = false;
         self.handshake(now);
     }
@@ -201,6 +205,9 @@ impl Machine {
         }
         controller.ready = true;
         let acked = controller.accounting.acked();
+        if controller.accounting.is_empty() {
+            self.bit.settled();
+        }
         // Identity, not position: a `~` sent mid-probe is acked first with an entry of its own.
         let answered = controller.probe.take_if(|probe| acked.is_some_and(|sent| sent.id == probe.id));
         if let Some(probe) = answered {
@@ -211,6 +218,11 @@ impl Machine {
     /// A touch zeroes Z; a miss stops the firmware (`sys.stop`), so a job waits at the probe for Play to try again.
     fn probe_answered(&mut self, probe: Probe, ok: bool, effects: &mut Vec<Effect>) {
         self.probing = false;
+        if ok && probe.zeroed {
+            self.bit.zeroed();
+        } else {
+            self.bit.lost();
+        }
         match (ok, probe.zeroed, probe.index) {
             (true, true, Some(_)) => {
                 self.job.z_target = 0.0;
@@ -326,6 +338,7 @@ impl Machine {
         controller.resync_after = Some(now + RESYNC_DELAY);
         controller.caught_up = false;
         self.probing = false;
+        self.bit.lost();
     }
 
     pub(crate) fn realtime(&mut self, text: &str, now: Duration, effects: &mut Vec<Effect>) {
@@ -352,6 +365,7 @@ impl Machine {
         if let Some(mode) = positioning_set_by(&message) {
             self.positioning = mode;
         }
+        self.bit.written(text);
         let setting = text.strip_prefix('$').and_then(|setting| setting.split_once('='));
         if let Some((key, value)) = setting.and_then(|(key, value)| Some((key.parse().ok()?, value.trim()))) {
             self.kinematics.update_setting(key, value);
@@ -409,6 +423,8 @@ impl Machine {
                     self.mark(mark, effects);
                     false
                 }
+                // While it waits, nothing after it may go.
+                Queued::Raise(raise) => self.expand_raise(raise, now, effects),
             };
             if written {
                 return;
@@ -483,6 +499,7 @@ impl Machine {
             matches!(queued, Queued::Line { boot: true, .. } | Queued::SettingsPush | Queued::Mark(_))
         });
         self.controller.hold_until = None;
+        self.controller.raise_deadline = None;
     }
 
     pub(crate) fn ports_found(&mut self, ports: Vec<String>, effects: &mut Vec<Effect>) {

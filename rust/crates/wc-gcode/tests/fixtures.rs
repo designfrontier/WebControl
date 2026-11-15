@@ -8,7 +8,7 @@ use wc_gcode::board::{Board, BoardEdit, BoardTrim};
 use wc_gcode::firmware_gcode as fw;
 use wc_gcode::position::find_position_at;
 use wc_gcode::preview::{compress, render};
-use wc_gcode::restart::{GcodeState, positioning_word, sequence, state_at, units_word};
+use wc_gcode::restart::{GcodeState, Options, positioning_word, sequence, state_at, units_word};
 use wc_gcode::sanitise::{sanitise, stream_problem, strip_comments};
 use wc_gcode::shift::{HomeShift, move_line, positioning_set_by, shift_to_home};
 use wc_gcode::{Positioning, Units, load};
@@ -144,13 +144,15 @@ fn check_restarts(name: &str, lines: &[String], fixture: &Value, tolerance: f64)
         };
         let state = state.unwrap_or_else(|e| panic!("{at}: {e}"));
         assert_matches(&state_json(&state), expected, tolerance, &at);
-        let restart = sequence(
-            &state,
-            case["zTarget"].as_f64(),
-            case["changeTool"].as_bool().unwrap(),
-            case["currentTool"].as_i64().unwrap(),
-            5.0,
-        );
+        let options = Options {
+            z_target: case["zTarget"].as_f64(),
+            change_tool: case["changeTool"].as_bool().unwrap(),
+            current_tool: case["currentTool"].as_i64().unwrap(),
+            safe_height_mm: 5.0,
+            current_z_mm: None,
+            speed_after_spindle: false,
+        };
+        let restart = sequence(&state, &options);
         assert_eq!(json!(restart.lines), case["sent"], "{at}");
         assert_eq!(json!(restart.stopped_at_tool_change), case["stoppedAtToolChange"], "{at}");
     });

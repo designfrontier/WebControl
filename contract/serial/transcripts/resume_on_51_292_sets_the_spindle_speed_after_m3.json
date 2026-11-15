@@ -1,0 +1,82 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "resume_on_51_292_sets_the_spindle_speed_after_m3",
+    "description": "On 51.29x M3 leaves the spindle's PWM at 0 until an S line (spec/firmware.md §9, B13), so Resume restores the spindle with M3 and then the file's last S on its own line. 51.27 and stock firmware get the bare M3, as before.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.29",
+      "build": "51.292"
+    },
+    "webcontrolCommit": "rust"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    },
+    "gcode": {
+      "lines": [
+        "G21",
+        "G90",
+        "M3 S12000",
+        "G0 Z5",
+        "G0 X10 Y10",
+        "G1 Z-1 F100",
+        "G1 X30 F600",
+        "G1 Y30",
+        "G0 Z5",
+        "M5"
+      ]
+    }
+  },
+  "events": [
+    {"type": "expect", "state": {"firmwareBuild": "51.292"}},
+    {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "M3 S12000  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 Z5  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 X10 Y10  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 Z-1 F100  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 X30 F600  \n"},
+    {"type": "ui", "action": {"command": "pauseRun", "arg": "", "arg1": ""}, "comment": "the X30 line is still unacknowledged"},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "state": {"uploadFlag": 2, "jobInProgress": true, "pauseButtonSetting": "Resume"}},
+    {"type": "ui", "action": {"command": "resumeRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "~\n", "realtime": true},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 Z5.0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 X30.0 Y10.0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "M3  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "S12000.0  \n", "comment": "the file's last S, on its own line after the M3"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 Z-1.0 F100.0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 F600.0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 Y30  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 Z5  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "M5  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "state": {"uploadFlag": 0, "jobInProgress": false, "gcodeIndex": 0}}
+  ]
+}

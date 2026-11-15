@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "meta": {
     "name": "real_katie_body_top_pause_stop",
-    "description": "Tool change answered with Play, then helical arcs; Pause during the 11 s retract, then Stop: ! goes out, the firmware reloads its position, and the job ends. From the owner's katie-guitar/1-body-top-25-endmill.nc (20251216-182101.jsonl).",
+    "description": "Tool change answered with Play, which waits for the status report the controller sends after the ~ (the bit's height is unknown) and travels at its 15.04 mm rounded up a step (Z15.05), never down to the 5 mm safe height; then helical arcs; Pause during the 11 s retract, then Stop: ! goes out, the firmware reloads its position, and the job ends. From the owner's katie-guitar/1-body-top-25-endmill.nc (20251216-182101.jsonl).",
     "firmware": {
       "variant": "holey",
       "version": "51.27"
@@ -68,14 +68,16 @@
     {"type": "tx", "bytes": "~\n", "realtime": true},
     {"type": "rx", "line": "ok"},
     {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "<Idle,MPos:6.20,34.00,15.04,WPos:0.000,0.000,0.000>"},
     {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "[PE:0.01,-0.01,127,1705.52,1694.37]"},
     {"type": "rx", "line": "G21"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G90  \n"},
     {"type": "rx", "line": "G90"},
     {"type": "rx", "line": "ok"},
-    {"type": "tx", "bytes": "G0 Z5.0  \n"},
-    {"type": "rx", "line": "G0 Z5.0"},
+    {"type": "tx", "bytes": "G0 Z15.05  \n"},
+    {"type": "rx", "line": "G0 Z15.05"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G0 X6.2 Y34.0  \n"},
     {"type": "rx", "line": "G0 X6.2 Y34.0"},

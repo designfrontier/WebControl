@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "meta": {
     "name": "real_mancala_outside_tool_change",
-    "description": "A small contour with arcs, its first pass and its last back to back: T2 M6 stops streaming and the firmware asks for tool 2; Resume returns to the file's XY at safe height and the job runs to M30. From the owner's mancala/mancala.frd.outside.25.endmill.nc (20260629-143512.jsonl).",
+    "description": "A small contour with arcs, its first pass and its last back to back: T2 M6 stops streaming and the firmware asks for tool 2; Resume returns to the file's XY at the bit's reported 10.03 mm rounded up a step (Z10.04), never down to the 5 mm safe height, and the job runs to M30. From the owner's mancala/mancala.frd.outside.25.endmill.nc (20260629-143512.jsonl).",
     "firmware": {
       "variant": "holey",
       "version": "51.27"
@@ -76,8 +76,8 @@
     {"type": "tx", "bytes": "G90  \n"},
     {"type": "rx", "line": "G90"},
     {"type": "rx", "line": "ok"},
-    {"type": "tx", "bytes": "G0 Z5.0  \n"},
-    {"type": "rx", "line": "G0 Z5.0"},
+    {"type": "tx", "bytes": "G0 Z10.04  \n"},
+    {"type": "rx", "line": "G0 Z10.04"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G0 X42.9463 Y60.2564  \n"},
     {"type": "rx", "line": "G0 X42.9463 Y60.2564"},

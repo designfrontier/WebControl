@@ -44,6 +44,7 @@
     {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
     {"type": "tx", "bytes": "~\n", "realtime": true},
     {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "<Idle,MPos:0.00,0.00,-10.00,WPos:0.000,0.000,0.000>", "comment": "the missed probe left the bit height unknown, so the restart waits for this report"},
     {"type": "tx", "bytes": "G21  \n"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G90  \n"},

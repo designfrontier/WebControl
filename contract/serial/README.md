@@ -184,6 +184,8 @@ the backend had been quiet for `quiet` seconds, one line per settle.
 | `stream_buffered_with_home_shift` | 126-byte character counting, refilled by each ok |
 | `stream_unbuffered_waits_for_a_slow_ok`, `stream_buffered_waits_for_a_slow_ok` | an ok 4 s late (status reports in between) releases nothing early |
 | `start_mid_file_restores_modal_state` | restart sequence: safe height, XY, `G1` plunge at the plunge feed, `G1 F<file F>` |
+| `resume_above_safe_height_never_lowers_before_travel` | Resume with the bit above the safe height travels at the bit's Z; so does Return to Center |
+| `resume_on_51_292_sets_the_spindle_speed_after_m3` | On 51.29x Resume restores the spindle with `M3` then the file's last `S` on its own line |
 | `pause_jog_resume_returns_to_file_position` | Pause with a line in flight, jog while paused, Resume returns and replunges |
 | `m0_in_file_then_resume` | M0 stops streaming; Resume sends `~` and returns |
 | `tool_change_t_and_m6_on_one_line` | `T2 M6`: stop after it, prompt, Resume returns at safe height without plunging |
@@ -426,6 +428,12 @@ owner's settings (`tools/owner_machine.py`) and the home v0.94 streamed with. Th
 `real_katie_neck_back_pause_jog_resume` raises every Z in today's file by 25 mm: the owner regenerated
 `1-neck-back-25-endmill.nc` after cutting it, and the logs show the Z values it was cut with.
 
+Every `real_*` transcript has differed from Python since "Never lower before travel" (Rust-intended deviation 2): their
+resumes travel at the bit's height, which Python never did, and `real_mancala_roughing_tool_change`,
+`real_mancala_finishing_large_job` and `real_katie_body_top_pause_stop` wait for the status report the controller
+sent after the `~` (copied from their recordings, its `[PE:]` line after the first write it releases). They are
+hand-edited.
+
 `tools/extract_real_job.py` cut both files from the recordings (its `JOBS` table named each job's recording, time
 windows and line ranges), `tools/real_job_scenarios.py` held the scenarios, and `tools/compare_real_jobs.py` wrote
 `real-jobs.md`: every write the backend makes for these lines against what v0.94 made, each difference either an
@@ -477,3 +485,35 @@ Where the Rust backend writes something different from Python by owner decision.
    409 or an alert, saving nothing, when the safe height is not a finite number. No transcript pins it:
    `fixtures/calibration/accept_commands.json` stays Python's record, and `wc-calibration`'s fixture test inserts the
    raise.
+2. **Never lower before travel** (2026-11-15). Before the XY travel of every resume and restart (Resume after Pause, an
+   M0 or a tool change; Play mid-file; Play after an ALARM or overflow) and of Home, Return to Center and triangular
+   Accept, Python sent `G0 Z<zAxisSafeHeight>` (`G00 Z…` for Home and Return to Center) even when the bit was higher,
+   so a bit 10 mm up was lowered to 5 mm and then travelled. Rust sends the same one line, at max(safe height, the
+   bit's Z) in the active units, and no Z move before the travel lowers the bit. Keeping the line when the bit is
+   already higher (a move to where it is) keeps every sequence the same shape, so a transcript changes only in that
+   line's value. The bit's Z is the Z WebControl last commanded, followed through every line it wrote (relative
+   moves, units, `G10 Z0`, a touching probe's zero); when a Stop, an ALARM, a missed probe, a line it cannot follow
+   or a reboot leaves that unknown, it is the last status report's MPos z plus one display step (0.01 in the
+   report's units), since MPos has two decimals and is only a lower bound here (`spec/firmware.md` B10, B15). A report
+   counts only once the units are known from a `G20`/`G21` WebControl wrote (the handshake's) and while no line that
+   moves Z or changes units is unacknowledged, since the firmware reports mid-move and acks a line when it finishes.
+   The height is settled when the line reaches the controller, after every line queued before it (a Z jog pressed just
+   before Resume counts). With neither known then (no Z followed and no report since the last line that moved Z: after
+   a Stop, an ALARM or overflow, a missed probe, a reconnect or a reboot), nothing is guessed: the raise, and every
+   command queued after it, waits for a status report read after that point (one comes about every 200 ms,
+   `spec/firmware.md` §2) and uses its MPos z rounded up. With no report for 3 s it is refused instead: nothing
+   queued after it goes out, a `Bit Height Unknown` alert says so, a resume is left paused (Resume tries again) and
+   Play mid-file leaves the job stopped at its line. Stop drops the waiting raise at once, as any queued command;
+   the wait holds only the queue, never the machine task. Python sent the safe height at once, so a transcript whose
+   height is unknown there reads a status report before the raise: `setup.sled` for those that start with none
+   (Python replayed them unchanged), one after a missed probe, and the recorded one after the `~` for the real jobs.
+   Transcripts: `resume_above_safe_height_never_lowers_before_travel`; `real_katie_neck_back_pause_jog_resume`,
+   `real_mancala_outside_tool_change` and `real_maypole_tool_change_play`, whose resumes now travel at the bit's
+   10 mm (or the reported 10.03 mm, sent as `Z10.04`) instead of 5 mm; `real_mancala_finishing_large_job` and
+   `real_katie_body_top_pause_stop`, which wait for the report after the `~` and travel at `Z10.04` and `Z15.05`;
+   `real_mancala_roughing_tool_change`, which waits for it and travels at 5 mm above the bit's -0.02 mm; and
+   `probe_in_file_misses_and_waits_at_the_probe`, which waits for the report after a missed probe.
+3. **The spindle's speed after `M3` on 51.29x** (2026-11-15). 51.29x leaves the PWM at 0 after `M3` until an `S` line
+   (`spec/firmware.md` §9, B13), so a resume or restart that restores `M3` or `M4` on a controller reporting 51.29
+   follows it with the file's last `S` on its own line (`S12000.0`), if the file set one. On 51.27 and stock the
+   restart sends the bare `M3`, as before. Transcript: `resume_on_51_292_sets_the_spindle_speed_after_m3`.
