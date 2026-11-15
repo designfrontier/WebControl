@@ -1,0 +1,42 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "move_z_raise_lower_and_zero_mm",
+    "description": "Z moves in mm (units, G91, the move, G90), then Define Z zero (G10 Z0).",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "c859cea"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    }
+  },
+  "events": [
+    {"type": "ui", "action": {"command": "moveZ", "arg": "raise", "arg1": "5"}},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G91  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G00 Z5.0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "ui", "action": {"command": "moveZ", "arg": "lower", "arg1": "1.5"}},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G91  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G00 Z-1.5  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "ui", "action": {"command": "defineZ0", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G10 Z0  \n"},
+    {"type": "rx", "line": "ok"}
+  ]
+}

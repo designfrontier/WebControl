@@ -1,0 +1,257 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://webcontrol.local/contract/serial/transcript.schema.json",
+  "title": "Serial transcript",
+  "description": "What the backend writes to the Maslow controller, and how it reacts to the controller's lines, for one scenario. See contract/serial/README.md.",
+  "type": "object",
+  "required": ["formatVersion", "meta", "setup", "events"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "formatVersion": { "const": 1 },
+    "meta": {
+      "type": "object",
+      "required": ["name", "description", "firmware", "webcontrolCommit"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z0-9_]+$", "description": "Equals the file name without .json." },
+        "description": { "type": "string", "minLength": 1 },
+        "firmware": {
+          "type": "object",
+          "required": ["variant", "version"],
+          "additionalProperties": false,
+          "properties": {
+            "variant": { "enum": ["holey", "stock", "optical"] },
+            "version": {
+              "type": "string",
+              "pattern": "^[0-9]+\\.[0-9]+$",
+              "description": "What B05 reports, e.g. \"51.27\"; every 51.29x build reports \"51.29\"."
+            },
+            "build": {
+              "type": "string",
+              "description": "Narrows a 51.29 version, e.g. \"51.292\", whose $ writes print the EEPROM rewrite notice."
+            }
+          }
+        },
+        "webcontrolCommit": { "type": "string", "description": "The Python backend commit the transcript was recorded from." }
+      }
+    },
+    "setup": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "enum": ["connected", "boot"],
+          "default": "connected",
+          "description": "connected: the runner first plays the standard prelude (README) and checks nothing until it ends. boot: the port has just opened and the controller has said nothing yet."
+        },
+        "settings": {
+          "type": "object",
+          "description": "webcontrol.json values by section and key, applied before the backend starts.",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": { "type": ["string", "number", "boolean"] }
+          }
+        },
+        "units": { "enum": ["MM", "INCHES"], "default": "MM" },
+        "unitsZ": { "enum": ["MM", "INCHES"], "description": "Units of the Z-axis panel; defaults to units." },
+        "home": {
+          "type": "object",
+          "required": ["x", "y"],
+          "additionalProperties": false,
+          "description": "homeX/homeY in machine units: the shift added to every absolute X/Y in the gcode file.",
+          "properties": { "x": { "type": "number" }, "y": { "type": "number" } }
+        },
+        "gcode": {
+          "description": "The loaded file, as /openGCode loads it. Inline lines are joined with \\n and end with one.",
+          "oneOf": [
+            {
+              "type": "object",
+              "required": ["lines"],
+              "additionalProperties": false,
+              "properties": { "lines": { "type": "array", "items": { "type": "string" } } }
+            },
+            {
+              "type": "object",
+              "required": ["path"],
+              "additionalProperties": false,
+              "properties": { "path": { "type": "string", "pattern": "^gcode/[A-Za-z0-9_.-]+$", "description": "Relative to contract/serial/." } }
+            }
+          ]
+        },
+        "gcodeIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "description": "Initial job state: the file line Play starts at, set with the moveGcodeGoto action at the end of the prelude."
+        },
+        "sled": {
+          "type": "object",
+          "required": ["x", "y", "z"],
+          "additionalProperties": false,
+          "description": "Sled position, sent as a status report at the end of the prelude.",
+          "properties": { "x": { "type": "number" }, "y": { "type": "number" }, "z": { "type": "number" } }
+        },
+        "bootBanner": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Lines the prelude receives first; defaults to the 51.27 TLE9201 banner ending in the boot ok."
+        }
+      }
+    },
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "quiet": { "type": "number", "exclusiveMinimum": 0, "default": 0.1 },
+        "txTimeout": { "type": "number", "exclusiveMinimum": 0, "default": 2.0 },
+        "settle": { "type": "number", "exclusiveMinimum": 0, "default": 1.0 }
+      }
+    },
+    "events": { "type": "array", "items": { "$ref": "#/$defs/event" } }
+  },
+  "$defs": {
+    "comment": { "type": "string", "description": "For readers only; runners ignore it." },
+    "event": {
+      "type": "object",
+      "required": ["type"],
+      "properties": { "type": { "enum": ["ui", "http", "rx", "tx", "tick", "expect"] } },
+      "oneOf": [
+        { "$ref": "#/$defs/ui" },
+        { "$ref": "#/$defs/http" },
+        { "$ref": "#/$defs/rx" },
+        { "$ref": "#/$defs/tx" },
+        { "$ref": "#/$defs/tick" },
+        { "$ref": "#/$defs/expect" }
+      ]
+    },
+    "ui": {
+      "type": "object",
+      "required": ["type", "action"],
+      "additionalProperties": false,
+      "description": "The browser's socket event `action` {\"data\": action} on /MaslowCNC (contract/schemas/actions/<command>.json).",
+      "properties": {
+        "type": { "const": "ui" },
+        "comment": { "$ref": "#/$defs/comment" },
+        "action": {
+          "type": "object",
+          "required": ["command", "arg", "arg1"],
+          "additionalProperties": false,
+          "properties": {
+            "command": { "type": "string" },
+            "arg": { "type": ["string", "number"] },
+            "arg1": { "type": ["string", "number"] }
+          }
+        }
+      }
+    },
+    "http": {
+      "type": "object",
+      "required": ["type", "method", "path"],
+      "additionalProperties": false,
+      "description": "An HTTP request as the browser makes it (contract/index.json).",
+      "properties": {
+        "type": { "const": "http" },
+        "comment": { "$ref": "#/$defs/comment" },
+        "method": { "enum": ["GET", "POST", "PUT", "DELETE"] },
+        "path": { "type": "string", "pattern": "^/" },
+        "json": { "description": "JSON body." },
+        "form": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Multipart form fields." },
+        "status": { "type": "integer", "description": "Expected response status, if checked." }
+      }
+    },
+    "rx": {
+      "type": "object",
+      "required": ["type", "line"],
+      "additionalProperties": false,
+      "description": "One controller line; the runner sends it followed by \\r\\n.",
+      "properties": {
+        "type": { "const": "rx" },
+        "comment": { "$ref": "#/$defs/comment" },
+        "line": { "type": "string", "not": { "pattern": "[\\r\\n]" } }
+      }
+    },
+    "tx": {
+      "type": "object",
+      "required": ["type", "bytes"],
+      "additionalProperties": false,
+      "description": "The next write the backend must have made, byte for byte, including trailing spaces and \\n.",
+      "properties": {
+        "type": { "const": "tx" },
+        "comment": { "$ref": "#/$defs/comment" },
+        "bytes": { "type": "string", "minLength": 1 },
+        "realtime": {
+          "type": "boolean",
+          "default": false,
+          "description": "True exactly when the write is a realtime command (! or ~) the firmware acts on outside its line buffer."
+        },
+        "timeout": { "type": "number", "exclusiveMinimum": 0, "description": "Overrides timing.txTimeout for this write." }
+      }
+    },
+    "tick": {
+      "type": "object",
+      "required": ["type", "seconds"],
+      "additionalProperties": false,
+      "description": "Advance the clock by at least this much before the next event.",
+      "properties": {
+        "type": { "const": "tick" },
+        "comment": { "$ref": "#/$defs/comment" },
+        "seconds": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "emitted": {
+      "type": "object",
+      "required": ["command"],
+      "additionalProperties": false,
+      "description": "A /MaslowCNC `message` with this command whose decoded data contains these fields; strings match as substrings.",
+      "properties": { "command": { "type": "string" }, "data": {} }
+    },
+    "alert": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Shorthand for an activateModal with modalType alert; strings match as substrings.",
+      "properties": { "title": { "type": "string" }, "message": { "type": "string" } }
+    },
+    "expect": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "minProperties": 2,
+      "properties": {
+        "type": { "const": "expect" },
+        "comment": { "$ref": "#/$defs/comment" },
+        "state": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "uploadFlag": { "enum": [-1, 0, 1, 2], "description": "1 streaming; 2 paused by Pause; -1 stopping after an M0/M1 or tool-changing M6 line; 0 not streaming (idle, or a job held by the controller)." },
+            "jobInProgress": { "type": "boolean" },
+            "gcodeIndex": { "type": "integer", "minimum": 0, "description": "The next file line to send." },
+            "units": { "enum": ["MM", "INCHES"] },
+            "manualZAxisAdjust": { "type": "boolean" },
+            "pauseButtonSetting": { "enum": ["Pause", "Resume"] },
+            "currentTool": { "type": "integer" },
+            "positioningMode": { "enum": ["G90", "G91"] },
+            "firmwareBuild": { "type": ["string", "null"] },
+            "controllerFirmwareVersion": { "type": "number" },
+            "controllerBoard": { "type": ["string", "null"] },
+            "home": { "type": "object", "properties": { "x": { "type": "number" }, "y": { "type": "number" } } }
+          }
+        },
+        "settings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["section", "key", "value"],
+            "additionalProperties": false,
+            "properties": { "section": { "type": "string" }, "key": { "type": "string" }, "value": { "type": ["string", "number", "boolean"] } }
+          }
+        },
+        "emitted": { "type": "array", "items": { "$ref": "#/$defs/emitted" } },
+        "notEmitted": { "type": "array", "items": { "$ref": "#/$defs/emitted" } },
+        "alerts": { "type": "array", "items": { "$ref": "#/$defs/alert" } },
+        "noAlerts": { "type": "array", "items": { "$ref": "#/$defs/alert" } }
+      }
+    }
+  }
+}

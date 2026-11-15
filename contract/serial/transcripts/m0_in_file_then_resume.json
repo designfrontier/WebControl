@@ -1,0 +1,63 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "m0_in_file_then_resume",
+    "description": "An M0 line stops streaming after it; the firmware prints Maslow Paused and holds the M0's ok. Resume sends ~, returns to the file position at safe height and carries on with the next line.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "c859cea"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    },
+    "gcode": {
+      "path": "gcode/m0_pause_mm.nc"
+    }
+  },
+  "events": [
+    {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 Z5  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 X10 Y10  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 Z-3 F100  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 X20 F300  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "M0  \n"},
+    {"type": "rx", "line": "Maslow Paused"},
+    {"type": "expect", "state": {"uploadFlag": 0, "jobInProgress": true, "gcodeIndex": 7, "pauseButtonSetting": "Resume"}},
+    {"type": "ui", "action": {"command": "resumeRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "~\n", "realtime": true},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 Z5.0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 X20.0 Y10.0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 Z-3.0 F100.0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 F300.0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 X30  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 Z5  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "state": {"uploadFlag": 0, "jobInProgress": false, "gcodeIndex": 0}}
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "start_mid_file_restores_modal_state",
+    "description": "Play at line 7 (G1 X25 Y25): restart sequence of units, G90, rapid to safe height and to the XY before the line, a G1 plunge at the file's plunge feed, then the file's G1 and feed restored, then the file from line 7.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "c859cea"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    },
+    "gcode": {
+      "path": "gcode/restart_mm.nc"
+    },
+    "gcodeIndex": 7
+  },
+  "events": [
+    {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 Z5.0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 X25.0 Y5.0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 Z-2.0 F150.0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 F900.0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 X25 Y25  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "X5  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "Y5  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 Z6  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "state": {"uploadFlag": 0, "jobInProgress": false, "gcodeIndex": 0}}
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "line_too_long_pauses_the_job",
+    "description": "A line over 126 bytes as written would overflow the firmware's buffer and run its tail as a command, so the job pauses before it with an alert; nothing of it is sent.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "c859cea"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    },
+    "gcode": {
+      "lines": [
+        "G0 X1",
+        "G1 X1 Y1 F100 F100 F100 F100 F100 F100 F100 F100 F100 F100 F100 F100 F100 F100 F100 F100 F100 F100 F100 F100 F100 F100 F100 F100",
+        "G0 X2"
+      ]
+    }
+  },
+  "events": [
+    {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G0 X1  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "state": {"uploadFlag": 2, "jobInProgress": true, "gcodeIndex": 1}, "alerts": [{"title": "Line Too Long", "message": "Line 2 is 131 characters"}]}
+  ]
+}

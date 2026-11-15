@@ -1,0 +1,30 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "home_at_safe_height_mm",
+    "description": "Home raises to the safe height, rapids to the home position and lowers to Z0.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "c859cea"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 100.5,
+      "y": -50.25
+    }
+  },
+  "events": [
+    {"type": "ui", "action": {"command": "home", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G90   \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G00 Z5.0 \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G00 X100.5 Y-50.25  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G00 Z0  \n"},
+    {"type": "rx", "line": "ok"}
+  ]
+}

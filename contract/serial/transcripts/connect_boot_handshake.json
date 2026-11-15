@@ -1,0 +1,39 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "connect_boot_handshake",
+    "description": "The port opens and the controller boots: WebControl sends units, $$ and G90 once the boot ok arrives, then the B05 version query and the $13 write the banner queued. The B05 reply is parsed.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "c859cea"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    },
+    "start": "boot"
+  },
+  "events": [
+    {"type": "rx", "line": "PCB v1.6 TLE9201  Detected"},
+    {"type": "rx", "line": "FAKE_SERVO off"},
+    {"type": "rx", "line": "Grbl v1.00"},
+    {"type": "rx", "line": "ready"},
+    {"type": "rx", "line": "ok", "comment": "the boot ok releases the queued commands"},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "$$ \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "B05  \n"},
+    {"type": "rx", "line": "Firmware Version 51.27"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "$13=63.5000 \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "state": {"firmwareBuild": "51.27", "controllerBoard": "PCB v1.6 TLE9201  Detected"}, "emitted": [{"command": "controllerMessage", "data": "Firmware Version 51.27"}]}
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "stop_mid_line_resets_the_index",
+    "description": "Stop while a line is in flight: ! goes out at once, the firmware flushes that line (no ok for it) and acks the !. The index resets, and commands wait for a status report before they go out again.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "c859cea"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 12.3456,
+      "y": -7.25
+    },
+    "gcode": {
+      "path": "gcode/square_mm.nc"
+    }
+  },
+  "events": [
+    {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 Z5  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 X22.8456 Y3.00  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 Z-1.5 F127  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 X42.8456 F600  \n"},
+    {"type": "ui", "action": {"command": "stopRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "!\n", "realtime": true},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "state": {"uploadFlag": 0, "jobInProgress": false, "gcodeIndex": 0}},
+    {"type": "ui", "action": {"command": "move", "arg": "up", "arg1": "1"}},
+    {"type": "tick", "seconds": 0.3, "comment": "the backend ignores acks until a status report after 0.25 s"},
+    {"type": "rx", "line": "<Idle,MPos:0.00,0.00,0.00,WPos:0.000,0.000,0.000>"},
+    {"type": "tx", "bytes": "G91  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G00 Y1.0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "ok"}
+  ]
+}
