@@ -88,15 +88,22 @@ describe("App shell", () => {
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 
-  it("runs Process GCode and Clear Board at once", async () => {
+  it("runs Process GCode at once", async () => {
     const { user, socket } = renderApp("/");
     await pick(user, "Boards", "Process GCode");
-    await pick(user, "Boards", "Clear Board");
-    expect(socket.actions()).toEqual([
-      ["boardProcessGCode", "", ""],
-      ["boardClearBoard", "", ""],
-    ]);
+    expect(socket.actions()).toEqual([["boardProcessGCode", "", ""]]);
     expect(currentPath()).toBe("/");
+  });
+
+  it("clears the board's cut data after a confirm, and not on cancel", async () => {
+    const { user, socket } = renderApp("/");
+    await pick(user, "Boards", "Clear Board");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(socket.actions()).toEqual([]);
+
+    await pick(user, "Boards", "Clear Board");
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Clear Board" }));
+    expect(socket.actions()).toEqual([["boardClearBoard", "", ""]]);
   });
 
   it("clears the gcode after a confirm, and not on cancel", async () => {

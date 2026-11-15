@@ -70,6 +70,10 @@ test("edits, trims and saves the current board from the Boards menu", async ({ p
   await waitForServer(page);
   // Editing a board resizes it without resizing its cut record, which trimming indexes; start from a clear one.
   await chooseMenu(page, "Boards", "Clear Board");
+  await page
+    .getByRole("dialog", { name: "Clear the board's cut data?" })
+    .getByRole("button", { name: "Clear Board" })
+    .click();
 
   await chooseMenu(page, "Boards", "Create/Edit Board");
   await page.getByLabel("Board ID").fill("E2E shelf");

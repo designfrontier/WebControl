@@ -13,6 +13,19 @@ import { ThemeToggle } from "./theme";
 const ONLINE_HELP = "https://webcontrolcnc.github.io/WebControl/";
 const GCODE_LOCKED_REASON = "Stop the job first";
 
+const CONFIRMS = {
+  clearGCode: {
+    title: "Clear the loaded gcode?",
+    confirmLabel: "Clear GCode",
+    body: "The toolpath is removed from WebControl. The file in the gcode library is kept.",
+  },
+  boardClearBoard: {
+    title: "Clear the board's cut data?",
+    confirmLabel: "Clear Board",
+    body: "WebControl forgets which parts of this board have been cut.",
+  },
+} as const;
+
 /** The classic navbar (templates/base.html): the same menus in the same order, each opening a modal. */
 export const TopBar = () => {
   const navigate = useNavigate();
@@ -20,7 +33,7 @@ export const TopBar = () => {
   const updateAvailable = useUpdateAvailable();
   const locked = useMachine(selectGcodeLocked) ? GCODE_LOCKED_REASON : undefined;
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [confirmClear, setConfirmClear] = useState(false);
+  const [confirm, setConfirm] = useState<keyof typeof CONFIRMS | null>(null);
 
   const done = () => setDrawerOpen(false);
   const open = (path: string) => () => {
@@ -36,7 +49,7 @@ export const TopBar = () => {
     { label: "Open", onSelect: open("/files/open"), disabledReason: locked },
     { label: "Save", onSelect: open("/files/save") },
     { label: "Upload", onSelect: open("/files/upload"), disabledReason: locked },
-    { label: "Clear GCode", onSelect: () => setConfirmClear(true), disabledReason: locked },
+    { label: "Clear GCode", onSelect: () => setConfirm("clearGCode"), disabledReason: locked },
     { label: "View/Edit", onSelect: open("/files/edit") },
     { label: "Send Custom GCode", onSelect: open("/files/send") },
   ];
@@ -53,7 +66,7 @@ export const TopBar = () => {
     { label: "Create/Edit Board", onSelect: open("/boards/edit") },
     { label: "Trim Board", onSelect: open("/boards/trim") },
     { label: "Process GCode", onSelect: run("boardProcessGCode") },
-    { label: "Clear Board", onSelect: run("boardClearBoard") },
+    { label: "Clear Board", onSelect: () => setConfirm("boardClearBoard") },
   ];
   const help: MenuItem[] = [
     { label: "Getting Started", onSelect: open("/machine/getting-started") },
@@ -94,18 +107,18 @@ export const TopBar = () => {
           Classic UI
         </a>
       </div>
-      {confirmClear && (
+      {confirm && (
         <ConfirmDialog
-          title="Clear the loaded gcode?"
-          confirmLabel="Clear GCode"
+          title={CONFIRMS[confirm].title}
+          confirmLabel={CONFIRMS[confirm].confirmLabel}
           danger
-          onCancel={() => setConfirmClear(false)}
+          onCancel={() => setConfirm(null)}
           onConfirm={() => {
-            setConfirmClear(false);
-            run("clearGCode")();
+            setConfirm(null);
+            run(confirm)();
           }}
         >
-          <p>The toolpath is removed from WebControl. The file in the gcode library is kept.</p>
+          <p>{CONFIRMS[confirm].body}</p>
         </ConfirmDialog>
       )}
     </header>
