@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { getStartupState } from "../api/state";
 import * as boards from "../features/boards/api";
 import * as calibration from "../features/calibration/api";
-import { opticalSettings } from "../features/calibration/fixtures";
 import * as files from "../features/files/api";
 import * as machine from "../features/machine/api";
 import { quickConfigureValues } from "../features/machine/fixtures";
@@ -26,8 +25,14 @@ const sources = import.meta.glob<string>(["../**/*.{ts,tsx}", "!../**/*.test.{ts
 
 const pattern = ({ path }: HttpEndpoint) =>
   new RegExp(`^${path.replace(/\{[^}]+\}/g, "[^?]+").replace(/\//g, "\\/")}(\\?.*)?$`);
+/** The UI's catch-all never answers under /api/, so an unlisted API call is not mistaken for a page. */
 const endpointFor = (method: string, url: string) =>
-  httpEndpoints.find((endpoint) => endpoint.method === method && pattern(endpoint).test(url));
+  httpEndpoints.find(
+    (endpoint) =>
+      endpoint.method === method &&
+      pattern(endpoint).test(url) &&
+      !(endpoint.family === "static" && url.startsWith("/api/")),
+  );
 
 const formFields = (body: FormData) =>
   Object.fromEntries(
@@ -85,8 +90,6 @@ const recordUiRequests = async () => {
         Array.from({ length: 12 }, () => 100),
       ),
     () => calibration.acceptHoley(fetch),
-    () => calibration.getOptical(fetch),
-    () => calibration.saveOpticalSettings(fetch, opticalSettings()),
     () => files.getGcodeLibrary(fetch),
     () => files.getLoadedGcode(fetch),
     () => files.getGcodeText(fetch),
@@ -135,7 +138,7 @@ describe("the HTTP contract", () => {
   it("covers every request the UI makes, and each request body fits its schema", async () => {
     const calls = await recordUiRequests();
     expect(literalApiPaths()).toContainEqual({ method: "GET", url: "/api/main" });
-    expect(calls.filter(({ body }) => body !== undefined)).toHaveLength(23);
+    expect(calls.filter(({ body }) => body !== undefined)).toHaveLength(22);
     const unlisted = [...calls, ...literalApiPaths()].filter(({ method, url }) => !endpointFor(method, url));
     expect(unlisted).toEqual([]);
 
@@ -164,6 +167,7 @@ describe("the HTTP contract", () => {
     const text = Object.values(sources).join("\n");
     expect(text).toMatch(/"\/static\/images\//);
     expect(endpointFor("GET", "/static/images/GPIO/RPI_pin_layout.svg")?.family).toBe("static");
-    expect(endpointFor("GET", "/next/files")?.family).toBe("static");
+    expect(endpointFor("GET", "/files/open")?.family).toBe("static");
+    expect(endpointFor("GET", "/api/nope")).toBeUndefined();
   });
 });

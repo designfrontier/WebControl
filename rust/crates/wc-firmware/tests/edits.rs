@@ -1,5 +1,5 @@
-//! The `$` lines a settings edit sends (`Config.setValue` → `syncFirmwareKey`), checked against what Python sends
-//! for the same edits in tests/test_rust_settings_roundtrip.py.
+//! The `$` lines a settings edit sends (`Config.setValue` → `syncFirmwareKey`), checked against what Python sent
+//! for the same edits (fixtures/rust_settings/edit-lines.json).
 
 use std::path::PathBuf;
 
@@ -8,7 +8,7 @@ use wc_config::{Paths, Settings};
 use wc_firmware::settings::write;
 
 fn fixtures() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../tests/fixtures/rust_settings")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../fixtures/rust_settings")
 }
 
 fn python_written() -> Settings {

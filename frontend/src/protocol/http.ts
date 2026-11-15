@@ -10,9 +10,6 @@ import {
   holeyMeasurementsSchema,
   holeyParametersSchema,
   holeyResultSchema,
-  opticalSettingsSavedSchema,
-  opticalSettingsSchema,
-  opticalStateSchema,
   triangularMeasurementsSchema,
   triangularParametersSchema,
   triangularResultSchema,
@@ -240,18 +237,6 @@ export const httpEndpoints: HttpEndpoint[] = [
     body: json(z.object({}), "{}"),
     responses: { 200: json(holeyParametersSchema), 409: error("Nothing calculated yet") },
   }),
-  get("/api/calibration/optical", "Optical calibration settings, curve and error matrix", opticalStateSchema),
-  api({
-    method: "PUT",
-    path: "/api/calibration/optical/settings",
-    summary: "Save optical calibration settings",
-    body: json(opticalSettingsSchema),
-    responses: {
-      200: json(opticalSettingsSavedSchema),
-      400: error("Missing or non-numeric field"),
-      500: error("Could not save"),
-    },
-  }),
   get("/api/system/info", "Version, platform, firmware and update status", systemInfoSchema),
   get("/api/system/pid", "Stored PID gains", pidSettingsSchema),
   api({
@@ -307,8 +292,8 @@ export const httpEndpoints: HttpEndpoint[] = [
   },
   {
     method: "GET",
-    path: "/next/{path}",
-    summary: "This UI's built files, with index.html for any other path",
+    path: "/{path}",
+    summary: "This UI's built files, with index.html for any other path outside /api/; /next/... redirects here (308)",
     params: z.object({ path: z.string().describe("May be empty or contain slashes") }),
     responses: {
       200: { type: "file", description: "A file from frontend/dist, or index.html with Cache-Control: no-cache" },

@@ -2,12 +2,12 @@ import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { closeServerDialogs, resetMachine, waitForServer } from "./helpers";
 
-// These tests jog, start runs and write units: safe only because tests/e2e_backend.py runs with a temporary HOME and no port.
+// These tests jog, start runs and write units: safe only because the e2e backend runs on a temporary home with no port.
 const serverDialog = (page: Page) => page.locator("dialog[open][data-kind]");
 
 test.beforeEach(async ({ page, baseURL }) => {
   await resetMachine(baseURL!);
-  await page.goto("/next/");
+  await page.goto("/");
   await waitForServer(page);
   await expect(page.getByRole("button", { name: "Play" })).toBeEnabled({ timeout: 15_000 });
 });
@@ -57,5 +57,5 @@ test("the Z-Axis button opens its modal, which moves Z and closes again", async 
   await zAxis.getByRole("button", { name: /Raise/ }).click();
   await page.keyboard.press("Escape");
   await expect(zAxis).toBeHidden();
-  await expect(page).toHaveURL(/\/next\/?$/);
+  await expect(page).toHaveURL(/\/$/);
 });

@@ -74,19 +74,27 @@ fn dist_asset() -> String {
 }
 
 #[tokio::test]
-async fn the_root_redirects_to_the_react_ui() {
-    let reply = get("/").await;
-    assert_eq!(reply.status, StatusCode::FOUND);
-    assert_eq!(reply.location.as_deref(), Some("/next/"));
-    let bare = get("/next").await;
-    assert_eq!(bare.status, StatusCode::PERMANENT_REDIRECT);
-    assert_eq!(bare.location.as_deref(), Some("/next/"));
+async fn old_next_addresses_redirect_to_the_same_path_at_the_root() {
+    let cases = [
+        ("/next", "/"),
+        ("/next/", "/"),
+        ("/next/calibration/holey", "/calibration/holey"),
+        ("/next/logs?x=1&y=2", "/logs?x=1&y=2"),
+        ("/next//evil.com", "/evil.com"),
+        ("/next/\\evil.com", "/evil.com"),
+        ("/next/\\/\\evil.com", "/evil.com"),
+    ];
+    for (from, to) in cases {
+        let reply = get(from).await;
+        assert_eq!(reply.status, StatusCode::PERMANENT_REDIRECT, "{from}");
+        assert_eq!(reply.location.as_deref(), Some(to), "{from}");
+    }
 }
 
 #[tokio::test]
 async fn the_ui_is_served_from_the_embedded_dist() {
-    let index = get("/next/").await;
-    index.checked("GET", "/next/");
+    let index = get("/").await;
+    index.checked("GET", "/");
     assert_eq!(index.status, StatusCode::OK);
     assert!(index.content_type.starts_with("text/html"));
     assert!(index.text().contains("id=\"root\""));
@@ -95,7 +103,7 @@ async fn the_ui_is_served_from_the_embedded_dist() {
 
 #[tokio::test]
 async fn built_files_are_served_typed_by_extension() {
-    let path = format!("/next/{}", dist_asset());
+    let path = format!("/{}", dist_asset());
     let reply = get(&path).await;
     reply.checked("GET", &path);
     assert_eq!(reply.status, StatusCode::OK);
@@ -105,16 +113,16 @@ async fn built_files_are_served_typed_by_extension() {
 
 #[tokio::test]
 async fn client_routes_fall_back_to_index_html() {
-    let reply = get("/next/calibration/holey").await;
-    reply.checked("GET", "/next/calibration/holey");
+    let reply = get("/calibration/holey").await;
+    reply.checked("GET", "/calibration/holey");
     assert!(reply.text().contains("id=\"root\""));
     assert_eq!(reply.cache_control.as_deref(), Some("no-cache"));
 }
 
 #[tokio::test]
 async fn a_missing_file_with_an_extension_is_a_plain_404() {
-    let reply = get("/next/assets/nope.js").await;
-    reply.checked("GET", "/next/assets/nope.js");
+    let reply = get("/assets/nope.js").await;
+    reply.checked("GET", "/assets/nope.js");
     assert_eq!(reply.status, StatusCode::NOT_FOUND);
     assert_eq!(reply.text(), "Not found");
 }
@@ -170,7 +178,10 @@ async fn unknown_api_paths_answer_json_404s() {
     let reply = get("/api/nope").await;
     assert_eq!(reply.status, StatusCode::NOT_FOUND);
     assert_eq!(reply.json(), json!({"error": "Not found"}));
-    let html = get("/nowhere").await;
+    let page = get("/nowhere").await;
+    assert_eq!(page.status, StatusCode::OK, "any other GET is a UI route");
+    assert!(page.text().contains("id=\"root\""));
+    let html = request_with(settings(None).1, "POST", "/nowhere").await;
     assert_eq!(html.status, StatusCode::NOT_FOUND);
     assert!(html.content_type.starts_with("text/html"));
 }
@@ -200,7 +211,7 @@ const ROUTED: &[(&str, &str)] = &[
     ("GET", "/api/system/pid"),
     ("GET", "/api/calibration/triangular"),
     ("GET", "/api/calibration/holey"),
-    ("GET", "/next/{path}"),
+    ("GET", "/{path}"),
     ("GET", "/static/{filename}"),
     ("GET", "/api/files/gcode"),
     ("POST", "/api/files/gcode/directories"),
@@ -392,11 +403,12 @@ async fn help_serves_the_index_page_by_default_without_its_front_matter() {
     assert!(page["markdown"].as_str().unwrap().starts_with("# WebControl\n"), "{page}");
 }
 
-/// tests/fixtures/help/python-pages.json holds Python's title and a SHA-256 of its markdown for every docs/ page.
+/// fixtures/help/python-pages.json holds Python's title and a SHA-256 of its markdown for every docs/ page;
+/// index.md's hash is of this project's rewrite.
 #[tokio::test]
 async fn every_help_page_matches_what_python_serves() {
     use sha2::Digest;
-    let fixture = wc_testkit::repo_root().join("tests/fixtures/help/python-pages.json");
+    let fixture = wc_testkit::repo_root().join("fixtures/help/python-pages.json");
     let expected: Value = serde_json::from_str(&std::fs::read_to_string(fixture).unwrap()).unwrap();
     for (path, want) in expected.as_object().unwrap() {
         let uri = format!("/api/system/help?path={}", path.replace('&', "%26"));

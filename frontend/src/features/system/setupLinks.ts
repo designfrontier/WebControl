@@ -42,9 +42,4 @@ export const SETUP_LINKS: SetupLink[] = [
     label: "Holey calibration",
     blockedBy: (info) => (version(info) >= 50 ? null : needs("holey firmware", info)),
   },
-  {
-    to: "/calibration/optical",
-    label: "Optical calibration",
-    blockedBy: (info) => (version(info) >= 100 ? null : needs("custom firmware", info)),
-  },
 ];

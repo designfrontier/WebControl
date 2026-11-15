@@ -1,43 +1,5 @@
 import { describe, expect, it } from "vitest";
-import actionsPy from "../../../Actions/actions.py?raw";
-import mainPy from "../../../main.py?raw";
-import baseSocketJs from "../../../static/scripts/baseSocket.js?raw";
-import { actionCommands, clientEvents, decodeEnvelopeData, serverMessages } from ".";
-
-const apiModules = import.meta.glob<string>("../../../api/*.py", { query: "?raw", import: "default", eager: true });
-
-/** Commands the old client handles that no server code path emits any more. */
-const NEVER_SENT = ["calibrationMessage", "gcodeUpdate", "closeContentModals"];
-
-const pythonActionCommands = () =>
-  actionsPy
-    .replace(/'''[\s\S]*?'''/g, "")
-    .split("\n")
-    .filter((line) => !line.trim().startsWith("#"))
-    .flatMap((line) => [...line.matchAll(/msg\["data"\]\["command"\] == "(\w+)"/g)].map((match) => match[1]));
-
-describe("protocol coverage of the Python backend", () => {
-  it("lists every command Actions.processAction handles, once", () => {
-    expect([...actionCommands].sort()).toEqual([...new Set(pythonActionCommands())].sort());
-    expect(new Set(actionCommands).size).toBe(actionCommands.length);
-  });
-
-  it("has a schema for every server message the old UI handled", () => {
-    const handled = [...baseSocketJs.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/^\s*case '(\w+)':/gm)].map(
-      (match) => match[1],
-    );
-    const missing = handled.filter((command) => !(command in serverMessages) && !NEVER_SENT.includes(command));
-    expect(missing).toEqual([]);
-  });
-
-  it("only emits events the server has a /MaslowCNC handler for", () => {
-    const handled = [mainPy, ...Object.values(apiModules)].flatMap((source) =>
-      [...source.matchAll(/socketio\.on\(\s*"(\w+)",\s*namespace="\/MaslowCNC"/g)].map((match) => match[1]),
-    );
-    expect(Object.keys(apiModules)).toContain("../../../api/state.py");
-    expect(Object.keys(clientEvents).filter((event) => !handled.includes(event))).toEqual([]);
-  });
-});
+import { decodeEnvelopeData, serverMessages } from ".";
 
 describe("decodeEnvelopeData", () => {
   it("parses JSON-encoded data", () => {

@@ -14,7 +14,14 @@ export interface ControlAvailability {
   step: boolean;
 }
 
-const NONE: ControlAvailability = { manual: false, units: false, defineHome: false, play: false, pause: false, step: false };
+const NONE: ControlAvailability = {
+  manual: false,
+  units: false,
+  defineHome: false,
+  play: false,
+  pause: false,
+  step: false,
+};
 
 const CONTROLS: Record<RunState, Omit<ControlAvailability, "units">> = {
   idle: { manual: true, defineHome: true, play: true, pause: false, step: true },

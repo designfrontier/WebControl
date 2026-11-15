@@ -1,4 +1,4 @@
-//! The Python-generated golden fixtures in tests/fixtures/gcode and tests/fixtures/boards (see the README there).
+//! The golden fixtures in fixtures/gcode and fixtures/boards, recorded from the Python backend (see the README there).
 
 use std::io::Read;
 use std::path::PathBuf;
@@ -15,7 +15,7 @@ use wc_gcode::{Positioning, Units, load};
 use wc_testkit::contract::Contract;
 
 fn fixtures() -> PathBuf {
-    wc_testkit::repo_root().join("tests/fixtures")
+    wc_testkit::repo_root().join("fixtures")
 }
 
 fn read_json(relative: &str) -> Value {

@@ -1,11 +1,11 @@
-//! `tests/fixtures/calibration/{holey_calibrate,triangular_calculate,accept_commands}.json`, with the README's
+//! `fixtures/calibration/{holey_calibrate,triangular_calculate,accept_commands}.json`, with the README's
 //! rules: floats within `tolerance`, `keyTolerance` first, `null` expected means refused, accept line for line.
 
 use serde_json::{Value, json};
 use wc_calibration::{Accept, MachineSettings, holey, triangular};
 
 fn fixture(name: &str) -> Value {
-    let path = format!("{}/../../../tests/fixtures/calibration/{name}", env!("CARGO_MANIFEST_DIR"));
+    let path = format!("{}/../../../fixtures/calibration/{name}", env!("CARGO_MANIFEST_DIR"));
     serde_json::from_str(&std::fs::read_to_string(path).expect("fixture")).expect("json")
 }
 

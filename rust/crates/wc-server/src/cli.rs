@@ -103,7 +103,7 @@ pub async fn serve(options: Options, shutdown: impl Future<Output = ()> + Send +
         match error.kind() {
             std::io::ErrorKind::AddrInUse => std::io::Error::new(
                 error.kind(),
-                format!("port {port} is in use, probably by the Python backend (see `wc-switch status`)"),
+                format!("port {port} is in use, perhaps by an older WebControl (see `wc-switch status`)"),
             ),
             _ => error,
         }

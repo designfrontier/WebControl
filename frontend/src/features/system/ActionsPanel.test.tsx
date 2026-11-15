@@ -157,12 +157,10 @@ describe("ActionsPanel", () => {
   it.each([
     [1.26, "1.26", "Triangular calibration", null],
     [1.26, "1.26", "Holey calibration", "Needs holey firmware; the controller reports stock 1.26."],
-    [1.26, "1.26", "Optical calibration", "Needs custom firmware; the controller reports stock 1.26."],
     [51.27, "51.27", "Triangular calibration", "Needs stock firmware; the controller reports holey 51.27."],
     [51.27, "51.27", "Holey calibration", null],
-    [51.27, "51.27", "Optical calibration", "Needs custom firmware; the controller reports holey 51.27."],
     [100.07, "100.07", "Triangular calibration", "Needs stock firmware; the controller reports custom 100.07."],
-    [100.07, "100.07", "Optical calibration", null],
+    [100.07, "100.07", "Holey calibration", null],
   ])("on firmware %s (build %s) gates %s to the firmware it needs", async (version, build, name, reason) => {
     renderActions({
       fetch: systemFetch({

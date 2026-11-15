@@ -228,37 +228,15 @@ impl Transcript {
         Transcript::parse(&text).map_err(|e| format!("{}: {e}", path.display()))
     }
 
-    fn directory(name: &str) -> Vec<(PathBuf, Transcript)> {
-        let mut paths: Vec<PathBuf> = std::fs::read_dir(serial_dir().join(name))
+    /// Every transcript in `contract/serial/transcripts/`, sorted by file name.
+    pub fn corpus() -> Vec<(PathBuf, Transcript)> {
+        let mut paths: Vec<PathBuf> = std::fs::read_dir(serial_dir().join("transcripts"))
             .expect("transcripts directory")
             .map(|entry| entry.expect("directory entry").path())
             .filter(|path| path.extension().is_some_and(|ext| ext == "json"))
             .collect();
         paths.sort();
         paths.into_iter().map(|path| (path.clone(), Transcript::load(&path).unwrap())).collect()
-    }
-
-    /// Every transcript in `contract/serial/transcripts/`, sorted by file name.
-    pub fn corpus() -> Vec<(PathBuf, Transcript)> {
-        Transcript::directory("transcripts")
-    }
-
-    /// `contract/serial/transcripts-rust/`: where the Rust backend must differ from Python (the README's known
-    /// warts), a transcript there replaces the shared one of the same name; one with a new name is Rust only.
-    pub fn overrides() -> Vec<(PathBuf, Transcript)> {
-        Transcript::directory("transcripts-rust")
-    }
-
-    /// The corpus the Rust backend replays: the shared transcripts with the Rust ones in place of theirs, plus the
-    /// Rust-only ones.
-    pub fn rust_corpus() -> Vec<(PathBuf, Transcript)> {
-        let overrides = Transcript::overrides();
-        let shared = Transcript::corpus()
-            .into_iter()
-            .filter(|(_, t)| !overrides.iter().any(|(_, o)| o.meta.name == t.meta.name));
-        let mut all: Vec<(PathBuf, Transcript)> = shared.chain(overrides.clone()).collect();
-        all.sort_by(|a, b| a.1.meta.name.cmp(&b.1.meta.name));
-        all
     }
 
     /// The file lines `setup.gcode` loads, before the loader normalises them.

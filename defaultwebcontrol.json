@@ -1006,15 +1006,6 @@
             "value": 0
         },
         {
-            "default": 0,
-            "desc": "Append every line sent to and received from the controller, with the action that caused it, to ~/.WebControl/serial-recordings (a file per connection, 5 MB per file, newest 40 files kept). Recordings become test transcripts for the serial contract.\ndefault setting: off",
-            "key": "recordSerial",
-            "section": "WebControl Settings",
-            "title": "Record serial traffic",
-            "type": "bool",
-            "value": 0
-        },
-        {
             "default": ".nc, .ngc, .text, .gcode",
             "desc": "Valid file extensions for Ground Control to open. Comma separated list.\ndefault setting: .nc, .ngc, .text, .gcode",
             "key": "validExtensions",

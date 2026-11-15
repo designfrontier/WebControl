@@ -1,5 +1,5 @@
 //! Validates what a backend sends and accepts against `contract/`, with every object schema that lists its
-//! properties closed, as `tests/test_contract.py` does for Python.
+//! properties closed, as the Python backend's contract test did.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::PathBuf;
@@ -193,9 +193,14 @@ impl Contract {
         }
     }
 
-    /// The endpoint a concrete request path hits; literal paths win over templates.
+    /// The endpoint a concrete request path hits; literal paths win over templates, and the UI's catch-all never
+    /// answers under `/api/`.
     pub fn endpoint(&self, method: &str, path: &str) -> Option<&Endpoint> {
-        self.endpoints.iter().filter(|e| e.method == method && e.pattern.is_match(path)).min_by_key(|e| e.placeholders)
+        self.endpoints
+            .iter()
+            .filter(|e| e.method == method && e.pattern.is_match(path))
+            .filter(|e| e.family != "static" || !path.starts_with("/api/"))
+            .min_by_key(|e| e.placeholders)
     }
 
     fn require_endpoint(&self, method: &str, path: &str) -> Result<&Endpoint, String> {

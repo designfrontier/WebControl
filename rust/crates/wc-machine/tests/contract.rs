@@ -169,11 +169,15 @@ const HANDLED_EVENTS: [&str; 5] =
     ["action", "settingRequest", "updateSetting", "checkForGCodeUpdate", "checkForBoardUpdate"];
 
 #[test]
-fn every_client_event_decodes_and_the_handled_ones_are_known() {
-    Contract::shared().client_events("/MaslowCNC").iter().for_each(|event| {
+fn every_client_event_is_handled() {
+    let events = Contract::shared().client_events("/MaslowCNC");
+    events.iter().for_each(|event| {
         let frame = Frame { ns: "/MaslowCNC".into(), event: event.clone(), data: sample(event) };
-        let decoded = ClientEvent::from_frame(&frame).unwrap_or_else(|| panic!("{event} does not decode"));
-        let handled = !matches!(decoded, ClientEvent::Unhandled(_));
-        assert_eq!(handled, HANDLED_EVENTS.contains(&event.as_str()), "{event}");
+        assert!(ClientEvent::from_frame(&frame).is_some(), "{event} does not decode");
     });
+    let mut sorted = events.clone();
+    sorted.sort();
+    let mut handled = HANDLED_EVENTS.map(String::from).to_vec();
+    handled.sort();
+    assert_eq!(sorted, handled);
 }

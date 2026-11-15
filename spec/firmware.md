@@ -6,7 +6,7 @@ upgrade flow are built against. Firmware paths are relative to `cnc_ctrl_v1/`.
 | Tag | Repo @ commit | Notes |
 |---|---|---|
 | S126 | MaslowCNC/Firmware @ e1e0d02 | Stock 1.26 |
-| H27 | madgrizzle/Firmware @ 950fb23 | Holey 51.27, bundled by `buildFirmware.sh`; the user's controller |
+| H27 | madgrizzle/Firmware @ 950fb23 | Holey 51.27, bundled by the Python backend's `buildFirmware.sh`; the user's controller |
 | H28 | madgrizzle/Firmware @ e9cc445 | 51.28: FAKE_SERVO handling and version only |
 | H291 | Orob-Maslow/Firmware @ 97d12a6 | Tags v51.29 / v51.291 (master); reports `51.29` |
 | H292 | Orob-Maslow/Firmware @ 0064955 | Tag v51.292; the planned upgrade target |

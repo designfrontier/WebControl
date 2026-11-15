@@ -1,6 +1,6 @@
 //! Holey and triangular calibration, ported from `Actions/holeyCalibration.py` and
 //! `Actions/triangularCalibration.py`: the fits, the test patterns and what Accept saves and sends. Pure: the
-//! caller supplies the settings and acts on the result. Checked against `tests/fixtures/calibration/`.
+//! caller supplies the settings and acts on the result. Checked against `fixtures/calibration/`.
 
 mod accept;
 pub mod holey;

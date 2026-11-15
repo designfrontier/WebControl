@@ -87,7 +87,7 @@ describe("App shell", () => {
       "href",
       "https://webcontrolcnc.github.io/WebControl/",
     );
-    expect(screen.getByRole("menuitem", { name: "Logs" })).toHaveAttribute("href", "/next/logs");
+    expect(screen.getByRole("menuitem", { name: "Logs" })).toHaveAttribute("href", "/logs");
     expect(screen.getByRole("menuitem", { name: "Logs" })).toHaveAttribute("target", "_blank");
     await user.click(screen.getByRole("menuitem", { name: "Logs" }));
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
@@ -121,18 +121,6 @@ describe("App shell", () => {
     await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Clear GCode" }));
     expect(socket.actions()).toEqual([["clearGCode", "", ""]]);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  });
-
-  it("links to the classic UI on the Python backend", async () => {
-    const { store } = renderApp("/", { fetch: fakeFetch({ "GET /api/state": startupState({ backend: "python" }) }) });
-    await waitFor(() => expect(store.getState().backend).toBe("python"));
-    expect(screen.getByRole("link", { name: "Classic UI" })).toHaveAttribute("href", "/");
-  });
-
-  it("hides the classic UI link on the Rust backend, which has no classic UI", async () => {
-    const { store } = renderApp("/", { fetch: fakeFetch({ "GET /api/state": startupState({ backend: "rust" }) }) });
-    await waitFor(() => expect(store.getState().backend).toBe("rust"));
-    expect(screen.queryByRole("link", { name: "Classic UI" })).not.toBeInTheDocument();
   });
 
   it("disables loading and clearing gcode while a job is in progress, saying why", async () => {

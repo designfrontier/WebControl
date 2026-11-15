@@ -3,7 +3,7 @@ import { chooseMenu, closeServerDialogs, connectBackend, openActions, resetMachi
 
 test.beforeEach(async ({ page, baseURL }) => {
   await resetMachine(baseURL!);
-  await page.goto("/next/");
+  await page.goto("/");
   await waitForServer(page);
   await closeServerDialogs(page);
 });
@@ -41,7 +41,7 @@ test("Back closes a modal and a reload restores it", async ({ page }) => {
   await settings.getByRole("navigation", { name: "Settings sections" }).getByRole("link", { name: "Camera" }).click();
   await expect(page).toHaveURL(/\/settings\/camera$/);
   await page.goBack();
-  await expect(page).toHaveURL(/\/next\/?$/);
+  await expect(page).toHaveURL(/\/$/);
   await expect(settings).toBeHidden();
 });
 

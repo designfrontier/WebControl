@@ -282,19 +282,19 @@ describe("SettingsPage", () => {
     await waitFor(() => expect(puts).toEqual([{ gpio2: "Stop" }]));
   });
 
-  it("turns on serial recording from the WebControl tab", async () => {
+  it("turns on a WebControl setting from its tab", async () => {
     const { fetch, puts } = settingsServer(webcontrolSection());
     const { user } = renderApp("/settings/webcontrol", { fetch });
     await screen.findByRole("form", { name: "WebControl Settings" });
 
-    const record = screen.getByLabelText("Record serial traffic");
-    expect(record).not.toBeChecked();
-    expect(record).toHaveAccessibleDescription(/serial-recordings/);
-    await user.click(record);
+    const computed = screen.getByLabelText("Computed Sled Position");
+    expect(computed).not.toBeChecked();
+    expect(computed).toHaveAccessibleDescription(/chain lengths/);
+    await user.click(computed);
     await user.click(saveButton());
 
-    await waitFor(() => expect(puts).toEqual([{ recordSerial: true }]));
-    expect(screen.getByLabelText("Record serial traffic")).toBeChecked();
+    await waitFor(() => expect(puts).toEqual([{ computedPosition: true }]));
+    expect(screen.getByLabelText("Computed Sled Position")).toBeChecked();
   });
 
   it("switches sections from the tabs", async () => {

@@ -1,38 +1,12 @@
 # Environments
 .env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-#pyyinstaller
-build
-dist
-
-#logs
-log.txt
-alog.txt
-!tests/fixtures/v094/log.txt
-!tests/fixtures/v094/alog.txt
 
 # IDE-specific files
 .idea
 
-# Eclipse PyDev
-.pydevproject
-.settings/*
-
-# Byte-compiled / optimized / DLL files
+# Python venvs for tools such as ziglang
+.venv
 __pycache__/
-*.py[cod]
-*$py.class
 
-# Test output
-.coverage
-htmlcov/
-.pytest_cache/
-
-# tools/build_release.sh output
-releases/
+# macOS
+.DS_Store

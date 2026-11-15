@@ -1,5 +1,12 @@
 # Rust backend hardware checklists: the order to run them
 
+These were written while the Python backend ran beside Rust on the same card, and they took Rust from "installed
+beside Python" to "cutting and upgrading firmware". The Python backend has since been removed (it is in git history
+up to `220aa0e`). The steps that use it (`wc-switch python`, "on Python", comparing with Python's numbers) are the
+record of how each milestone was accepted; they only work on a card that still has that install. On a fresh install,
+the way back is the boot disk with v0.94 (`spec/INSTALL-PI.md`, step 8) or `rust/deploy.sh rollback` for a bad
+binary, and the rest of each checklist still applies to a release.
+
 These checklists take `webcontrol-rs` from "installed beside Python" to "cutting and upgrading firmware" on the
 microSD card (`pi@maslow.local`). The SSD with v0.94 is never touched. Run them in the order below. Each one
 assumes every earlier one passed. CI already covers everything that can run without the machine (each checklist's
@@ -53,7 +60,7 @@ Why this order:
 
 ## Not covered on the machine
 
-- The camera and optical calibration are out of scope for the Rust backend. Use Python for them (`wc-switch python`).
-- Stock-firmware and custom-hex upgrades: the Rust wizard tells you to use the Python backend for these.
+- The camera and optical calibration are dropped; the UI no longer offers optical calibration.
+- Stock-firmware and custom-hex upgrades: the wizard refuses them and points to another tool.
 - With no controller attached, Rust refuses machine commands (jog, Z, sprockets) with "The controller is not
   connected." Python queues them instead.

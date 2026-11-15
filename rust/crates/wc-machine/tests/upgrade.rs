@@ -561,6 +561,7 @@ fn steps_out_of_order_and_the_other_firmwares_alert() {
     assert_eq!(alerts[1], "There is no saved firmware to roll back to in this session.");
     assert!(alerts[2].contains("guided upgrade"));
     assert!(alerts[3].contains("load the stock firmware") && alerts[4].contains("load the custom firmware"));
+    assert!(!alerts[3].contains("Python"), "the Python backend is gone: {}", alerts[3]);
     bench.act("reset");
     assert_eq!(bench.stage(), Stage::Idle);
 }

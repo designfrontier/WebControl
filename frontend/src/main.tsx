@@ -6,26 +6,20 @@ import { applyPreference, readPreference } from "./app/themePreference";
 import { WebControlProvider } from "./app/WebControlProvider";
 import { createClient } from "./socket/client";
 import { connectSocket } from "./socket/connect";
-import { selectTransport, watchBackend } from "./transport";
 import "./styles/theme.css";
 import "./styles/app.css";
 
 applyPreference(readPreference());
 
 const browserFetch = (input: string, init?: RequestInit) => fetch(input, init);
+const client = createClient(connectSocket());
 
-void selectTransport(browserFetch).then((backend) => {
-  const socket = connectSocket();
-  watchBackend(socket, backend, { fetch: browserFetch, reload: () => window.location.reload() });
-  const client = createClient(socket);
-
-  createRoot(document.getElementById("root")!).render(
-    <StrictMode>
-      <BrowserRouter basename="/next">
-        <WebControlProvider client={client} fetch={browserFetch}>
-          <App />
-        </WebControlProvider>
-      </BrowserRouter>
-    </StrictMode>,
-  );
-});
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <BrowserRouter>
+      <WebControlProvider client={client} fetch={browserFetch}>
+        <App />
+      </WebControlProvider>
+    </BrowserRouter>
+  </StrictMode>,
+);

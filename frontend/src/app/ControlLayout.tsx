@@ -28,7 +28,7 @@ const HelpRedirect = () => <Navigate to={`/help/${useParams()["*"] ?? ""}`} repl
 
 const LEGACY_PATHS = [...Object.keys(legacyRedirects), "system/help/*"];
 
-/** The control screen, with any route modal over it: /next/files/open is the control screen plus Open G-Code. */
+/** The control screen, with any route modal over it: /files/open is the control screen plus Open G-Code. */
 export const ControlLayout = () => {
   const { pathname } = useLocation();
   const legacy = LEGACY_PATHS.some((path) => matchPath(`/${path}`, pathname));

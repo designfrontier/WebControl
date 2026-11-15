@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://webcontrol.local/contract/serial/recording.schema.json",
   "title": "Serial recording line",
-  "description": "One line of ~/.WebControl/serial-recordings/<session>.jsonl, written by DataStructures/serialRecorder.py or tools/import_v094_log.py. See contract/serial/README.md.",
+  "description": "One line of ~/.WebControl/serial-recordings/<session>.jsonl, as the Python backend recorded it (its serial recorder or tools/import_v094_log.py, in git history). See contract/serial/README.md.",
   "type": "object",
   "required": ["type", "t"],
   "properties": {

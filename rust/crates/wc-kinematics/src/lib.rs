@@ -1,6 +1,6 @@
-//! The kinematics of the holey firmware (spec/firmware.md B14), ported from `Actions/HoleySimulationKinematics.py`:
+//! The kinematics of the holey firmware (spec/firmware.md B14), ported from the Python backend's holey kinematics:
 //! chain lengths for a position (`inverse`) and the position for chain lengths (`forward`), in both modes.
-//! Everything is `f64` in Python's operation order, so results match `tests/fixtures/calibration/kinematics.json`,
+//! Everything is `f64` in Python's operation order, so results match `fixtures/calibration/kinematics.json`,
 //! except `Firmware32`, the controller's own float32 maths for the live computed sled position.
 
 mod checked;

@@ -135,5 +135,5 @@ export const createWebSocketTransport = (namespace: string, deps: WebSocketDeps 
   return transport;
 };
 
-/** `separate` is meaningless here: every namespace is its own socket. */
+/** Every namespace gets a socket of its own. */
 export const connectWebSocket: ConnectTransport = (namespace) => createWebSocketTransport(namespace);

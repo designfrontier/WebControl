@@ -1,8 +1,14 @@
 # Rust backend: implementation plan
 
+**Status:** the Rust backend has replaced the Python one, which was removed from the repository after `220aa0e`;
+the React UI moved from `/next` to `/` (old `/next` addresses redirect). This plan is kept as the record of how the
+port was built and why. The Python files it names (`main.py`, `Actions/`, `tests/`, `tools/`, ...) are in git history
+at `220aa0e`; `tests/fixtures/` is now `fixtures/`, and `contract/serial/transcripts-rust/` was folded into
+`contract/serial/transcripts/`.
+
 The plan for replacing WebControl's Python backend (`main.py`, Flask + gevent) with a Rust binary on the shop Pi 3B.
 The inputs are `contract/` (what the React UI and a backend say to each other), `spec/firmware.md` (§Implications B
-are the firmware requirements, C is the upgrade flow) and `tests/fixtures/calibration/`. This plan does not restate
+are the firmware requirements, C is the upgrade flow) and `fixtures/calibration/`. This plan does not restate
 them: where it says "per B7" or "wart 5", read that section.
 
 Owner decisions taken as given: Rust; the target is Raspberry Pi OS Lite 64-bit on a Pi 3B, from a microSD card that
@@ -15,13 +21,14 @@ the 51.292 upgrade is one click and follows C.
 
 These override anything below that disagrees:
 
-- **Classic UI dropped** from the Rust backend; `/` redirects to `/next/`.
+- **Classic UI dropped** from the Rust backend; `/` redirected to `/next/` (the UI has since moved to `/`).
 - **Firmware for the upgrade:** built in CI from the v51.292 tag, pinned by SHA-256; holey upgrades only.
 - **One shared `~/.WebControl`** for both backends, with the safeguards in §7.
 - **No self-update;** deploy from the Mac.
 - **Power-off kept. GPIO kept:** port `Actions/gpioActions.py` behaviour (pin factory, button actions routed
   through the job state machine with debounce, LEDs) using `rppal`, with a no-op fallback off-Pi.
-- **Camera and optical calibration dropped for now:** M7 is out of scope; no `wc-optical` crate.
+- **Camera and optical calibration dropped:** M7 is out of scope; no `wc-optical` crate, and the UI and `contract/`
+  no longer carry optical calibration.
 - **OS:** Raspberry Pi OS Lite 64-bit (trixie) recommended, bookworm supported; target glibc 2.36.
 - **Warts cleaned up after parity,** with a `contract/VERSION` bump.
 - **Coverage: 95% lines for every crate** (not the 90/80 below), enforced in CI.
@@ -56,7 +63,7 @@ These also override anything below; `contract/README.md` ("Rust-intended differe
 ## 0. Recommendations up front
 
 1. **Serve only the React UI.** Drop the classic UI (Jinja `templates/`, `static/scripts`, `WebPageProcessor/`,
-   `requestPage`, the `classicOnlyClientToServer` events) from the Rust backend. `/` redirects to `/next/`. The 14
+   `requestPage`, the `classicOnlyClientToServer` events) from the Rust backend. `/` redirected to `/next/`. The 14
    classic form routes the React UI still posts to (`/openGCode` … `/backupWebControl`, family `classic` in
    `index.json`) are part of the contract and are implemented with their classic shapes (wart 8). The Python backend
    stays the fallback for anything only the classic UI does.
@@ -280,7 +287,7 @@ accepts both forms during the overlap).
 
 ### 5.1 Golden calibration fixtures
 
-`wc-calibration/tests/fixtures.rs` and `wc-kinematics/tests/fixtures.rs` read `tests/fixtures/calibration/*.json`
+`wc-calibration/tests/fixtures.rs` and `wc-kinematics/tests/fixtures.rs` read `fixtures/calibration/*.json`
 directly, with the README's rules:
 
 - floats within `tolerance`, with `keyTolerance` taking precedence
@@ -546,8 +553,8 @@ M5 routes and M6a can follow M1/M2 while M4 is under way.
 
 ### Open questions for the owner, ranked
 
-1. **Drop the classic UI from the Rust backend?** Recommended: yes. `/` redirects to `/next/`, and the classic UI
-   remains available by switching to Python.
+1. **Drop the classic UI from the Rust backend?** Recommended: yes. `/` redirected to `/next/`, and the classic UI
+   remained available by switching to Python until Python was removed.
 2. **Firmware artefact provenance.** Should CI build v51.292 from the Orob-Maslow tag with `buildFirmware.sh` and
    pin the SHA-256, or should the reviewed shipped hex be committed? Also: support only holey 51.292 (stock and
    custom upgrade buttons alert "use the Python backend")? Recommended: build from the tag, holey only.

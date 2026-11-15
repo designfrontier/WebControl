@@ -38,16 +38,6 @@ export default tseslint.config(
     },
   },
   {
-    files: ["src/**/*.{ts,tsx}"],
-    ignores: ["src/transport/socketio.ts"],
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        { paths: [{ name: "socket.io-client", message: "Depend on src/transport's Transport, not on socket.io." }] },
-      ],
-    },
-  },
-  {
     files: ["**/*.test.{ts,tsx}", "src/test/**", "e2e/**"],
     rules: { "@typescript-eslint/no-non-null-assertion": "off" },
   },

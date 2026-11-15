@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** The socket.io namespace every WebControl UI event travels on. */
+/** The namespace every WebControl UI event travels on. */
 export const NAMESPACE = "/MaslowCNC";
 
 /** Every server push arrives as a `message` event wrapping one command; `data` is JSON text when dataFormat is "json". */
