@@ -98,3 +98,38 @@ def test_a_buffer_overflow_raises_an_alarm(ui, data, monkeypatch):
 
     alarms = [json.loads(payload["data"])["message"] for _, payload in emitted if payload["command"] == "alarm"]
     assert alarms == ["Alarm: Controller Buffer Overflow"]
+
+
+@pytest.fixture
+def error_report(ui, data, monkeypatch):
+    settings = {"positionErrorLimit": "2.0", "computedPosition": "0"}
+    real_get_value = data.config.getValue
+    monkeypatch.setattr(data.config, "getValue", lambda section, key: settings.get(key) or real_get_value(section, key))
+    for key in ["leftError", "rightError", "leftError_prev", "rightError_prev", "computedX", "computedY",
+                "leftChain", "rightChain", "bufferSize"]:
+        monkeypatch.setattr(data, key, getattr(data, key))
+    drain(data.console_queue)
+    return ui
+
+
+@pytest.mark.parametrize("version", [0, 1.26, 51.27])
+def test_a_holey_error_report_is_parsed_by_its_field_count(error_report, data, monkeypatch, version):
+    monkeypatch.setattr(data, "controllerFirmwareVersion", version)
+
+    error_report.setErrorOnScreen("[PE:0.5,0.25,120,1650.5,1700.25]\r\n")
+
+    assert (data.leftError, data.rightError, data.bufferSize) == (0.25, 0.125, 120)
+    assert (data.leftChain, data.rightChain) == (1650.5, 1700.25)
+    assert drain(data.console_queue) == []
+
+
+@pytest.mark.parametrize("version", [0, 1.26, 51.27])
+def test_a_stock_error_report_is_parsed_by_its_field_count(error_report, data, monkeypatch, version):
+    monkeypatch.setattr(data, "controllerFirmwareVersion", version)
+    monkeypatch.setattr(data, "leftChain", 1.0)
+
+    error_report.setErrorOnScreen("[PE:0.5,0.25,120]\r\n")
+
+    assert (data.leftError, data.rightError, data.bufferSize, data.leftChain) == (0.25, 0.125, 120, 1.0)
+    assert drain(data.console_queue) == []
+

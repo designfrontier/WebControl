@@ -297,42 +297,15 @@ class UIProcessor:
         if limit != 0:
             try:
                 with self.app.app_context():
-                    startpt = message.find(':') + 1
-                    endpt = message.find(',', startpt)
-                    leftErrorValueAsString = message[startpt:endpt]
-                    self.app.data.leftError = float(leftErrorValueAsString) / limit
-
-                    startpt = endpt + 1
-                    endpt = message.find(',', startpt)
-                    rightErrorValueAsString = message[startpt:endpt]
-                    self.app.data.rightError = float(rightErrorValueAsString) / limit
-
-                    # the two custom firmwares were modified to send the chain lengths as well as the error.  This
-                    # allows for forward kinematics to be performed to get sled location.
-                    if self.app.data.controllerFirmwareVersion > 50 and self.app.data.controllerFirmwareVersion < 150:
-
-                        startpt = endpt + 1
-                        endpt = message.find(',', startpt)
-                        bufferSizeValueAsString = message[startpt:endpt]
-                        self.app.data.bufferSize = int(bufferSizeValueAsString)
-
-                        startpt = endpt + 1
-                        endpt = message.find(',', startpt)
-                        leftChainLengthAsString = message[startpt:endpt]
-                        self.app.data.leftChain = float(leftChainLengthAsString)
-
-                        startpt = endpt + 1
-                        endpt = message.find(']', startpt)
-                        rightChainLengthAsString = message[startpt:endpt]
-                        self.app.data.rightChain = float(rightChainLengthAsString)
-
+                    fields = message[message.find(':') + 1:message.find(']')].split(',')
+                    self.app.data.leftError = float(fields[0]) / limit
+                    self.app.data.rightError = float(fields[1]) / limit
+                    self.app.data.bufferSize = int(fields[2])
+                    # Holey and optical firmware add the chain lengths, which allow a forward kinematics position.
+                    if len(fields) >= 5:
+                        self.app.data.leftChain = float(fields[3])
+                        self.app.data.rightChain = float(fields[4])
                     else:
-                        # if not custom firmware, then just buffer size remains.
-                        startpt = endpt + 1
-                        endpt = message.find(']', startpt)
-                        bufferSizeValueAsString = message[startpt:endpt]
-                        self.app.data.bufferSize = int(bufferSizeValueAsString)
-                        # regardless of setting, if not custom firmware there cannot be a forward kinematic compute
                         computedEnabled = 0
 
                     computed = None
