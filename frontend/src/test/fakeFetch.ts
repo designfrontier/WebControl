@@ -23,6 +23,7 @@ export const startupState = (over: Partial<StartupState> = {}): StartupState => 
   pauseButtonSetting: "Pause",
   jobInProgress: false,
   manualZAxisAdjust: false,
+  probing: false,
   hostAddress: "192.168.1.20:5000",
   controllerFirmwareVersion: 0,
   controllerBoard: null,

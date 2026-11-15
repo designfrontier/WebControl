@@ -354,7 +354,8 @@ impl Machine {
         if !line.is_empty() && !py::isspace(&line) && !only_selects_tool(&line) {
             let positioning = positioning_set_by(&line).unwrap_or(self.positioning);
             let shifted = shift_to_home(&line, self.positioning, &self.home_shift());
-            self.write(&shifted, Some(self.index), now, effects);
+            let id = self.write(&shifted, Some(self.index), now, effects);
+            self.track_probe(&shifted, id, Some(self.index));
             self.after_line_sent(&shifted, positioning, effects);
         }
         if self.index + 1 < self.gcode.len() {
@@ -369,7 +370,8 @@ impl Machine {
         let Ok(z) = word(line, 'Z') else {
             return tracing::debug!(line, "unreadable Z word; Python raised here");
         };
-        if let Some(z) = z {
+        // A probe's Z is a limit, not a target; its answer sets Z.
+        if let Some(z) = z.filter(|_| !line.contains("G38.2")) {
             self.job.z_target = if positioning == Positioning::Absolute { z } else { self.job.z_target + z };
         }
         self.follow_units_in(line, effects);

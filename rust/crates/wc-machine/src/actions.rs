@@ -20,8 +20,22 @@ const JOB_LINES_HELD: &str = "The controller paused with lines of the job still 
 const ADJUST_Z_FIRST: &str = "The controller is waiting for Z to be adjusted by hand. Adjust it, then press Resume.";
 const GCODE_LOADING: &str = "Gcode is still loading. Start the job when the preview appears.";
 const CLEARED_Z_LIMIT_MM: i32 = 9999;
-const SAFE_WHILE_PROBING: [&str; 7] =
-    ["stopRun", "stopZ", "pauseRun", "createDirectory", "toggleCamera", "statusRequest", "queryCamera"];
+/// Stop, Pause and the actions that send the controller nothing.
+const SAFE_WHILE_PROBING: [&str; 13] = [
+    "stopRun",
+    "stopZ",
+    "pauseRun",
+    "createDirectory",
+    "toggleCamera",
+    "statusRequest",
+    "queryCamera",
+    "shutdown",
+    "TurnOffRPI",
+    "updatePorts",
+    "clearLogs",
+    "boardProcessGCode",
+    "boardClearBoard",
+];
 /// Commands that reach the controller, so they need it connected.
 const MACHINE_COMMANDS: [&str; 17] = [
     "move",

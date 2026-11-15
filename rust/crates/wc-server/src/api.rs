@@ -38,6 +38,7 @@ pub(crate) async fn state(State(state): State<AppState>) -> Json<StartupState> {
         pause_button_setting: snapshot.pause_button,
         job_in_progress: snapshot.job_in_progress,
         manual_z_axis_adjust: snapshot.manual_z_axis_adjust,
+        probing: snapshot.probing,
         host_address: snapshot.host_address.clone(),
         controller_firmware_version: snapshot.controller_firmware_version,
         controller_board: snapshot.controller_board.clone(),

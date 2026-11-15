@@ -1,0 +1,75 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "probe_in_file_waits_for_the_touch",
+    "description": "Rust only: buffered streaming stops behind a G38.2 from the file until the controller answers it, as Touch Z does: nothing more is written, moving actions are refused and actions that move nothing still run. Python streams on behind the probe and does not track it.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "610e5bf"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    },
+    "gcode": {
+      "lines": [
+        "G21",
+        "G0 Z5",
+        "G38.2 Z-10 F100",
+        "G1 Z-1 F200",
+        "G1 X10 Y0"
+      ]
+    },
+    "settings": {
+      "Maslow Settings": {
+        "bufferOn": 1
+      }
+    }
+  },
+  "events": [
+    {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "tx", "bytes": "G0 Z5  \n"},
+    {"type": "tx", "bytes": "G38.2 Z-10 F100  \n"},
+    {"type": "expect", "state": {"uploadFlag": 1, "probing": true}, "emitted": [{"command": "statusMessage", "data": {"probing": true}}]},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "ok"},
+    {"type": "ui", "action": {"command": "pauseRun", "arg": "", "arg1": ""}},
+    {"type": "ui", "action": {"command": "move", "arg": "up", "arg1": "10"}},
+    {"type": "expect", "alerts": [{"title": "Alert", "message": "Wait for Touch Z to finish"}], "state": {"uploadFlag": 2, "probing": true}},
+    {"type": "ui", "action": {"command": "clearLogs", "arg": "", "arg1": ""}},
+    {"type": "expect", "noAlerts": [{"title": "Alert", "message": "Wait for Touch Z to finish"}]},
+    {"type": "rx", "line": "probing for z axis zero"},
+    {"type": "rx", "line": "max depth -10.00 mm."},
+    {"type": "rx", "line": "feedrate 60.00 mm per min."},
+    {"type": "rx", "line": "z axis zeroed"},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "state": {"uploadFlag": 2, "probing": false, "gcodeIndex": 3}, "noAlerts": [{"title": "Touch Z Failed"}]},
+    {"type": "ui", "action": {"command": "resumeRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "~\n", "realtime": true},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 Z5.0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 X0.0 Y0.0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 Z0.0 F100.0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 F100.0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "tx", "bytes": "G1 Z-1 F200  \n"},
+    {"type": "tx", "bytes": "G1 X10 Y0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "state": {"uploadFlag": 0, "jobInProgress": false, "probing": false}}
+  ]
+}

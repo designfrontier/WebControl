@@ -286,6 +286,8 @@ async fn sent_gcode_is_remembered_and_refused_while_probing() {
     let server = Server::with(probing);
     let reply = server.post_form("/sendGCode", &[Part::Field("gcode", "G0 X1")]).await;
     assert_eq!((reply.status, reply.json()), (StatusCode::INTERNAL_SERVER_ERROR, json!("failed")));
+    assert_eq!(server.get("/api/state").await.json()["probing"], true);
+    assert_eq!(server.get("/api/main").await.json()["status"]["probing"], true);
 }
 
 #[tokio::test]

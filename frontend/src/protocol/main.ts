@@ -36,6 +36,8 @@ export const mainMessages = {
     jobInProgress: z.boolean().optional(),
     /** The job waits for a tool change or a manual Z adjustment. */
     manualZAxisAdjust: z.boolean().optional(),
+    /** A G38.2 probe is queued or descending; only Stop, Pause and actions that move nothing run. Rust only. */
+    probing: z.boolean().optional(),
   }),
   positionMessage: z.object({
     xval: z.number(),
@@ -115,6 +117,8 @@ export const startupStateSchema = z.object({
   pauseButtonSetting: z.enum(["Pause", "Resume"]),
   jobInProgress: z.boolean().default(false),
   manualZAxisAdjust: z.boolean().default(false),
+  /** A G38.2 probe is queued or descending. Rust only; Python never sends it. */
+  probing: z.boolean().default(false),
   hostAddress: z.string(),
   /** 0 until the controller reports its version on connect. */
   controllerFirmwareVersion: z.number().default(0),
