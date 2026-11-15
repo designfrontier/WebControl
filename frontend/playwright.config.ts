@@ -11,7 +11,7 @@ const backendCommand = rust
   : `npm run build && ${python} ../tests/e2e_backend.py`;
 
 /** The specs the Rust backend passes so far; each milestone adds its own until it runs them all. */
-const rustSpecs = ["rust/**/*.spec.ts", "files-boards.spec.ts", "viewer.spec.ts"];
+const rustSpecs = ["rust/**/*.spec.ts", "files-boards.spec.ts", "viewer.spec.ts", "calibration.spec.ts"];
 
 /** Runs a real backend (no machine attached, throwaway ~/.WebControl) serving the built app at /next. */
 export default defineConfig({

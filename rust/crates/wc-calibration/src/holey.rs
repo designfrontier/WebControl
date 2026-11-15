@@ -1,27 +1,21 @@
 //! `Actions/holeyCalibration.py`: six holes cut with the configured machine, twelve distances measured between
 //! them, and a least-squares fit of the motor spacing, motor height and chain tolerances that explains them.
 
-use levenberg_marquardt::{LeastSquaresProblem, LevenbergMarquardt, TerminationReason};
-use nalgebra::{Owned, SMatrix, SVector, U4, U12};
 use serde_json::Value;
 use wc_config::python_float_str;
 use wc_kinematics::{Geometry, Kinematics, Mode, sprocket_radius};
 
 use crate::accept::{Accept, SettingWrite};
+use crate::trf::{self, Params, Residuals};
 use crate::{CalibrationError, MachineSettings, python};
 
-pub const MEASUREMENTS: usize = 12;
+pub const MEASUREMENTS: usize = trf::M;
 
 /// The holes each of M1 to M11 spans, numbered 1 to 6 as on the pattern. M12 runs from hole 2 to the top edge.
 const MEASUREMENT_MAP: [(usize, usize); 11] =
     [(1, 2), (2, 3), (4, 5), (5, 6), (1, 4), (2, 5), (3, 6), (2, 4), (1, 5), (3, 5), (2, 6)];
 /// Counter-clockwise from the top middle hole.
 const CUT_ORDER: [usize; 6] = [1, 0, 3, 4, 5, 2];
-/// scipy's `diff_step`: each finite-difference step is a tenth of the parameter, or 0.1 near zero.
-const DIFF_STEP: f64 = 0.1;
-
-type Params = SVector<f64, 4>;
-type Residuals = SVector<f64, MEASUREMENTS>;
 
 /// The fitted machine, rounded to 5 places as Python rounds it, and the root of the summed squared residuals.
 #[derive(Debug, Clone, PartialEq)]
@@ -127,55 +121,6 @@ pub fn parse_measurements(values: &[Value]) -> Result<[f64; MEASUREMENTS], Calib
     Ok(parsed)
 }
 
-struct Fit {
-    base: Geometry,
-    chains: [(f64, f64); 6],
-    measured: Residuals,
-    params: Params,
-}
-
-impl Fit {
-    /// `LengthDeltaFromIdeal`: measured minus calculated, for each of M1 to M12.
-    fn residuals_at(&self, params: &Params) -> Option<Residuals> {
-        let holes = holes_for(&self.base, &self.chains, params)?;
-        Some(self.measured - Residuals::from(measurements_of(&holes, self.base.machine_height)))
-    }
-}
-
-impl LeastSquaresProblem<f64, U12, U4> for Fit {
-    type ResidualStorage = Owned<f64, U12>;
-    type JacobianStorage = Owned<f64, U12, U4>;
-    type ParameterStorage = Owned<f64, U4>;
-
-    fn set_params(&mut self, params: &Params) {
-        self.params = *params;
-    }
-
-    fn params(&self) -> Params {
-        self.params
-    }
-
-    fn residuals(&self) -> Option<Residuals> {
-        self.residuals_at(&self.params)
-    }
-
-    /// scipy's `2-point` Jacobian with `diff_step=0.1`: forward differences with a step relative to each parameter.
-    fn jacobian(&self) -> Option<SMatrix<f64, MEASUREMENTS, 4>> {
-        let f0 = self.residuals()?;
-        let mut jacobian = SMatrix::<f64, MEASUREMENTS, 4>::zeros();
-        (0..4).try_for_each(|j| {
-            let x = self.params[j];
-            let sign = if x >= 0.0 { 1.0 } else { -1.0 };
-            let mut stepped = self.params;
-            stepped[j] = x + DIFF_STEP * sign * x.abs().max(1.0);
-            let step = stepped[j] - x;
-            jacobian.set_column(j, &((self.residuals_at(&stepped)? - f0) / step));
-            Some(())
-        })?;
-        Some(jacobian)
-    }
-}
-
 /// `Calibrate`: fits the machine to the twelve measurements from the form.
 pub fn calibrate(settings: &MachineSettings, values: &[Value]) -> Result<HoleyResult, CalibrationError> {
     calibrate_measurements(settings, &parse_measurements(values)?)
@@ -185,22 +130,23 @@ pub fn calibrate_measurements(
     settings: &MachineSettings,
     measured: &[f64; MEASUREMENTS],
 ) -> Result<HoleyResult, CalibrationError> {
-    let base = model(settings);
-    let fit =
-        Fit { base, chains: chain_lengths(settings), measured: Residuals::from(*measured), params: Params::zeros() };
-    let (fit, report) = LevenbergMarquardt::new().with_ftol(1e-11).minimize(fit);
-    let failed = matches!(report.termination, TerminationReason::User(_) | TerminationReason::Numerical(_));
-    let deltas = fit.params;
-    if failed || !deltas.iter().all(|d| d.is_finite()) {
+    let (base, chains, measured) = (model(settings), chain_lengths(settings), Residuals::from(*measured));
+    // `LengthDeltaFromIdeal`: measured minus calculated, for each of M1 to M12.
+    let residuals = |params: &Params| {
+        let holes = holes_for(&base, &chains, params)?;
+        Some(measured - Residuals::from(measurements_of(&holes, base.machine_height)))
+    };
+    let fitted = trf::least_squares(residuals, Params::zeros()).ok_or(CalibrationError::NoSolution)?;
+    let deltas = fitted.x;
+    if !deltas.iter().all(|d| d.is_finite()) {
         return Err(CalibrationError::NoSolution);
     }
-    let residuals = fit.residuals().ok_or(CalibrationError::NoSolution)?;
     Ok(HoleyResult {
-        distance_between_motors: python::round(deltas[0] + fit.base.d, 5),
-        motor_y_offset: python::round(deltas[1] + fit.base.motor_offset_y, 5),
-        left_chain_tolerance: python::round(deltas[2] + fit.base.left_chain_tolerance, 5),
-        right_chain_tolerance: python::round(deltas[3] + fit.base.right_chain_tolerance, 5),
-        total_error: residuals.norm(),
+        distance_between_motors: python::round(deltas[0] + base.d, 5),
+        motor_y_offset: python::round(deltas[1] + base.motor_offset_y, 5),
+        left_chain_tolerance: python::round(deltas[2] + base.left_chain_tolerance, 5),
+        right_chain_tolerance: python::round(deltas[3] + base.right_chain_tolerance, 5),
+        total_error: fitted.f.norm(),
     })
 }
 

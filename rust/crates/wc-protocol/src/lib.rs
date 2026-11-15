@@ -2,6 +2,8 @@
 
 #[path = "slices/boards.rs"]
 pub mod boards;
+#[path = "slices/calibration.rs"]
+pub mod calibration;
 mod envelope;
 mod events;
 #[path = "slices/files.rs"]

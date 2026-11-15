@@ -8,8 +8,10 @@ use axum::response::{IntoResponse, Response};
 use serde_json::{Value, json};
 use wc_config::Settings;
 use wc_firmware::boot::supports_z_limits;
+use wc_machine::calibration::{self, Kind};
 use wc_machine::forms::{self, CUSTOM_FIRMWARE_VERSION};
 use wc_machine::{Request, Response as Answer};
+use wc_protocol::calibration::{HoleyParameters, TriangularParameters};
 use wc_protocol::machine::{MachineSetup, QuickConfigure};
 use wc_protocol::main::{Backend, GcodeLine, Macro, MainScreen, Point, StartupState, Units};
 use wc_protocol::system::{BundledFirmware, PidSettings, SystemInfo, UpdateStatus};
@@ -171,4 +173,36 @@ pub(crate) async fn system(State(state): State<AppState>) -> Json<SystemInfo> {
         update: UpdateStatus { available: false, version: None },
         firmware_upgrade: Some(snapshot.firmware_upgrade.clone()),
     })
+}
+
+pub(crate) async fn triangular(State(state): State<AppState>) -> Json<TriangularParameters> {
+    Json(calibration::triangular_parameters(&state.machine.snapshot().settings))
+}
+
+pub(crate) async fn holey(State(state): State<AppState>) -> Json<HoleyParameters> {
+    Json(calibration::holey_parameters(&state.machine.snapshot().settings))
+}
+
+/// `POST /api/calibration/{kind}`: calculated on a blocking thread, so the machine task stays free for Stop.
+async fn calculate(state: &AppState, kind: Kind, body: &Bytes) -> Response {
+    let (settings, body) = (state.machine.snapshot().settings.0.clone(), json_body(body));
+    // A panic aborts the release build, so the join cannot fail there.
+    let calculated = tokio::task::spawn_blocking(move || calibration::calculate(kind, &settings, &body)).await;
+    answer(state, Request::Calibrated(calculated.expect("the calculation does not panic"))).await
+}
+
+pub(crate) async fn calculate_triangular(State(state): State<AppState>, body: Bytes) -> Response {
+    calculate(&state, Kind::Triangular, &body).await
+}
+
+pub(crate) async fn calculate_holey(State(state): State<AppState>, body: Bytes) -> Response {
+    calculate(&state, Kind::Holey, &body).await
+}
+
+pub(crate) async fn accept_triangular(State(state): State<AppState>) -> Response {
+    answer(&state, Request::AcceptCalibration(Kind::Triangular)).await
+}
+
+pub(crate) async fn accept_holey(State(state): State<AppState>) -> Response {
+    answer(&state, Request::AcceptCalibration(Kind::Holey)).await
 }

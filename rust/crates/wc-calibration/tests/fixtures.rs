@@ -58,6 +58,22 @@ fn holey_calibrate_reproduces_the_python_fixture() {
     });
 }
 
+/// Stricter than the fixture's 1e-3: scipy's own algorithm stops where Python did, so Accept sends the same bytes.
+#[test]
+fn holey_calibrate_lands_on_python_s_five_decimals_exactly() {
+    let fixture = fixture("holey_calibrate.json");
+    let settings = settings(&fixture["geometry"]);
+    fixture["cases"].as_array().expect("cases").iter().filter(|case| case["expected"].is_object()).for_each(|case| {
+        let result = holey::calibrate(&settings, case["measurements"].as_array().expect("measurements")).unwrap();
+        let (actual, expected) = (holey_json(&result), &case["expected"]);
+        ["Opt_D", "Opt_motorOffsetY", "Opt_leftChainTolerance", "Opt_rightChainTolerance"]
+            .iter()
+            .for_each(|key| assert_eq!(actual[key], expected[key], "{} {key}", case["name"]));
+        let error = (actual["totalError"].as_f64().unwrap() - expected["totalError"].as_f64().unwrap()).abs();
+        assert!(error < 1e-9, "{} totalError off by {error}", case["name"]);
+    });
+}
+
 #[test]
 fn the_holey_model_is_the_fixture_model() {
     let fixture = fixture("holey_calibrate.json");

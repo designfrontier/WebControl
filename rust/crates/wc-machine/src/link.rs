@@ -316,6 +316,10 @@ impl Machine {
         if let Some(mode) = positioning_set_by(&message) {
             self.positioning = mode;
         }
+        let setting = text.strip_prefix('$').and_then(|setting| setting.split_once('='));
+        if let Some((key, value)) = setting.and_then(|(key, value)| Some((key.parse().ok()?, value.trim()))) {
+            self.kinematics.update_setting(key, value);
+        }
         effects.push(Effect::Write(message.into_bytes()));
         effects.push(Effect::Log(format!("Sent: {text}")));
         sent.id

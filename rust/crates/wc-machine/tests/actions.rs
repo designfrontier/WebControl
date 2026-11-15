@@ -272,20 +272,58 @@ fn position_reports_are_sent_when_the_sled_moves() {
     assert_eq!(pushed(&nan, "positionMessage")[0]["state"], "Stopped");
 }
 
-/// Ported from test_ui_processor: PE reports by field count; -999999 until forward kinematics lands.
+/// Ported from test_ui_processor: PE reports by field count, with the sled position the chain lengths give.
 #[test]
 fn error_reports_are_fractions_of_the_limit() {
     let mut rig = Rig::connected_with(settings(&[("WebControl Settings", "computedPosition", json!(1))]));
     let holey = pushed(&rig.rx("[PE:0.5,-1.0,120,1650.0,1651.0]"), "errorValueMessage");
-    assert_eq!(
-        holey,
-        [json!({"leftError": 0.25, "rightError": 0.5, "computedX": -999999.0, "computedY": -999999.0,
-        "computedEnabled": 1})]
-    );
+    assert_eq!(holey.len(), 1);
+    assert_eq!(holey[0]["leftError"], 0.25);
+    assert_eq!(holey[0]["rightError"], 0.5);
+    assert_eq!(holey[0]["computedEnabled"], 1);
+    // Python's HoleySimulationKinematics.forward(1650, 1651, 0, 0) on the default settings.
+    let (x, y) = (holey[0]["computedX"].as_f64().unwrap(), holey[0]["computedY"].as_f64().unwrap());
+    assert!((x - -0.5903697011988455).abs() < 1e-9 && (y - 126.41059578749022).abs() < 1e-9, "({x}, {y})");
     assert!(pushed(&rig.rx("[PE:0.5001,-1.0,120,1650.0,1651.0]"), "errorValueMessage").is_empty());
-    assert_eq!(pushed(&rig.rx("[PE:0.1,0.1,120]"), "errorValueMessage")[0]["computedEnabled"], 0);
+    let short = pushed(&rig.rx("[PE:0.1,0.1,120]"), "errorValueMessage");
+    assert_eq!((&short[0]["computedEnabled"], &short[0]["computedX"]), (&json!(0), &json!(-999999.0)));
     let mut off = Rig::connected_with(settings(&[("Advanced Settings", "positionErrorLimit", json!("0"))]));
     assert!(pushed(&off.rx("[PE:0.5,-1.0,120]"), "errorValueMessage").is_empty());
+}
+
+#[test]
+fn the_computed_position_is_left_out_when_disabled_or_unreachable() {
+    let mut off = Rig::connected();
+    let report = pushed(&off.rx("[PE:0.5,-1.0,120,1650.0,1651.0]"), "errorValueMessage");
+    assert_eq!((&report[0]["computedEnabled"], &report[0]["computedX"]), (&json!(0), &json!(-999999.0)));
+    let mut on = Rig::connected_with(settings(&[("WebControl Settings", "computedPosition", json!(1))]));
+    let unreachable = pushed(&on.rx("[PE:0.5,-1.0,120,10.0,9000.0]"), "errorValueMessage");
+    assert_eq!((&unreachable[0]["computedX"], &unreachable[0]["computedY"]), (&json!(-999999.0), &json!(-999999.0)));
+}
+
+/// Every `$` write updates the model, as `config.setValue` called `holeyKinematics.updateSetting`.
+#[test]
+fn a_setting_written_to_the_controller_moves_the_computed_position() {
+    let mut rig = Rig::connected_with(settings(&[("WebControl Settings", "computedPosition", json!(1))]));
+    let before = pushed(&rig.rx("[PE:0.5,-1.0,120,1650.0,1651.0]"), "errorValueMessage")[0]["computedY"].clone();
+    let body = json!({"values": {"motorOffsetY": "500"}});
+    rig.send(Event::Edit { id: 1, request: wc_machine::Request::UpdateSettings { section: "maslow".into(), body } });
+    assert_eq!(rig.run_to_quiet(), ["$3=500"]);
+    let after = pushed(&rig.rx("[PE:0.1,-1.0,120,1650.0,1651.0]"), "errorValueMessage")[0]["computedY"].clone();
+    let lift = after.as_f64().unwrap() - before.as_f64().unwrap();
+    assert!((lift - 37.0).abs() < 1.0, "the sled computes about 37 mm higher, not {lift}");
+}
+
+#[test]
+fn quadrilateral_settings_give_a_quadrilateral_model() {
+    let quadrilateral = settings(&[
+        ("WebControl Settings", "computedPosition", json!(1)),
+        ("Computed Settings", "kinematicsTypeComputed", json!("1")),
+        ("Computed Settings", "chainOverSprocketComputed", json!("junk")),
+    ]);
+    let mut rig = Rig::connected_with(quadrilateral);
+    let report = pushed(&rig.rx("[PE:0.5,-1.0,120,1650.0,1651.0]"), "errorValueMessage");
+    assert!(report[0]["computedX"].as_f64().unwrap() > -999999.0, "{report:?}");
 }
 
 #[test]

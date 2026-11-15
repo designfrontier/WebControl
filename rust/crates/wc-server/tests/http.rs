@@ -198,6 +198,8 @@ const ROUTED: &[(&str, &str)] = &[
     ("GET", "/api/machine/setup"),
     ("GET", "/api/machine/quick-configure"),
     ("GET", "/api/system/pid"),
+    ("GET", "/api/calibration/triangular"),
+    ("GET", "/api/calibration/holey"),
     ("GET", "/next/{path}"),
     ("GET", "/static/{filename}"),
     ("GET", "/api/files/gcode"),
