@@ -46,6 +46,7 @@ def test_collects_the_computed_settings_the_ui_needs_at_startup():
         "controllerBoard": "PCB v1.6 TLE9201  Detected",
         "firmwareBuild": "51.27",
         "macros": [{"command": "macro1", "title": "Spindle on"}, {"command": "macro2", "title": "Dust collector"}],
+        "backend": "python",
     }
 
 
@@ -101,3 +102,7 @@ def test_endpoint_serves_the_live_config(client, data):
     assert body["pauseButtonSetting"] == "Pause"
     assert [macro["command"] for macro in body["macros"]] == ["macro1", "macro2"]
     assert body["controllerFirmwareVersion"] == float(data.controllerFirmwareVersion)
+
+
+def test_names_the_python_backend_so_the_ui_keeps_socket_io(client):
+    assert client.get("/api/state").get_json()["backend"] == "python"

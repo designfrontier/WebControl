@@ -123,6 +123,8 @@ export const startupStateSchema = z.object({
   /** The version narrowed by fingerprint: every 51.29x build reports 51.29, so "51.292" or "51.29x"; null if unknown. */
   firmwareBuild: z.string().nullable().default(null),
   macros: z.array(z.object({ command: z.enum(["macro1", "macro2"]), title: z.string() })),
+  /** Which backend answered; it picks the transport. Absent from older Python builds, which speak socket.io. */
+  backend: z.enum(["python", "rust"]).optional(),
 });
 export type StartupState = z.infer<typeof startupStateSchema>;
 

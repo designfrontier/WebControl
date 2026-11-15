@@ -44,6 +44,7 @@ def startup_state(data):
             {"command": f"macro{n}", "title": str(config.getValue("Maslow Settings", f"macro{n}_title") or "")}
             for n in (1, 2)
         ],
+        "backend": "python",
     }
 
 

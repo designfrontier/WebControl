@@ -95,6 +95,13 @@
           "title"
         ]
       }
+    },
+    "backend": {
+      "type": "string",
+      "enum": [
+        "python",
+        "rust"
+      ]
     }
   },
   "required": [
