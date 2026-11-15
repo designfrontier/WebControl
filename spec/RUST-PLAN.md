@@ -109,6 +109,8 @@ the file but unused; open question 5).
   position (a goto, an index move, a rewind, a G20/G21) are `Effect::Compute(Work)`, which the shell runs on the
   blocking pool and answers with `Event::Computed`. One of each kind runs at a time and only the newest request
   waits. Opening the port (with its 20 ms reset pulse), listing ports and reading the CPU load also run there.
+  A closed port still writes what was queued on it (the `!` before a flash) for up to 250 ms before it is dropped,
+  and avrdude waits until no port task has the device open or is opening it.
 - **Broadcast vs per-client.** Every push is a `ServerPush { client: Option<Sid>, … }` on one `broadcast` channel.
   Each WS session forwards broadcasts, and only its own per-client pushes, which also carry `client` per contract.
   An HTTP request's answer is its response (contract README).

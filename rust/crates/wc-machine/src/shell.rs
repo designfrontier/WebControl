@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use serde_json::json;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
-use tokio::sync::{broadcast, mpsc, oneshot, watch};
+use tokio::sync::{OwnedMutexGuard, broadcast, mpsc, oneshot, watch};
 use tokio::task::JoinHandle;
 use tokio::time::{Instant, MissedTickBehavior};
 use wc_config::Settings;
@@ -17,6 +17,8 @@ use crate::{Effect, Event, FirmwareJob, JobResult, Machine, Response, Snapshot};
 const TICK: Duration = Duration::from_millis(10);
 const HEALTH: Duration = Duration::from_secs(5);
 const PUSH_BACKLOG: usize = 1024;
+/// How long a closed port may take to write what was queued before it, such as the `!` before a flash.
+const CLOSE_GRACE: Duration = Duration::from_millis(250);
 
 /// What the shell drives: the real `Machine`, or a stand-in in tests.
 pub trait Core: Send + 'static {
@@ -167,6 +169,9 @@ impl Out {
     }
 }
 
+/// Held by whoever has the controller's device open, or is opening it: a port task, or avrdude.
+type PortLock = Arc<tokio::sync::Mutex<()>>;
+
 /// An open (or opening) port: the writer's queue, and the task that opens, reads and writes it.
 struct Port {
     out: mpsc::UnboundedSender<Out>,
@@ -178,6 +183,7 @@ struct Task<C: Core> {
     opener: Arc<Mutex<Box<dyn PortOpener>>>,
     host: Arc<dyn Host>,
     port: Option<Port>,
+    device: PortLock,
     generation: u64,
     reads: mpsc::UnboundedSender<Read>,
     pushes: broadcast::Sender<Push>,
@@ -268,22 +274,33 @@ async fn write_port(
     }
 }
 
-/// Opens `name` on the blocking pool, then reads and writes it until the machine closes it.
+/// Opens `name` on the blocking pool, then reads and writes it until the machine closes it and the writer has
+/// emptied its queue. The device lock goes with the open, so it is released only after the port is.
 async fn run_port(
     opener: Arc<Mutex<Box<dyn PortOpener>>>,
+    device: PortLock,
     name: String,
     outgoing: mpsc::UnboundedReceiver<Out>,
     generation: u64,
     reads: mpsc::UnboundedSender<Read>,
 ) {
-    let port = name.clone();
+    let (port, held) = (name.clone(), device.lock_owned().await);
     let opened =
-        tokio::task::spawn_blocking(move || opener.lock().unwrap_or_else(PoisonError::into_inner).open(&port)).await;
-    match opened.unwrap_or_else(|panic| Err(std::io::Error::other(panic))) {
+        tokio::task::spawn_blocking(move || (opener.lock().unwrap_or_else(PoisonError::into_inner).open(&port), held))
+            .await;
+    let (opened, _held): (_, Option<OwnedMutexGuard<()>>) = match opened {
+        Ok((opened, held)) => (opened, Some(held)),
+        Err(panic) => (Err(std::io::Error::other(panic)), None),
+    };
+    match opened {
         Ok((reader, writer)) => {
             let _ = reads.send((generation, Event::PortOpened { port: name }));
-            let reading = read_lines(reader, generation, reads.clone());
-            tokio::join!(reading, write_port(writer, outgoing, generation, reads));
+            let writing = write_port(writer, outgoing, generation, reads.clone());
+            tokio::pin!(writing);
+            tokio::select! {
+                () = read_lines(reader, generation, reads) => writing.await,
+                () = &mut writing => {}
+            }
         }
         Err(error) => {
             let _ = reads.send((generation, Event::PortFailed { port: name, error: error.to_string() }));
@@ -312,10 +329,18 @@ async fn read_lines(port: Box<dyn AsyncRead + Send + Unpin>, generation: u64, re
     let _ = reads.send((generation, Event::PortClosed));
 }
 
+/// Lets a closed port write what is queued, then drops it.
+async fn finish(mut task: JoinHandle<()>) {
+    if tokio::time::timeout(CLOSE_GRACE, &mut task).await.is_err() {
+        task.abort();
+    }
+}
+
 impl<C: Core> Task<C> {
     fn close(&mut self) {
-        if let Some(port) = self.port.take() {
-            port.task.abort();
+        if let Some(Port { out, task }) = self.port.take() {
+            drop(out);
+            tokio::spawn(finish(task));
         }
         self.generation += 1;
     }
@@ -324,7 +349,8 @@ impl<C: Core> Task<C> {
     fn open(&mut self, name: String) {
         self.close();
         let (out, outgoing) = mpsc::unbounded_channel();
-        let opening = run_port(self.opener.clone(), name, outgoing, self.generation, self.reads.clone());
+        let (opener, device) = (self.opener.clone(), self.device.clone());
+        let opening = run_port(opener, device, name, outgoing, self.generation, self.reads.clone());
         self.port = Some(Port { out, task: tokio::spawn(opening) });
     }
 
@@ -365,9 +391,13 @@ impl<C: Core> Task<C> {
             }
             Effect::SaveSettings(settings) => drop(self.persist.send_replace(Some(settings))),
             Effect::Firmware(job) => {
-                let (host, jobs) = (self.host.clone(), self.jobs.clone());
+                let (host, jobs, device) = (self.host.clone(), self.jobs.clone(), self.device.clone());
                 tokio::spawn(async move {
-                    let result = tokio::task::spawn_blocking(move || host.firmware(job)).await;
+                    let held = match job {
+                        FirmwareJob::Save { .. } => None,
+                        _ => Some(device.lock_owned().await),
+                    };
+                    let result = tokio::task::spawn_blocking(move || (host.firmware(job), held).0).await;
                     let result = result.unwrap_or_else(|e| JobResult::Saved(Err(e.to_string())));
                     let _ = jobs.send(Event::FirmwareDone(result));
                 });
@@ -421,6 +451,7 @@ pub fn spawn<C: Core>(core: C, opener: Box<dyn PortOpener>, host: Arc<dyn Host>)
         opener: Arc::new(Mutex::new(opener)),
         host,
         port: None,
+        device: PortLock::default(),
         generation: 0,
         reads,
         pushes,

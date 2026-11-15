@@ -125,6 +125,10 @@ impl Core for Echo {
     fn handle(&mut self, event: Event, _: Duration) -> Vec<Effect> {
         let (label, write) = match &event {
             Event::Action(a) if a.command == "open" => return vec![Effect::OpenPort("p".into())],
+            Event::Action(a) if a.command == "close" => return vec![Effect::ClosePort],
+            Event::Action(a) if a.command == "handOff" => {
+                return vec![Effect::Write(b"last\n".to_vec()), Effect::Realtime(b"!\n".to_vec()), Effect::ClosePort];
+            }
             Event::Action(a) if a.command == "leds" => {
                 return vec![Effect::Leds(Leds { play: true, ..Leds::default() })];
             }
@@ -273,6 +277,31 @@ async fn realtime_bytes_jump_the_queued_lines_and_a_stop_drops_them() {
     settle().await;
     let expected = ["~", "zero", "one", "~", "!", "after"];
     assert_eq!(*written.lock().unwrap(), expected, "two was cut short and three dropped");
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn a_stop_written_just_before_the_port_closes_still_reaches_it() {
+    let (opener, mut ends, _) = wire();
+    let (handle, _task) = spawn(Echo { seen: Arc::default(), inner: with_port() }, opener, Arc::new(NoHost));
+    handle.send(Event::Action(action("open")));
+    let mut controller = Controller::new(ends.recv().await.unwrap());
+    handle.send(Event::Action(action("handOff")));
+    assert_eq!(controller.next().await, "!", "the line before it is dropped, the Stop is not");
+    let end = tokio::time::timeout(Duration::from_secs(1), controller.lines.next_line()).await.unwrap().unwrap();
+    assert_eq!(end, None, "and then the port is closed");
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn a_closed_port_stuck_on_a_write_is_dropped_all_the_same() {
+    let written = Arc::new(Mutex::new(Vec::new()));
+    let gate = Gate { permits: Arc::new(Semaphore::new(0)), waiting: None, written: written.clone() };
+    let core = Echo { seen: Arc::default(), inner: with_port() };
+    let (handle, _task) = spawn(core, Box::new(Gated(Some(gate))), Arc::new(NoHost));
+    ["open", "stuck", "close"].into_iter().for_each(|c| handle.send(Event::Action(action(c))));
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert_eq!(Arc::strong_count(&written), 2, "still trying to write");
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert_eq!(Arc::strong_count(&written), 1, "given up and dropped");
 }
 
 /// Panics on its first open, as a driver might; the next attempt still gets the opener.
@@ -618,6 +647,10 @@ impl Core for Jobs {
             Event::Action(a) if a.command == "read" => FirmwareJob::ReadFlash { port },
             Event::Action(a) if a.command == "save" => FirmwareJob::Save { files: vec![] },
             Event::Action(a) if a.command == "write" => FirmwareJob::WriteFlash { port, image },
+            Event::Action(a) if a.command == "openThenRead" => {
+                return vec![Effect::OpenPort(port.clone()), Effect::Firmware(FirmwareJob::ReadFlash { port })];
+            }
+            Event::PortOpened { .. } => return vec![Effect::ClosePort],
             _ => return Vec::new(),
         };
         vec![Effect::Firmware(job)]
@@ -677,4 +710,69 @@ async fn firmware_jobs_run_off_the_machine_task_and_come_back_as_events() {
     let results = run_jobs(Arc::new(Flashes)).await;
     assert!(matches!(&results[0], JobResult::Saved(Ok(text)) if text.starts_with("ReadFlash")));
     assert!(matches!(&results[2], JobResult::Saved(Ok(text)) if text.starts_with("WriteFlash")));
+}
+
+/// Counts the ports it has open, from the start of an open until the writer is dropped.
+struct Counted(Arc<Mutex<usize>>);
+
+impl Drop for Counted {
+    fn drop(&mut self) {
+        *self.0.lock().unwrap() -= 1;
+    }
+}
+
+impl AsyncWrite for Counted {
+    fn poll_write(self: Pin<&mut Self>, _: &mut Context<'_>, buf: &[u8]) -> Poll<std::io::Result<usize>> {
+        Poll::Ready(Ok(buf.len()))
+    }
+    fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+    fn poll_shutdown(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+}
+
+struct SlowOpen(Arc<Mutex<usize>>);
+
+impl PortOpener for SlowOpen {
+    fn open(&mut self, _: &str) -> std::io::Result<Serial> {
+        *self.0.lock().unwrap() += 1;
+        std::thread::sleep(Duration::from_millis(50));
+        Ok((Box::new(tokio::io::empty()), Box::new(Counted(self.0.clone()))))
+    }
+}
+
+/// Notes how many ports were open when avrdude started.
+struct Overlap(Arc<Mutex<usize>>);
+
+impl Host for Overlap {
+    fn list_ports(&self) -> Vec<String> {
+        Vec::new()
+    }
+    fn log(&self, _: &str) {}
+    fn clear_logs(&self) {}
+    fn power_off(&self) {}
+    fn exit(&self) {}
+    fn cpu_load(&self) -> f64 {
+        0.0
+    }
+    fn create_directory(&self, _: &str) -> bool {
+        false
+    }
+    fn firmware(&self, _: FirmwareJob) -> JobResult {
+        JobResult::Read(Ok(self.0.lock().unwrap().to_string()))
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn avrdude_waits_for_a_port_still_opening_to_close() {
+    let (open, results) = (Arc::new(Mutex::new(0)), Arc::new(Mutex::new(Vec::new())));
+    let core = Jobs { results: results.clone(), inner: Machine::new("h", Settings::defaults()) };
+    let (handle, _task) = spawn(core, Box::new(SlowOpen(open.clone())), Arc::new(Overlap(open)));
+    handle.send(Event::Action(action("openThenRead")));
+    while results.lock().unwrap().is_empty() {
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    assert_eq!(*results.lock().unwrap(), [JobResult::Read(Ok("0".into()))], "no port was open under avrdude");
 }
