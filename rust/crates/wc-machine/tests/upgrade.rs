@@ -200,7 +200,7 @@ impl Bench {
     }
 
     fn apply(&mut self, event: Event) {
-        let effects = self.machine.handle(event, self.now);
+        let effects = self.machine.handle_inline(event, self.now);
         effects.into_iter().for_each(|effect| self.effect(effect));
     }
 
@@ -579,7 +579,7 @@ fn the_upgrade_needs_the_controller_and_a_serial_port() {
             })
             .collect()
     };
-    assert!(alerts(machine.handle(action("check"), Duration::ZERO))[0].contains("not connected"));
+    assert!(alerts(machine.handle_inline(action("check"), Duration::ZERO))[0].contains("not connected"));
     let mut bench = Bench::with(machine, Build::holey_51_27().on_board(OWNERS_BOARD));
     bench.act("check");
     assert_eq!(bench.settle(&[Stage::Checking], 10_000), Stage::Ready);

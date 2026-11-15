@@ -245,9 +245,9 @@ async fn every_endpoint_listed_as_routed_is_in_the_contract_and_answers() {
 fn on_51_292(settings: Settings) -> Machine {
     let mut machine = Machine::new("10.0.0.5:5000", settings);
     let now = std::time::Duration::ZERO;
-    machine.handle(Event::PortOpened { port: "/dev/ttyACM0".into() }, now);
+    machine.handle_inline(Event::PortOpened { port: "/dev/ttyACM0".into() }, now);
     ["Firmware Version 51.29", "Change in setting, rewriting EEPROM"].iter().for_each(|line| {
-        machine.handle(Event::ControllerLine(line.to_string()), now);
+        machine.handle_inline(Event::ControllerLine(line.to_string()), now);
     });
     machine
 }

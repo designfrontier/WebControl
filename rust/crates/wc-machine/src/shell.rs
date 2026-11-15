@@ -375,6 +375,7 @@ impl<C: Core> Task<C> {
                 }
             }
             Effect::Leds(leds) => self.host.leds(leds),
+            Effect::Compute(work) => off_task(&self.jobs, move || work.run()),
         }
     }
 

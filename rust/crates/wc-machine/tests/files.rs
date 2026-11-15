@@ -290,8 +290,10 @@ fn processing_the_gcode_marks_the_board_and_clearing_empties_it() {
 #[test]
 fn a_board_python_cannot_grid_is_left_alone() {
     let mut rig = Rig::new();
-    rig.machine
-        .handle(Event::Request { id: 1, request: Request::LoadBoard(board_file("\"wide\"")) }, Default::default());
+    rig.machine.handle_inline(
+        Event::Request { id: 1, request: Request::LoadBoard(board_file("\"wide\"")) },
+        Default::default(),
+    );
     assert!(rig.act("boardProcessGCode").is_empty());
 }
 

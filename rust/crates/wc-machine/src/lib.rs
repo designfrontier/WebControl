@@ -17,6 +17,7 @@ mod setup;
 mod shell;
 mod ui;
 mod upgrade;
+mod work;
 
 pub use edits::{Request, Response};
 pub use gates::{Gate, gate};
@@ -24,3 +25,4 @@ pub use job::Flow;
 pub use machine::{Effect, Event, Machine, Shared, Snapshot};
 pub use shell::{Core, Host, MachineHandle, NoHost, NoPort, PortOpener, Serial, spawn};
 pub use upgrade::{FirmwareJob, JobResult, POST_FLASH_WAIT};
+pub use work::{Done, Work};

@@ -192,6 +192,30 @@ async fn say(controller: &mut DuplexStream, lines: &[&str]) {
     controller.write_all(text.as_bytes()).await.unwrap();
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_stop_during_the_computed_position_solve_reaches_the_port_in_time() {
+    let _alone = ONE_AT_A_TIME.lock().await;
+    let quadrilateral = machine(&[
+        ("WebControl Settings", "computedPosition", json!(1)),
+        ("Computed Settings", "kinematicsTypeComputed", json!("1")),
+    ]);
+    let (rig, mut controller) = Rig::connected(quadrilateral, Slowness::default()).await;
+    // An unreachable pair leaves the quadrilateral solver tilted, so the next solve takes about 40 ms.
+    say(&mut controller, &["[PE:0.1,-1.0,120,10.0,9000.0]", "[PE:0.2,-1.0,120,3000.0,3000.0]"]).await;
+    within_bound("the forward-kinematics solve", rig.stop_reaches_the_port(None).await);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_stop_during_a_gcode_goto_reaches_the_port_in_time() {
+    let _alone = ONE_AT_A_TIME.lock().await;
+    let mut loaded = machine(&[]);
+    let lines: String = (0..60_000).map(|i| format!("G1 X{}.{} Y{} Z-0.1 F500\n", i % 100, i % 7, i % 50)).collect();
+    loaded.load_gcode(&lines);
+    let (rig, _controller) = Rig::connected(loaded, Slowness::default()).await;
+    rig.handle.send(command("moveGcodeGoto", json!(59_990)));
+    within_bound("the gcode position rescan", rig.stop_reaches_the_port(None).await);
+}
+
 async fn stop_during_a_slow_line(slowness: Slowness, work: &str) {
     let (rig, mut controller) = Rig::connected(machine(&[]), slowness).await;
     say(&mut controller, &["PCB v1.6 TLE9201  Detected", "Grbl v1.00", "ready", "ok"]).await;

@@ -52,7 +52,7 @@ impl SimRig {
     pub fn send(&mut self, event: Event) {
         let mut pending = VecDeque::from([event]);
         while let Some(event) = pending.pop_front() {
-            let effects = self.machine.handle(event, self.now);
+            let effects = self.machine.handle_inline(event, self.now);
             effects.iter().for_each(|effect| {
                 if let Effect::Write(bytes) | Effect::Realtime(bytes) = effect {
                     self.written.push(String::from_utf8_lossy(bytes).trim_end_matches('\n').to_string());
