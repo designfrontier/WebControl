@@ -80,6 +80,9 @@ async fn old_next_addresses_redirect_to_the_same_path_at_the_root() {
         ("/next/", "/"),
         ("/next/calibration/holey", "/calibration/holey"),
         ("/next/logs?x=1&y=2", "/logs?x=1&y=2"),
+        ("/next//evil.com", "/evil.com"),
+        ("/next/\\evil.com", "/evil.com"),
+        ("/next/\\/\\evil.com", "/evil.com"),
     ];
     for (from, to) in cases {
         let reply = get(from).await;

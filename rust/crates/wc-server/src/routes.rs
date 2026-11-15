@@ -11,7 +11,8 @@ use crate::{AppState, api, archive, assets, boards, files, help, ws};
 
 /// The UI's old `/next` addresses: the same path and query at the root.
 async fn from_next(uri: Uri) -> Response {
-    let path = uri.path().strip_prefix("/next").unwrap_or_default().trim_start_matches('/');
+    // Browsers read a leading `/\` as `//`, which would send `/next/\evil.com` off-site.
+    let path = uri.path().strip_prefix("/next").unwrap_or_default().trim_start_matches(['/', '\\']);
     let to = uri.query().map_or(format!("/{path}"), |query| format!("/{path}?{query}"));
     (StatusCode::PERMANENT_REDIRECT, [(header::LOCATION, to)]).into_response()
 }
