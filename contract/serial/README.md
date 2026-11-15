@@ -359,7 +359,9 @@ until a transcript and this list change together.
 3. **Doubled spaces.** Most lines end in two spaces (`G21  `, `G0 Z5  `); `home` and `returnToCenter` send `G90   `.
 4. **Handshake order and scope.** `G21`, `$$`, `G90` go out before `B05` and the `$13` write, so `$$` is compared
    before the firmware version is known. Only `$13` and settings `$$` shows differ are written, not the full set
-   `spec/firmware.md` B.9 asks for after every boot.
+   `spec/firmware.md` B.2 and B.9 ask for after every boot. The Python backend keeps this on purpose. **The Rust
+   backend must not copy it:** on each boot it sends `B05`, the units, `G90`, every setting, then `$$` to verify, and
+   changes the `connect_*` transcripts and this item with it (the prelude's tx is not checked).
 5. **Number formats vary.** A restore writes `$16=0.000000`, `$21=1300.00`, `$45=0.00000516850`: whatever each
    setting's formatter produces. Moves the backend builds print Python's `str(float)` (`G00 X254.0`, `G0 Z5.0`), and
    home-shifted file coordinates keep the longer operand's decimals (`X22.8456 Y3.00`).
