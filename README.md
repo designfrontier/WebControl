@@ -126,8 +126,9 @@ npx playwright install chromium   # once
 npm run test:e2e      # every Playwright spec against webcontrol-rs, built and started on a throwaway home
 ```
 
-`WEBCONTROL_BACKEND` defaults to `http://localhost:5000`. A simulated machine for `npm run dev`:
-`cargo run -p wc-server -- --home "$(mktemp -d)" --port 5000 --simulate` in `rust/`.
+`WEBCONTROL_BACKEND` defaults to `http://localhost:5000`, which macOS's AirPlay Receiver often holds. A simulated
+machine for `npm run dev`: `cargo run -p wc-server -- --home "$(mktemp -d)" --port 5055 --simulate` in `rust/`, then
+`WEBCONTROL_BACKEND=http://localhost:5055 npm run dev`.
 
 ### Backend (`rust/`)
 
