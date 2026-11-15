@@ -78,16 +78,30 @@ def test_the_fit_uses_the_chain_elasticity_setting(holey):
     assert holey.kin.chainElasticity == 6.2e-06
 
 
-def test_the_fit_uses_the_sled_geometry_settings(holey):
+def test_the_sled_geometry_settings_do_not_change_the_triangular_fit(holey):
     [set_setting(holey.data, "Maslow Settings", key, value) for key, value in
      [("sledWidth", "300"), ("sledHeight", "120"), ("sledCG", "70")]]
 
     holey.InitializeIdealXyCoordinates()
 
     kin = holey.kin
-    assert (kin.l, kin.s, kin.h3) == (300.0, 120.0, 70.0)
-    assert kin.h == pytest.approx(math.sqrt(150.0 ** 2 + 120.0 ** 2), rel=1e-15)
-    assert kin.Theta == pytest.approx(math.atan(2 * 120.0 / 300.0), rel=1e-15)
+    assert (kin.l, kin.s, kin.h3) == (Kinematics.l, Kinematics.s, Kinematics.h3)
+
+
+def test_a_zero_sled_width_does_not_break_calibrate(holey):
+    expected = holey.Calibrate(holey_form(holey.InitializeIdealXyCoordinates()))
+    set_setting(holey.data, "Maslow Settings", "sledWidth", "0")
+
+    assert holey.Calibrate(holey_form(holey.InitializeIdealXyCoordinates())) == expected
+
+
+def test_a_zero_sled_width_does_not_break_the_test_pattern(holey):
+    holey.CutTestPattern()
+    expected = drain(holey.data.gcode_queue)
+    set_setting(holey.data, "Maslow Settings", "sledWidth", "0")
+
+    assert holey.CutTestPattern() is True
+    assert drain(holey.data.gcode_queue) == expected
 
 
 def test_the_fit_uses_the_firmware_chain_density_whatever_the_settings_say(holey, monkeypatch):
@@ -102,15 +116,12 @@ def test_the_fit_uses_the_firmware_chain_density_whatever_the_settings_say(holey
 
 def test_settings_that_are_missing_keep_the_model_defaults(holey, monkeypatch):
     real_get_value = holey.data.config.getValue
-    missing = {"chainElasticity", "sledWidth", "sledHeight", "sledCG"}
     monkeypatch.setattr(holey.data.config, "getValue", lambda section, key: (
-        None if key in missing else real_get_value(section, key)))
+        None if key == "chainElasticity" else real_get_value(section, key)))
 
     holey.InitializeIdealXyCoordinates()
 
-    kin = holey.kin
-    assert (kin.chainElasticity, kin.l, kin.s, kin.h3) == (
-        Kinematics.chainElasticity, Kinematics.l, Kinematics.s, Kinematics.h3)
+    assert holey.kin.chainElasticity == Kinematics.chainElasticity
 
 
 def firmware_machine(params):
