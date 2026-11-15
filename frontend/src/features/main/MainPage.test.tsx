@@ -278,6 +278,13 @@ describe("Z-Axis modal", () => {
     expect(button("Touch Plate")).toBeDisabled();
   });
 
+  it("greys out Z moves while a probe runs", async () => {
+    const { socket } = await renderZ(mainState({ touchPlate: true }));
+    socket.serverMessage("statusMessage", { uploadFlag: 0, positioningMode: 0, currentTool: 1, probing: true });
+    ["Raise", "Lower", "Set Z Zero Here", "Touch Plate"].forEach((name) => expect(button(name)).toBeDisabled());
+    expect(button("Stop Z")).toBeEnabled();
+  });
+
   it("probes with the touch plate", async () => {
     const { socket, user } = await renderZ(mainState({ touchPlate: true }));
     await user.click(button("Touch Plate"));
@@ -448,6 +455,18 @@ describe("MainPage job state", () => {
     });
     expect(button("Set Home Here")).toBeDisabled();
     expect(button("Play")).toBeEnabled();
+    expect(button("Up")).toBeEnabled();
+  });
+
+  it("greys out every move while a probe runs, leaving Stop", async () => {
+    const { socket } = await renderMain();
+    socket.serverMessage("statusMessage", { uploadFlag: 0, positioningMode: 0, currentTool: 1, probing: true });
+    expect(job()).toHaveTextContent("Probing");
+    ["Play", "Up", "Home", "Macro 1", "Set Home Here", "Next line"].forEach((name) =>
+      expect(button(name)).toBeDisabled(),
+    );
+    expect(button("Stop")).toBeEnabled();
+    socket.serverMessage("statusMessage", { uploadFlag: 0, positioningMode: 0, currentTool: 1, probing: false });
     expect(button("Up")).toBeEnabled();
   });
 

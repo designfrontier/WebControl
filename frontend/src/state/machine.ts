@@ -14,8 +14,8 @@ export interface MachineState {
   /** The controller's firmware version, or null until it reports one. */
   firmwareVersion: number | null;
   status: { uploadFlag: number; currentTool: number; positioningMode: number } | null;
-  /** Whether a job is running or paused, which uploadFlag alone loses on controller pauses. */
-  job: { inProgress: boolean; manualZAxisAdjust: boolean };
+  /** Whether a job is running or paused, which uploadFlag alone loses on controller pauses; probing is Rust only. */
+  job: { inProgress: boolean; manualZAxisAdjust: boolean; probing: boolean };
   position:
     | (Point & {
         z: number;
@@ -72,7 +72,7 @@ export const initialMachineState: MachineState = {
   health: null,
   firmwareVersion: null,
   status: null,
-  job: { inProgress: false, manualZAxisAdjust: false },
+  job: { inProgress: false, manualZAxisAdjust: false, probing: false },
   position: null,
   positionError: null,
   homePosition: null,
@@ -130,13 +130,14 @@ const applyMessage = (state: MachineState, event: Extract<MachineEvent, { type: 
       };
     }
     case "statusMessage": {
-      const { uploadFlag, positioningMode, currentTool, jobInProgress, manualZAxisAdjust } = event.data;
+      const { uploadFlag, positioningMode, currentTool, jobInProgress, manualZAxisAdjust, probing } = event.data;
       return {
         ...state,
         status: { uploadFlag, positioningMode, currentTool },
         job: {
           inProgress: jobInProgress ?? state.job.inProgress,
           manualZAxisAdjust: manualZAxisAdjust ?? state.job.manualZAxisAdjust,
+          probing: probing ?? state.job.probing,
         },
       };
     }
@@ -201,10 +202,11 @@ export const machineReducer = (state: MachineState, event: MachineEvent): Machin
         controllerFirmwareVersion,
         jobInProgress,
         manualZAxisAdjust,
+        probing,
       } = event.state;
       return {
         ...state,
-        job: { inProgress: jobInProgress, manualZAxisAdjust },
+        job: { inProgress: jobInProgress, manualZAxisAdjust, probing },
         firmwareVersion: reportedVersion(controllerFirmwareVersion),
         units,
         unitsZ,
@@ -233,11 +235,12 @@ export const selectRunState = (state: MachineState): RunState => {
   return uploadFlag === 1 ? "running" : uploadFlag !== 0 || state.job.inProgress ? "paused" : "idle";
 };
 
-export type JobState = "Idle" | "Running" | "Paused" | "Waiting for tool change";
+export type JobState = "Idle" | "Running" | "Paused" | "Waiting for tool change" | "Probing";
 
 export const selectJobState = (state: MachineState): JobState | null => {
   const run = selectRunState(state);
   if (run === "unknown") return null;
+  if (state.job.probing) return "Probing";
   if (state.job.manualZAxisAdjust) return "Waiting for tool change";
   return run === "running" ? "Running" : run === "paused" ? "Paused" : "Idle";
 };
@@ -245,6 +248,9 @@ export const selectJobState = (state: MachineState): JobState | null => {
 /** Mirrors the server's gcodeLocked(): no loading, clearing or editing gcode until the job is stopped. */
 export const selectGcodeLocked = (state: MachineState) =>
   state.job.inProgress || state.job.manualZAxisAdjust || (state.status !== null && state.status.uploadFlag !== 0);
+
+/** A G38.2 is queued or descending: the server refuses every move until it answers or Stop. */
+export const selectProbing = (state: MachineState) => state.job.probing;
 
 export interface MachineStore {
   getState(): MachineState;

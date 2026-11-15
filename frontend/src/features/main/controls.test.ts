@@ -18,6 +18,12 @@ describe("controlsFor", () => {
   ] as const)("gates the controls while %s", (runState, expected) => {
     expect(controlsFor(runState)).toEqual(expected);
   });
+
+  it("leaves only Pause during a probe", () => {
+    const none = { manual: false, defineHome: false, play: false, pause: false, step: false };
+    expect(controlsFor("idle", false, true)).toEqual(none);
+    expect(controlsFor("paused", false, true)).toEqual({ ...none, pause: true });
+  });
 });
 
 describe("parseDistance", () => {

@@ -120,7 +120,7 @@ describe("ActionsPanel", () => {
     renderActions({
       machine: {
         status: { uploadFlag: 0, positioningMode: 0, currentTool: 0 },
-        job: { inProgress: false, manualZAxisAdjust: true },
+        job: { inProgress: false, manualZAxisAdjust: true, probing: false },
       },
     });
     expect(screen.getByRole("button", { name: "Reset home to center" })).toBeDisabled();
