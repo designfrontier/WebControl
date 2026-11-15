@@ -21,6 +21,46 @@ export const logMessageSchema = z.discriminatedUnion("log", [
 ]);
 export type LogMessage = z.infer<typeof logMessageSchema>;
 
+export const upgradeStageSchema = z.enum([
+  "idle",
+  "checking",
+  "ready",
+  "blocked",
+  "backingUp",
+  "flashing",
+  "restarting",
+  "migrating",
+  "selfTest",
+  "testing",
+  "done",
+  "failed",
+  "rollingBack",
+  "rolledBack",
+]);
+export type UpgradeStage = z.infer<typeof upgradeStageSchema>;
+
+const chainsSchema = z.object({ left: z.number(), right: z.number() });
+
+/** webcontrol-rs's guided holey upgrade (spec/firmware.md C), driven by upgradeHoleyFirmware's steps. */
+export const firmwareUpgradeSchema = z.object({
+  target: z.string(),
+  /** The pinned image's SHA-256; null when the build carries no image. */
+  imageSha256: z.string().nullable(),
+  stage: upgradeStageSchema,
+  message: z.string(),
+  /** The boot banner and B05 version pre-flight found. */
+  board: z.string().nullable(),
+  firmware: z.string().nullable(),
+  chains: chainsSchema.nullable(),
+  chainsAfter: chainsSchema.nullable(),
+  motors: z.array(z.object({ motor: z.string(), passed: z.array(z.boolean()) })),
+  /** Where the $$ dump, settings, chain lengths and flash read-back were saved. */
+  backup: z.string().nullable(),
+  canRollback: z.boolean(),
+  log: z.array(z.string()),
+});
+export type FirmwareUpgrade = z.infer<typeof firmwareUpgradeSchema>;
+
 /** GET /api/system/info */
 export const systemInfoSchema = z.object({
   version: z.string(),
@@ -34,6 +74,8 @@ export const systemInfoSchema = z.object({
   /** Only holey 51.292 and later store Z limits. */
   firmwareSupportsZaxisLimit: z.boolean().default(false),
   update: z.object({ available: z.boolean(), version: z.string().nullable() }),
+  /** Only webcontrol-rs sends it; Python's upgrade buttons flash at once. */
+  firmwareUpgrade: firmwareUpgradeSchema.optional(),
 });
 export type SystemInfo = z.infer<typeof systemInfoSchema>;
 

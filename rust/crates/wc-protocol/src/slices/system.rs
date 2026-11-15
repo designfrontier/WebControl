@@ -31,6 +31,61 @@ pub struct SystemInfo {
     pub firmware_build: Option<String>,
     pub firmware_supports_zaxis_limit: bool,
     pub update: UpdateStatus,
+    /// Only webcontrol-rs sends it; the UI shows the upgrade wizard when it is there.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub firmware_upgrade: Option<FirmwareUpgrade>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum UpgradeStage {
+    Idle,
+    Checking,
+    Ready,
+    Blocked,
+    BackingUp,
+    Flashing,
+    Restarting,
+    Migrating,
+    SelfTest,
+    Testing,
+    Done,
+    Failed,
+    RollingBack,
+    RolledBack,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct Chains {
+    pub left: f64,
+    pub right: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct MotorResult {
+    pub motor: String,
+    pub passed: Vec<bool>,
+}
+
+/// The holey 51.292 upgrade as `GET /api/system/info` reports it.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FirmwareUpgrade {
+    pub target: String,
+    /// The pinned image's SHA-256; `None` when this build carries no image.
+    pub image_sha256: Option<String>,
+    pub stage: UpgradeStage,
+    pub message: String,
+    /// The boot banner and B05 version pre-flight found.
+    pub board: Option<String>,
+    pub firmware: Option<String>,
+    pub chains: Option<Chains>,
+    pub chains_after: Option<Chains>,
+    pub motors: Vec<MotorResult>,
+    /// Where the `$$` dump, settings, chain lengths and flash read-back were saved.
+    pub backup: Option<String>,
+    pub can_rollback: bool,
+    pub log: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]

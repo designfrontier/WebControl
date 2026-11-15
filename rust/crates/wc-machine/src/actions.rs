@@ -58,6 +58,9 @@ fn is_blank(value: &Value) -> bool {
 impl Machine {
     pub(crate) fn action(&mut self, action: &Action, now: Duration, effects: &mut Vec<Effect>) {
         let command = action.command.as_str();
+        if self.upgrade.holds_link() && !crate::upgrade::allowed_while_flashing(command) {
+            return effects.push(alert("Wait for the firmware upgrade to finish."));
+        }
         if self.probing && !SAFE_WHILE_PROBING.contains(&command) {
             return effects.push(alert(PROBING));
         }
@@ -134,6 +137,8 @@ impl Machine {
                 None
             }
             "startRun" => self.start_run(),
+            crate::upgrade::COMMAND => self.upgrade_action(action, now, effects),
+            "upgradeStockFirmware" | "upgradeCustomFirmware" => Some(self.other_firmware(command)),
             _ if crate::setup::COMMANDS.contains(&command) => self.setup_action(action, effects),
             _ if crate::pid::COMMANDS.contains(&command) => self.pid_action(action),
             _ if crate::calibration::COMMANDS.contains(&command) => self.calibration_action(command),

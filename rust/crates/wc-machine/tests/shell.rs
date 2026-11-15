@@ -8,7 +8,9 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, DuplexStream, Lines};
 use tokio::sync::mpsc;
 use wc_config::Settings;
 use wc_machine::files::{Reply, Request};
-use wc_machine::{Core, Effect, Event, Host, Machine, NoHost, NoPort, PortOpener, Serial, Snapshot, spawn};
+use wc_machine::{
+    Core, Effect, Event, FirmwareJob, Host, JobResult, Machine, NoHost, NoPort, PortOpener, Serial, Snapshot, spawn,
+};
 use wc_protocol::main::LinkStatus;
 use wc_protocol::{Action, Envelope, Namespace, Push};
 
@@ -471,4 +473,83 @@ async fn a_stalled_directory_never_holds_up_stop() {
     release.send(()).unwrap();
     assert_eq!(stopped.expect("Stop waited on the disk").unwrap().data["command"], "showFPSpinner");
     assert_eq!(next_command(&mut pushes).await, "jobs", "the directory is still reported once made");
+}
+
+/// Asks the host to run each firmware job an action names, and records what came back.
+struct Jobs {
+    results: Arc<Mutex<Vec<JobResult>>>,
+    inner: Machine,
+}
+
+impl Core for Jobs {
+    fn handle(&mut self, event: Event, _: Duration) -> Vec<Effect> {
+        let port = "/dev/ttyACM0".to_string();
+        let image = wc_firmware::image::Image::new(":00000001FF\n");
+        let job = match event {
+            Event::FirmwareDone(result) => {
+                self.results.lock().unwrap().push(result);
+                return Vec::new();
+            }
+            Event::Action(a) if a.command == "read" => FirmwareJob::ReadFlash { port },
+            Event::Action(a) if a.command == "save" => FirmwareJob::Save { files: vec![] },
+            Event::Action(a) if a.command == "write" => FirmwareJob::WriteFlash { port, image },
+            _ => return Vec::new(),
+        };
+        vec![Effect::Firmware(job)]
+    }
+    fn snapshot(&self) -> Snapshot {
+        self.inner.snapshot()
+    }
+}
+
+struct Flashes;
+
+impl Host for Flashes {
+    fn list_ports(&self) -> Vec<String> {
+        Vec::new()
+    }
+    fn log(&self, _: &str) {}
+    fn clear_logs(&self) {}
+    fn power_off(&self) {}
+    fn exit(&self) {}
+    fn cpu_load(&self) -> f64 {
+        0.0
+    }
+    fn create_directory(&self, _: &str) -> bool {
+        false
+    }
+    fn firmware(&self, job: FirmwareJob) -> JobResult {
+        JobResult::Saved(Ok(format!("{job:?}")))
+    }
+}
+
+async fn run_jobs(host: Arc<dyn Host>) -> Vec<JobResult> {
+    let results = Arc::new(Mutex::new(Vec::new()));
+    let core = Jobs { results: results.clone(), inner: Machine::new("h", Settings::defaults()) };
+    let (handle, task) = spawn(core, Box::new(NoPort), host);
+    for command in ["read", "save", "write"] {
+        let before = results.lock().unwrap().len();
+        handle.send(Event::Action(action(command)));
+        while results.lock().unwrap().len() == before {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
+    drop(handle);
+    task.await.unwrap();
+    results.lock().unwrap().clone()
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn firmware_jobs_run_off_the_machine_task_and_come_back_as_events() {
+    let results = run_jobs(Arc::new(NoHost)).await;
+    let why = "this host cannot run avrdude".to_string();
+    let unsupported = [
+        JobResult::Read(Err(why.clone())),
+        JobResult::Saved(Err(why.clone())),
+        JobResult::Written { success: false, output: why },
+    ];
+    assert_eq!(results, unsupported);
+    let results = run_jobs(Arc::new(Flashes)).await;
+    assert!(matches!(&results[0], JobResult::Saved(Ok(text)) if text.starts_with("ReadFlash")));
+    assert!(matches!(&results[2], JobResult::Saved(Ok(text)) if text.starts_with("WriteFlash")));
 }

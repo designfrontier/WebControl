@@ -171,6 +171,7 @@ pub(crate) async fn system(State(state): State<AppState>) -> Json<SystemInfo> {
         firmware_supports_zaxis_limit: supports_z_limits(snapshot.firmware_build.as_deref()),
         firmware_build: snapshot.firmware_build.clone(),
         update: UpdateStatus { available: false, version: None },
+        firmware_upgrade: Some(snapshot.firmware_upgrade.clone()),
     })
 }
 

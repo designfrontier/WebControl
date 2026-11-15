@@ -34,6 +34,8 @@ export interface ActionGroup {
 const fixed = (text: string) => () => text;
 
 const firmwareLabel = (name: string, key: keyof SystemInfo["firmware"]) => (info: SystemInfo | null) => {
+  const guided = key === "holey" ? info?.firmwareUpgrade : undefined;
+  if (guided) return `Upgrade holey firmware to ${guided.target}…`;
   const version = info?.firmware[key];
   return version ? `Upgrade ${name} firmware (${version})` : `Upgrade ${name} firmware`;
 };

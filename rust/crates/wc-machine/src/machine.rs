@@ -7,10 +7,12 @@ use std::time::Duration;
 use serde_json::{Map, Value, json};
 use wc_config::Settings;
 use wc_firmware::Accounting;
+use wc_firmware::image::Image;
 use wc_gcode::Positioning;
 use wc_gcode::board::Board;
 use wc_gcode::restart::positioning_word;
 use wc_protocol::main::{ActivateModal, ConnectionStatus, HostAddress, LinkStatus, PauseButton, StatusMessage, Units};
+use wc_protocol::system::FirmwareUpgrade;
 use wc_protocol::{Action, Envelope, Message, Push};
 
 use crate::edits::{Request as Edit, Response};
@@ -18,6 +20,7 @@ use crate::files::{Preview, Reply, Request, bed_board};
 use crate::pid::Pid;
 use crate::setup::Measure;
 use crate::ui::{ErrorTracker, PositionTracker};
+use crate::upgrade::{FirmwareJob, JobResult, Mark, Upgrade};
 
 /// Everything that can happen to the machine.
 #[derive(Debug, Clone, PartialEq)]
@@ -61,6 +64,8 @@ pub enum Event {
     Health {
         cpu: f64,
     },
+    /// A [`FirmwareJob`] the shell ran.
+    FirmwareDone(JobResult),
     CheckForGcodeUpdate,
     CheckForBoardUpdate,
     /// A gcode library directory now exists; the UI lists it.
@@ -94,6 +99,8 @@ pub enum Effect {
     },
     /// Write `webcontrol.json`; only the latest one pending matters.
     SaveSettings(Arc<Settings>),
+    /// Run off the machine task; the port is closed first.
+    Firmware(FirmwareJob),
     /// `createDirectory`: make this gcode library directory, then report `Event::DirectoryCreated`.
     CreateDirectory(String),
     Reply {
@@ -127,9 +134,15 @@ pub(crate) enum RunState {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Link {
-    Disconnected { retry_at: Duration },
+    Disconnected {
+        retry_at: Duration,
+    },
     Opening,
-    Connected { port: String },
+    Connected {
+        port: String,
+    },
+    /// avrdude has the port; nothing reopens it until the flash is over.
+    HandedOff,
 }
 
 /// A command waiting for the controller to go idle; the boot's own lines survive a Stop.
@@ -143,6 +156,8 @@ pub(crate) enum Queued {
     SettingsPush,
     /// Nothing more is written for this long, as Python's `time.sleep` in the action held the queue.
     Delay(Duration),
+    /// The upgrade acts here once every line before it is answered.
+    Mark(Mark),
 }
 
 /// What readers see; every field is derived from the machine's state, never stored separately.
@@ -175,6 +190,7 @@ pub struct Snapshot {
     pub sled: (f64, f64),
     pub ports: Vec<String>,
     pub settings: Shared<Settings>,
+    pub firmware_upgrade: FirmwareUpgrade,
 }
 
 impl Snapshot {
@@ -296,6 +312,7 @@ pub struct Machine {
     pub(crate) calibration: crate::calibration::Results,
     /// The forward-kinematics model for the computed sled position, kept current by every `$` write.
     pub(crate) kinematics: wc_kinematics::Kinematics,
+    pub(crate) upgrade: Upgrade,
 }
 
 pub(crate) fn broadcast<M: Message>(message: &M) -> Effect {
@@ -345,7 +362,14 @@ impl Machine {
             pid: Pid::default(),
             calibration: crate::calibration::Results::default(),
             kinematics,
+            upgrade: Upgrade::new(Image::embedded()),
         }
+    }
+
+    /// Upgrades with `image` in place of the one embedded at build time.
+    pub fn with_firmware(mut self, image: Option<Image>) -> Machine {
+        self.upgrade.image = image;
+        self
     }
 
     /// Always opens `port`, whatever `COMport` says.
@@ -383,6 +407,7 @@ impl Machine {
             Event::PortClosed => self.link_lost("The controller's port closed.", now, &mut effects),
             Event::Ports(ports) => self.ports_found(ports, &mut effects),
             Event::Health { cpu } => self.health(cpu, &mut effects),
+            Event::FirmwareDone(result) => self.firmware_done(result, now, &mut effects),
             Event::CheckForGcodeUpdate => self.gcode_update_requested(&mut effects),
             Event::CheckForBoardUpdate => self.push_board(&mut effects),
             Event::DirectoryCreated(name) => self.directory_created(name, &mut effects),
@@ -451,6 +476,7 @@ impl Machine {
             sled: (self.position.x, self.position.y),
             ports: self.ports.clone(),
             settings: Shared(self.settings.clone()),
+            firmware_upgrade: self.upgrade.view(),
         }
     }
 }

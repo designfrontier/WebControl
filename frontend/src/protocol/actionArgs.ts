@@ -135,7 +135,12 @@ export const actionSpecs = {
   }),
   upgradeCustomFirmware: idle("Flash the bundled custom firmware"),
   upgradeStockFirmware: idle("Flash the bundled stock firmware"),
-  upgradeHoleyFirmware: idle("Flash the bundled holey firmware"),
+  upgradeHoleyFirmware: idle("Flash the bundled holey firmware", {
+    arg: actionArg.describe(
+      'Python flashes the bundled hex and ignores it (the UI sends ""). webcontrol-rs runs the guided 51.292 upgrade ' +
+        'one step per action: "check", "upgrade", "selfTest", "rollback" or "reset"; "" only alerts.',
+    ),
+  }),
   adjustChain: idle("Extend one chain after a 5 s countdown", { arg: z.enum(["left", "right"]) }),
   executeVelocityPIDTest: noJob("Start a velocity PID test", {
     arg: pidArgs("v", ["KpV", "KiV", "KdV"], false),

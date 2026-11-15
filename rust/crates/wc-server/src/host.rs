@@ -11,7 +11,9 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::Notify;
 use wc_config::library::resolve_inside;
 use wc_config::{Paths, Settings};
-use wc_machine::Host;
+use wc_machine::{FirmwareJob, Host, JobResult};
+
+use crate::firmware::{Avrdude, BACKUPS, Flasher, run_job};
 
 /// `install-pi.sh` allows exactly this command without a password (`/etc/sudoers.d/webcontrol-rs`).
 pub const POWER_OFF: [&str; 4] = ["sudo", "--non-interactive", "/usr/bin/systemctl", "poweroff"];
@@ -111,6 +113,8 @@ pub struct SystemHost {
     power_off: Vec<String>,
     exit: Arc<Notify>,
     settings: Option<Paths>,
+    backups: PathBuf,
+    flasher: Box<dyn Flasher>,
 }
 
 impl SystemHost {
@@ -125,7 +129,14 @@ impl SystemHost {
             power_off: POWER_OFF.map(String::from).to_vec(),
             exit,
             settings: None,
+            backups: dir.join(BACKUPS),
+            flasher: Box::new(Avrdude::default()),
         }
+    }
+
+    /// Flashes with `flasher` in place of avrdude.
+    pub fn with_flasher(self, flasher: Box<dyn Flasher>) -> SystemHost {
+        SystemHost { flasher, ..self }
     }
 
     /// Saves the settings under `paths`; without it they stay in memory.
@@ -188,6 +199,10 @@ impl Host for SystemHost {
         if let Err(error) = settings.save(paths) {
             tracing::error!(%error, file = %paths.settings_file().display(), "could not save the settings");
         }
+    }
+
+    fn firmware(&self, job: FirmwareJob) -> JobResult {
+        run_job(&self.backups, self.flasher.as_ref(), job)
     }
 
     /// `createDirectory`: one new directory inside the gcode library, as Python's `os.mkdir`.
