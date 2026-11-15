@@ -30,14 +30,15 @@ class SerialPortThread(MakesmithInitFuncs):
         self.machineIsReadyForData = False  # Tracks whether last command was acked
         self.lastWriteTime = time.time()
         self.bufferSpace = self.bufferSize  # The amount of space currently available in the buffer
-        self.lengthOfLastLineStack = deque()
+        self.unackedLines = deque()  # (length, gcode index or None) per line sent, newest on the left
         self.resyncAfter = None
 
-    def _write(self, message, isQuickCommand=False):
+    def _write(self, message, isQuickCommand=False, gcodeIndex=None):
         '''
         Sends messages to controller.  No change from what I can tell from ground control
         :param message:
         :param isQuickCommand:
+        :param gcodeIndex: the file line being sent, if any, so a halt can rewind to it.
         :return:
         '''
         taken = time.time() - self.lastWriteTime
@@ -61,9 +62,9 @@ class SerialPortThread(MakesmithInitFuncs):
                 if message[0] == "!":
                     self._awaitResync()
                 else:
-                    self.lengthOfLastLineStack.append(len(message))
+                    self.unackedLines.append((len(message), None))
             else:
-                self.lengthOfLastLineStack.appendleft(len(message))
+                self.unackedLines.appendleft((len(message), gcodeIndex))
 
             '''
             Monitor gcode for positioning mode change requests
@@ -100,8 +101,17 @@ class SerialPortThread(MakesmithInitFuncs):
         self.machineIsReadyForData = False
         self.resyncAfter = time.time() + self.RESYNC_DELAY
 
+    def _rewindToDroppedLines(self):
+        '''
+        The controller drops every line it hadn't finished, so a resume must start from the oldest of them.
+        '''
+        dropped = [index for _length, index in self.unackedLines if index is not None]
+        if dropped and self.data.jobInProgress:
+            self.data.gcodeIndex = min(dropped)
+            self.data.actions.sendGCodePositionUpdate(self.data.gcodeIndex, recalculate=True)
+
     def _emptyAccounting(self):
-        self.lengthOfLastLineStack.clear()
+        self.unackedLines.clear()
         self.bufferSpace = self.bufferSize
 
     def _getFirmwareVersion(self):
@@ -201,7 +211,7 @@ class SerialPortThread(MakesmithInitFuncs):
             if not line.isspace(): # if all spaces, don't send.  likely a comment.
                 positioningMode = self._positioningModeOf(line)
                 line = self._shiftToHome(line)
-                self._write(line)
+                self._write(line, gcodeIndex=self.data.gcodeIndex)
                 try:
                     self._afterLineSent(line, positioningMode)
                 except Exception as e:
@@ -416,11 +426,12 @@ class SerialPortThread(MakesmithInitFuncs):
         # Check if a line has been completed
         elif lineFromMachine == "ok\r\n" or (len(lineFromMachine) >= 6 and lineFromMachine[0:6] == "error:"):
             self.machineIsReadyForData = True
-            if bool(self.lengthOfLastLineStack) is True:  # if we've sent lines to the machine
+            if bool(self.unackedLines) is True:  # if we've sent lines to the machine
                 # free up that space in the buffer
-                self.bufferSpace = (self.bufferSpace + self.lengthOfLastLineStack.pop())
+                self.bufferSpace = (self.bufferSpace + self.unackedLines.pop()[0])
         # The firmware stops itself on these and never acks the lines it held.
         if lineFromMachine.startswith(("ALARM:", "Buffer overflow!")):
+            self._rewindToDroppedLines()
             self._awaitResync()
 
 

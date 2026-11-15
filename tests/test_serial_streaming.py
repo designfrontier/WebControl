@@ -10,7 +10,8 @@ from helpers import decode_ui_message, drain
 
 SAVED_DATA = [
     "gcode", "gcodeIndex", "positioningMode", "connectionStatus", "requestSerialClose", "currentZTarget",
-    "currentTool", "pausedzval", "pausedUnits", "pausedPositioningMode", "gcodeShift",
+    "currentTool", "pausedzval", "pausedUnits", "pausedPositioningMode", "gcodeShift", "uploadFlag",
+    "jobInProgress",
 ]
 
 
@@ -506,3 +507,44 @@ def test_a_resume_sent_while_resyncing_after_a_stop_does_not_block_manual_comman
     ))
 
     assert sent_after(port, "!") == ["~", "G0 X1 "]
+
+
+@pytest.mark.parametrize("halt", ["ALARM: The sled is not keeping up\r\n", "Buffer overflow!\r\n"])
+def test_a_halt_mid_cut_rewinds_the_index_to_the_oldest_line_the_controller_dropped(data, serial, halt):
+    data.gcode = [f"G1 X{n} " for n in range(50)]
+    data.uploadFlag = 1
+    data.jobInProgress = True
+    first_unacked = []
+
+    def stop_acking(port):
+        port.ack = False
+        first_unacked.append(data.gcodeIndex)
+
+    def controller_halts(port):
+        port.incoming.append(halt)
+        data.uploadFlag = 0  # as MessageProcessor does on this line
+
+    serial.run(buffer=True, on_poll=every_poll(
+        once_after(serial.clock, 0, lambda port: drain(data.gcode_queue)),
+        once_after(serial.clock, 0.5, stop_acking),
+        once_after(serial.clock, 1, controller_halts),
+    ))
+
+    assert first_unacked[0] > 0
+    assert data.gcodeIndex == first_unacked[0]
+
+
+def test_a_halt_outside_a_job_leaves_the_index_alone(data, serial):
+    data.gcode = [f"G1 X{n} " for n in range(50)]
+    data.gcodeIndex = 7
+    data.jobInProgress = False
+
+    def controller_halts(port):
+        drain(data.gcode_queue)
+        port.ack = False
+        data.gcode_queue.put("G0 X1")
+        port.incoming.append("ALARM: The sled is not keeping up\r\n")
+
+    serial.run(on_poll=once_after(serial.clock, 0, controller_halts))
+
+    assert data.gcodeIndex == 7
