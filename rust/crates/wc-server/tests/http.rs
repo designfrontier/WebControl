@@ -403,7 +403,8 @@ async fn help_serves_the_index_page_by_default_without_its_front_matter() {
     assert!(page["markdown"].as_str().unwrap().starts_with("# WebControl\n"), "{page}");
 }
 
-/// fixtures/help/python-pages.json holds Python's title and a SHA-256 of its markdown for every docs/ page.
+/// fixtures/help/python-pages.json holds Python's title and a SHA-256 of its markdown for every docs/ page;
+/// index.md's hash is of this project's rewrite.
 #[tokio::test]
 async fn every_help_page_matches_what_python_serves() {
     use sha2::Digest;
