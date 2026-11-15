@@ -1,0 +1,33 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "move_z_in_inches_on_a_mm_machine",
+    "description": "The Z panel in inches on a mm machine: G20 for the move, then G21 to put the controller back.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "c859cea"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    },
+    "unitsZ": "INCHES"
+  },
+  "events": [
+    {"type": "ui", "action": {"command": "moveZ", "arg": "raise", "arg1": "0.25"}},
+    {"type": "tx", "bytes": "G20  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G91  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G00 Z0.25  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "ok"}
+  ]
+}

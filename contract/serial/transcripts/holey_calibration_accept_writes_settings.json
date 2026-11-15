@@ -1,0 +1,31 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "holey_calibration_accept_writes_settings",
+    "description": "Holey calibration: Calculate sends nothing; Accept stores the fitted motor spacing, motor offset and chain tolerances and writes each to the controller as its $ key.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "c859cea"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    }
+  },
+  "events": [
+    {"type": "http", "method": "POST", "path": "/api/calibration/holey", "json": {"measurements": [966.0, 964.5, 965.8, 964.9, 711.6, 710.9, 711.4, 1199.5, 1198.2, 1199.1, 1198.6, 254.3]}, "status": 200},
+    {"type": "http", "method": "POST", "path": "/api/calibration/holey/accept", "json": {}, "status": 200},
+    {"type": "tx", "bytes": "$3=462.64616 \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "$2=2978.54418 \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "$40=-0.03767 \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "$41=0.04275 \n"},
+    {"type": "rx", "line": "ok"}
+  ]
+}

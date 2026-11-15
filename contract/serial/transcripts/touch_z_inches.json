@@ -1,0 +1,30 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "touch_z_inches",
+    "description": "Touch Z on an inch machine switches to G21 for the probe (its plunge limit is in mm) and back to G20.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "c859cea"
+  },
+  "setup": {
+    "units": "INCHES",
+    "home": {
+      "x": 0,
+      "y": 0
+    }
+  },
+  "events": [
+    {"type": "ui", "action": {"command": "touchZ", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G21 \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90 G38.2 Z-10 M02 \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G20 \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G10 Z0  \n"},
+    {"type": "rx", "line": "ok"}
+  ]
+}

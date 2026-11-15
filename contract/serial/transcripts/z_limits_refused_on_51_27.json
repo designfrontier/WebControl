@@ -1,0 +1,26 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "z_limits_refused_on_51_27",
+    "description": "51.27 stores no Z limits (B17-B19 are Invalid statement), so every Z-limit action alerts and sends nothing.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "c859cea"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    }
+  },
+  "events": [
+    {"type": "ui", "action": {"command": "setMaxZ", "arg": "", "arg1": ""}},
+    {"type": "ui", "action": {"command": "setMinZ", "arg": "", "arg1": ""}},
+    {"type": "ui", "action": {"command": "clearZ", "arg": "", "arg1": ""}},
+    {"type": "ui", "action": {"command": "getZlimits", "arg": "", "arg1": ""}},
+    {"type": "expect", "alerts": [{"message": "Z-axis limits need holey firmware 51.292 or later"}]}
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "touch_z_mm",
+    "description": "Touch Z probes with G38.2 down to the plunge limit and then zeroes Z with G10 Z0. The zero is queued with the probe, not after it succeeds.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "c859cea"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    }
+  },
+  "events": [
+    {"type": "ui", "action": {"command": "touchZ", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G90 G38.2 Z-10 M02 \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G10 Z0  \n"},
+    {"type": "rx", "line": "ok"}
+  ]
+}

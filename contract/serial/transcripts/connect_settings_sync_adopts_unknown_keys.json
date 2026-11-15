@@ -1,0 +1,56 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "connect_settings_sync_adopts_unknown_keys",
+    "description": "The $$ reply is compared with webcontrol.json: $18, $9, $28 and $36, which WebControl has never known, are adopted without a write; $3, which differs, is rewritten; $45 printed rounded to 8 decimals is left alone.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "c859cea"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    },
+    "start": "boot"
+  },
+  "events": [
+    {"type": "rx", "line": "PCB v1.6 TLE9201  Detected"},
+    {"type": "rx", "line": "FAKE_SERVO off"},
+    {"type": "rx", "line": "Grbl v1.00"},
+    {"type": "rx", "line": "ready"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "$$ \n"},
+    {"type": "rx", "line": "$0=2438.40000000 (Machine width, mm)"},
+    {"type": "rx", "line": "$1=1219.20000000"},
+    {"type": "rx", "line": "$2=2978.40000000"},
+    {"type": "rx", "line": "$3=478.00000000"},
+    {"type": "rx", "line": "$9=2000"},
+    {"type": "rx", "line": "$12=8113.73000000"},
+    {"type": "rx", "line": "$13=63.50000000"},
+    {"type": "rx", "line": "$15=800"},
+    {"type": "rx", "line": "$16=0"},
+    {"type": "rx", "line": "$18=12.60000000"},
+    {"type": "rx", "line": "$19=3.17000000"},
+    {"type": "rx", "line": "$28=1.00000000"},
+    {"type": "rx", "line": "$36=1.00000000"},
+    {"type": "rx", "line": "$45=0.00000517 (chain stretch factor, m/m/N)"},
+    {"type": "rx", "line": "$46=97.90000000"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "B05  \n"},
+    {"type": "rx", "line": "Firmware Version 51.27"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "$13=63.5000 \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "$3=463 \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "settings": [{"section": "Advanced Settings", "key": "maxZRPM", "value": "12.6"}, {"section": "Advanced Settings", "key": "axisDetachTime", "value": "2000"}, {"section": "Advanced Settings", "key": "propWeightV", "value": "1"}, {"section": "Advanced Settings", "key": "propWeightVZ", "value": "1"}, {"section": "Maslow Settings", "key": "motorOffsetY", "value": "463"}]}
+  ]
+}

@@ -80,6 +80,7 @@ class SerialPortThread(MakesmithInitFuncs):
             '''
             try:
                 self.serialInstance.write(message)
+                self.data.serialRecorder.tx(message.decode())
                 # Update positioning mode after message has been sent.
                 # In 'try' block to maintain state integrity if message send fails.
                 if (positioningMode is not None):
@@ -116,6 +117,18 @@ class SerialPortThread(MakesmithInitFuncs):
     def _emptyAccounting(self):
         self.unackedLines.clear()
         self.bufferSpace = self.bufferSize
+
+    def _startRecording(self):
+        try:
+            config = self.data.config
+            settings = {section: {option["key"]: option["value"] for option in config.settings.get(section, [])}
+                        for section in ("Maslow Settings", "Advanced Settings")}
+            home = {"x": float(config.getValue("Advanced Settings", "homeX")),
+                    "y": float(config.getValue("Advanced Settings", "homeY"))}
+            self.data.serialRecorder.startSession(self.data.comport, self.data.units, home, settings, self.data.version,
+                                                  gcode=getattr(self.data.gcodeFile, "filename", None))
+        except Exception as e:
+            self.data.console_queue.put("Could not start the serial recording: " + str(e))
 
     def _setupMachineUnits(self):
         '''
@@ -329,6 +342,7 @@ class SerialPortThread(MakesmithInitFuncs):
 
             self.lastMessageTime = time.time()
             self.data.connectionStatus = 1
+            self._startRecording()
             # The port open resets the board, and its boot banner queues B05 and the write-only settings.
             self._setupMachineUnits()
             self._requestSettingsUpdate()
@@ -401,6 +415,7 @@ class SerialPortThread(MakesmithInitFuncs):
                 # the need for the .decode() at the end MIGHT be a python3 thing.  ground control doesn't have
                 # it.
                 lineFromMachine = self.serialInstance.readline().decode()
+                self.data.serialRecorder.rx(lineFromMachine)
                 self.lastMessageTime = time.time()
                 self.data.message_queue.put(lineFromMachine)
             elif self.resyncAfter is not None and time.time() >= self.resyncAfter:

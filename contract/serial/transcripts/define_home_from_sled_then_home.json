@@ -1,0 +1,48 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "define_home_from_sled_then_home",
+    "description": "Define Home with no arguments takes the sled position from the last status report and sends nothing; the next Home goes there. Define Home with arguments takes inches and stores mm on a mm machine.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "c859cea"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    },
+    "sled": {
+      "x": 12.34,
+      "y": -5.5,
+      "z": 0.0
+    }
+  },
+  "events": [
+    {"type": "ui", "action": {"command": "defineHome", "arg": "", "arg1": ""}},
+    {"type": "expect", "state": {"home": {"x": 12.34, "y": -5.5}}, "emitted": [{"command": "homePositionMessage", "data": {"xval": 12.34, "yval": -5.5}}]},
+    {"type": "ui", "action": {"command": "home", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G90   \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G00 Z5.0 \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G00 X12.34 Y-5.5  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G00 Z0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "ui", "action": {"command": "defineHome", "arg": 10, "arg1": 5}},
+    {"type": "expect", "state": {"home": {"x": 254.0, "y": 127.0}}},
+    {"type": "ui", "action": {"command": "home", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G90   \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G00 Z5.0 \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G00 X254.0 Y127.0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G00 Z0  \n"},
+    {"type": "rx", "line": "ok"}
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "return_to_center_inches",
+    "description": "Return to Center in inches: the safe height is converted from mm and printed with three decimals.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "c859cea"
+  },
+  "setup": {
+    "units": "INCHES",
+    "home": {
+      "x": 0,
+      "y": 0
+    }
+  },
+  "events": [
+    {"type": "ui", "action": {"command": "returnToCenter", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G90   \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G00 Z0.197 \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G00 X0.0 Y0.0  \n"},
+    {"type": "rx", "line": "ok"}
+  ]
+}

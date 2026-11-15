@@ -68,6 +68,7 @@ class Actions(MakesmithInitFuncs):
         :return:
         '''
         try:
+            self.data.serialRecorder.action(msg["data"]["command"], msg["data"].get("arg", ""), msg["data"].get("arg1", ""))
             if self.data.firmwarePaused and self.data.uploadFlag != 1 and msg["data"]["command"] in MACHINE_COMMANDS:
                 if self.data.firmwareHoldsJobLines:
                     self.data.ui_queue1.put("Alert", "Alert", JOB_LINES_HELD_MESSAGE)

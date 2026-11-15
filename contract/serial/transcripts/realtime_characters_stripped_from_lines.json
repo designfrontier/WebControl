@@ -1,0 +1,33 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "realtime_characters_stripped_from_lines",
+    "description": "!, ~, backtick, ? and control characters act as realtime commands anywhere in a line, so they are removed from streamed lines; closed comments are removed too.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "c859cea"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    },
+    "gcode": {
+      "lines": [
+        "G1 X1! Y2~ Z`3? F4\u0018",
+        "G0 X5 (note) ; trailing"
+      ]
+    }
+  },
+  "events": [
+    {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G1 X1 Y2 Z3 F4  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 X5   \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "state": {"uploadFlag": 0, "jobInProgress": false, "gcodeIndex": 0}}
+  ]
+}

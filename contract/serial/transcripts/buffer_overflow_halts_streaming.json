@@ -1,0 +1,69 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "buffer_overflow_halts_streaming",
+    "description": "The firmware reports Buffer overflow!: streaming halts, the index rewinds to the oldest unacknowledged line, and Stop then ends the job.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "69d6968"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    },
+    "gcode": {
+      "path": "gcode/long_cut_mm.nc"
+    },
+    "settings": {
+      "Maslow Settings": {
+        "bufferOn": 1
+      }
+    }
+  },
+  "events": [
+    {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "tx", "bytes": "G0 Z5  \n"},
+    {"type": "tx", "bytes": "G0 X0 Y0  \n"},
+    {"type": "tx", "bytes": "G1 Z-2 F120  \n"},
+    {"type": "tx", "bytes": "G1 X10 Y0 F800  \n"},
+    {"type": "tx", "bytes": "G1 X10 Y10  \n"},
+    {"type": "tx", "bytes": "G1 X20 Y10  \n"},
+    {"type": "tx", "bytes": "G1 X20 Y20  \n"},
+    {"type": "tx", "bytes": "G1 X30 Y20  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 X30 Y30  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 X40 Y30  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 X40 Y40  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 X50 Y40  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 X50 Y50  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 X60 Y50  \n"},
+    {"type": "rx", "line": "Buffer overflow!"},
+    {"type": "rx", "line": "Buffer Used: 127"},
+    {"type": "rx", "line": "Buffer Number of Lines: 9"},
+    {"type": "rx", "line": "Buffer Begin: 1"},
+    {"type": "rx", "line": "Buffer End: 0"},
+    {"type": "rx", "line": "Buffer Contents: G1 X20 Y10  \\nG1 X20 Y20  \\nG1 X30 Y20  \\nG1 X30 Y30  \\nG1 X40 Y30  \\nG1 X40 Y40  \\nG1 X50 Y40  \\nG1 X50 Y50  \\nG1 X60 Y50  \\n(End of Buffer)"},
+    {"type": "rx", "line": "ok", "comment": "the firmware runs the unread tail of the line and acks it"},
+    {"type": "expect", "state": {"uploadFlag": 0, "jobInProgress": true, "gcodeIndex": 7}, "emitted": [{"command": "alarm", "data": {"message": "Alarm: Controller Buffer Overflow"}}]},
+    {"type": "tick", "seconds": 0.3, "comment": "the backend ignores acks until a status report after 0.25 s"},
+    {"type": "rx", "line": "<Idle,MPos:20.00,10.00,-2.00,WPos:0.000,0.000,0.000>"},
+    {"type": "ui", "action": {"command": "stopRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "!\n", "realtime": true},
+    {"type": "rx", "line": "ok"},
+    {"type": "tick", "seconds": 0.3, "comment": "the backend ignores acks until a status report after 0.25 s"},
+    {"type": "rx", "line": "<Idle,MPos:20.00,10.00,-2.00,WPos:0.000,0.000,0.000>"},
+    {"type": "expect", "state": {"uploadFlag": 0, "jobInProgress": false, "gcodeIndex": 0}}
+  ]
+}

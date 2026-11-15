@@ -1,0 +1,53 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "stream_buffered_short_job_fits_the_buffer",
+    "description": "The unbuffered job again with buffering on: all eleven lines (125 bytes with their trailing spaces and newlines) fit in the controller's 126, so they all go out before the first ok.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "727d2af"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 12.3456,
+      "y": -7.25
+    },
+    "gcode": {
+      "path": "gcode/square_mm.nc"
+    },
+    "settings": {
+      "Maslow Settings": {
+        "bufferOn": 1
+      }
+    }
+  },
+  "events": [
+    {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "tx", "bytes": "G0 Z5  \n"},
+    {"type": "tx", "bytes": "G0 X22.8456 Y3.00  \n"},
+    {"type": "tx", "bytes": "G1 Z-1.5 F127  \n"},
+    {"type": "tx", "bytes": "G1 X42.8456 F600  \n"},
+    {"type": "tx", "bytes": "G1 Y23.00  \n"},
+    {"type": "tx", "bytes": "G1 X22.8456  \n"},
+    {"type": "tx", "bytes": "G1 Y3.00  \n"},
+    {"type": "tx", "bytes": "G0 Z5  \n"},
+    {"type": "tx", "bytes": "M5  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "state": {"uploadFlag": 0, "jobInProgress": false, "gcodeIndex": 0}}
+  ]
+}

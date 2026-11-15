@@ -2,6 +2,7 @@ import queue
 
 from config.config import Config
 from DataStructures.logger import Logger
+from DataStructures.serialRecorder import SerialRecorder
 from DataStructures.loggingQueue import LoggingQueue
 from DataStructures.uiQueue import UIQueue
 
@@ -92,6 +93,7 @@ class Data:
     currentZTarget = 0  # current target for Z-Axis move.  Need to track so if user pauses, we can move back to that spot.
     message = ""  # used to update the client
     logger = Logger()  # the module which records the machines behavior to review later
+    serialRecorder = SerialRecorder()  # opt-in capture of serial traffic for contract/serial transcripts
     config = Config()
     # Background image stuff, persist but not saved
     backgroundFile = None

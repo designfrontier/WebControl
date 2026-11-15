@@ -1,0 +1,56 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "stream_unbuffered_waits_for_a_slow_ok",
+    "description": "A long move's ok comes 4 s after the line, with status reports in between: nothing more goes out until it does, so no timer may release the next line.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "69d6968"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 12.3456,
+      "y": -7.25
+    },
+    "gcode": {
+      "path": "gcode/square_mm.nc"
+    }
+  },
+  "events": [
+    {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 Z5  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 X22.8456 Y3.00  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 Z-1.5 F127  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 X42.8456 F600  \n"},
+    {"type": "rx", "line": "<Idle,MPos:0.00,0.00,-1.50,WPos:0.000,0.000,0.000>"},
+    {"type": "tick", "seconds": 1.0, "comment": "still moving; no ok yet"},
+    {"type": "rx", "line": "<Idle,MPos:0.00,0.00,-1.50,WPos:0.000,0.000,0.000>"},
+    {"type": "tick", "seconds": 1.0, "comment": "still moving; no ok yet"},
+    {"type": "rx", "line": "<Idle,MPos:0.00,0.00,-1.50,WPos:0.000,0.000,0.000>"},
+    {"type": "tick", "seconds": 1.0, "comment": "still moving; no ok yet"},
+    {"type": "rx", "line": "<Idle,MPos:0.00,0.00,-1.50,WPos:0.000,0.000,0.000>"},
+    {"type": "tick", "seconds": 1.0, "comment": "still moving; no ok yet"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 Y23.00  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 X22.8456  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 Y3.00  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 Z5  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "M5  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "state": {"uploadFlag": 0, "jobInProgress": false, "gcodeIndex": 0}}
+  ]
+}

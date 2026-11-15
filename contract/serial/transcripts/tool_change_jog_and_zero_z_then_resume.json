@@ -1,0 +1,80 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "tool_change_jog_and_zero_z_then_resume",
+    "description": "During a tool change a Z move releases the firmware once with ~ and goes out; Define Z zero follows. Resume sends ~ again, returns to the file's XY at safe height and streams on.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "c859cea"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    },
+    "gcode": {
+      "path": "gcode/tool_change_mm.nc"
+    }
+  },
+  "events": [
+    {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 Z5  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 X10 Y10  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 Z-3 F100  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 X20 F600  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 Z5  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "T2 M6  \n"},
+    {"type": "rx", "line": "Tool Change: Please insert tool 2"},
+    {"type": "rx", "line": "Maslow Paused"},
+    {"type": "ui", "action": {"command": "moveZ", "arg": "raise", "arg1": "10"}},
+    {"type": "tx", "bytes": "~\n", "realtime": true},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G91  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G00 Z10.0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "ui", "action": {"command": "defineZ0", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G10 Z0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "state": {"manualZAxisAdjust": true, "uploadFlag": 0}},
+    {"type": "ui", "action": {"command": "resumeRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "~\n", "realtime": true},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 Z5.0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 X20.0 Y10.0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 F600.0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 X40 Y40  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 Z-2 F100  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "X50  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "state": {"uploadFlag": 0, "jobInProgress": false, "gcodeIndex": 0}}
+  ]
+}

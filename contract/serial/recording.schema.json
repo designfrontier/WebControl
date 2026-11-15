@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://webcontrol.local/contract/serial/recording.schema.json",
+  "title": "Serial recording line",
+  "description": "One line of ~/.WebControl/serial-recordings/<session>.jsonl, written by DataStructures/serialRecorder.py or tools/import_v094_log.py. See contract/serial/README.md.",
+  "type": "object",
+  "required": ["type", "t"],
+  "properties": {
+    "t": { "type": "number", "minimum": 0, "description": "Monotonic seconds since the session started." }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "type": { "const": "session" },
+        "started": { "type": "string", "description": "Local wall time the session started, ISO 8601." },
+        "port": { "type": ["string", "null"] },
+        "units": { "enum": ["MM", "INCHES", null] },
+        "home": {
+          "type": ["object", "null"],
+          "properties": { "x": { "type": "number" }, "y": { "type": "number" } }
+        },
+        "settings": { "type": "object", "description": "Settings by section, key to value." },
+        "webcontrol": { "type": "string", "description": "WebControl version, or \"0.94-log\" for an imported log." },
+        "source": { "type": "string", "description": "For an imported log: the file and line the session starts at." },
+        "gcode": { "type": "string", "description": "The G-code file loaded when the session started, if any." }
+      },
+      "required": ["type", "started"]
+    },
+    {
+      "properties": {
+        "type": { "const": "tx" },
+        "data": { "type": "string", "description": "The exact bytes written." },
+        "cause": { "type": "integer", "description": "seq of the most recent ui record, if any." }
+      },
+      "required": ["type", "data"]
+    },
+    {
+      "properties": {
+        "type": { "const": "rx" },
+        "data": { "type": "string", "description": "The line as read, usually ending in \\r\\n." }
+      },
+      "required": ["type", "data"]
+    },
+    {
+      "properties": {
+        "type": { "const": "ui" },
+        "seq": { "type": "integer", "minimum": 1 },
+        "command": { "type": "string" },
+        "arg": {},
+        "arg1": {}
+      },
+      "required": ["type", "seq", "command"]
+    },
+    {
+      "properties": {
+        "type": { "const": "gcode" },
+        "filename": { "type": "string" },
+        "lines": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["type", "filename"]
+    },
+    {
+      "properties": {
+        "type": { "const": "dropped" },
+        "count": { "type": "integer", "minimum": 1 }
+      },
+      "required": ["type", "count"]
+    }
+  ]
+}

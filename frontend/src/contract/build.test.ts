@@ -4,7 +4,8 @@ import version from "../../../contract/VERSION?raw";
 import { actionCommands, clientEvents, httpEndpoints, serverMessages } from "../protocol";
 import { buildContract, toJsonSchema } from "./build";
 
-const onDisk = import.meta.glob<string>("../../../contract/**/*.json", {
+// contract/serial/ is the backend ↔ controller contract, not generated from src/protocol.
+const onDisk = import.meta.glob<string>(["../../../contract/**/*.json", "!../../../contract/serial/**"], {
   query: "?raw",
   import: "default",
   eager: true,

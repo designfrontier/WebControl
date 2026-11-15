@@ -1,0 +1,79 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "stream_buffered_waits_for_a_slow_ok",
+    "description": "Buffered: the buffer fills, then the oldest line's ok takes 4 s with status reports in between. Nothing more goes out until that ok frees its bytes.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "69d6968"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    },
+    "gcode": {
+      "path": "gcode/long_cut_mm.nc"
+    },
+    "settings": {
+      "Maslow Settings": {
+        "bufferOn": 1
+      }
+    }
+  },
+  "events": [
+    {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "tx", "bytes": "G0 Z5  \n"},
+    {"type": "tx", "bytes": "G0 X0 Y0  \n"},
+    {"type": "tx", "bytes": "G1 Z-2 F120  \n"},
+    {"type": "tx", "bytes": "G1 X10 Y0 F800  \n"},
+    {"type": "tx", "bytes": "G1 X10 Y10  \n"},
+    {"type": "tx", "bytes": "G1 X20 Y10  \n"},
+    {"type": "tx", "bytes": "G1 X20 Y20  \n"},
+    {"type": "tx", "bytes": "G1 X30 Y20  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 X30 Y30  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 X40 Y30  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 X40 Y40  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 X50 Y40  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 X50 Y50  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 X60 Y50  \n"},
+    {"type": "rx", "line": "<Idle,MPos:0.00,0.00,-2.00,WPos:0.000,0.000,0.000>"},
+    {"type": "tick", "seconds": 1.0, "comment": "still moving; no ok yet"},
+    {"type": "rx", "line": "<Idle,MPos:0.00,0.00,-2.00,WPos:0.000,0.000,0.000>"},
+    {"type": "tick", "seconds": 1.0, "comment": "still moving; no ok yet"},
+    {"type": "rx", "line": "<Idle,MPos:0.00,0.00,-2.00,WPos:0.000,0.000,0.000>"},
+    {"type": "tick", "seconds": 1.0, "comment": "still moving; no ok yet"},
+    {"type": "rx", "line": "<Idle,MPos:0.00,0.00,-2.00,WPos:0.000,0.000,0.000>"},
+    {"type": "tick", "seconds": 1.0, "comment": "still moving; no ok yet"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 X60 Y60  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 X70 Y60  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 X70 Y70  \n"},
+    {"type": "tx", "bytes": "G0 Z5  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "state": {"uploadFlag": 0, "jobInProgress": false, "gcodeIndex": 0}}
+  ]
+}

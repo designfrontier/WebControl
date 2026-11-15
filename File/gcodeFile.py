@@ -191,6 +191,8 @@ class GCodeFile(MakesmithInitFuncs):
             self.data.gcodeFile.filename = ""
             return False
         self.updateGcode()
+        if gcodeLoad:
+            self.data.serialRecorder.gcodeLoaded(self.data.gcodeFile.filename, len(self.data.gcode))
         self.data.gcodeFile.isChanged = True
         self.data.actions.sendGCodePositionUpdate(self.data.gcodeIndex, recalculate=True)
         return True

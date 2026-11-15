@@ -1,0 +1,32 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "unclosed_comment_pauses_the_job",
+    "description": "A line with an unclosed ( would hang 51.27, so the job pauses before it with an alert.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "c859cea"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    },
+    "gcode": {
+      "lines": [
+        "G0 X1",
+        "G1 X2 (rough pass",
+        "G0 X3"
+      ]
+    }
+  },
+  "events": [
+    {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G0 X1  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "state": {"uploadFlag": 2, "gcodeIndex": 1}, "alerts": [{"title": "Line Unclosed Comment"}]}
+  ]
+}
