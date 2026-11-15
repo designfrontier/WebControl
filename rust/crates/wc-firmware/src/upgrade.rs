@@ -4,7 +4,7 @@
 use serde_json::Value;
 use wc_config::Settings;
 
-use crate::settings::{Push, boot_push, setting_line};
+use crate::settings::{Push, boot_push, setting_key, setting_line};
 
 pub const TARGET_BUILD: &str = "51.292";
 /// What B05 prints for every 51.29x build.
@@ -141,21 +141,18 @@ fn z_rpm(settings: &Settings, preflight: Option<f64>) -> f64 {
     stored.filter(|v| usable(*v)).or(preflight.filter(|v| usable(*v))).unwrap_or(STOCK_Z_RPM)
 }
 
-fn key_of(line: &str) -> Option<u32> {
-    line.strip_prefix('$')?.split_once('=')?.0.parse().ok()
-}
-
 /// C6: every setting the controller takes, blanks filled with their defaults, as after any EEPROM reset.
 pub fn migration_push(settings: &Settings, firmware: f64, build: Option<&str>, migration: Migration) -> Push {
     let mut push = boot_push(settings, firmware, true);
-    push.lines
-        .retain(|line| build == Some(TARGET_BUILD) || !key_of(line).is_some_and(|k| UNSAFE_ON_51_291.contains(&k)));
+    push.lines.retain(|line| {
+        build == Some(TARGET_BUILD) || !setting_key(line).is_some_and(|k| UNSAFE_ON_51_291.contains(&k))
+    });
     let Migration::Upgrade { preflight_z_rpm } = migration else {
         return push;
     };
     let rpm = z_rpm(settings, preflight_z_rpm);
     let line = setting_line(Z_RPM_KEY, &Value::from(rpm));
-    match push.lines.iter_mut().find(|l| key_of(l) == Some(Z_RPM_KEY)) {
+    match push.lines.iter_mut().find(|l| setting_key(l) == Some(Z_RPM_KEY)) {
         Some(existing) => *existing = line,
         None => push.lines.push(line),
     }

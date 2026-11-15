@@ -1,8 +1,37 @@
 use serde_json::{Value, json};
 use wc_config::Settings;
 use wc_firmware::settings::{
-    Sync, adopted_text, boot_push, firmware_key_value, parse_setting_reply, setting_line, sync_reported, values_match,
+    Push, Sync, adopted_text, boot_push, boot_sync, firmware_key_value, parse_setting_reply, reinitialises_axes,
+    setting_key, setting_line, skip_held_reinit_keys, sync_reported, values_match,
 };
+
+#[test]
+fn a_boot_that_finds_every_value_held_writes_only_r() {
+    let held = [(0, 2438.4), (3, 463.0), (13, 63.5), (38, 2.0), (39, 3.0)];
+    let push = boot_sync(&Settings::defaults(), 51.27, &held);
+    assert_eq!(push, Push { lines: vec!["$13=63.5000".into()], adopted: vec![] });
+}
+
+#[test]
+fn a_boot_writes_what_differs_in_key_order_with_r_once_and_adopts_unknown_keys() {
+    let reported = [(38, 1.0), (13, 10.1), (3, 478.0), (18, 12.6)];
+    let push = boot_sync(&Settings::defaults(), 51.27, &reported);
+    assert_eq!(push.lines, ["$3=463", "$13=63.5000", "$38=2.00000"]);
+    assert_eq!(push.adopted, [("Advanced Settings".into(), "maxZRPM".into(), json!("12.6"))]);
+    assert_eq!(boot_sync(&Settings::defaults(), 51.27, &[]).lines, ["$13=63.5000"], "nothing reported");
+}
+
+#[test]
+fn only_chain_over_sprocket_reinitialises_and_a_held_one_is_never_rewritten() {
+    assert!(reinitialises_axes("$38=2.00000 ") && !reinitialises_axes("$39=3") && !reinitialises_axes("$$"));
+    assert_eq!((setting_key("$RST=*"), setting_key(" $12=8113.73 ")), (None, Some(12)));
+    let mut push = boot_push(&Settings::defaults(), 51.27, true);
+    skip_held_reinit_keys(&mut push, &[(38, 2.0), (39, 3.0)]);
+    assert!(!push.lines.iter().any(|l| l.starts_with("$38=")) && push.lines.contains(&"$39=3.00000".to_string()));
+    let mut differs = boot_push(&Settings::defaults(), 51.27, true);
+    skip_held_reinit_keys(&mut differs, &[(38, 1.0)]);
+    assert!(differs.lines.contains(&"$38=2.00000".to_string()));
+}
 
 /// The restore lines Python writes in `connect_eeprom_read_fail_restores_settings`, by stored value.
 #[test]
