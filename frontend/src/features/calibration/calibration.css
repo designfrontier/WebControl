@@ -1,9 +1,4 @@
 .calibration {
-  --chart-1: var(--accent);
-  --chart-2: var(--ok);
-  --chart-3: var(--warn);
-  --chart-4: var(--danger);
-
   display: grid;
   gap: var(--space-4);
   max-width: 1100px;
@@ -12,8 +7,7 @@
 /* Grid tracks default to their content's min width, so the 769px diagrams would widen the page on phones. */
 .calibration,
 .calibration .card,
-.wizard,
-.optical-settings {
+.wizard {
   grid-template-columns: minmax(0, 1fr);
 }
 
@@ -153,13 +147,6 @@
 }
 
 .diagram,
-.camera-image {
-  display: block;
-  max-width: 100%;
-  height: auto;
-  border-radius: var(--radius);
-}
-
 .diagram {
   width: 100%;
   max-width: 560px;
@@ -201,90 +188,20 @@
   color: var(--danger);
 }
 
-.optical-settings {
-  display: grid;
-  gap: var(--space-4);
-}
-
-.chart-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: var(--space-4);
-}
-
-.chart,
 .sled-position {
   margin: 0;
 }
 
-.chart svg,
 .sled-position svg {
   display: block;
   width: 100%;
   height: auto;
 }
 
-.chart figcaption,
 .sled-position figcaption {
   color: var(--muted);
   font-size: 0.85rem;
   text-align: center;
-}
-
-.chart-axes rect {
-  fill: none;
-  stroke: var(--line);
-}
-
-.chart-axes text {
-  fill: var(--muted);
-  font-size: 9px;
-}
-
-.chart-line {
-  fill: none;
-  stroke-width: 1;
-}
-
-.chart-line-0 {
-  stroke: var(--chart-1);
-}
-.chart-line-1 {
-  stroke: var(--chart-2);
-}
-.chart-line-2 {
-  stroke: var(--chart-3);
-}
-.chart-line-3 {
-  stroke: var(--chart-4);
-}
-.chart-line-4 {
-  stroke: var(--chart-5);
-}
-.chart-line-5 {
-  stroke: var(--chart-6);
-}
-.chart-line-6 {
-  stroke: var(--chart-7);
-}
-.chart-line-7 {
-  stroke: var(--chart-8);
-}
-
-circle.chart-dot-ideal {
-  fill: var(--muted);
-}
-
-circle.chart-dot-measured {
-  fill: var(--accent);
-}
-
-.chart-key.chart-dot-ideal {
-  color: var(--muted);
-}
-
-.chart-key.chart-dot-measured {
-  color: var(--accent);
 }
 
 .sheet {

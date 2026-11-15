@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { opticalSettingsSchema } from "./calibration";
 import { actionArg, numberLike } from "./core";
 import type { ActionCommand } from "./index";
 
@@ -11,7 +10,7 @@ import type { ActionCommand } from "./index";
 export type AllowedDuring = "always" | "idleOrPaused" | "idleOrControllerPaused" | "idle" | "noJob";
 
 /** How the UI reaches processAction for a command; most go through the `action` socket event. */
-export type ActionRoute = "action" | "opticalCalibration" | "POST /api/system/pid-test" | "none";
+export type ActionRoute = "action" | "POST /api/system/pid-test" | "none";
 
 export interface ActionSpec {
   allowedDuring: AllowedDuring;
@@ -47,7 +46,6 @@ const idle = (summary: string, args?: Parameters<typeof spec>[2]) => spec("idle"
 const noJob = (summary: string, args?: Parameters<typeof spec>[2]) => spec("noJob", summary, args);
 
 const direction = z.enum(["upLeft", "up", "upRight", "left", "right", "downLeft", "down", "downRight"]);
-const opticalCamera = { arg: opticalSettingsSchema, via: "opticalCalibration" as const };
 
 /** processAction's `arg`/`arg1` for each command, in the order Actions.processAction tests them. */
 export const actionSpecs = {
@@ -116,23 +114,6 @@ export const actionSpecs = {
   setSprocketsZero: idle("Define the current sprocket angles as zero"),
   setSprocketsDefault: idle("Mark the chains as at their default lengths"),
   updatePorts: idle("Rescan serial ports; answered by an updatePorts message"),
-  optical_onStart: idle("Start the optical calibration camera"),
-  optical_Calibrate: idle("Run optical calibration", opticalCamera),
-  saveOpticalCalibrationConfiguration: idle("Save optical settings", {
-    arg: opticalSettingsSchema,
-    via: "none",
-  }),
-  stopOpticalCalibration: idle("Stop optical calibration"),
-  testOpticalCalibration: idle("Grab a test image", opticalCamera),
-  findCenterOpticalCalibration: idle("Find the optical centre", opticalCamera),
-  saveAndSendOpticalCalibration: idle("Store the calibration and send it to the controller"),
-  reloadCalibration: idle("Reload the stored calibration; answered by updateOpticalCalibrationError"),
-  saveCalibrationToCSV: idle("Write the calibration to CSV"),
-  clearCalibration: idle("Clear the calibration"),
-  curveFitOpticalCalibration: idle("Fit curves; answered by updateOpticalCalibrationCurve"),
-  adjustCenter: idle("Move the optical centre up or down and return to it", {
-    arg: z.number().describe("mm, signed"),
-  }),
   upgradeCustomFirmware: idle("Flash the bundled custom firmware"),
   upgradeStockFirmware: idle("Flash the bundled stock firmware"),
   upgradeHoleyFirmware: idle("Flash the bundled holey firmware", {

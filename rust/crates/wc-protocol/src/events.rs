@@ -52,11 +52,7 @@ pub enum ClientEvent {
     CheckForGcodeUpdate,
     /// Resend the board to every client.
     CheckForBoardUpdate,
-    /// A contract event this backend does not decode yet.
-    Unhandled(String),
 }
-
-const LATER_EVENTS: [&str; 1] = ["opticalCalibration"];
 
 impl ClientEvent {
     /// `None` for an unknown event or a malformed payload; the transport ignores those.
@@ -80,7 +76,6 @@ impl ClientEvent {
             }
             "checkForGCodeUpdate" => Some(ClientEvent::CheckForGcodeUpdate),
             "checkForBoardUpdate" => Some(ClientEvent::CheckForBoardUpdate),
-            event if LATER_EVENTS.contains(&event) => Some(ClientEvent::Unhandled(event.into())),
             _ => None,
         }
     }

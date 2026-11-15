@@ -2,7 +2,6 @@ import { Link, NavLink, Route, Routes } from "react-router";
 import { StopButton } from "../../app/StopButton";
 import { AlarmBanner } from "../../app/StatusBar";
 import { HoleyCalibration } from "./HoleyCalibration";
-import { OpticalCalibration } from "./OpticalCalibration";
 import { TriangularCalibration } from "./TriangularCalibration";
 import "./calibration.css";
 
@@ -18,12 +17,6 @@ const METHODS = [
     label: "Holey",
     summary: "For holey firmware: cut six holes and measure twelve distances to set motor spacing and chain tolerance.",
     Component: HoleyCalibration,
-  },
-  {
-    path: "optical",
-    label: "Optical",
-    summary: "Measure positioning error across the sheet with a camera on the sled and send a correction matrix.",
-    Component: OpticalCalibration,
   },
 ];
 

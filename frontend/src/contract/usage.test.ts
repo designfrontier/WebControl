@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { getStartupState } from "../api/state";
 import * as boards from "../features/boards/api";
 import * as calibration from "../features/calibration/api";
-import { opticalSettings } from "../features/calibration/fixtures";
 import * as files from "../features/files/api";
 import * as machine from "../features/machine/api";
 import { quickConfigureValues } from "../features/machine/fixtures";
@@ -91,8 +90,6 @@ const recordUiRequests = async () => {
         Array.from({ length: 12 }, () => 100),
       ),
     () => calibration.acceptHoley(fetch),
-    () => calibration.getOptical(fetch),
-    () => calibration.saveOpticalSettings(fetch, opticalSettings()),
     () => files.getGcodeLibrary(fetch),
     () => files.getLoadedGcode(fetch),
     () => files.getGcodeText(fetch),
@@ -141,7 +138,7 @@ describe("the HTTP contract", () => {
   it("covers every request the UI makes, and each request body fits its schema", async () => {
     const calls = await recordUiRequests();
     expect(literalApiPaths()).toContainEqual({ method: "GET", url: "/api/main" });
-    expect(calls.filter(({ body }) => body !== undefined)).toHaveLength(23);
+    expect(calls.filter(({ body }) => body !== undefined)).toHaveLength(22);
     const unlisted = [...calls, ...literalApiPaths()].filter(({ method, url }) => !endpointFor(method, url));
     expect(unlisted).toEqual([]);
 

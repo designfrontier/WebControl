@@ -2,21 +2,19 @@ import { screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { fakeFetch } from "../../test/fakeFetch";
 import { currentPath, renderApp } from "../../test/render";
-import { opticalState } from "./fixtures";
 
 const fetch = () =>
   fakeFetch({
     "/api/calibration/triangular": { motorYoffset: 463, rotationRadius: 139.1, chainSagCorrection: 33 },
-    "/api/calibration/optical": opticalState(),
   });
 
 describe("CalibrationPage", () => {
-  it("lists the three methods with what each is for", () => {
+  it("lists the two methods with what each is for", () => {
     renderApp("/calibration", { fetch: fetch() });
     expect(screen.getByRole("heading", { level: 1, name: "Calibration" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open triangular calibration" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open holey calibration" })).toBeInTheDocument();
-    expect(screen.getByText(/camera on the sled/)).toBeInTheDocument();
+    expect(screen.queryByText(/optical/i)).not.toBeInTheDocument();
   });
 
   it("moves between methods with the sub-navigation", async () => {
@@ -27,9 +25,9 @@ describe("CalibrationPage", () => {
 
     const methods = within(screen.getByRole("navigation", { name: "Calibration methods" }));
     expect(methods.getByRole("link", { name: "Triangular" })).toHaveAttribute("aria-current", "page");
-    await user.click(methods.getByRole("link", { name: "Optical" }));
-    expect(currentPath()).toBe("/calibration/optical");
-    expect(await screen.findByRole("form", { name: "Optical calibration settings" })).toBeInTheDocument();
+    await user.click(methods.getByRole("link", { name: "Holey" }));
+    expect(currentPath()).toBe("/calibration/holey");
+    expect(methods.getAllByRole("link").map((link) => link.textContent)).toEqual(["Triangular", "Holey"]);
   });
 
   it("explains an unknown method address", () => {

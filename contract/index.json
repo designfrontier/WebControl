@@ -101,22 +101,6 @@
                 "schema": "schemas/messages/updatePIDData.json",
                 "dataFormat": "json"
               },
-              "updateOpticalCalibrationCurve": {
-                "schema": "schemas/messages/updateOpticalCalibrationCurve.json",
-                "dataFormat": "json"
-              },
-              "updateOpticalCalibrationError": {
-                "schema": "schemas/messages/updateOpticalCalibrationError.json",
-                "dataFormat": "json"
-              },
-              "updateOpticalCalibrationFindCenter": {
-                "schema": "schemas/messages/updateOpticalCalibrationFindCenter.json",
-                "dataFormat": "json"
-              },
-              "updateCalibrationImage": {
-                "schema": "schemas/messages/updateCalibrationImage.json",
-                "dataFormat": "json"
-              },
               "pyinstallUpdate": {
                 "schema": "schemas/messages/pyinstallUpdate.json",
                 "dataFormat": "json"
@@ -139,9 +123,6 @@
           },
           "updateSetting": {
             "schema": "schemas/events/updateSetting.json"
-          },
-          "opticalCalibration": {
-            "schema": "schemas/events/opticalCalibration.json"
           }
         },
         "classicOnlyClientToServer": [
@@ -445,78 +426,6 @@
       "allowedDuring": "idle",
       "via": "action",
       "schema": "schemas/actions/updatePorts.json"
-    },
-    "optical_onStart": {
-      "summary": "Start the optical calibration camera",
-      "allowedDuring": "idle",
-      "via": "action",
-      "schema": "schemas/actions/optical_onStart.json"
-    },
-    "optical_Calibrate": {
-      "summary": "Run optical calibration",
-      "allowedDuring": "idle",
-      "via": "opticalCalibration",
-      "schema": "schemas/actions/optical_Calibrate.json"
-    },
-    "saveOpticalCalibrationConfiguration": {
-      "summary": "Save optical settings",
-      "allowedDuring": "idle",
-      "via": "none",
-      "schema": "schemas/actions/saveOpticalCalibrationConfiguration.json"
-    },
-    "stopOpticalCalibration": {
-      "summary": "Stop optical calibration",
-      "allowedDuring": "idle",
-      "via": "action",
-      "schema": "schemas/actions/stopOpticalCalibration.json"
-    },
-    "testOpticalCalibration": {
-      "summary": "Grab a test image",
-      "allowedDuring": "idle",
-      "via": "opticalCalibration",
-      "schema": "schemas/actions/testOpticalCalibration.json"
-    },
-    "findCenterOpticalCalibration": {
-      "summary": "Find the optical centre",
-      "allowedDuring": "idle",
-      "via": "opticalCalibration",
-      "schema": "schemas/actions/findCenterOpticalCalibration.json"
-    },
-    "saveAndSendOpticalCalibration": {
-      "summary": "Store the calibration and send it to the controller",
-      "allowedDuring": "idle",
-      "via": "action",
-      "schema": "schemas/actions/saveAndSendOpticalCalibration.json"
-    },
-    "reloadCalibration": {
-      "summary": "Reload the stored calibration; answered by updateOpticalCalibrationError",
-      "allowedDuring": "idle",
-      "via": "action",
-      "schema": "schemas/actions/reloadCalibration.json"
-    },
-    "saveCalibrationToCSV": {
-      "summary": "Write the calibration to CSV",
-      "allowedDuring": "idle",
-      "via": "action",
-      "schema": "schemas/actions/saveCalibrationToCSV.json"
-    },
-    "clearCalibration": {
-      "summary": "Clear the calibration",
-      "allowedDuring": "idle",
-      "via": "action",
-      "schema": "schemas/actions/clearCalibration.json"
-    },
-    "curveFitOpticalCalibration": {
-      "summary": "Fit curves; answered by updateOpticalCalibrationCurve",
-      "allowedDuring": "idle",
-      "via": "action",
-      "schema": "schemas/actions/curveFitOpticalCalibration.json"
-    },
-    "adjustCenter": {
-      "summary": "Move the optical centre up or down and return to it",
-      "allowedDuring": "idle",
-      "via": "action",
-      "schema": "schemas/actions/adjustCenter.json"
     },
     "upgradeCustomFirmware": {
       "summary": "Flash the bundled custom firmware",
@@ -953,44 +862,6 @@
           "contentType": "application/json",
           "description": "Nothing calculated yet",
           "schema": "schemas/http/post-api-calibration-holey-accept.409.json"
-        }
-      }
-    },
-    {
-      "method": "GET",
-      "path": "/api/calibration/optical",
-      "family": "api",
-      "summary": "Optical calibration settings, curve and error matrix",
-      "responses": {
-        "200": {
-          "contentType": "application/json",
-          "schema": "schemas/http/get-api-calibration-optical.200.json"
-        }
-      }
-    },
-    {
-      "method": "PUT",
-      "path": "/api/calibration/optical/settings",
-      "family": "api",
-      "summary": "Save optical calibration settings",
-      "body": {
-        "contentType": "application/json",
-        "schema": "schemas/http/put-api-calibration-optical-settings.request.json"
-      },
-      "responses": {
-        "200": {
-          "contentType": "application/json",
-          "schema": "schemas/http/put-api-calibration-optical-settings.200.json"
-        },
-        "400": {
-          "contentType": "application/json",
-          "description": "Missing or non-numeric field",
-          "schema": "schemas/http/put-api-calibration-optical-settings.400.json"
-        },
-        "500": {
-          "contentType": "application/json",
-          "description": "Could not save",
-          "schema": "schemas/http/put-api-calibration-optical-settings.500.json"
         }
       }
     },

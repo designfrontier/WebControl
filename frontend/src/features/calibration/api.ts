@@ -5,26 +5,22 @@ import {
   calibrationErrorSchema,
   holeyParametersSchema,
   holeyResultSchema,
-  opticalSettingsSavedSchema,
-  opticalStateSchema,
   triangularParametersSchema,
   triangularResultSchema,
 } from "../../protocol";
-import type { OpticalSettings } from "../../protocol";
 
 export type Outcome<T> = { ok: true; data: T } | { ok: false; error: string };
 
 /** Like sendJson, but resolves with the server's `{ error }` message instead of throwing, so forms can show it. */
 export const submit = async <S extends z.ZodType>(
   fetchImpl: Fetch,
-  method: "POST" | "PUT",
   path: string,
   body: unknown,
   schema: S,
 ): Promise<Outcome<z.output<S>>> => {
   try {
     const response = await fetchImpl(`/api${path}`, {
-      method,
+      method: "POST",
       headers: { Accept: "application/json", "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
@@ -46,20 +42,15 @@ export const getTriangular = (fetchImpl: Fetch) =>
   getJson(fetchImpl, "/calibration/triangular", triangularParametersSchema);
 
 export const calculateTriangular = (fetchImpl: Fetch, measurements: Record<string, number>) =>
-  submit(fetchImpl, "POST", "/calibration/triangular", measurements, triangularResultSchema);
+  submit(fetchImpl, "/calibration/triangular", measurements, triangularResultSchema);
 
 export const acceptTriangular = (fetchImpl: Fetch) =>
-  submit(fetchImpl, "POST", "/calibration/triangular/accept", {}, triangularParametersSchema);
+  submit(fetchImpl, "/calibration/triangular/accept", {}, triangularParametersSchema);
 
 export const getHoley = (fetchImpl: Fetch) => getJson(fetchImpl, "/calibration/holey", holeyParametersSchema);
 
 export const calculateHoley = (fetchImpl: Fetch, measurements: number[]) =>
-  submit(fetchImpl, "POST", "/calibration/holey", { measurements }, holeyResultSchema);
+  submit(fetchImpl, "/calibration/holey", { measurements }, holeyResultSchema);
 
 export const acceptHoley = (fetchImpl: Fetch) =>
-  submit(fetchImpl, "POST", "/calibration/holey/accept", {}, holeyParametersSchema);
-
-export const getOptical = (fetchImpl: Fetch) => getJson(fetchImpl, "/calibration/optical", opticalStateSchema);
-
-export const saveOpticalSettings = (fetchImpl: Fetch, settings: OpticalSettings) =>
-  submit(fetchImpl, "PUT", "/calibration/optical/settings", settings, opticalSettingsSavedSchema);
+  submit(fetchImpl, "/calibration/holey/accept", {}, holeyParametersSchema);

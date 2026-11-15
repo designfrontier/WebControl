@@ -157,7 +157,7 @@ fn action_events_decode_with_lenient_arguments() {
 }
 
 #[test]
-fn setting_requests_decode_and_other_events_are_named_but_not_decoded_yet() {
+fn setting_requests_decode_and_unknown_events_do_not() {
     let frame = |event: &str, data: Value| Frame { ns: "/MaslowCNC".into(), event: event.into(), data };
     let request = frame("settingRequest", json!({"data": {"section": "Computed Settings", "setting": "units"}}));
     contract().validate_frame(&request.encode()).unwrap();
@@ -167,8 +167,7 @@ fn setting_requests_decode_and_other_events_are_named_but_not_decoded_yet() {
     );
     assert_eq!(ClientEvent::from_frame(&frame("settingRequest", json!({"data": {"section": 1}}))), None);
     assert_eq!(ClientEvent::from_frame(&frame("settingRequest", json!({}))), None);
-    let later = frame("opticalCalibration", json!({}));
-    assert_eq!(ClientEvent::from_frame(&later), Some(ClientEvent::Unhandled("opticalCalibration".into())));
+    assert_eq!(ClientEvent::from_frame(&frame("opticalCalibration", json!({}))), None);
     assert_eq!(ClientEvent::from_frame(&frame("bogus", json!({}))), None);
 }
 

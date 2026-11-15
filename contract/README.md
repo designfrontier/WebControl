@@ -27,7 +27,7 @@ generated files by hand.
 | `schemas/websocket/frame.json`        | One frame of the plain-WebSocket transport (below)                                   |
 
 In `index.json`, `actions.<command>.allowedDuring` is the run-state gate and `via` says how the UI reaches it (`action`
-event, `opticalCalibration` event, `POST /api/system/pid-test`, or `none`). The gates, by the run state they refuse in:
+event, `POST /api/system/pid-test`, or `none`). The gates, by the run state they refuse in:
 
 | Run state                                                         | `always` | `idleOrPaused` | `idleOrControllerPaused` | `idle`  | `noJob` |
 | ----------------------------------------------------------------- | -------- | -------------- | ------------------------ | ------- | ------- |
