@@ -4,8 +4,10 @@
 mod support;
 
 use std::ffi::CString;
+use std::fs::OpenOptions;
 use std::io::Read;
 use std::os::unix::ffi::OsStrExt;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::channel;
 use std::time::Duration;
@@ -49,10 +51,21 @@ fn stays_responsive(route: &'static str, target: &'static str, parts: Vec<Part<'
     });
     let path = waiting.recv_timeout(Duration::from_secs(10)).unwrap();
     let status = answer.recv_timeout(Duration::from_secs(5));
-    let mut drained = Vec::new();
-    std::fs::File::open(&path).unwrap().read_to_end(&mut drained).unwrap();
+    while !runtime.is_finished() {
+        release(&path);
+    }
     assert_eq!(status, Ok(StatusCode::OK), "{route} stalled the runtime while it wrote");
     runtime.join().unwrap();
+}
+
+/// Briefly plays both ends of the FIFO, so the route's write and any read back of the file both finish.
+fn release(path: &Path) {
+    let end = |write: bool| OpenOptions::new().read(!write).write(write).custom_flags(libc::O_NONBLOCK).open(path);
+    if let Ok(mut reader) = end(false) {
+        let _ = reader.read_to_end(&mut Vec::new());
+    }
+    drop(end(true));
+    std::thread::sleep(Duration::from_millis(10));
 }
 
 #[test]
