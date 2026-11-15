@@ -10,6 +10,22 @@ also holds the Python install; the two backends run as two systemd services, one
 `levenberg-marquardt` + `nalgebra` and must match the fixtures; optical calibration comes last and is experimental;
 the 51.292 upgrade is one click and follows C.
 
+## Owner decisions (2026-11-14)
+
+These override anything below that disagrees:
+
+- **Classic UI dropped** from the Rust backend; `/` redirects to `/next/`.
+- **Firmware for the upgrade:** built in CI from the v51.292 tag, pinned by SHA-256; holey upgrades only.
+- **One shared `~/.WebControl`** for both backends, with the safeguards in §7.
+- **No self-update;** deploy from the Mac.
+- **Power-off kept. GPIO kept:** port `Actions/gpioActions.py` behaviour (pin factory, button actions routed
+  through the job state machine with debounce, LEDs) using `rppal`, with a no-op fallback off-Pi.
+- **Camera and optical calibration dropped for now:** M7 is out of scope; no `wc-optical` crate.
+- **OS:** Raspberry Pi OS Lite 64-bit (trixie) recommended, bookworm supported; target glibc 2.36.
+- **Warts cleaned up after parity,** with a `contract/VERSION` bump.
+- **Coverage: 95% lines for every crate** (not the 90/80 below), enforced in CI.
+- **Rust becomes the boot default** after M4 passes a real cut plus two weeks of normal use.
+
 ## 0. Recommendations up front
 
 1. **Serve only the React UI.** Drop the classic UI (Jinja `templates/`, `static/scripts`, `WebPageProcessor/`,
