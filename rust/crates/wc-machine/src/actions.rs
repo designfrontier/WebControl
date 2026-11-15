@@ -11,7 +11,7 @@ use crate::commands;
 use crate::machine::{Effect, Link, Machine, RunState, alert, broadcast};
 
 const SENDING: &str = "Cannot issue command while sending gcode.";
-const PROBING: &str = "Wait for Touch Z to finish or press Stop";
+pub(crate) const PROBING: &str = "Wait for Touch Z to finish or press Stop";
 const NOT_CONNECTED: &str = "The controller is not connected.";
 const Z_LIMITS_UNSUPPORTED: &str = "Z-axis limits need holey firmware 51.292 or later.";
 const CLEARED_Z_LIMIT_MM: i32 = 9999;

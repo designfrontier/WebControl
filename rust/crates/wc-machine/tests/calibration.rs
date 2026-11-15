@@ -243,6 +243,20 @@ fn accept_waits_for_the_job_to_stop() {
     assert_eq!(accept_on(&mut rig, Kind::Triangular).status, 200);
 }
 
+/// Triangular Accept ends with `G0 X0 Y0`, which must not queue behind a probe that leaves the bit on the plate.
+#[test]
+fn accept_waits_for_touch_z_to_finish() {
+    let mut rig = Rig::connected();
+    calculate_on(&mut rig, Kind::Triangular, triangular_body());
+    rig.act("touchZ");
+    let refused = accept_on(&mut rig, Kind::Triangular);
+    assert_eq!((refused.status, refused.body), (409, json!({"error": "Wait for Touch Z to finish or press Stop"})));
+    assert_eq!(text(&rig, "Maslow Settings", "motorOffsetY"), "463");
+    assert_eq!(rig.run_to_quiet(), ["G90 G38.2 Z-10"], "the probe answers and nothing follows it");
+    assert_eq!(accept_on(&mut rig, Kind::Triangular).status, 200);
+    assert_eq!(rig.run_to_quiet().last().map(String::as_str), Some("G0 X0 Y0"));
+}
+
 const HOLES: [(&str, &str); 6] = [
     ("0", "355.6"),
     ("-965.2", "355.6"),

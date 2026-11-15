@@ -181,10 +181,13 @@ impl Machine {
         true
     }
 
-    /// `POST /api/calibration/{kind}/accept`. Python took it mid-job; here it waits, as the action's gate does.
+    /// `POST /api/calibration/{kind}/accept`. Python took it mid-job or mid-probe; here it waits, as the action gates do.
     pub(crate) fn accept_calibration(&mut self, kind: Kind) -> Response {
         if self.run != RunState::Idle {
             return Response::error(409, JOB_RUNNING);
+        }
+        if self.probing {
+            return Response::error(409, crate::actions::PROBING);
         }
         if !self.accept_result(kind) {
             return Response::error(409, NOTHING_TO_ACCEPT);
