@@ -1,13 +1,17 @@
 # -*- mode: python ; coding: utf-8 -*-
+# Build with tools/build_release.sh, or `pyinstaller main-onedir.spec` after `npm run build` in frontend/.
+import sys
+
+sys.path.insert(0, SPECPATH)
+from pyinstaller_datas import bundle_datas
 
 block_cipher = None
 
-
 a = Analysis(['main.py'],
-             pathex=['C:\\Windows\\System32\\downlevel', 'C:\\Users\\john\\PycharmProjects\\WebControl'],
+             pathex=[SPECPATH],
              binaries=[],
-             datas=[('templates', 'templates'), ('firmware','firmware'), ('static', 'static'), ('tools', 'tools'), ('docs','docs'), ('defaultwebcontrol.json', '.')],
-             hiddenimports=['flask', 'flask-misaka', 'clr', 'gevent', 'gevent-websocket', 'engineio.async_gevent', 'distro', 'markdown'],
+             datas=bundle_datas(SPECPATH),
+             hiddenimports=['flask', 'gevent', 'engineio.async_drivers.gevent', 'psutil', 'distro', 'markdown', 'markdown.extensions.fenced_code'],
              excludes=[],
              win_no_prefer_redirects=False,
              win_private_assemblies=False,
@@ -24,7 +28,9 @@ exe = EXE(pyz,
           strip=False,
           upx=True,
           console=True,
-          icon = 'webcontrolicon_256px.ico' )
+          # The self-updater and the Pi image expect data files beside the executable, not in _internal/.
+          contents_directory='.',
+          icon='webcontrolicon_256px.ico' if sys.platform == 'win32' else None)
 coll = COLLECT(exe,
           a.binaries,
           a.zipfiles,
