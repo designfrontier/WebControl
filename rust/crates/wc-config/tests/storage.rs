@@ -167,3 +167,40 @@ fn saving_writes_every_section_and_unknown_field_back() {
     assert_eq!(saved["Odd"], "text");
     assert_eq!(saved["Maslow Settings"].as_array().unwrap().len(), 19);
 }
+
+fn computed(settings: &Value, key: &str) -> Value {
+    let section = settings["Computed Settings"].as_array().unwrap();
+    section.iter().find(|o| o["key"] == key).unwrap()["value"].clone()
+}
+
+/// A file with a nine-tooth sprocket, a stale `distPerRot`, and one default missing.
+fn nine_tooth_file(paths: &Paths) {
+    let mut file: Value = serde_json::from_str(include_str!("../../../../defaultwebcontrol.json")).unwrap();
+    let advanced = file["Advanced Settings"].as_array_mut().unwrap();
+    advanced.retain(|option| option["key"] != "fPWM");
+    advanced.iter_mut().filter(|option| option["key"] == "gearTeeth").for_each(|option| option["value"] = json!("9"));
+    fs::create_dir_all(paths.dir()).unwrap();
+    fs::write(paths.settings_file(), file.to_string()).unwrap();
+}
+
+#[test]
+fn opening_derives_the_computed_settings_and_saves_them_as_main_py_does_at_startup() {
+    let home = tempfile::tempdir().unwrap();
+    let paths = Paths::new(home.path());
+    nine_tooth_file(&paths);
+    let settings = Settings::open(&paths).unwrap();
+    assert_eq!(settings.value("Computed Settings", "distPerRot"), Some(&json!("57.15")));
+    assert_eq!(computed(&read(&paths.settings_file()), "distPerRot"), "57.15");
+    assert_eq!(computed(&read(&paths.settings_snapshot()), "distPerRot"), "63.5", "the snapshot is the file as found");
+}
+
+#[test]
+fn a_home_that_cannot_be_prepared_still_gets_the_derived_settings_and_is_left_alone() {
+    let home = tempfile::tempdir().unwrap();
+    let paths = Paths::new(home.path());
+    nine_tooth_file(&paths);
+    let before = fs::read_to_string(paths.settings_file()).unwrap();
+    let settings = Settings::load_derived(&paths);
+    assert_eq!(settings.value("Computed Settings", "distPerRot"), Some(&json!("57.15")));
+    assert_eq!(fs::read_to_string(paths.settings_file()).unwrap(), before);
+}

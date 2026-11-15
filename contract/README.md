@@ -182,3 +182,12 @@ until a `VERSION` bump changes them.
     (`/editGCode` resends it itself). A load waits for one already running, and `startRun` is refused meanwhile;
     a load that finishes after a job has started is dropped with a 500 and the job keeps its gcode. The board resend
     after any `action` (wart 12) ends the spinner early too.
+
+## Rust-intended differences
+
+Where the Rust backend deliberately does not copy Python, as the owner decided (`spec/RUST-PLAN.md`).
+
+- **Every settings import recomputes.** After `/importFileWCJSON` changes anything, Rust runs `computeSettings`
+  (`kinematicsTypeComputed`, `distPerRot`, the PID gains, `chainOverSprocketComputed`, `fPWMComputed`), writes the
+  derived values that changed to the controller, then sends `$$`, as both backends already do after `/importFile`
+  and `/importRestoreWebControl`. Python's `importWebControlJSON` keeps the imported computed values as they are.
