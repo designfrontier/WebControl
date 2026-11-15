@@ -13,6 +13,8 @@
 - `Boards/` — board (workpiece) model and manager tracking dimensions and cut-area grid
 - `contract/` — frozen frontend ↔ backend spec as JSON Schema, generated from `frontend/src/protocol/` (see its
   `README.md`: layout, versioning, plain-WebSocket wire format, known warts)
+- `contract/serial/` — backend ↔ controller contract: JSON transcripts of the exact bytes sent and how controller
+  replies are handled, replayed against the real serial thread by `tests/test_serial_contract.py` (see its `README.md`)
 - `config/` — `Config` class: loads/saves `~/.WebControl/webcontrol.json`, computes derived settings, syncs settings with firmware
 - `Connection/` — serial link to the Arduino (`serialPortThread` buffering/flow control) and `NonVisibleWidgets`, which wires all backend services onto `Data`
 - `DataStructures/` — `Data` global state object, inter-thread queues, logger, and `MakesmithInitFuncs` base that injects `data`
@@ -48,7 +50,8 @@
 - `templates/` — Jinja pages and modal fragments (desktop + `_mobile` variants)
 - `templates/archive/` — retired 2D frontpage templates
 - `tests/` — backend pytest suite (`conftest.py` boots `main.py` with serial port, camera and network checks faked)
-- `tools/` — install/upgrade/repair scripts and OpenCV build helper
+- `tools/` — install/upgrade/repair scripts and OpenCV build helper; serial contract tools (`serial_scenarios.py`,
+  `record_serial_transcript.py`, `convert_recording.py`, `import_v094_log.py`)
 - `WebPageProcessor/` — renders modal HTML for each `requestPage` socket event
 
 ### Key files

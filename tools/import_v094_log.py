@@ -1,9 +1,6 @@
 """Splits a WebControl v0.94 log.txt (and optionally alog.txt) into serial recordings, one per controller connect.
 
     .venv/bin/python tools/import_v094_log.py ~/.WebControl/log.txt --alog ~/.WebControl/alog.txt --out recordings/
-    .venv/bin/python tools/convert_recording.py recordings/20240302-091455-1.jsonl --name ...
-
-The log format is described in contract/serial/README.md ("v0.94 logs").
 """
 import argparse
 import datetime

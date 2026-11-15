@@ -1,10 +1,6 @@
 """Turns a serial recording (~/.WebControl/serial-recordings/*.jsonl) into a contract/serial transcript skeleton.
 
     .venv/bin/python tools/convert_recording.py 20261114-093000.jsonl --gcode part.nc --name cut_part_one
-    .venv/bin/python tools/convert_recording.py 20261114-093000.jsonl 20261114-093000.1.jsonl --stdout
-
-The skeleton replays the recorded rx and checks the recorded tx; read it against spec/firmware.md, add expect events
-and a description, and trim it to the behaviour it is for.
 """
 import argparse
 import json
