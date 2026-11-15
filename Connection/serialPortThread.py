@@ -116,13 +116,6 @@ class SerialPortThread(MakesmithInitFuncs):
         self.unackedLines.clear()
         self.bufferSpace = self.bufferSize
 
-    def _getFirmwareVersion(self):
-        '''
-        Send command to have controller report details
-        :return:
-        '''
-        self.data.gcode_queue.put("B05 ")
-
     def _setupMachineUnits(self):
         '''
         Send command to put controller in correct units state.
@@ -348,7 +341,7 @@ class SerialPortThread(MakesmithInitFuncs):
 
             self.lastMessageTime = time.time()
             self.data.connectionStatus = 1
-            self._getFirmwareVersion()
+            # The port open resets the board, and its boot banner queues B05 and the write-only settings.
             self._setupMachineUnits()
             self._requestSettingsUpdate()
             # The host may still hold G91 from before a lost connection; resuming relies on the two agreeing.

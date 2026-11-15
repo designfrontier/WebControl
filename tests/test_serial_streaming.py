@@ -160,7 +160,7 @@ def test_a_reconnect_does_not_inherit_unacked_lines_from_the_old_connection(data
 
     port = serial.run()
 
-    assert port.sent[:3] == ["B05  ", f"{'G20' if data.units == 'INCHES' else 'G21'}  ", "$$ "]
+    assert port.sent[:2] == [f"{'G20' if data.units == 'INCHES' else 'G21'}  ", "$$ "]
 
 
 def test_a_requested_close_ends_the_thread_before_it_can_take_a_stop(data, serial):

@@ -54,6 +54,24 @@ def test_connecting_writes_dist_per_rot_once_even_when_the_controller_already_ha
     assert [line for line in port.sent if line.startswith("$13=")] == ["$13=63.5000 "]
 
 
+def test_connecting_asks_for_the_version_once_so_a_mismatch_alerts_once(data, serial, processor, clock, monkeypatch):
+    monkeypatch.setattr(data, "holeyFirmwareVersion", "51.28")
+    replied = {"count": 0}
+
+    def answer_b05(port):
+        booting(port)
+        versions_asked = len([line for line in port.sent if line.startswith("B05")])
+        port.incoming.extend(["Firmware Version 51.27\r\n"] * (versions_asked - replied["count"]))
+        replied["count"] = versions_asked
+
+    booting = booting_on_connect(processor, BOOT[:-1])
+    port = serial.run(on_poll=answer_b05)
+    [processor.processMessage(line) for line in drain(data.message_queue)]
+
+    assert len([line for line in port.sent if line.startswith("B05")]) == 1
+    assert len([message for message in drain(data.ui_queue1) if "not up to date" in message]) == 1
+
+
 def set_value(config, key, value):
     option(config, key)["value"] = value
 
