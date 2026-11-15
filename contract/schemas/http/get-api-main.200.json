@@ -20,6 +20,9 @@
         },
         "manualZAxisAdjust": {
           "type": "boolean"
+        },
+        "probing": {
+          "type": "boolean"
         }
       },
       "required": [

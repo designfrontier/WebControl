@@ -49,6 +49,20 @@ describe("machineReducer socket and startup", () => {
   });
 });
 
+describe("machineReducer backend", () => {
+  it("is unknown until /api/state loads", () => {
+    expect(initialMachineState.backend).toBeNull();
+  });
+
+  it.each([
+    ["rust", "rust"],
+    ["python", "python"],
+    [undefined, "python"],
+  ] as const)("records backend %s from /api/state as %s", (backend, expected) => {
+    expect(apply([{ type: "startup", state: startupState({ backend }) }]).backend).toBe(expected);
+  });
+});
+
 describe("machineReducer messages", () => {
   it("records the controller as disconnected without a port", () => {
     const state = apply([message("connectionStatus", { status: "disconnected", port: "none" })]);
@@ -180,8 +194,10 @@ describe("selectRunState", () => {
 });
 
 describe("job state", () => {
-  const status = (uploadFlag: number, job: { jobInProgress?: boolean; manualZAxisAdjust?: boolean } = {}) =>
-    message("statusMessage", { uploadFlag, positioningMode: 0, currentTool: 0, ...job });
+  const status = (
+    uploadFlag: number,
+    job: { jobInProgress?: boolean; manualZAxisAdjust?: boolean; probing?: boolean } = {},
+  ) => message("statusMessage", { uploadFlag, positioningMode: 0, currentTool: 0, ...job });
 
   it("counts a job paused by the controller as paused, not idle", () => {
     const state = apply([status(0, { jobInProgress: true })]);
@@ -200,8 +216,8 @@ describe("job state", () => {
   });
 
   it("keeps the last job flags when a status message leaves them out", () => {
-    const state = apply([status(0, { jobInProgress: true, manualZAxisAdjust: true }), status(0)]);
-    expect(state.job).toEqual({ inProgress: true, manualZAxisAdjust: true });
+    const state = apply([status(0, { jobInProgress: true, manualZAxisAdjust: true, probing: true }), status(0)]);
+    expect(state.job).toEqual({ inProgress: true, manualZAxisAdjust: true, probing: true });
   });
 
   it("locks gcode while uploading, adjusting Z or in a job, and not when idle or unknown", () => {
@@ -213,7 +229,15 @@ describe("job state", () => {
 
   it("loads the job flags from /api/state", () => {
     const state = apply([{ type: "startup", state: startupState({ jobInProgress: true, manualZAxisAdjust: true }) }]);
-    expect(state.job).toEqual({ inProgress: true, manualZAxisAdjust: true });
+    expect(state.job).toEqual({ inProgress: true, manualZAxisAdjust: true, probing: false });
+    const probing = apply([{ type: "startup", state: startupState({ probing: true }) }]);
+    expect(probing.job.probing).toBe(true);
+  });
+
+  it("reads Probing while a probe runs, and ends it when the status says so", () => {
+    const probing = apply([status(0, { probing: true })]);
+    expect(selectJobState(probing)).toBe("Probing");
+    expect(selectJobState(apply([status(0, { probing: false })], probing))).toBe("Idle");
   });
 });
 

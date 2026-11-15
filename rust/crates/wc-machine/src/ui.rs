@@ -5,7 +5,9 @@ use serde_json::Value;
 use wc_config::Settings;
 use wc_firmware::{PositionError, Status};
 use wc_kinematics::{Geometry, Kinematics};
-use wc_protocol::main::{ErrorValueMessage, HealthMessage, HomePositionMessage, PositionMessage, RequestedSetting};
+use wc_protocol::main::{
+    ErrorValueMessage, HealthMessage, HomePositionMessage, HostAddress, PositionMessage, RequestedSetting,
+};
 
 use crate::machine::{Effect, Machine, broadcast};
 use crate::work::{NO_COMPUTED_POSITION, Work};
@@ -173,6 +175,30 @@ impl Machine {
             effects.push(broadcast(&status));
             self.last_status = Some(status);
         }
+    }
+
+    /// Everything a client keeps from pushes, sent to `sid` alone.
+    pub(crate) fn resync(&mut self, sid: &str, effects: &mut Vec<Effect>) {
+        let mut pushes = vec![
+            broadcast(&HostAddress { host_address: self.host_address.clone() }),
+            broadcast(&self.connection_status()),
+            broadcast(&self.snapshot().status()),
+            broadcast(&RequestedSetting {
+                setting: "pauseButtonSetting".into(),
+                value: serde_json::to_value(self.job.pause_button()).unwrap_or(Value::Null),
+            }),
+            broadcast(&HomePositionMessage {
+                xval: self.settings.number("Advanced Settings", "homeX"),
+                yval: self.settings.number("Advanced Settings", "homeY"),
+            }),
+        ];
+        self.push_gcode_position_to(sid, &mut pushes);
+        self.gcode_update_requested(&mut pushes);
+        self.push_board(&mut pushes);
+        effects.extend(pushes.into_iter().map(|effect| match effect {
+            Effect::Push(push) => Effect::Push(push.to_client(sid)),
+            other => other,
+        }));
     }
 
     /// `processSettingRequest`; every answer is a broadcast (wart 12).

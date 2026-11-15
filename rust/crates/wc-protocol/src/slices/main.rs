@@ -140,6 +140,8 @@ pub struct StatusMessage {
     pub job_in_progress: bool,
     #[serde(rename = "manualZAxisAdjust")]
     pub manual_z_axis_adjust: bool,
+    /// A G38.2 probe is queued or descending (Rust only).
+    pub probing: bool,
 }
 
 impl Message for StatusMessage {
@@ -302,6 +304,8 @@ pub struct StartupState {
     pub pause_button_setting: PauseButton,
     pub job_in_progress: bool,
     pub manual_z_axis_adjust: bool,
+    /// A G38.2 probe is queued or descending (Rust only).
+    pub probing: bool,
     pub host_address: String,
     pub controller_firmware_version: f64,
     pub controller_board: Option<String>,

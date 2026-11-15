@@ -14,13 +14,24 @@ interface Props {
   runState: RunState;
   /** selectGcodeLocked: the server refuses defineHome until the job is stopped or a tool change resumed. */
   homeLocked: boolean;
+  /** selectProbing: the server refuses every move until the probe answers. */
+  probing: boolean;
   onAction(action: ScreenAction, point: Point): void;
   onClose(): void;
 }
 
 /** The right-click / long-press menu on the viewer (old templates/screenAction.html), owned by the client. */
-export const ScreenActionDialog = ({ point, units, onBed, runState, homeLocked, onAction, onClose }: Props) => {
-  const running = runState === "running";
+export const ScreenActionDialog = ({
+  point,
+  units,
+  onBed,
+  runState,
+  homeLocked,
+  probing,
+  onAction,
+  onClose,
+}: Props) => {
+  const running = runState === "running" || probing;
   const paused = runState === "paused";
   const format = (inches: number) => fromInches(inches, units).toFixed(units === "MM" ? 1 : 2);
 
@@ -54,7 +65,8 @@ export const ScreenActionDialog = ({ point, units, onBed, runState, homeLocked, 
       <p>
         X {format(point.x)}, Y {format(point.y)} {unitLabel(units)}
       </p>
-      {running ? <p className="muted">Unavailable while gcode is running.</p> : null}
+      {probing ? <p className="muted">Unavailable while the probe runs.</p> : null}
+      {running && !probing ? <p className="muted">Unavailable while gcode is running.</p> : null}
       {paused ? <p className="muted">Define home is unavailable while a run is paused.</p> : null}
       {!onBed && !running ? (
         <p className="muted">This point is outside the work area, so the sled cannot move there.</p>

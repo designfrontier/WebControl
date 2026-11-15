@@ -11,7 +11,7 @@ repo="$(dirname "$rust")"
 target=aarch64-unknown-linux-gnu
 binary="${WC_BINARY:-$rust/target/$target/release/webcontrol-rs}"
 command="${1:-}"
-host="${2:-pi@maslow-next.local}"
+host="${2:-pi@maslow.local}"
 
 # The 51.292 image the upgrade flashes, built from its tag in Docker unless WC_FIRMWARE_HEX names one.
 firmware() {

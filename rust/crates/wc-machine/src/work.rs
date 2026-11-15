@@ -6,6 +6,7 @@ use std::sync::Arc;
 use wc_gcode::position;
 use wc_kinematics::Kinematics;
 use wc_protocol::main::{ErrorValueMessage, GcodePositionMessage};
+use wc_protocol::{Envelope, Push};
 
 use crate::machine::{Effect, Event, Machine, alert, broadcast};
 
@@ -18,6 +19,8 @@ pub enum Work {
     ComputedPosition { model: Box<Kinematics>, chains: (f64, f64), guess: (f64, f64), report: ErrorValueMessage },
     /// `sendGCodePositionUpdate`: the file read from the top to `index`. `failure` is alerted if that fails.
     GcodePosition { gcode: Arc<Vec<String>>, index: usize, scale: f64, failure: Option<String> },
+    /// The same for a client that fell behind; nothing waits behind it.
+    GcodePositionFor { sid: String, gcode: Arc<Vec<String>>, index: usize, scale: f64 },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -28,6 +31,21 @@ pub enum Done {
         report: ErrorValueMessage,
     },
     GcodePosition(Result<GcodePositionMessage, Option<String>>),
+    GcodePositionFor {
+        sid: String,
+        message: Option<GcodePositionMessage>,
+    },
+}
+
+fn gcode_position(gcode: &[String], index: usize, scale: f64) -> Option<GcodePositionMessage> {
+    let at = position::find_position_at(gcode, index).ok()?;
+    Some(GcodePositionMessage {
+        xval: at.x * scale,
+        yval: at.y * scale,
+        zval: at.z * scale,
+        gcode_line: gcode.get(index).cloned().unwrap_or_default(),
+        gcode_line_index: index,
+    })
 }
 
 impl Work {
@@ -40,14 +58,10 @@ impl Work {
                 Done::ComputedPosition { model, report }
             }
             Work::GcodePosition { gcode, index, scale, failure } => {
-                let at = position::find_position_at(&gcode, index).map_err(|_| failure);
-                Done::GcodePosition(at.map(|at| GcodePositionMessage {
-                    xval: at.x * scale,
-                    yval: at.y * scale,
-                    zval: at.z * scale,
-                    gcode_line: gcode.get(index).cloned().unwrap_or_default(),
-                    gcode_line_index: index,
-                }))
+                Done::GcodePosition(gcode_position(&gcode, index, scale).ok_or(failure))
+            }
+            Work::GcodePositionFor { sid, gcode, index, scale } => {
+                Done::GcodePositionFor { sid, message: gcode_position(&gcode, index, scale) }
             }
         })
     }
@@ -67,22 +81,24 @@ pub(crate) struct Lanes {
 }
 
 impl Lanes {
-    fn of(&mut self, work: &Work) -> &mut Lane {
+    fn of(&mut self, work: &Work) -> Option<&mut Lane> {
         match work {
-            Work::ComputedPosition { .. } => &mut self.position,
-            Work::GcodePosition { .. } => &mut self.gcode,
+            Work::ComputedPosition { .. } => Some(&mut self.position),
+            Work::GcodePosition { .. } => Some(&mut self.gcode),
+            Work::GcodePositionFor { .. } => None,
         }
     }
 }
 
 impl Machine {
     pub(crate) fn compute(&mut self, work: Work, effects: &mut Vec<Effect>) {
-        let lane = self.lanes.of(&work);
-        if lane.running {
-            lane.next = Some(work);
-        } else {
-            lane.running = true;
-            effects.push(Effect::Compute(work));
+        match self.lanes.of(&work) {
+            Some(lane) if lane.running => lane.next = Some(work),
+            Some(lane) => {
+                lane.running = true;
+                effects.push(Effect::Compute(work));
+            }
+            None => effects.push(Effect::Compute(work)),
         }
     }
 
@@ -103,6 +119,10 @@ impl Machine {
                     Err(None) => {}
                 }
                 &mut self.lanes.gcode
+            }
+            Done::GcodePositionFor { sid, message } => {
+                let to_client = |message| Effect::Push(Push::message(Envelope::json(message)).to_client(sid));
+                return effects.extend(message.iter().map(to_client));
             }
         };
         let Some(mut next) = lane.next.take() else {

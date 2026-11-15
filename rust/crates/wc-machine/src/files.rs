@@ -18,6 +18,8 @@ use crate::machine::{Effect, Machine, alert, broadcast};
 use crate::work::Work;
 
 pub const GCODE_LOCKED: &str = "Cannot load gcode while a job is running or paused. Stop the job first.";
+pub const SETTINGS_LOCKED: &str = "Cannot change settings while a job is running or paused. Stop the job first.";
+pub const SEND_LOCKED: &str = "Cannot send gcode while a job is running or paused. Stop the job first.";
 const PROBING: &str = "Wait for Touch Z to finish or press Stop";
 
 /// The 3D preview: the gzip `gcodeUpdateCompressed` sends, `None` until a file is first loaded.
@@ -224,19 +226,30 @@ impl Machine {
         self.gcode_position(None, effects);
     }
 
+    /// The same for one client, outside the lane, since it changes nothing.
+    pub(crate) fn push_gcode_position_to(&mut self, sid: &str, effects: &mut Vec<Effect>) {
+        if self.index < self.gcode.len() {
+            let (gcode, index, scale) = (self.gcode.clone(), self.index, self.gcode_scale());
+            self.compute(Work::GcodePositionFor { sid: sid.into(), gcode, index, scale }, effects);
+        }
+    }
+
     /// False when there is no line at the index; `failure` is alerted if the file cannot be read up to it.
     fn gcode_position(&mut self, failure: Option<String>, effects: &mut Vec<Effect>) -> bool {
         if self.index >= self.gcode.len() {
             return false;
         }
-        let scale = match (self.preview.file_units, self.units()) {
+        let (gcode, index, scale) = (self.gcode.clone(), self.index, self.gcode_scale());
+        self.compute(Work::GcodePosition { gcode, index, scale, failure }, effects);
+        true
+    }
+
+    fn gcode_scale(&self) -> f64 {
+        match (self.preview.file_units, self.units()) {
             (Units::Mm, Units::Inches) => 1.0 / 25.4,
             (Units::Inches, Units::Mm) => 25.4,
             _ => 1.0,
-        };
-        let (gcode, index) = (self.gcode.clone(), self.index);
-        self.compute(Work::GcodePosition { gcode, index, scale, failure }, effects);
-        true
+        }
     }
 
     fn install(&mut self, gcode: Gcode) {
@@ -419,7 +432,20 @@ impl Machine {
         Reply::Done
     }
 
+    /// Decision 2: nothing but the job reaches the controller or the settings while the job holds the gcode.
+    fn job_lock(&self, request: &Request) -> Option<&'static str> {
+        let refused = match request {
+            Request::SendGcode(_) => SEND_LOCKED,
+            Request::ImportIni(_) | Request::ImportWebControl(_) | Request::RestoreSettings(_) => SETTINGS_LOCKED,
+            _ => return None,
+        };
+        self.gcode_locked().then_some(refused)
+    }
+
     pub(crate) fn request(&mut self, request: Request, effects: &mut Vec<Effect>) -> Reply {
+        if let Some(refused) = self.job_lock(&request) {
+            return Reply::Refused(refused.into());
+        }
         match request {
             Request::SetSettings(changes) => {
                 changes.into_iter().for_each(|(section, key, value)| self.set_setting(&section, &key, value));

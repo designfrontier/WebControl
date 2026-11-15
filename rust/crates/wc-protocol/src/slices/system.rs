@@ -85,6 +85,8 @@ pub struct FirmwareUpgrade {
     /// Where the `$$` dump, settings, chain lengths and flash read-back were saved.
     pub backup: Option<String>,
     pub can_rollback: bool,
+    /// The version read off the board before the upgrade, which a rollback restores.
+    pub rollback_firmware: Option<String>,
     pub log: Vec<String>,
 }
 

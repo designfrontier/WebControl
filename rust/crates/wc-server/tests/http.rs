@@ -150,7 +150,7 @@ async fn api_state_reports_the_settings_and_the_rust_backend() {
         reply.json(),
         json!({"units": "MM", "distToMove": 2.5, "unitsZ": "MM", "distToMoveZ": 1.0,
             "homePosition": {"x": 12.5, "y": -3.0}, "pauseButtonSetting": "Pause", "jobInProgress": false,
-            "manualZAxisAdjust": false, "hostAddress": "10.0.0.5:5000", "controllerFirmwareVersion": 0.0,
+            "manualZAxisAdjust": false, "probing": false, "hostAddress": "10.0.0.5:5000", "controllerFirmwareVersion": 0.0,
             "controllerBoard": null, "firmwareBuild": null,
             "macros": [{"command": "macro1", "title": "Spindle on"}, {"command": "macro2", "title": ""}],
             "backend": "rust"})
@@ -261,7 +261,7 @@ async fn api_main_reports_the_run_status_and_the_touch_plate() {
     assert_eq!(
         reply.json(),
         json!({"status": {"uploadFlag": 0, "positioningMode": 0, "currentTool": 0, "jobInProgress": false,
-            "manualZAxisAdjust": false}, "touchPlate": true, "gcode": {"lineIndex": 0, "line": "", "lineCount": 0}})
+            "manualZAxisAdjust": false, "probing": false}, "touchPlate": true, "gcode": {"lineIndex": 0, "line": "", "lineCount": 0}})
     );
     let flags =
         [(json!(0), false), (json!(true), true), (json!("True"), true), (json!("2.5"), true), (json!("no"), false)];

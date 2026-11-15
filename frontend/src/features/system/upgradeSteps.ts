@@ -27,7 +27,7 @@ const busy = (title: string): StageView => ({ title, busy: true, buttons: [] });
 
 const rollback = (upgrade: FirmwareUpgrade): StepButton[] =>
   upgrade.canRollback
-    ? [{ step: "rollback", label: `Roll back to ${upgrade.firmware ?? "the saved firmware"}`, danger: true }]
+    ? [{ step: "rollback", label: `Roll back to ${upgrade.rollbackFirmware ?? "the saved firmware"}`, danger: true }]
     : [];
 
 const views: Record<UpgradeStage, (upgrade: FirmwareUpgrade) => StageView> = {

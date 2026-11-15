@@ -12,10 +12,11 @@ use wc_firmware::{Reply, classify, split_glued};
 use wc_gcode::firmware_gcode::{only_selects_tool, tool_change_line};
 use wc_gcode::sanitise::{problem_with, sanitise};
 use wc_gcode::shift::positioning_set_by;
-use wc_protocol::main::{ActivateModal, Alarm, ClearAlarm, ControllerMessage, Units};
+use wc_protocol::main::{ActivateModal, Alarm, ClearAlarm, ControllerMessage, PauseButton, Units};
 
-use crate::job::Flow;
-use crate::machine::{Controller, Effect, Link, Machine, Queued, alert, broadcast};
+use crate::gpio::Led;
+use crate::job::{Flow, pause_button};
+use crate::machine::{Controller, Effect, Link, Machine, Probe, Queued, alert, broadcast};
 
 /// The 5 s poller Python used to reopen the port.
 pub const RECONNECT: Duration = Duration::from_secs(5);
@@ -31,6 +32,9 @@ const EEPROM_RESTORED: &str = "The controller lost its settings (EEPROM read fai
                                WebControl doesn't keep Z-axis limits, so set them again if you use them.";
 const TOUCH_Z_FAILED: &str =
     "The probe did not touch the plate, so Z was not zeroed. Check the plate and its clip, then try again.";
+const NOT_ZEROED: &str = "Probe finished but Z was not zeroed. The controller may have no Z axis attached, or Z was \
+                          already at the probe's depth. Set Z before cutting.";
+const PROBE_TITLE: &str = "Touch Z Failed";
 const CONNECTION_LOST: &str = "Message: USB connection lost. This has likely caused the machine to loose it's \
                                calibration, which can cause erratic behavior. It is recommended to stop the program, \
                                remove the sled, and perform the chain calibration process. Press Continue to \
@@ -172,6 +176,11 @@ impl Machine {
                 self.controller.queue.extend([Queued::SettingsPush, read_back]);
             }
         }
+        if line == "z axis zeroed"
+            && let Some(probe) = self.controller.probe.as_mut()
+        {
+            probe.zeroed = true;
+        }
         let reply = classify(line);
         self.acknowledge(line, &reply, effects);
         self.react(line, reply, now, effects);
@@ -193,11 +202,37 @@ impl Machine {
         controller.ready = true;
         let acked = controller.accounting.acked();
         // Identity, not position: a `~` sent mid-probe is acked first with an entry of its own.
-        if acked.is_some_and(|sent| Some(sent.id) == controller.probe) {
-            controller.probe = None;
-            self.probing = false;
-            if !matches!(reply, Reply::Ok) {
-                effects.push(broadcast(&ActivateModal::titled_alert("Touch Z Failed", TOUCH_Z_FAILED)));
+        let answered = controller.probe.take_if(|probe| acked.is_some_and(|sent| sent.id == probe.id));
+        if let Some(probe) = answered {
+            self.probe_answered(probe, matches!(reply, Reply::Ok), effects);
+        }
+    }
+
+    /// A touch zeroes Z; a miss stops the firmware (`sys.stop`), so a job waits at the probe for Play to try again.
+    fn probe_answered(&mut self, probe: Probe, ok: bool, effects: &mut Vec<Effect>) {
+        self.probing = false;
+        match (ok, probe.zeroed, probe.index) {
+            (true, true, Some(_)) => {
+                self.job.z_target = 0.0;
+                if let Some((_, z)) = self.job.paused_at.as_mut() {
+                    *z = 0.0;
+                }
+            }
+            (true, true, None) => {}
+            (true, false, _) => {
+                effects.push(broadcast(&ActivateModal::titled_alert(PROBE_TITLE, NOT_ZEROED)));
+                self.pause_run(effects);
+            }
+            (false, _, index) => {
+                effects.push(broadcast(&ActivateModal::titled_alert(PROBE_TITLE, TOUCH_Z_FAILED)));
+                if let Some(index) = index.filter(|_| self.job.flow.in_job()) {
+                    self.index = index;
+                    self.job.flow = Flow::Held;
+                    self.job.paused_at = None;
+                    self.push_gcode_position(effects);
+                    effects.push(pause_button(PauseButton::Resume));
+                    self.leds.light(Led::Pause);
+                }
             }
         }
     }
@@ -347,6 +382,7 @@ impl Machine {
             false => self.controller.accounting.is_empty() && self.controller.ready,
         };
         self.job.flow == Flow::Streaming
+            && !self.probing
             && !self.gcode.is_empty()
             && self.controller.queue.is_empty()
             && self.may_write(now)
@@ -425,12 +461,16 @@ impl Machine {
             self.controller.accounting.acked();
             self.controller.ready = true;
         }
-        if command.contains("G38.2") {
-            self.controller.probe = Some(id);
-            self.probing = true;
-        }
+        self.track_probe(&command, id, None);
         self.follow_units_in(&command, effects);
         true
+    }
+
+    pub(crate) fn track_probe(&mut self, line: &str, id: u64, index: Option<usize>) {
+        if line.contains("G38.2") {
+            self.controller.probe = Some(Probe { id, index, zeroed: false });
+            self.probing = true;
+        }
     }
 
     pub(crate) fn queue(&mut self, lines: impl IntoIterator<Item = String>) {

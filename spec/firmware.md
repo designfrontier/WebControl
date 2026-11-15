@@ -59,7 +59,10 @@ the raw line, re-send B05 on any boot banner (`PCB v1.`, `Grbl v1.00`, `ready`),
   motion mode alone. On a touch G38.2 zeroes Z itself (`zAxis.set(0)`, H27 `GCode.cpp:922`, H292
   `GCode.cpp:1047`), prints `z axis zeroed` and acks, so a `G10 Z0` after it is redundant and WebControl sends none;
   on a miss it prints `error: probe did not connect`, `program stopped`, `z axis not set` and an empty line, with no
-  `ok`, and sets `sys.stop` (H27 `GCode.cpp:936-937`, H292 `GCode.cpp:1061-1062`). `M2` and
+  `ok`, and sets `sys.stop`, which drops every line the firmware held (H27 `GCode.cpp:936-937`, H292
+  `GCode.cpp:1061-1062`). It acks with `ok` and no `z axis zeroed` when Z is not attached (`G38.2 gcode only valid
+  with z-axis attached`), when the target equals the current Z (no move at all), and for `G38.<n>` other than `.2`
+  (H27 `GCode.cpp:836-948`). `M2` and
   `M30` only turn the spindle off. The firmware reads T only when it leads a line that also has a G or M word (`T2 M6`, `T2 G0 X1`):
   in `M6 T2`, `N10 T2 M6`, `G0 X1 T2` and a lone `T2` line the T is ignored, and a lone `T2` runs as a modal move.
 - `$` keys: units match WebControl's assumptions. `$13` is the only path that sets R. `$37` is used only when
@@ -155,7 +158,8 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
 4. Realtime: `!` resets accounting (immediate `ok`, no ack for the aborted line); `~` immediate `ok`.
 5. Sanitise outgoing lines: strip comments, reject an unclosed `(`, remove `!`, `~`, backtick, `?` and control
    characters.
-6. ALARM or `Buffer overflow!` halts streaming and requires Stop/resync; a probe `error:` is that line's ack;
+6. ALARM or `Buffer overflow!` halts streaming and rewinds the job to the oldest unacknowledged line; acks are
+   ignored until a status report (the resync); a probe `error:` is that line's ack;
    `$RST` has no `ok` of its own; detect a trailing glued `ok` on 51.291.
 7. Parse every message type above, including B04's glued status line.
 8. B05 after every boot; parse `^Firmware Version\s+([\d.]+)`; fingerprint 51.29x; record the PCB/driver banner.
@@ -165,7 +169,8 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
     on the first motion line; restart with a G1 Z plunge at an explicit feed, then restore the file's last F, if it set one
     (without one the plunge feed stays modal).
 11. Never auto-send `~`; stop streaming before any line the firmware will pause on (using its T semantics); emit
-    `T<n> M6`; require Stop after an ALARM.
+    `T<n> M6`. After an ALARM or `Buffer overflow!`, Play resumes from the oldest unacknowledged line, returning at
+    safe height (`alarm_mid_cut_rewinds_and_resumes`); Stop also clears it (owner decision, 2026-11-15).
 12. Z limits: hide below 51.292 and never send B17/B18/B19; on 51.292+ use `$63`/`$64` (mm, shifted by zeroing)
     and B20 to read them.
 13. Spindle on 51.29x: send `S` on its own line after M3.
@@ -173,7 +178,9 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
     forward-solve limits).
 15. MPos has 2 decimals; never use it to restore an exact Z.
 16. Touch Z: send `G38.2` alone; no `G10 Z0` after it; a probe `error:` alerts and zeroes nothing; until the probe
-    answers, refuse every action that moves the machine (Resume included), except Stop.
+    answers, refuse every action that moves the machine (Resume included), except Stop. A `G38.2` streamed from a file
+    is the same: stream nothing behind it, hold the job at the probe line on a miss, and take Z as 0 after a touch.
+    An `ok` without `z axis zeroed` alerts that Z was not zeroed and pauses a job.
 
 ### C. One-click firmware upgrade
 

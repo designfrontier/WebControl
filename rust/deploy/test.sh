@@ -106,10 +106,10 @@ install_stages_the_sudoers_rule() {
   deploy install pi@other.local > /dev/null && grep -q "scp .*webcontrol-rs.sudoers pi@other.local:" "$work/calls"
 }
 
-push_to_the_new_card_by_default() {
+push_to_maslow_local_by_default() {
   reset
   echo '{"jobInProgress":false}' > "$work/state"
-  deploy push > /dev/null && grep -q "scp .*webcontrol-rs pi@maslow-next.local:/tmp/webcontrol-rs.new" "$work/calls" &&
+  deploy push > /dev/null && grep -q "scp .*webcontrol-rs pi@maslow.local:/tmp/webcontrol-rs.new" "$work/calls" &&
     grep -q "try-restart webcontrol-rs" "$work/calls"
 }
 
@@ -125,7 +125,7 @@ rollback_swaps_prev_back() {
 }
 
 check "install stages the power-off sudoers rule" install_stages_the_sudoers_rule
-check "push copies to pi@maslow-next.local and restarts only a running Rust backend" push_to_the_new_card_by_default
+check "push copies to pi@maslow.local and restarts only a running Rust backend" push_to_maslow_local_by_default
 check "push refuses while a job is in progress" push_refuses_during_a_job
 check "rollback puts the previous binary back" rollback_swaps_prev_back
 

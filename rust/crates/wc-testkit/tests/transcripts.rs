@@ -32,8 +32,17 @@ fn rust_overrides_fit_the_schema_and_replace_shared_transcripts_by_name() {
         assert_eq!(path.file_stem().unwrap().to_str().unwrap(), transcript.meta.name);
         assert!(transcript.meta.description.starts_with("Rust"), "{} says why Rust differs", transcript.meta.name);
     });
+    let shared = Transcript::corpus();
+    let rust_only: Vec<&str> = overrides
+        .iter()
+        .map(|(_, t)| t)
+        .filter(|t| !shared.iter().any(|(_, s)| s.meta.name == t.meta.name))
+        .inspect(|t| assert!(t.meta.description.starts_with("Rust only"), "{} replaces nothing", t.meta.name))
+        .map(|t| t.meta.name.as_str())
+        .collect();
+    assert!(rust_only.contains(&"touch_z_without_zeroing_alerts"), "{rust_only:?}");
     let rust = Transcript::rust_corpus();
-    assert_eq!(rust.len(), Transcript::corpus().len(), "every override replaces a shared transcript");
+    assert_eq!(rust.len(), shared.len() + rust_only.len(), "each override replaces one shared transcript or none");
     let names: Vec<&str> = rust.iter().map(|(_, t)| t.meta.name.as_str()).collect();
     assert!(names.windows(2).all(|pair| pair[0] < pair[1]), "sorted and unique");
     let replaced = rust.iter().find(|(_, t)| t.meta.name == "connect_boot_handshake").unwrap();

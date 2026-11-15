@@ -99,7 +99,7 @@ export const JogPanel = ({ available }: { available: ControlAvailability }) => {
           decimals={JOG_DECIMALS}
           units={units}
           onToggleUnits={field.toggleUnits}
-          unitsDisabled={!available.manual}
+          unitsDisabled={!available.units}
           inputRef={field.input}
           invalid={field.invalid}
         />

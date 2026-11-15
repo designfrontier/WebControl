@@ -1,6 +1,7 @@
 import { ApiError, getJson, sendJson } from "../../api/http";
 import type { Fetch } from "../../api/http";
 import {
+  classicErrorSchema,
   helpPageSchema,
   pidSettingsSchema,
   pidTestResponseSchema,
@@ -30,9 +31,11 @@ export const restoreBackup = async (fetchImpl: Fetch, file: File) => {
   const body = new FormData();
   body.append("file", file);
   const response = await fetchImpl("/importRestoreWebControl", { method: "POST", body });
-  const parsed = restoreResponseSchema.safeParse(await response.json().catch(() => null));
+  const answer: unknown = await response.json().catch(() => null);
+  const parsed = restoreResponseSchema.safeParse(answer);
   if (!response.ok || !parsed.success) {
-    throw new ApiError(response.status, `Restore failed with ${response.status}`);
+    const reason = classicErrorSchema.safeParse(answer).data?.error;
+    throw new ApiError(response.status, reason ?? `Restore failed with ${response.status}`, answer);
   }
 };
 

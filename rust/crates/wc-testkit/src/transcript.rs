@@ -244,12 +244,13 @@ impl Transcript {
     }
 
     /// `contract/serial/transcripts-rust/`: where the Rust backend must differ from Python (the README's known
-    /// warts), a transcript there replaces the shared one of the same name.
+    /// warts), a transcript there replaces the shared one of the same name; one with a new name is Rust only.
     pub fn overrides() -> Vec<(PathBuf, Transcript)> {
         Transcript::directory("transcripts-rust")
     }
 
-    /// The corpus the Rust backend replays: the shared transcripts with the Rust ones in place of theirs.
+    /// The corpus the Rust backend replays: the shared transcripts with the Rust ones in place of theirs, plus the
+    /// Rust-only ones.
     pub fn rust_corpus() -> Vec<(PathBuf, Transcript)> {
         let overrides = Transcript::overrides();
         let shared = Transcript::corpus()

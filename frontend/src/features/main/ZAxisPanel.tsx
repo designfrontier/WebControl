@@ -1,5 +1,5 @@
 import { useClient, useMachine } from "../../app/context";
-import { selectRunState } from "../../state/machine";
+import { selectGcodeLocked, selectProbing, selectRunState } from "../../state/machine";
 import { controlsFor } from "./controls";
 import type { ControlAvailability } from "./controls";
 import { DistanceField } from "./DistanceField";
@@ -40,7 +40,7 @@ export const ZAxisPanel = ({ available, touchPlate }: Props) => {
         decimals={Z_DECIMALS}
         units={unitsZ}
         onToggleUnits={field.toggleUnits}
-        unitsDisabled={!available.manual}
+        unitsDisabled={!available.units}
         inputRef={field.input}
         invalid={field.invalid}
       />
@@ -73,6 +73,6 @@ export const ZAxisPanel = ({ available, touchPlate }: Props) => {
 /** The Z-Axis modal: loads whether the touch plate is enabled, which only GET /api/main reports. */
 export const ZAxisModal = () => {
   const loaded = useMainScreenState();
-  const available = controlsFor(useMachine(selectRunState));
+  const available = controlsFor(useMachine(selectRunState), useMachine(selectGcodeLocked), useMachine(selectProbing));
   return <ZAxisPanel available={available} touchPlate={loaded?.touchPlate ?? false} />;
 };

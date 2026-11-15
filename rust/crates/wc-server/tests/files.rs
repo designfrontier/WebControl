@@ -254,7 +254,8 @@ async fn the_gcode_cannot_be_replaced_during_a_job() {
     }
     assert!(!server.dir().join("gcode/guarded.nc").exists());
     assert_eq!(server.get("/api/files/gcode/text").await.json()["text"], "G0 X1 \nG1 Z-1");
-    assert_eq!(server.post_form("/sendGCode", &[Part::Field("gcode", "G0 X1")]).await.status, StatusCode::OK);
+    let sent = server.post_form("/sendGCode", &[Part::Field("gcode", "G0 X1")]).await;
+    assert_eq!(sent.status, StatusCode::CONFLICT, "decision 2, where Python sends it mid-job");
 }
 
 /// Ported from test_gcode_load_guard and test_job_in_progress: a paused job, or a tool change outside one, locks too.
@@ -286,6 +287,8 @@ async fn sent_gcode_is_remembered_and_refused_while_probing() {
     let server = Server::with(probing);
     let reply = server.post_form("/sendGCode", &[Part::Field("gcode", "G0 X1")]).await;
     assert_eq!((reply.status, reply.json()), (StatusCode::INTERNAL_SERVER_ERROR, json!("failed")));
+    assert_eq!(server.get("/api/state").await.json()["probing"], true);
+    assert_eq!(server.get("/api/main").await.json()["status"]["probing"], true);
 }
 
 #[tokio::test]

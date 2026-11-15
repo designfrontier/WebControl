@@ -238,15 +238,31 @@ fn an_air_cut_against_the_simulator_runs_every_pause_and_ends_where_the_file_doe
 }
 
 #[test]
-fn moving_the_controller_to_another_port_mid_job_pauses_it() {
+fn moving_the_controller_to_another_port_mid_job_is_refused_and_the_cut_goes_on() {
     let mut rig = Rig::connected_with(settings(&[("Maslow Settings", "COMport", json!("/dev/ttyACM0"))]));
     rig.machine.load_gcode(&file(&["G0 X1", "G0 X2"]));
     rig.act("startRun");
     let body = json!({"values": {"COMport": "/dev/ttyUSB0"}});
     let request = wc_machine::Request::UpdateSettings { section: "maslow".into(), body };
-    rig.send(Event::Edit { id: 1, request });
+    let effects = rig.send(Event::Edit { id: 1, request });
+    let refused = effects.iter().find_map(|effect| match effect {
+        wc_machine::Effect::Respond { response, .. } => Some((response.status, response.body.clone())),
+        _ => None,
+    });
+    assert_eq!(refused, Some((409, json!({"error": wc_machine::files::SETTINGS_LOCKED}))));
+    assert!(!effects.iter().any(|effect| matches!(effect, wc_machine::Effect::ClosePort)));
     let snapshot = rig.machine.snapshot();
-    assert_eq!((snapshot.upload_flag, snapshot.job_in_progress, snapshot.gcode_index), (2, true, 0));
+    assert_eq!(snapshot.settings.text_or_empty("Maslow Settings", "COMport"), "/dev/ttyACM0");
+    assert_eq!((snapshot.upload_flag, snapshot.job_in_progress), (1, true));
+}
+
+#[test]
+fn moving_the_controller_to_another_port_when_idle_reopens_it() {
+    let mut rig = Rig::connected_with(settings(&[("Maslow Settings", "COMport", json!("/dev/ttyACM0"))]));
+    let body = json!({"values": {"COMport": "/dev/ttyUSB0"}});
+    let request = wc_machine::Request::UpdateSettings { section: "maslow".into(), body };
+    let effects = rig.send(Event::Edit { id: 1, request });
+    assert!(effects.iter().any(|effect| matches!(effect, wc_machine::Effect::ClosePort)));
 }
 
 #[test]

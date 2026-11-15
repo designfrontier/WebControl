@@ -175,6 +175,21 @@ describe("MainPage jogging", () => {
     expect(socket.emittedEvents("updateSetting")).toEqual([{ data: { setting: "toMM", value: "254.000" } }]);
   });
 
+  it("keeps the unit switches disabled while a job is paused or a tool change waits", async () => {
+    const { socket } = await renderMain();
+    status(socket, 2);
+    expect(button("Units: mm")).toBeDisabled();
+    expect(button("Up")).toBeEnabled();
+    socket.serverMessage("statusMessage", {
+      uploadFlag: 0,
+      positioningMode: 0,
+      currentTool: 2,
+      jobInProgress: false,
+      manualZAxisAdjust: true,
+    });
+    expect(button("Units: mm")).toBeDisabled();
+  });
+
   it("converts the stored distance when the typed one is invalid", async () => {
     const { socket, user } = await renderMain();
     await user.type(screen.getByLabelText("Distance"), "x");
@@ -259,6 +274,14 @@ describe("Z-Axis modal", () => {
     expect(socket.actions()).toEqual([]);
   });
 
+  it("keeps the Z unit switch disabled while a job is paused", async () => {
+    const { socket } = await renderZ();
+    status(socket, 2);
+    const zAxis = within(screen.getByRole("region", { name: "Z axis" }));
+    expect(zAxis.getByRole("button", { name: "Z units: mm" })).toBeDisabled();
+    expect(zAxis.getByRole("button", { name: "Raise" })).toBeEnabled();
+  });
+
   it("switches Z units with two decimals like the old popup", async () => {
     const { socket, user } = await renderZ();
     const zUnits = within(screen.getByRole("region", { name: "Z axis" })).getByRole("button", { name: "Z units: mm" });
@@ -276,6 +299,13 @@ describe("Z-Axis modal", () => {
   it("enables Touch Plate only when the touch plate is configured", async () => {
     await renderZ();
     expect(button("Touch Plate")).toBeDisabled();
+  });
+
+  it("greys out Z moves while a probe runs", async () => {
+    const { socket } = await renderZ(mainState({ touchPlate: true }));
+    socket.serverMessage("statusMessage", { uploadFlag: 0, positioningMode: 0, currentTool: 1, probing: true });
+    ["Raise", "Lower", "Set Z Zero Here", "Touch Plate"].forEach((name) => expect(button(name)).toBeDisabled());
+    expect(button("Stop Z")).toBeEnabled();
   });
 
   it("probes with the touch plate", async () => {
@@ -448,6 +478,18 @@ describe("MainPage job state", () => {
     });
     expect(button("Set Home Here")).toBeDisabled();
     expect(button("Play")).toBeEnabled();
+    expect(button("Up")).toBeEnabled();
+  });
+
+  it("greys out every move while a probe runs, leaving Stop", async () => {
+    const { socket } = await renderMain();
+    socket.serverMessage("statusMessage", { uploadFlag: 0, positioningMode: 0, currentTool: 1, probing: true });
+    expect(job()).toHaveTextContent("Probing");
+    ["Play", "Up", "Home", "Macro 1", "Set Home Here", "Next line"].forEach((name) =>
+      expect(button(name)).toBeDisabled(),
+    );
+    expect(button("Stop")).toBeEnabled();
+    socket.serverMessage("statusMessage", { uploadFlag: 0, positioningMode: 0, currentTool: 1, probing: false });
     expect(button("Up")).toBeEnabled();
   });
 

@@ -1,4 +1,6 @@
 import { expect, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { closeServerDialogs, waitForServer } from "./helpers";
 
 test("quick configure saves to the server and reloads", async ({ page }) => {
   await page.goto("/next/machine");
@@ -45,17 +47,21 @@ test("quick configure saves to the server and reloads", async ({ page }) => {
   await expect(page.getByText("Saved. The controller has the new machine dimensions.")).toBeVisible();
 });
 
-test("Z-axis and sprocket screens drive the machine with no controller attached", async ({ page }) => {
-  test.skip(
-    process.env.E2E_BACKEND === "rust",
-    "The Rust backend refuses machine commands with no controller attached",
-  );
+/** Rust refuses machine commands with no controller; Python queues them silently. */
+const expectNoControllerRefusal = async (page: Page) => {
+  if (process.env.E2E_BACKEND !== "rust") return;
+  await expect(page.locator("dialog[open][data-kind]")).toContainText("The controller is not connected.");
+  await closeServerDialogs(page);
+};
+
+test("Z-axis and sprocket screens with no controller attached", async ({ page }) => {
   await page.goto("/next/machine/z-axis");
-  await expect(page.getByText(/^Server: connected/)).toBeVisible({ timeout: 15_000 });
+  await waitForServer(page);
   const step = page.getByRole("textbox", { name: "Step" });
   await expect(step).not.toHaveValue("");
   await step.fill("2");
   await page.getByRole("button", { name: "↑ Raise" }).click();
+  await expectNoControllerRefusal(page);
   await expect(page.getByRole("button", { name: "Touch off Z" })).toBeDisabled();
 
   await page.goto("/next/machine/sprockets");
@@ -63,7 +69,9 @@ test("Z-axis and sprocket screens drive the machine with no controller attached"
   const extendLeft = page.getByRole("button", { name: /^Extend left chain to \d+ mm$/ });
   await expect(extendLeft).toBeDisabled();
   await page.getByRole("button", { name: "Define zero" }).click();
+  await expectNoControllerRefusal(page);
   await expect(extendLeft).toBeEnabled();
   await page.getByRole("button", { name: "Left motor clockwise 10°" }).click();
+  await expectNoControllerRefusal(page);
   await expect(extendLeft).toBeDisabled();
 });

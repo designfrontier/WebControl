@@ -121,3 +121,25 @@ fn work_is_compared_by_value() {
     assert_eq!(work(&first), work(&second));
     assert_ne!(work(&first)[0], Work::GcodePosition { gcode: Vec::new().into(), index: 0, scale: 1.0, failure: None });
 }
+
+#[test]
+fn a_resync_reads_the_gcode_position_off_the_task_for_that_client_alone() {
+    let mut rig = Rig::new();
+    rig.machine.load_gcode("G0 X1\nG0 X2\nG0 X3\n");
+    rig.machine.handle(action("moveGcodeGoto", json!(1), json!("")), rig.now);
+    let goto = work(&rig.machine.handle(action("moveGcodeGoto", json!(2), json!("")), rig.now));
+    assert!(goto.is_empty(), "the goto waits behind the one before it");
+    let effects = rig.machine.handle(Event::ClientResync { sid: "s1".into() }, rig.now);
+    let resync = work(&effects);
+    assert_eq!(resync.len(), 1, "the resync does not wait behind the gotos");
+    let done = rig.machine.handle(resync[0].clone().run(), rig.now);
+    let to_s1: Vec<_> = done
+        .iter()
+        .filter_map(|e| match e {
+            Effect::Push(p) if p.data["command"] == "gcodePositionMessage" => Some(p.client.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(to_s1, [Some("s1".to_string())]);
+    assert!(work(&done).is_empty(), "and leaves the gotos' lane alone");
+}

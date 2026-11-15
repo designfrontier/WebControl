@@ -1,0 +1,74 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "probe_in_file_misses_and_waits_at_the_probe",
+    "description": "Rust only: a G38.2 from the file that never touches: the firmware's `error: probe did not connect` answers it and the firmware stops (`sys.stop`). The job is held at the probe line with the Touch Z Failed alert, and Play returns at safe height and probes again. Python streams on after the miss.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "610e5bf"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    },
+    "gcode": {
+      "lines": [
+        "G21",
+        "G0 Z5",
+        "G38.2 Z-10 F100",
+        "G1 Z-1 F200",
+        "G1 X10 Y0"
+      ]
+    }
+  },
+  "events": [
+    {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 Z5  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G38.2 Z-10 F100  \n"},
+    {"type": "rx", "line": "probing for z axis zero"},
+    {"type": "rx", "line": "max depth -10.00 mm."},
+    {"type": "rx", "line": "feedrate 60.00 mm per min."},
+    {"type": "rx", "line": "error: probe did not connect"},
+    {"type": "rx", "line": "program stopped"},
+    {"type": "rx", "line": "z axis not set"},
+    {"type": "rx", "line": ""},
+    {"type": "expect", "alerts": [{"title": "Touch Z Failed", "message": "did not touch the plate"}], "state": {"uploadFlag": 0, "jobInProgress": true, "gcodeIndex": 2, "probing": false, "pauseButtonSetting": "Resume"}},
+    {"type": "tick", "seconds": 0.3, "comment": "nothing more of the file goes out"},
+    {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "~\n", "realtime": true},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 Z5.0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 X0.0 Y0.0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 Z5.0 F12.8  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G38.2 Z-10 F100  \n"},
+    {"type": "expect", "state": {"uploadFlag": 1, "probing": true}},
+    {"type": "rx", "line": "probing for z axis zero"},
+    {"type": "rx", "line": "max depth -10.00 mm."},
+    {"type": "rx", "line": "feedrate 60.00 mm per min."},
+    {"type": "rx", "line": "z axis zeroed"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 Z-1 F200  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 X10 Y0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "state": {"uploadFlag": 0, "jobInProgress": false, "probing": false}, "noAlerts": [{"title": "Touch Z Failed"}]}
+  ]
+}

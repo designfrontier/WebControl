@@ -176,6 +176,7 @@ impl Upgrade {
                 .collect(),
             backup: self.backup.clone(),
             can_rollback: self.rollback.is_some() && !self.busy(),
+            rollback_firmware: self.rollback.as_ref().map(|saved| format!("{}", saved.version)),
             log: self.log.clone(),
         }
     }

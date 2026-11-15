@@ -316,6 +316,7 @@ fn preflight_reads_the_board_version_settings_and_chains() {
     assert_eq!(view.image_sha256, Some(target().sha256));
     assert!(view.message.contains("Ready to upgrade PCB v1.1 Detected to 51.292"), "{}", view.message);
     assert!(!view.can_rollback);
+    assert_eq!(view.rollback_firmware, None);
 }
 
 #[test]
@@ -635,6 +636,8 @@ fn a_check_after_the_upgrade_still_rolls_back_to_the_firmware_read_off_the_board
     bench.act("check");
     assert_eq!(bench.settle(&[Stage::Checking], 10_000), Stage::Blocked);
     assert!(bench.view().can_rollback);
+    assert_eq!(bench.view().firmware.as_deref(), Some("51.29"));
+    assert_eq!(bench.view().rollback_firmware.as_deref(), Some("51.27"));
     bench.act("rollback");
     let stage = bench.settle(&[Stage::RollingBack, Stage::Restarting, Stage::Migrating], 120_000);
     assert_eq!(stage, Stage::RolledBack, "{:?}", bench.view().log);
