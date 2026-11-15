@@ -14,12 +14,17 @@ mkdir -p "$work/bin" "$work/releases"
 printf ':00000001FF\n' > "$work/fw.hex"
 (sha256sum "$work/fw.hex" 2> /dev/null || shasum -a 256 "$work/fw.hex") | cut -d' ' -f1 > "$work/fw.sha256"
 
-# Every stub logs to $work/calls. sudo runs its command as is.
+# Every stub logs to $work/calls. sudo runs its command as is, except cp when $work/fail-cp exists.
 cat > "$work/bin/sudo" <<EOF
 #!/usr/bin/env bash
 echo "sudo \$*" >> "$work/calls"
 [ "\$1" = -v ] && exit 0
+[ "\$1" = cp ] && [ -f "$work/fail-cp" ] && exit 1
 exec "\$@"
+EOF
+cat > "$work/bin/visudo" <<EOF
+#!/usr/bin/env bash
+! grep -qs "BAD SUDOERS" "\${*: -1}"
 EOF
 cat > "$work/bin/uname" <<EOF
 #!/usr/bin/env bash
@@ -28,16 +33,22 @@ EOF
 cat > "$work/bin/curl" <<EOF
 #!/usr/bin/env bash
 echo "curl \$*" >> "$work/calls"
-exec "$real_curl" "\$@"
+[[ " \$* " == *" -K - "* ]] || exec "$real_curl" "\$@"
+config="\$(cat)"
+echo "curl-config \$config" >> "$work/calls"
+printf '%s\n' "\$config" | exec "$real_curl" "\$@"
 EOF
-# The service: a binary containing BROKEN runs without answering and rewrites webcontrol.json when stopped; a
-# working one answers /api/state with its version (or $work/stale-version), and with the controller unless
-# $work/controller-lost exists.
+# A BROKEN binary never answers and scribbles on webcontrol.json when stopped. A working one answers with its version
+# (or stale-version) and the controller (unless controller-lost); with job-starts, install-pi.sh's reload starts a job.
 cat > "$work/bin/systemctl" <<EOF
 #!/usr/bin/env bash
 echo "systemctl \$*" >> "$work/calls"
 bin="$work/root/opt/webcontrol-rs/webcontrol-rs"
 case "\$1" in
+  daemon-reload)
+    [ -f "$work/job-starts" ] && [ -f "$work/srv/api/state" ] &&
+      sed -i.orig 's/"jobInProgress":false/"jobInProgress":true/' "$work/srv/api/state" &&
+      echo '{"owner": "changed during the job"}' > "$work/home/.WebControl/webcontrol.json" ;;
   is-active)
     unit="\${*: -1}"
     if [ "\$unit" = webcontrol-rs ]; then s="\$(cat "$work/active" 2> /dev/null || echo inactive)"
@@ -86,6 +97,7 @@ publish() {
   "tag_name": "v$v",
   "draft": false,
   "assets": [
+    {"name": "webcontrol-rs-$v-aarch64Xtar.gz", "browser_download_url": "$dl/webcontrol-rs-$v-aarch64Xtar.gz"},
     {"name": "webcontrol-rs-$v-aarch64.tar.gz", "browser_download_url": "$dl/webcontrol-rs-$v-aarch64.tar.gz"},
     {"name": "webcontrol-rs-$v-aarch64", "browser_download_url": "$dl/webcontrol-rs-$v-aarch64"},
     {"name": "SHA256SUMS", "browser_download_url": "$dl/SHA256SUMS"}
@@ -108,7 +120,8 @@ installed() {
 
 fresh() {
   rm -rf "${work:?}/root" "${work:?}/home" "$work/srv" "$work/gh" "$work/x" "$work/calls" "$work/active" \
-    "$work/python-active" "$work/controller" "$work/controller-lost" "$work/stale-version" "$work/running" "$work/out" "$work/err"
+    "$work/python-active" "$work/controller" "$work/controller-lost" "$work/stale-version" "$work/running" "$work/out" "$work/err" \
+    "$work/fail-cp" "$work/job-starts"
   mkdir -p "$work/root" "$work/home/.WebControl" "$work/srv/api" "$work/x"
   echo '{"owner": "settings"}' > "$work/home/.WebControl/webcontrol.json"
   echo aarch64 > "$work/arch"
@@ -195,7 +208,7 @@ first_install_skips_the_backup() {
   publish 1.1
   latest 1.1
   update > "$work/out" && grep -q "nothing to back up" "$work/out" &&
-    grep -q "not answering" "$work/out" && [ "$(version_of "$opt/webcontrol-rs")" = 1.1 ] && [ ! -e "$backup" ]
+    grep -q "not running, so no job is; carrying on" "$work/out" && [ "$(version_of "$opt/webcontrol-rs")" = 1.1 ] && [ ! -e "$backup" ]
 }
 
 checksum_mismatch_changes_nothing() {
@@ -413,8 +426,9 @@ takes_the_repo_and_token() {
   publish 1.1
   cp "$api/tags/v1.1" "$work/gh/repos/maker/fork/releases/latest"
   update GITHUB_TOKEN=secret --repo maker/fork > /dev/null &&
-    grep -q "Authorization: Bearer secret .*repos/maker/fork/releases/latest" "$work/calls" &&
-    ! grep "SHA256SUMS" "$work/calls" | grep -q Authorization || return 1
+    grep -qx 'curl-config header = "Authorization: Bearer secret"' "$work/calls" &&
+    grep -q "^curl -K - .*repos/maker/fork/releases/latest" "$work/calls" &&
+    ! grep "^curl " "$work/calls" | grep -q secret && ! grep "SHA256SUMS" "$work/calls" | grep -q -- "-K" || return 1
   fresh
   installed 1.0
   mkdir -p "$work/gh/repos/maker/fork/releases"
@@ -433,6 +447,79 @@ python_backend_is_not_started() {
   latest 1.1
   update > "$work/out" && grep -q "Python backend is running" "$work/out" &&
     ! grep -q "systemctl restart" "$work/calls" && [ "$(version_of "$opt/webcontrol-rs")" = 1.1 ]
+}
+
+hung_service_is_busy() {
+  fresh
+  installed 1.0
+  publish 1.1
+  latest 1.1
+  rm "$work/srv/api/state"
+  local before
+  before="$(snapshot)"
+  ! update > /dev/null 2> "$work/err" && grep -q "running but not answering" "$work/err" && no_changes_since "$before"
+}
+
+failed_backup_keeps_the_old_one() {
+  fresh
+  installed 1.0
+  publish 1.1
+  publish 1.2
+  latest 1.1
+  update > /dev/null || return 1
+  latest 1.2
+  touch "$work/fail-cp"
+  ! update > /dev/null 2>&1 && grep -qx "version=1.0" "$backup/MANIFEST" &&
+    [ "$(version_of "$backup/files$opt/webcontrol-rs")" = 1.0 ] && [ "$(version_of "$opt/webcontrol-rs")" = 1.1 ]
+}
+
+job_started_during_the_update() {
+  fresh
+  installed 1.0
+  mark_installed_files
+  publish 1.1
+  latest 1.1
+  touch "$work/job-starts"
+  ! update > "$work/out" 2>&1 && grep -q "Not restarting: a job is running" "$work/out" &&
+    ! grep -q "systemctl restart" "$work/calls" && [ "$(version_of "$opt/webcontrol-rs")" = 1.0 ] && all_marked &&
+    grep -qx '{"owner": "changed during the job"}' "$work/home/.WebControl/webcontrol.json" &&
+    grep -q '"version":"1.0"' "$work/srv/api/state"
+}
+
+restore_skips_a_sudoers_rule_visudo_rejects() {
+  fresh
+  installed 1.0
+  mark_installed_files
+  echo "BAD SUDOERS" >> "$work/root/etc/sudoers.d/webcontrol-rs"
+  publish 1.9 BROKEN
+  latest 1.9
+  ! update > "$work/out" 2>&1 && grep -q "NOT restored .*sudoers.d/webcontrol-rs: it does not pass visudo" "$work/out" &&
+    grep -q "ROLLBACK INCOMPLETE" "$work/out" && ! grep -q "BAD SUDOERS" "$work/root/etc/sudoers.d/webcontrol-rs" &&
+    [ "$(version_of "$opt/webcontrol-rs")" = 1.0 ] && grep -q "^# installed by 1.0" "$work/root/usr/local/bin/wc-switch"
+}
+
+refuses_a_tarball_with_a_link() {
+  fresh
+  installed 1.0
+  publish 1.5
+  latest 1.5
+  local v="$work/releases/1.5" before
+  mkdir "$work/y" && tar -C "$work/y" -xzf "$v/webcontrol-rs-1.5-aarch64.tar.gz" &&
+    ln -s /etc "$work/y/webcontrol-rs-1.5-aarch64/etc" &&
+    tar -C "$work/y" -czf "$v/webcontrol-rs-1.5-aarch64.tar.gz" webcontrol-rs-1.5-aarch64 && rm -rf "$work/y"
+  (cd "$v" && (sha256sum webcontrol-rs-1.5-aarch64.tar.gz 2> /dev/null ||
+    shasum -a 256 webcontrol-rs-1.5-aarch64.tar.gz) > SHA256SUMS)
+  before="$(snapshot)"
+  ! update 2> "$work/err" > /dev/null && grep -q "holds a link" "$work/err" && no_changes_since "$before"
+  local result=$?
+  rm -rf "$v"
+  return "$result"
+}
+
+refuses_a_bad_version_flag() {
+  fresh
+  ! update --version ../../x > /dev/null 2> "$work/err" && grep -q "takes a release tag" "$work/err" &&
+    ! grep -qs "^curl" "$work/calls"
 }
 
 help_and_bad_flags() {
@@ -462,6 +549,12 @@ check "refuses a machine that is not aarch64" refuses_off_aarch64
 check "--repo, WEBCONTROL_REPO and GITHUB_TOKEN" takes_the_repo_and_token
 check "leaves the Python backend running" python_backend_is_not_started
 check "--help and unknown flags" help_and_bad_flags
+check "an active service that does not answer counts as busy" hung_service_is_busy
+check "a backup that fails keeps the previous one" failed_backup_keeps_the_old_one
+check "a job started during the update: files put back, nothing restarted" job_started_during_the_update
+check "a restore skips a sudoers rule visudo rejects" restore_skips_a_sudoers_rule_visudo_rejects
+check "refuses a tarball holding a link" refuses_a_tarball_with_a_link
+check "refuses a --version that is not a tag" refuses_a_bad_version_flag
 
 if [ "$failures" != 0 ]; then
   echo "$failures failed"
