@@ -41,9 +41,13 @@ def test_play_during_a_tool_change_resumes_where_it_paused(job):
     load(job, TOOL_CHANGE_FILE, AFTER_TOOL_CHANGE)
     job.uploadFlag = 0
     job.manualZAxisAdjust = True
+    job.toolChangeWaits = True
     job.jobInProgress = True
 
     job.actions.processAction({"data": {"command": "startRun", "arg": "", "arg1": ""}})
 
-    assert lowered_to(drain(job.gcode_queue)) == []
-    assert (job.uploadFlag, job.manualZAxisAdjust, job.gcodeIndex) == (1, False, AFTER_TOOL_CHANGE)
+    queued = drain(job.gcode_queue)
+    assert queued[2:4] == [SAFE_Z_MM, "G0 X0.0 Y0.0 "]
+    assert lowered_to(queued) == []
+    assert (job.uploadFlag, job.manualZAxisAdjust, job.toolChangeWaits) == (1, False, False)
+    assert job.gcodeIndex == AFTER_TOOL_CHANGE

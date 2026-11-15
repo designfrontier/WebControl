@@ -98,6 +98,8 @@ class Data:
     # Bumped by Stop, so a line already being sent can't move the index after the stop reset it.
     runGeneration = 0
     manualZAxisAdjust = False
+    # The firmware paused on an M6; manualZAxisAdjust is also set for $16=0's adjust-Z prompt, which is not one.
+    toolChangeWaits = False
     # The firmware printed "Maslow Paused" and holds every line until it gets "~".
     firmwarePaused = False
     # this is used to determine the first time the position is received from the machine

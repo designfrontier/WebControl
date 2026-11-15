@@ -572,6 +572,7 @@ class Actions(MakesmithInitFuncs):
             self.data.gcodeIndex = 0
             self.data.runGeneration += 1
             self.data.manualZAxisAdjust = False
+            self.data.toolChangeWaits = False
             self.data.firmwarePaused = False
             self.data.quick_queue.put("!")
             with self.data.gcode_queue.mutex:
@@ -688,35 +689,35 @@ class Actions(MakesmithInitFuncs):
 
     def resumeRun(self):
         '''
-        Resumes sending the gcode.  If a tool change command was received, then the manualZAxisAdjust is enabled and
-        the machine will be returned to the z-axis height it was when the tool change command was processed.  It also
-        makes sure the units are what they were prior to the tool change (user might have switched them up while
-        setting z-axis to zero).
+        Releases the firmware and resumes the job. Unless the firmware only asked for Z by hand, it first restores the
+        units the job paused in and returns to the file's position at safe height, lowering the bit only if it is
+        still the bit that paused.
         :return:
         '''
         try:
-            # Restore self.data.upladFlag properly
-            if self.data.manualZAxisAdjust:
-                # Z-axis is disabled and requires manual adjustment.
-                print("Resume run with manual z-axis adjust.")
-                self.data.manualZAxisAdjust = False
-                self.data.uploadFlag = 1 if self.data.jobInProgress else 0
-            elif self.data.uploadFlag == 1:
+            toolChange = self.data.toolChangeWaits
+            manualZ = self.data.manualZAxisAdjust and not toolChange
+            if self.data.uploadFlag == 1 and not manualZ:
                 # A second Resume (double click, another client) must not lift and replunge mid-cut.
                 return True
-            elif self.data.uploadFlag == 0 and not self.data.jobInProgress:
-                # An M0 sent from the console paused the firmware with no job to carry on.
-                pass
-            else:
-                # The user may have jogged, homed or moved the gcode index while paused, so return to the file's
-                # position at the current index at safe height before lowering the bit.
-                print("Resume run without manual z-axis adjust.")
+            self.data.manualZAxisAdjust = False
+            self.data.toolChangeWaits = False
+            # First, so the firmware finishes the line it paused on before the restart moves below reach it.
+            self.releaseFirmwarePause()
+            if manualZ:
+                # The firmware asked for Z by hand ($16=0) and carries on with the line it paused in.
+                self.data.uploadFlag = 1 if self.data.jobInProgress else 0
+            elif self.data.jobInProgress or self.data.uploadFlag != 0:
+                # The user may have jogged, homed, changed the bit or moved the gcode index while paused, so return
+                # to the file's position at the current index at safe height before lowering the bit.
                 if self.data.pausedUnits is not None and self.data.pausedUnits != self.data.units:
                     print("Restoring units to:" + str(self.data.pausedUnits))
                     self.updateSetting("toInches" if self.data.pausedUnits == "INCHES" else "toMM", 0, True)
                 zTarget = None
                 # currentZTarget is the last Z sent, which only matches the file's Z if the index has not moved.
-                if self.data.pausedGcodeIndex == self.data.gcodeIndex and self.data.pausedzval is not None:
+                # A new bit has no Z until the file sets one.
+                samePlace = self.data.pausedGcodeIndex == self.data.gcodeIndex and self.data.pausedzval is not None
+                if samePlace and not toolChange:
                     zTarget = self.data.pausedzval
                 self.queueRestartSequence(self.gcodeStateAt(self.data.gcodeIndex), zTarget, changeTool=False)
                 self.data.pausedUnits = None
@@ -727,8 +728,6 @@ class Actions(MakesmithInitFuncs):
                 self.sendGCodePositionUpdate(self.data.gcodeIndex, recalculate=True)
                 self.data.uploadFlag = 1
 
-            # Harmless when the firmware is not paused: it just answers ok.
-            self.releaseFirmwarePause()
             self.data.ui_queue1.put("Action", "setAsPause", "")
             self.data.gpioActions.causeAction("PauseLED", "off")
             return True

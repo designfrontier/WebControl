@@ -12,10 +12,11 @@ TOOL_CHANGE = ["Tool Change: Please insert tool 2\r\n", "Maslow Paused\r\n"]
 
 @pytest.fixture
 def tools(job, serial):  # noqa: F811
-    saved = {key: getattr(job, key) for key in ("nextTool", "firmwarePaused")}
+    saved = {key: getattr(job, key) for key in ("nextTool", "firmwarePaused", "toolChangeWaits", "units")}
     job.currentTool = 0
     job.nextTool = 0
     job.firmwarePaused = False
+    job.toolChangeWaits = False
     job.manualZAxisAdjust = False
     yield job
     for key, value in saved.items():
@@ -202,3 +203,70 @@ def test_the_firmwares_tool_change_message_corrects_the_tracked_tool(app, tools)
 
 def test_a_restart_after_a_t_behind_a_g_word_changes_to_that_tool(tools):
     assert restart_tool_change(tools, ["G21 ", "G0 X1 T4 ", "M6 ", "G0 X1 "]) == ["T4 M6 "]
+
+
+def firmware_that_pauses_on_m6(app, data, on_pause):
+    """Acks each line, except that an M6 holds its ok until "~", the way pause() blocks the line."""
+    state = {"seen": 0, "held": False}
+
+    def poll(port):
+        if state["seen"] == 0:
+            drain(data.gcode_queue)
+        written = port.sent[state["seen"]:]
+        state["seen"] = len(port.sent)
+        for line in written:
+            if line == "~":
+                port.incoming.extend(["ok\r\n"] * (2 if state["held"] else 1))
+                state["held"] = False
+            elif "M6" in line:
+                state["held"] = True
+                port.incoming.extend(TOOL_CHANGE)
+                [data.messageProcessor.processMessage(message) for message in TOOL_CHANGE]
+                on_pause()
+            else:
+                port.incoming.append("ok\r\n")
+
+    return poll
+
+
+TOOL_CHANGE_JOB = [
+    "G21 ", "G90 ", "G0 Z5 ", "G0 X10 Y10 ", "G1 Z-3 F100 ", "G1 X20 F600 ", "G0 Z5 ", "T2 M6 ", "G0 X40 Y40 ",
+    "G1 Z-2 F100 ", "X50 ",
+]
+AFTER_THE_M6 = ["G0 X40 Y40  ", "G1 Z-2 F100  ", "X50  "]
+RETURN_AT_SAFE_HEIGHT = ["G21  ", "G90  ", "G0 Z5.0  ", "G0 X20.0 Y10.0  ", "F600.0  ", "G90  "]
+
+
+def run_tool_change_job(app, data, serial, during_the_pause):  # noqa: F811
+    data.gcode = list(TOOL_CHANGE_JOB)
+    data.gcodeIndex = 0
+    data.uploadFlag = 1
+    data.jobInProgress = True
+    data.units = "MM"
+    port = serial.run(on_poll=firmware_that_pauses_on_m6(app, data, during_the_pause))
+    return port.sent[port.sent.index("T2 M6  ") + 1:]
+
+
+def test_resume_after_a_tool_change_releases_the_firmware_before_the_return_moves(app, tools, serial):  # noqa: F811
+    sent = run_tool_change_job(app, tools, serial, lambda: action(tools, "resumeRun"))
+
+    assert sent == ["~"] + RETURN_AT_SAFE_HEIGHT + AFTER_THE_M6
+
+
+def test_resume_after_jogging_during_a_tool_change_returns_to_the_file_at_safe_height(app, tools, serial):  # noqa: F811
+    def jog_then_resume():
+        tools.actions.processAction({"data": {"command": "moveTo", "arg": 0, "arg1": 0}})
+        action(tools, "resumeRun")
+
+    sent = run_tool_change_job(app, tools, serial, jog_then_resume)
+
+    assert sent == ["~", "~", "G90 G00 X0.0 Y0.0  "] + RETURN_AT_SAFE_HEIGHT + AFTER_THE_M6
+
+
+def test_resume_after_a_tool_change_never_lowers_the_new_bit_to_a_z_from_an_old_pause(app, tools, serial):  # noqa: F811
+    tools.pausedGcodeIndex = TOOL_CHANGE_JOB.index("T2 M6 ") + 1
+    tools.pausedzval = -3.0
+
+    sent = run_tool_change_job(app, tools, serial, lambda: action(tools, "resumeRun"))
+
+    assert not any(line.startswith(("G1 Z-3", "G0 Z-3")) for line in sent)

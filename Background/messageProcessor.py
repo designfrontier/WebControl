@@ -69,8 +69,8 @@ class MessageProcessor(MakesmithInitFuncs):
             elif message[0:12] == "Tool Change:":
                 # This thread owns the tool-change state; the UIProcessor only shows the prompt.
                 self.data.manualZAxisAdjust = True
+                self.data.toolChangeWaits = True
                 self.data.uploadFlag = 0
-                self.data.pausedzval = self.data.zval
                 self.data.pausedUnits = self.data.units
                 self.data.pausedPositioningMode = self.data.positioningMode
                 tool = re.search(r"tool\s+([0-9]+)", message)
