@@ -38,7 +38,10 @@ event, `opticalCalibration` event, `POST /api/system/pid-test`, or `none`). The 
 
 A controller pause holds the job like Pause does; only Play (`startRun`, the one `idleOrControllerPaused` action)
 runs, and it resumes the job. A tool change during a job is a controller pause. `noJob` matches the classic gcode
-routes' 409: the loaded gcode, home and PID tests wait until the job is stopped or finished. HTTP `family` is `api` (JSON for this UI), `classic` (old form routes
+routes' 409: the loaded gcode, home and PID tests wait until the job is stopped or finished. Two firmware pauses
+also refuse the machine commands among the `idleOrPaused` actions (jogs, Z moves, home, macros) with an Alert until
+Resume or Stop: one that arrived while lines were streaming, which may have job lines buffered behind it, and the
+`$16=0` prompt to adjust Z by hand. HTTP `family` is `api` (JSON for this UI), `classic` (old form routes
 the UI reuses, with their old shapes) or `static`.
 
 Schemas describe the wire: what is actually sent, before the UI coerces anything. Objects do not forbid extra
