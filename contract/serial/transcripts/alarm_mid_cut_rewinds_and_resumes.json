@@ -7,7 +7,7 @@
       "variant": "holey",
       "version": "51.27"
     },
-    "webcontrolCommit": "c859cea"
+    "webcontrolCommit": "69d6968"
   },
   "setup": {
     "units": "MM",
@@ -53,7 +53,7 @@
     {"type": "tx", "bytes": "G1 X60 Y60  \n"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G1 X70 Y60  \n"},
-    {"type": "rx", "line": "ALARM: The sled is not keeping up with its expected position and has halted."},
+    {"type": "rx", "line": "ALARM: The sled is not keeping up with its expected position and has halted. Click the 'Stop' button to clear the alarm. More information at: https://github.com/MaslowCNC/Firmware/wiki/Keeping-Up  "},
     {"type": "expect", "state": {"uploadFlag": 0, "jobInProgress": true, "gcodeIndex": 9}, "emitted": [{"command": "alarm", "data": {"message": "Alarm: Sled Not Keeping Up"}}]},
     {"type": "tick", "seconds": 0.3, "comment": "the backend ignores acks until a status report after 0.25 s"},
     {"type": "rx", "line": "<Idle,MPos:30.00,20.00,-2.00,WPos:0.000,0.000,0.000>"},

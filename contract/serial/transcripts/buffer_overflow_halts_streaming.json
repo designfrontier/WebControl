@@ -7,7 +7,7 @@
       "variant": "holey",
       "version": "51.27"
     },
-    "webcontrolCommit": "c859cea"
+    "webcontrolCommit": "69d6968"
   },
   "setup": {
     "units": "MM",
@@ -50,6 +50,12 @@
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G1 X60 Y50  \n"},
     {"type": "rx", "line": "Buffer overflow!"},
+    {"type": "rx", "line": "Buffer Used: 127"},
+    {"type": "rx", "line": "Buffer Number of Lines: 9"},
+    {"type": "rx", "line": "Buffer Begin: 1"},
+    {"type": "rx", "line": "Buffer End: 0"},
+    {"type": "rx", "line": "Buffer Contents: G1 X20 Y10  \\nG1 X20 Y20  \\nG1 X30 Y20  \\nG1 X30 Y30  \\nG1 X40 Y30  \\nG1 X40 Y40  \\nG1 X50 Y40  \\nG1 X50 Y50  \\nG1 X60 Y50  \\n(End of Buffer)"},
+    {"type": "rx", "line": "ok", "comment": "the firmware runs the unread tail of the line and acks it"},
     {"type": "expect", "state": {"uploadFlag": 0, "jobInProgress": true, "gcodeIndex": 7}, "emitted": [{"command": "alarm", "data": {"message": "Alarm: Controller Buffer Overflow"}}]},
     {"type": "tick", "seconds": 0.3, "comment": "the backend ignores acks until a status report after 0.25 s"},
     {"type": "rx", "line": "<Idle,MPos:20.00,10.00,-2.00,WPos:0.000,0.000,0.000>"},

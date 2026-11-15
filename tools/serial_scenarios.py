@@ -71,7 +71,8 @@ MM = {"units": "MM", "home": {"x": 0, "y": 0}}
 INCHES = {"units": "INCHES", "home": {"x": 0, "y": 0}}
 BUFFERED = {"Maslow Settings": {"bufferOn": 1}}
 BANNER = ["PCB v1.6 TLE9201  Detected", "FAKE_SERVO off", "Grbl v1.00", "ready"]
-SLED_HALTED = "ALARM: The sled is not keeping up with its expected position and has halted."
+SLED_HALTED = ("ALARM: The sled is not keeping up with its expected position and has halted. Click the 'Stop' button "
+               "to clear the alarm. More information at: https://github.com/MaslowCNC/Firmware/wiki/Keeping-Up  ")
 TOOL_2 = ["Tool Change: Please insert tool 2", "Maslow Paused"]
 DIRECTIONS = ["up", "upRight", "right", "downRight", "down", "downLeft", "left", "upLeft"]
 FINISHED = {"uploadFlag": 0, "jobInProgress": False, "gcodeIndex": 0}
@@ -227,6 +228,31 @@ scenario(
     [ui("startRun"), idle(), expect(state=FINISHED)],
 )
 
+
+def slow_ok(seconds=4, z=-1.5):
+    '''
+    A long move: no ok for `seconds`, while the firmware's own status reports keep the link alive.
+    '''
+    return [step for n in range(seconds) for step in (status(0, 0, z), tick(1.0, "still moving; no ok yet"))]
+
+
+scenario(
+    "stream_unbuffered_waits_for_a_slow_ok",
+    "A long move's ok comes 4 s after the line, with status reports in between: nothing more goes out until it "
+    "does, so no timer may release the next line.",
+    SHIFTED_HOME,
+    [ui("startRun"), wait_tx("X42.8456"), *slow_ok(), idle(), expect(state=FINISHED)],
+)
+
+scenario(
+    "stream_buffered_waits_for_a_slow_ok",
+    "Buffered: the buffer fills, then the oldest line's ok takes 4 s with status reports in between. Nothing more "
+    "goes out until that ok frees its bytes.",
+    {**MM, "gcode": gcode("long_cut_mm.nc"), "settings": BUFFERED},
+    [ui("startRun"), wait_tx("X20 Y10"), firmware(ack=False), idle(), *slow_ok(z=-2), firmware(ack=True), idle(),
+     expect(state=FINISHED)],
+)
+
 scenario(
     "stream_buffered_short_job_fits_the_buffer",
     "The unbuffered job again with buffering on: all eleven lines (125 bytes with their trailing spaces and newlines) "
@@ -316,6 +342,17 @@ scenario(
 )
 
 scenario(
+    "stop_ignores_a_status_report_read_too_soon",
+    "After Stop the backend holds commands until it reads a status report once the input has run dry at least 0.25 s "
+    "after the !; a report that comes right behind the !'s ok releases nothing.",
+    SHIFTED_HOME,
+    [ui("startRun"), wait_tx("X42.8456"), ui("stopRun"), idle(), status(42.85, 3, -1.5),
+     ui("move", "up", "1", comment="held: the report above came within 0.25 s of the !"),
+     expect(state=FINISHED), *resync(42.85, 3, -1.5), idle()],
+    timing={"quiet": 0.05},
+)
+
+scenario(
     "stop_with_a_stale_ok_in_flight",
     "Stop races an ok already on the wire for the in-flight line: the stale ok and the !'s ok both arrive, and the "
     "backend still holds the next command until a status report shows the controller has caught up.",
@@ -336,12 +373,19 @@ scenario(
      *resync(30, 20, -2), ui("startRun"), idle(), expect(state=FINISHED)],
 )
 
+HELD_LINES = ["G1 X%d Y%d  \\n" % xy for xy in [(20, 10), (20, 20), (30, 20), (30, 30), (40, 30), (40, 40),
+                                                (50, 40), (50, 50), (60, 50)]]
+# maslowRingBuffer::print(), which follows "Buffer overflow!" on 51.27.
+OVERFLOW_DUMP = ["Buffer Used: 127", "Buffer Number of Lines: 9", "Buffer Begin: 1", "Buffer End: 0",
+                 "Buffer Contents: " + "".join(HELD_LINES) + "(End of Buffer)"]
+
 scenario(
     "buffer_overflow_halts_streaming",
     "The firmware reports Buffer overflow!: streaming halts, the index rewinds to the oldest unacknowledged line, "
     "and Stop then ends the job.",
     {**MM, "gcode": gcode("long_cut_mm.nc"), "settings": BUFFERED},
     [ui("startRun"), wait_tx("X20 Y10"), firmware(ack=False), idle(), rx("Buffer overflow!"),
+     *[rx(line) for line in OVERFLOW_DUMP], rx("ok", "the firmware runs the unread tail of the line and acks it"),
      firmware(flush=True, ack=True),
      expect(state={"uploadFlag": 0, "jobInProgress": True, "gcodeIndex": 7},
             emitted=[{"command": "alarm", "data": {"message": "Alarm: Controller Buffer Overflow"}}]),
@@ -391,10 +435,13 @@ scenario(
 scenario(
     "z_limits_on_51_292",
     "51.292 keeps Z limits as $63/$64 in mm: Set Max and Set Min write the current Z, Clear writes far-off limits, "
-    "and reading them sends B20. Each $ write prints 51.292's EEPROM rewrite notice.",
+    "and reading them sends B20. Each $ write is answered as 51.292 answers it: the value echoed, the new limit, and "
+    "the EEPROM rewrite notice.",
     {**MM},
     [expect(state={"firmwareBuild": "51.292"}), status(0, 0, 12.34), ui("setMaxZ"), idle(),
-     status(0, 0, -20), ui("setMinZ"), idle(), ui("clearZ"), idle(), ui("getZlimits"), idle()],
+     status(0, 0, -20), ui("setMinZ"), idle(), ui("clearZ"), idle(),
+     firmware(rule={"pattern": r"^B20", "replies": ["Z Axis Upper Limit: 9999.00 Lower Limit: -9999.00"]}),
+     ui("getZlimits"), idle()],
     firmware_meta={"variant": "holey", "version": "51.29", "build": "51.292"},
 )
 

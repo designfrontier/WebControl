@@ -2,13 +2,13 @@
   "formatVersion": 1,
   "meta": {
     "name": "z_limits_on_51_292",
-    "description": "51.292 keeps Z limits as $63/$64 in mm: Set Max and Set Min write the current Z, Clear writes far-off limits, and reading them sends B20. Each $ write prints 51.292's EEPROM rewrite notice.",
+    "description": "51.292 keeps Z limits as $63/$64 in mm: Set Max and Set Min write the current Z, Clear writes far-off limits, and reading them sends B20. Each $ write is answered as 51.292 answers it: the value echoed, the new limit, and the EEPROM rewrite notice.",
     "firmware": {
       "variant": "holey",
       "version": "51.29",
       "build": "51.292"
     },
-    "webcontrolCommit": "c859cea"
+    "webcontrolCommit": "69d6968"
   },
   "setup": {
     "units": "MM",
@@ -22,22 +22,35 @@
     {"type": "rx", "line": "<Idle,MPos:0.00,0.00,12.34,WPos:0.000,0.000,0.000>"},
     {"type": "ui", "action": {"command": "setMaxZ", "arg": "", "arg1": ""}},
     {"type": "tx", "bytes": "$63=12.340 \n"},
+    {"type": "rx", "line": "the value received: 12.34"},
+    {"type": "rx", "line": ""},
+    {"type": "rx", "line": "new zaxis upper limit=12.34"},
     {"type": "rx", "line": "Change in setting, rewriting EEPROM"},
     {"type": "rx", "line": "ok"},
     {"type": "rx", "line": "<Idle,MPos:0.00,0.00,-20.00,WPos:0.000,0.000,0.000>"},
     {"type": "ui", "action": {"command": "setMinZ", "arg": "", "arg1": ""}},
     {"type": "tx", "bytes": "$64=-20.000 \n"},
+    {"type": "rx", "line": "the value received: -20.00"},
+    {"type": "rx", "line": ""},
+    {"type": "rx", "line": "new zaxis lower limit=-20.00"},
     {"type": "rx", "line": "Change in setting, rewriting EEPROM"},
     {"type": "rx", "line": "ok"},
     {"type": "ui", "action": {"command": "clearZ", "arg": "", "arg1": ""}},
     {"type": "tx", "bytes": "$63=9999 \n"},
+    {"type": "rx", "line": "the value received: 9999.00"},
+    {"type": "rx", "line": ""},
+    {"type": "rx", "line": "new zaxis upper limit=9999.00"},
     {"type": "rx", "line": "Change in setting, rewriting EEPROM"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "$64=-9999 \n"},
+    {"type": "rx", "line": "the value received: -9999.00"},
+    {"type": "rx", "line": ""},
+    {"type": "rx", "line": "new zaxis lower limit=-9999.00"},
     {"type": "rx", "line": "Change in setting, rewriting EEPROM"},
     {"type": "rx", "line": "ok"},
     {"type": "ui", "action": {"command": "getZlimits", "arg": "", "arg1": ""}},
     {"type": "tx", "bytes": "B20 \n"},
+    {"type": "rx", "line": "Z Axis Upper Limit: 9999.00 Lower Limit: -9999.00"},
     {"type": "rx", "line": "ok"}
   ]
 }
