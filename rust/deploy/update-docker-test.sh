@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
 # Runs webcontrol-update for real in an arm64 Debian container with systemd, against release.sh's tarballs
 # served by a fake GitHub API: install, update, update over a backup, --status, --rollback, and a failed update.
-#   WC_FIRMWARE_HEX=<hex> rust/deploy/update-docker-test.sh 0.9.0=<binary> 0.9.1=<binary> 0.9.2=<binary>
-# Each binary is an aarch64 webcontrol-rs built with that WC_VERSION. KEEP=1 leaves the container running.
 # shellcheck disable=SC2016 # Single-quoted commands expand inside the container.
 set -euo pipefail
+
+usage() {
+  cat >&2 <<'EOF'
+usage: WC_FIRMWARE_HEX=<hex> rust/deploy/update-docker-test.sh 0.9.0=<binary> 0.9.1=<binary> 0.9.2=<binary>
+Each binary is an aarch64 webcontrol-rs built with that WC_VERSION. KEEP=1 leaves the container running.
+EOF
+  exit 2
+}
 
 here="$(cd "$(dirname "$0")" && pwd)"
 rust="$(dirname "$here")"
@@ -13,7 +19,7 @@ distro="${DEBIAN:-trixie}"
 name="webcontrol-update-test-$distro"
 work="$(mktemp -d)"
 failures=0
-[ $# = 3 ] || { sed -n '2,5p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+[ $# = 3 ] || usage
 IFS='=' read -r v0 b0 <<< "$1"
 IFS='=' read -r v1 b1 <<< "$2"
 IFS='=' read -r v2 b2 <<< "$3"
@@ -130,6 +136,9 @@ expect "the installed version" "$(installed)" "$v1"
 expect "the version /api/state reports" "$(answering)" "$v1"
 as_pi 'grep -q -- "--no-such-flag" /etc/systemd/system/webcontrol-rs.service' && fail "the broken unit was not restored"
 expect "the service" "$(docker exec "$name" systemctl is-active webcontrol-rs || true)" active
+expect "webcontrol.json's owner" "$(docker exec "$name" stat -c %U /home/pi/.WebControl/webcontrol.json)" pi
+expect "the sudoers rule's owner and mode" "$(docker exec "$name" stat -c '%U %a' /etc/sudoers.d/webcontrol-rs)" "root 440"
+docker exec "$name" visudo -c > /dev/null || fail "sudoers does not parse after the rollback"
 
 if [ "$failures" != 0 ]; then
   echo "$failures failed"
