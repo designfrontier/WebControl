@@ -237,6 +237,39 @@ scenario(
      ui("moveZ", "raise", "5"), idle()],
 )
 
+
+def touch_z_then_resume_mid_probe():
+    '''
+    A paused job, then touchZ, then Resume while the probe descends: the firmware acks the ~ before the probe line.
+    '''
+    return [ui("startRun"), wait_tx("X10.5 Y10.25"), ui("pauseRun"), idle(),
+            ui("touchZ"), wait_tx(r"G38\.2"), firmware(forget=True), *[rx(line) for line in PROBING],
+            ui("resumeRun", comment="the probe is still descending"), wait_tx("^~"), firmware(forget=True),
+            rx("ok", "the ~'s own ack, which is not the probe's answer"),
+            expect(state={"uploadFlag": 1}, noAlerts=[{"title": "Touch Z"}])]
+
+
+scenario(
+    "resume_during_probe_waits_for_the_probes_own_answer",
+    "Resume pressed while a touchZ probe descends during a paused job: the firmware acks the ~ at once, and that ok "
+    "is not the probe's answer. Nothing more goes out until the probe line's own ok; only then is G10 Z0 queued, "
+    "behind the restart sequence Resume queued, so it zeroes Z at the restart's height (Known warts 7).",
+    {**MM, "gcode": gcode("square_mm.nc")},
+    [*touch_z_then_resume_mid_probe(), rx("z axis zeroed"), rx("ok", "the probe line's own ok"), idle(),
+     expect(state=FINISHED)],
+)
+
+scenario(
+    "resume_during_probe_then_the_probe_misses",
+    "Resume pressed while a touchZ probe descends during a paused job, and the probe then misses: the ~'s ok is not "
+    "taken as a touch, the probe's `error: probe did not connect` is its answer, so no G10 Z0 goes out and the user "
+    "is told.",
+    {**MM, "gcode": gcode("square_mm.nc")},
+    [*touch_z_then_resume_mid_probe(), *[rx(line) for line in PROBE_MISSED[len(PROBING):]],
+     expect(alerts=[{"title": "Touch Z Failed", "message": "Z was not zeroed"}]), idle(),
+     expect(state=FINISHED)],
+)
+
 # ----- streaming -----
 
 SHIFTED_HOME = {"units": "MM", "home": {"x": 12.3456, "y": -7.25}, "gcode": gcode("square_mm.nc")}
