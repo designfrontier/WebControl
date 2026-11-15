@@ -100,12 +100,14 @@ Every event has a `type` and may have a `comment`, which runners ignore.
 | `ui`     | `action: {command, arg, arg1}`                 | sends the socket event `action` `{"data": action}` on `/MaslowCNC`         |
 | `http`   | `method`, `path`, `json` or `form`, `status?`  | makes the request; checks the status if given                              |
 | `rx`     | `line`                                         | sends `line` followed by `\r\n` from the controller                        |
-| `tx`     | `bytes`, `realtime?`, `timeout?`               | checks that the backend's next write is exactly `bytes`                    |
+| `tx`     | `bytes`, `realtime?`, `timeout?`               | checks that the next line the backend wrote is exactly `bytes`             |
 | `tick`   | `seconds`                                      | advances the clock by at least `seconds`                                   |
 | `expect` | `state`, `settings`, `emitted`, `notEmitted`, `alerts`, `noAlerts` | checks observable state (below)        |
 
-`tx.bytes` is one write, byte for byte, including trailing spaces and the `\n` (most lines end in two spaces: the
-file loader's and the sender's). `realtime: true` marks the realtime commands `!` (stop) and `~` (resume), which
+`tx.bytes` is one line of the byte stream the backend writes, byte for byte, including trailing spaces and the
+`\n` (most lines end in two spaces: the file loader's and the sender's). Write boundaries don't matter: the
+controller sees only bytes, so the runner joins writes and cuts after each `\n`; a line left without its `\n` at the
+end fails. It is printable ASCII (`^[ -~]*\n$`), which is all the backend ever sends. `realtime: true` marks the realtime commands `!` (stop) and `~` (resume), which
 the firmware acts on as soon as it reads them, outside its line buffer and its 126-byte accounting; it is set
 exactly when the write is `!` or `~` (today written as `!\n` and `~\n`). Every other write goes through the
 buffer.
@@ -117,10 +119,13 @@ buffer.
   send), `units`, `manualZAxisAdjust`, `pauseButtonSetting` (`Pause`/`Resume`), `currentTool`, `positioningMode`
   (`G90`/`G91`), `firmwareBuild`, `controllerFirmwareVersion`, `controllerBoard`, `home` `{x, y}`. These are the
   names `GET /api/state` and the `statusMessage` push use, where they exist.
-- `settings`: `[{section, key, value}]`, compared as text with `webcontrol.json`.
+- `settings`: `[{section, key, value}]`; `value` is a string, compared with the stored value as text (as Python's
+  `str()` prints it: `"12.6"`, `"1"`).
 - `emitted` / `notEmitted`: `/MaslowCNC` `message` pushes, `{command, data}`, where `data` is the decoded payload.
-  Objects match field by field, strings as substrings, everything else by equality. Only messages emitted since the
-  previous `expect` (or the prelude) count.
+  Objects match field by field, strings as substrings, lists element by element. Numbers compare as `f64` (`254`
+  equals `254.0`) and booleans only equal booleans, as `serde_json::Value` would see them; `state` compares the same
+  way. Only messages emitted since the previous `expect` (or the prelude) count, so `notEmitted` covers only that
+  window.
 - `alerts` / `noAlerts`: shorthand for `activateModal` with `modalType: "alert"` and the given `title`/`message`
   substrings.
 
@@ -129,20 +134,25 @@ buffer.
 The runner owns the clock and advances it in small steps (the Python backend sleeps 10 ms per serial loop pass and at
 least 50 ms between writes, all on the fake clock). Events run strictly in order:
 
-1. **tx** events match writes in order. The runner waits up to `txTimeout` (default 2 s) for the next write; a
-   different write fails at once.
+1. **tx** events match lines in order. The runner waits up to `txTimeout` (default 2 s) for the next line; a
+   different line fails at once, and so does the right line written after the timeout (each line is stamped with
+   the fake clock when its `\n` is written).
 2. Before every other event the runner **settles**: it waits until the backend has read every rx line delivered so
    far and then lets `quiet` (default 0.1 s) pass. Any write that no earlier tx event matched, made at any time
-   before the settle ends, fails the transcript as an *unexpected tx*. This is what catches a line sent before the
-   ok that should release it, a duplicate, or a stray poll: the backend sends nothing unprompted (no `?` polling;
-   the firmware reports status on its own).
-3. After the last event the runner settles for `settle` (default 1 s) and fails on any further write.
+   before the settle ends, fails the transcript as an *unexpected tx*. This catches a duplicate, a stray poll (the
+   backend sends nothing unprompted: no `?` polling; the firmware reports status on its own), and a line sent before
+   the ok that releases it, within `quiet` of the write before. A backend that releases lines on a timer longer than
+   that is caught by the `*_waits_for_a_slow_ok` transcripts, which hold an ok for 4 s.
+3. After the last event the runner settles for `settle` (default 1 s) and fails on any further write; a write later
+   than that is not seen.
 4. `tick` waits at least `seconds`; writes made during a tick are matched by the tx events after it.
 
 So the timing tolerance is: a write may come any time between the previous event and its tx event (within
 `txTimeout`), but never before the controller line or action that causes it. Timing the backend itself depends on
-is spelled out with `tick`: after `!`, an ALARM or `Buffer overflow!` the backend ignores acks until it reads a status
-report after 0.25 s with no input, so those transcripts `tick` 0.3 s and then send a status report. The backend
+is spelled out with `tick`: after `!`, an ALARM or `Buffer overflow!` the backend ignores acks and holds lines until
+it reads a status report once its input has run dry at least 0.25 s after the halt, so those transcripts `tick`
+0.3 s and then send a status report; `stop_ignores_a_status_report_read_too_soon` pins that an earlier report
+releases nothing. The backend
 treats 5 s without any controller line as a lost connection, so no transcript waits that long without an rx.
 
 Recording uses the same rules, so a recorded transcript replays: the recorder's controller model answers only once
@@ -163,6 +173,7 @@ the backend has been quiet for `quiet` seconds, one line per settle.
 | `stream_unbuffered_with_home_shift` | one line per ok; home shift keeps both operands' decimals |
 | `stream_buffered_short_job_fits_the_buffer` | the same job buffered: 125 bytes, all sent before the first ok |
 | `stream_buffered_with_home_shift` | 126-byte character counting, refilled by each ok |
+| `stream_unbuffered_waits_for_a_slow_ok`, `stream_buffered_waits_for_a_slow_ok` | an ok 4 s late (status reports in between) releases nothing early |
 | `start_mid_file_restores_modal_state` | restart sequence: safe height, XY, `G1` plunge at the plunge feed, `G1 F<file F>` |
 | `pause_jog_resume_returns_to_file_position` | Pause with a line in flight, jog while paused, Resume returns and replunges |
 | `m0_in_file_then_resume` | M0 stops streaming; Resume sends `~` and returns |
@@ -172,13 +183,14 @@ the backend has been quiet for `quiet` seconds, one line per settle.
 | `tool_change_jog_and_zero_z_then_resume` | a Z move releases the firmware once; `G10 Z0`; Resume |
 | `stop_mid_line_resets_the_index` | `!` with a line in flight; index reset; commands wait for a status report |
 | `stop_with_a_stale_ok_in_flight` | a late ok after `!` does not release the next command early |
+| `stop_ignores_a_status_report_read_too_soon` | a status report within 0.25 s of `!` does not end the resync |
 | `alarm_mid_cut_rewinds_and_resumes` | ALARM: halt, rewind to the oldest unacknowledged line, Play resumes there |
-| `buffer_overflow_halts_streaming` | `Buffer overflow!`: halt, rewind, Stop |
+| `buffer_overflow_halts_streaming` | `Buffer overflow!` and its buffer dump: halt, rewind, Stop |
 | `line_too_long_pauses_the_job` | a line over 126 bytes as written is never sent; the job pauses with an alert |
 | `unclosed_comment_pauses_the_job` | an unclosed `(` is never sent; the job pauses with an alert |
 | `realtime_characters_stripped_from_lines` | `!`, `~`, backtick, `?`, control characters and comments removed from lines |
 | `z_limits_refused_on_51_27` | Z-limit actions alert and send nothing below 51.292 |
-| `z_limits_on_51_292` | `$63`/`$64` in mm, clear, `B20` |
+| `z_limits_on_51_292` | `$63`/`$64` in mm, clear, `B20`, with 51.292's replies to each |
 | `holey_calibration_accept_writes_settings` | Calculate sends nothing; Accept writes `$3`, `$2`, `$40`, `$41` |
 
 ## Adding or changing a transcript
@@ -213,13 +225,19 @@ serial port and a virtual clock. The format is plain JSON designed for `serde`:
   `Action.arg`/`arg1` are strings or numbers (`serde_json::Value`, or an untagged enum).
 - `setup.gcode` is an untagged enum of `{lines}` or `{path}`. Unknown fields are not allowed anywhere
   (`deny_unknown_fields` is safe), so a typo fails loudly.
-- Every number fits `f64`. `tx.bytes` and `rx.line` are UTF-8; in practice ASCII.
+- Every number fits `f64`. `tx.bytes` is printable ASCII ending in `\n`; `rx.line` is a string without `\r` or `\n`
+  (in practice ASCII, possibly empty: 51.292 prints empty lines). JSON can't carry arbitrary bytes, so a non-UTF-8
+  line can't be expressed.
+- `setup.settings` values are strings, numbers or booleans as `webcontrol.json` stores them (`Value`);
+  `expect.settings[].value` is always a string.
+- Numbers inside `tx.bytes` are pinned as the Python backend formats them (`G00 X254.0`, `$13=63.5000`,
+  `G0 X22.8456 Y3.00`), not as Rust's `{}` would; see "Known warts" 8.
 
 The runner needs these seams in the backend:
 
-1. A serial port trait the runner can implement: the backend writes byte strings and reads lines. Compare each
-   `write` call against the next `tx`. If the Rust backend batches several lines into one write, split on `\n`
-   before comparing (each tx is one line); a `realtime` tx must not be batched behind buffered lines.
+1. A serial port trait the runner can implement: the backend writes byte strings and reads lines. Join the writes
+   and cut after each `\n`, then compare each line with the next `tx`, as the Python runner does; how the backend
+   splits its writes is free. A `realtime` tx must still not be queued behind buffered lines.
 2. A clock trait (or `tokio::time::pause()` with `advance`) so settles and ticks cost no real time. Advance in steps of
    at most 10 ms so the backend's own timers (write pacing, the 0.25 s resync, the 5 s link timeout) see time pass
    as the Python one does.
@@ -242,16 +260,18 @@ With **WebControl Settings → Record serial traffic** on, the Python backend ap
 
 | `type`    | Fields                                                     |
 | --------- | ---------------------------------------------------------- |
-| `session` | `started` (ISO wall time), `webcontrol`, `port`, `units`, `home`, `settings` (Maslow and Advanced sections, key → value); `source` for an imported log |
+| `session` | `started` (ISO wall time), `webcontrol`, `port`, `units`, `home`, `settings` (Maslow and Advanced sections, key → value), `gcode` (the file loaded at connect, if any); `source` for an imported log |
 | `tx`      | `data` (the exact bytes written), `cause` (the `seq` of the most recent UI action, if any) |
 | `rx`      | `data` (the line as read, with its `\r\n`)                 |
 | `ui`      | `seq`, `command`, `arg`, `arg1`                            |
 | `gcode`   | `filename`, `lines` (a file was loaded)                    |
-| `dropped` | `count` (lines lost because the writer fell behind)        |
+| `dropped` | `count` (lines lost because the writer fell behind), just before the first record kept after them |
 
-Writing happens on a background thread from a bounded queue: a full queue drops lines and counts them, so recording
-never slows streaming. Files rotate at 5 MB (`<session>.jsonl`, `<session>.1.jsonl`, ...) and the directory keeps the
-newest 40 files.
+Nothing is recorded before the first connect. Writing happens on a native OS thread (not a gevent greenlet, so a slow
+disk never blocks the serial loop) from a bounded queue: a full queue drops lines and counts them, so recording never
+slows streaming. After a write error the recorder reports it once on the console and records nothing until the next
+connect. Files rotate at 5 MB (`<session>.jsonl`, `<session>.1.jsonl`, ...) and the directory keeps the newest 40
+files, always including the current session's first file, which holds its `session` line.
 
 `tools/convert_recording.py <recording.jsonl>... [--gcode file.nc] [--name name]` writes a transcript skeleton to
 `transcripts/` (and copies the G-code into `gcode/`):
@@ -316,12 +336,14 @@ importer against it.
 Behaviour the transcripts pin today that `spec/firmware.md` or plain sense says is off. A Rust backend matches it
 until a transcript and this list change together.
 
-1. **Realtime commands carry a newline.** `!` and `~` go out as `!\n` and `~\n`. The firmware acts on the character at
-   once; the `\n` then reaches its line buffer as an empty line.
+1. **Realtime commands carry a newline.** `!` and `~` go out as `!\n` and `~\n`. This one is harmless: the firmware
+   acts on the character at once and drops a `\n` that follows a realtime character (`quickCommandFlag`,
+   `GCode.cpp` in both 51.27 and 51.292), so nothing reaches its line buffer.
 2. **Resume always sends `~`**, even after a plain Pause, when the firmware is not paused. It costs an extra `ok`.
 3. **Doubled spaces.** Most lines end in two spaces (`G21  `, `G0 Z5  `); `home` and `returnToCenter` send `G90   `.
-4. **Handshake order.** `G21`, `$$`, `G90` go out before `B05` and the `$13` write, so `$$` is compared before the
-   firmware version is known.
+4. **Handshake order and scope.** `G21`, `$$`, `G90` go out before `B05` and the `$13` write, so `$$` is compared
+   before the firmware version is known. Only `$13` and settings `$$` shows differ are written, not the full set
+   `spec/firmware.md` B.9 asks for after every boot.
 5. **A lone `T2` line is sent** although the firmware runs it as an empty modal move; the following `M6` is led by
    `T2` anyway.
 6. **touchZ** sends `G90 G38.2 Z-<limit> M02 ` and queues `G10 Z0` at once, so Z is zeroed even when the probe
@@ -329,5 +351,17 @@ until a transcript and this list change together.
 7. **Z moves in the other unit flip the host's units.** The Z panel's `G20`/`G21` (and touchZ's on an inch machine)
    switch WebControl's own units and back, rescaling home by 1/25.4 and 25.4 each time, which drifts it
    (100.3 → 100.29999999999997 after three moves) and broadcasts unit changes.
-8. **Setting formats vary.** A restore writes `$16=0.000000`, `$21=1300.00`, `$45=0.00000516850`: whatever each
-   setting's formatter produces.
+8. **Number formats vary.** A restore writes `$16=0.000000`, `$21=1300.00`, `$45=0.00000516850`: whatever each
+   setting's formatter produces. Moves the backend builds print Python's `str(float)` (`G00 X254.0`, `G0 Z5.0`), and
+   home-shifted file coordinates keep the longer operand's decimals (`X22.8456 Y3.00`).
+9. **Nothing is sent before the boot `ok`.** The handshake waits for the `ok` that ends the boot banner
+   (`spec/firmware.md` A12), so a board that doesn't reset on port open gets nothing. B.1 says not to gate only on
+   it; a backend that sends on the banner fails `connect_boot_handshake` until that transcript changes.
+10. **A resume sets a feed the file never asked for.** Returning to the file after a tool change, M0 or alarm ends
+    with `G0 F800.0` (or `G1`) even when the file has no `F` before that point: 800 is `maxFeedrate` times the
+    default feed scale, not the file's feed, so it replaces the firmware's modal feed (`$15/2` after a 51.27 boot).
+11. **Simplified controller replies.** Outside `z_limits_on_51_292` and `buffer_overflow_halts_streaming`, the
+    controller lines are the minimum the backend reacts to: the boot handshake's `$$` is answered with a bare `ok`
+    (a real 51.27 prints every `$n=` line first; `connect_settings_sync_adopts_unknown_keys` covers that), and the
+    prelude's 51.292 answers are generated by `tests/serial_contract.py`. A Rust parser must also tolerate the full
+    replies in `spec/firmware.md` §1, §9.
