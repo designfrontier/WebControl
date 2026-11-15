@@ -26,6 +26,8 @@ def gcodeNumbers(letter, line):
 
 
 KEEP_ARCHIVES = 5
+# A restart lowers the bit at this feed when the file has not set a Z feed.
+DEFAULT_PLUNGE_FEED_MM_PER_MIN = 12.8
 
 # Manual commands that reach the controller, which runs none of them while the firmware is paused.
 MACHINE_COMMANDS = {
@@ -1589,8 +1591,8 @@ class Actions(MakesmithInitFuncs):
 
     def gcodeStateAt(self, index):
         '''
-        Parses the file up to index for the units, positioning, XYZ target (XY include home), feed rates, tool,
-        spindle, laser and dwell in effect there, all in the units in effect there.
+        Parses the file up to index for the units, positioning, XYZ target (XY include home), modal feed, plunge
+        feed, tool, spindle, laser and dwell in effect there, all in the units in effect there.
         '''
         positioning = "G90 "
         homeX = float(self.data.config.getValue("Advanced Settings", "homeX"))
@@ -1598,8 +1600,8 @@ class Actions(MakesmithInitFuncs):
         # homeX/homeY are stored in machine units, so a file without G20/G21 runs in them too.
         units = "G20 " if self.data.units == "INCHES" else "G21 "
         defaultFeedScale = 1 / 25.4 if units == "G20 " else 1
-        zAxisFeedRate = 12.8 * defaultFeedScale  # mm/min, currently hardcoded, but Todo: Add setting
-        xyAxisFeedRate = float(self.data.config.getValue("Advanced Settings", "maxFeedrate")) * defaultFeedScale
+        zAxisFeedRate = DEFAULT_PLUNGE_FEED_MM_PER_MIN * defaultFeedScale
+        feedRate = float(self.data.config.getValue("Advanced Settings", "maxFeedrate")) * defaultFeedScale
         previousUnits = units
         xpos = homeX
         ypos = homeY
@@ -1645,9 +1647,9 @@ class Actions(MakesmithInitFuncs):
                                 units = "G21 "
                             if units != previousUnits:
                                 scale = 1 / 25.4 if units == "G20 " else 25.4
-                                homeX, homeY, xpos, ypos, zpos, xyAxisFeedRate, zAxisFeedRate = [
+                                homeX, homeY, xpos, ypos, zpos, feedRate, zAxisFeedRate = [
                                     None if value is None else value * scale
-                                    for value in (homeX, homeY, xpos, ypos, zpos, xyAxisFeedRate, zAxisFeedRate)
+                                    for value in (homeX, homeY, xpos, ypos, zpos, feedRate, zAxisFeedRate)
                                 ]
                                 previousUnits = units
                             if line.find("X") != -1:
@@ -1672,11 +1674,10 @@ class Actions(MakesmithInitFuncs):
                                 dwell = re.sub(r"^G0*4", "", line).strip()
                             if line.find("F") != -1:
                                 _feedRate = re.search("F(?=.)(([ ]*)?[+-]?([0-9]*)(\.([0-9]+))?)", line)
-                                _feedRateFloat = float(_feedRate.groups()[0])
-                                if line.find("X") != -1 or line.find("Y") != -1 or line.find("Z") == -1:
-                                    xyAxisFeedRate = _feedRateFloat
-                                if line.find("Z") != -1:
-                                    zAxisFeedRate = _feedRateFloat
+                                feedRate = float(_feedRate.groups()[0])
+                                # A rapid's F is not a plunge feed, though the firmware keeps it as the modal F.
+                                if line.find("Z") != -1 and 0 not in gCodes:
+                                    zAxisFeedRate = feedRate
                         if line[0] == 'M':
                             mCodes = gcodeNumbers("M", line)
                             spindle = next((f"M{code} " for code in (3, 4, 5) if code in mCodes), spindle)
@@ -1685,25 +1686,23 @@ class Actions(MakesmithInitFuncs):
                             zpos = None if 6 in mCodes else zpos
         return {
             "units": units, "positioning": positioning, "x": xpos, "y": ypos, "z": zpos,
-            "xyFeedRate": xyAxisFeedRate, "zFeedRate": zAxisFeedRate,
+            "feedRate": feedRate, "zFeedRate": zAxisFeedRate,
             "tool": tool, "spindle": spindle, "laser": laser, "dwell": dwell,
         }
 
     def queueRestartSequence(self, state, zTarget=None, changeTool=True):
         '''
         Raises the bit to safe height, moves to the state's XY, restores tool, spindle, laser and dwell, lowers the bit
-        to zTarget (the state's Z by default) and leaves the controller in the state's positioning mode.
+        to zTarget (the state's Z by default) at the plunge feed, then restores the file's modal feed and positioning.
         '''
         zAxisSafeHeight = float(self.data.config.getValue("Maslow Settings", "zAxisSafeHeight"))
         if state["units"] == "G20 ":
             zAxisSafeHeight = zAxisSafeHeight / 25.4
         self.data.gcode_queue.put(state["units"])
         self.data.gcode_queue.put("G90 ")
-        self.data.gcode_queue.put("G0 Z" + str(round(zAxisSafeHeight, 4)) + " F" + str(round(state["zFeedRate"], 4)))
-        self.data.gcode_queue.put(
-            "G0 X" + str(round(state["x"], 4)) + " Y" + str(round(state["y"], 4))
-            + " F" + str(round(state["xyFeedRate"], 4))
-        )
+        # G0 runs at the firmware's maximum and ignores F, but would still set the modal F.
+        self.data.gcode_queue.put("G0 Z" + str(round(zAxisSafeHeight, 4)) + " ")
+        self.data.gcode_queue.put("G0 X" + str(round(state["x"], 4)) + " Y" + str(round(state["y"], 4)) + " ")
         if changeTool and state["tool"] is not None:
             self.data.gcode_queue.put("T" + state["tool"] + " M6 ")
         if state["spindle"] is not None:
@@ -1714,7 +1713,8 @@ class Actions(MakesmithInitFuncs):
             self.data.gcode_queue.put("G4 " + state["dwell"])
         zpos = state["z"] if zTarget is None else zTarget
         if zpos is not None:
-            self.data.gcode_queue.put("G0 Z" + str(round(zpos, 4)) + " ")
+            self.data.gcode_queue.put("G1 Z" + str(round(zpos, 4)) + " F" + str(round(state["zFeedRate"], 4)) + " ")
+        self.data.gcode_queue.put("F" + str(round(state["feedRate"], 4)) + " ")
         self.data.gcode_queue.put(state["positioning"])
 
     def findPositionAt(self, index):

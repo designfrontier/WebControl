@@ -10,7 +10,7 @@ AFTER_TOOL_CHANGE = TOOL_CHANGE_FILE.index("T2 M6") + 1
 
 
 def lowered_to(queued):
-    return [line for line in queued if line.startswith("G0 Z") and line != SAFE_Z_MM]
+    return [line for line in queued if line.startswith(("G0 Z", "G1 Z")) and line != SAFE_Z_MM]
 
 
 def test_a_restart_before_the_file_sets_z_stays_at_safe_height(job):
@@ -34,7 +34,7 @@ def test_a_restart_once_the_new_tool_has_a_z_lowers_to_it(job):
 
     job.actions.processGCode()
 
-    assert lowered_to(drain(job.gcode_queue)) == ["G0 Z-2.0 "]
+    assert lowered_to(drain(job.gcode_queue)) == ["G1 Z-2.0 F12.8 "]
 
 
 def test_play_during_a_tool_change_resumes_where_it_paused(job):

@@ -42,7 +42,7 @@ def test_resume_after_m0_releases_the_firmware_and_carries_on_from_the_next_line
 
     assert drain(tools.quick_queue) == ["~"]
     assert drain(tools.gcode_queue) == [
-        "G21 ", "G90 ", "G0 Z5.0 F100.0", "G0 X20.0 Y10.0 F300.0", "G0 Z-3.0 ", "G90 ",
+        "G21 ", "G90 ", "G0 Z5.0 ", "G0 X20.0 Y10.0 ", "G1 Z-3.0 F100.0 ", "F300.0 ", "G90 ",
     ]
     assert (tools.uploadFlag, tools.gcodeIndex, tools.firmwarePaused) == (1, AFTER_PAUSE, False)
     serial.thread().sendNextLine()

@@ -68,7 +68,7 @@ def test_starting_a_loaded_metric_file_mid_way_switches_the_machine_with_g21(inc
 
     inch_machine.actions.processGCode()
 
-    assert drain(inch_machine.gcode_queue)[:4] == ["G21 ", "G90 ", "G0 Z5.0 F12.8", "G0 X76.2 Y101.6 F800.0"]
+    assert drain(inch_machine.gcode_queue)[:4] == ["G21 ", "G90 ", "G0 Z5.0 ", "G0 X76.2 Y101.6 "]
 
 
 def test_a_file_without_units_is_taken_to_be_in_machine_units(inch_machine):

@@ -3,8 +3,8 @@ import pytest
 
 from helpers import decode_ui_message, drain
 
-SAFE_Z_MM = "G0 Z5.0 F12.8"
-FEED = " F800.0"
+SAFE_Z_MM = "G0 Z5.0 "
+FEED = "F800.0 "
 
 
 @pytest.fixture
@@ -55,7 +55,7 @@ def test_restart_mid_file_keeps_machine_mm_when_file_has_no_units(job):
     job.actions.processGCode()
 
     assert drain(job.gcode_queue) == [
-        "G21 ", "G90 ", SAFE_Z_MM, "G0 X10.0 Y20.0" + FEED, "G0 Z-3.0 ", "G90 ",
+        "G21 ", "G90 ", SAFE_Z_MM, "G0 X10.0 Y20.0 ", "G1 Z-3.0 F12.8 ", FEED, "G90 ",
     ]
 
 
@@ -73,7 +73,9 @@ def test_restart_mid_file_uses_the_files_units_over_the_machines(job):
 
     job.actions.processGCode()
 
-    assert drain(job.gcode_queue)[:3] == ["G20 ", "G90 ", "G0 Z0.1969 F0.5039"]
+    assert drain(job.gcode_queue) == [
+        "G20 ", "G90 ", "G0 Z0.1969 ", "G0 X10.0 Y20.0 ", "G1 Z-3.0 F0.5039 ", "F31.4961 ", "G90 ",
+    ]
 
 
 def test_restart_converts_home_not_the_current_position_when_the_file_switches_units(job):
@@ -83,7 +85,7 @@ def test_restart_converts_home_not_the_current_position_when_the_file_switches_u
 
     job.actions.processGCode()
 
-    assert drain(job.gcode_queue)[3] == "G0 X2.0 Y3.0 F31.4961"
+    assert drain(job.gcode_queue)[3] == "G0 X2.0 Y3.0 "
 
 
 def pause_at(data, lines, index, z_target):
@@ -103,7 +105,7 @@ def test_resume_returns_to_where_the_job_paused_before_lowering_the_bit(job):
     job.actions.resumeRun()
 
     assert drain(job.gcode_queue) == [
-        "G21 ", "G90 ", SAFE_Z_MM, "G0 X30.0 Y40.0" + FEED, "G0 Z-3.0 ", "G90 ",
+        "G21 ", "G90 ", SAFE_Z_MM, "G0 X30.0 Y40.0 ", "G1 Z-3.0 F12.8 ", FEED, "G90 ",
     ]
     assert job.uploadFlag == 1
     assert drain(job.quick_queue) == ["~"]
@@ -117,7 +119,7 @@ def test_resume_goes_to_the_new_line_when_the_index_moved_while_paused(job):
     job.actions.resumeRun()
 
     assert drain(job.gcode_queue) == [
-        "G21 ", "G90 ", SAFE_Z_MM, "G0 X50.0 Y60.0" + FEED, "G0 Z2.0 ", "G90 ",
+        "G21 ", "G90 ", SAFE_Z_MM, "G0 X50.0 Y60.0 ", "G1 Z2.0 F12.8 ", FEED, "G90 ",
     ]
 
 
@@ -126,7 +128,7 @@ def test_resume_lowers_to_the_z_it_paused_at_when_the_file_has_not_moved_z_yet(j
 
     job.actions.resumeRun()
 
-    assert drain(job.gcode_queue)[4] == "G0 Z1.5 "
+    assert drain(job.gcode_queue)[4] == "G1 Z1.5 F12.8 "
 
 
 def test_resume_restores_an_absolute_z_and_relative_mode_in_a_g91_file(job):
@@ -135,7 +137,7 @@ def test_resume_restores_an_absolute_z_and_relative_mode_in_a_g91_file(job):
     job.actions.resumeRun()
 
     assert drain(job.gcode_queue) == [
-        "G21 ", "G90 ", SAFE_Z_MM, "G0 X10.0 Y20.0" + FEED, "G0 Z-3.0 ", "G91 ",
+        "G21 ", "G90 ", SAFE_Z_MM, "G0 X10.0 Y20.0 ", "G1 Z-3.0 F12.8 ", FEED, "G91 ",
     ]
 
 
@@ -146,7 +148,7 @@ def test_resume_restores_the_units_the_job_was_paused_in(job):
 
     job.actions.resumeRun()
 
-    assert drain(job.gcode_queue)[:4] == ["G21 ", "G90 ", SAFE_Z_MM, "G0 X10.0 Y20.0" + FEED]
+    assert drain(job.gcode_queue)[:4] == ["G21 ", "G90 ", SAFE_Z_MM, "G0 X10.0 Y20.0 "]
     assert job.units == "MM"
 
 
@@ -167,17 +169,37 @@ def test_return_to_center_converts_the_safe_height_to_inches(job):
 
 
 @pytest.mark.parametrize(
-    "line, xy_feed, z_feed",
-    [("G1 Y10 F300", "F300.0", "F12.8"), ("G1 Z-1 F100", "F800.0", "F100.0"), ("G1 X10 F300", "F300.0", "F12.8")],
+    "line, plunge, feed",
+    [
+        ("G1 Y10 F300", "G1 Z-1.0 F12.8 ", "F300.0 "),
+        ("G1 Z-2 F100", "G1 Z-2.0 F100.0 ", "F100.0 "),
+        ("G1 X10 Z-2 F250", "G1 Z-2.0 F250.0 ", "F250.0 "),
+        ("G0 Z-2 F1000", "G1 Z-2.0 F12.8 ", "F1000.0 "),
+        ("G1 X10", "G1 Z-1.0 F12.8 ", FEED),
+    ],
 )
-def test_restart_takes_the_xy_feed_from_any_xy_move_and_the_z_feed_from_z_moves(job, line, xy_feed, z_feed):
-    load(job, ["G90", line, "G1 X1"], 2)
+def test_restart_plunges_at_the_files_z_feed_then_restores_its_modal_feed(job, line, plunge, feed):
+    load(job, ["G90", "G1 Z-1", line, "G1 X1"], 3)
 
     job.actions.processGCode()
 
-    queued = drain(job.gcode_queue)
-    assert queued[2].endswith(z_feed)
-    assert queued[3].endswith(xy_feed)
+    assert drain(job.gcode_queue)[4:] == [plunge, feed, "G90 "]
+
+
+def test_restart_retracts_and_moves_at_rapid_without_touching_the_modal_feed(job):
+    load(job, ["G90", "G1 X10 Y20 F300", "G1 Z-1 F50", "G1 X1"], 3)
+
+    job.actions.processGCode()
+
+    assert drain(job.gcode_queue)[2:4] == [SAFE_Z_MM, "G0 X10.0 Y20.0 "]
+
+
+def test_restart_before_the_file_sets_z_restores_the_feed_without_lowering(job):
+    load(job, ["G90", "G1 X10 Y20 F300", "G1 X1"], 2)
+
+    job.actions.processGCode()
+
+    assert drain(job.gcode_queue) == ["G21 ", "G90 ", SAFE_Z_MM, "G0 X10.0 Y20.0 ", "F300.0 ", "G90 "]
 
 
 @pytest.mark.parametrize("word", ["G40", "G41 D1", "G43 H1"])
@@ -241,17 +263,17 @@ def test_restart_does_not_mistake_g91_1_arc_centres_for_relative_moves(job):
     job.actions.processGCode()
 
     queued = drain(job.gcode_queue)
-    assert queued[3] == "G0 X30.0 Y40.0" + FEED
+    assert queued[3] == "G0 X30.0 Y40.0 "
     assert queued[-1] == "G90 "
 
 
 def test_restart_converts_the_default_feeds_to_inches(job):
     set_machine_units(job, "INCHES")
-    load(job, ["G90", "G0 X1 Y1", "G1 X2"], 2)
+    load(job, ["G90", "G0 X1 Y1", "G1 Z-0.1", "G1 X2"], 3)
 
     job.actions.processGCode()
 
-    assert drain(job.gcode_queue)[2:4] == ["G0 Z0.1969 F0.5039", "G0 X1.0 Y1.0 F31.4961"]
+    assert drain(job.gcode_queue)[2:] == ["G0 Z0.1969 ", "G0 X1.0 Y1.0 ", "G1 Z-0.1 F0.5039 ", "F31.4961 ", "G90 "]
 
 
 def test_restart_converts_z_and_feeds_when_the_file_switches_units(job):
@@ -259,9 +281,9 @@ def test_restart_converts_z_and_feeds_when_the_file_switches_units(job):
 
     job.actions.processGCode()
 
-    queued = drain(job.gcode_queue)
-    assert queued[2:4] == ["G0 Z0.1969 F10.0", "G0 X1.0 Y0.0 F20.0"]
-    assert queued[4] == "G0 Z-0.1 "
+    assert drain(job.gcode_queue) == [
+        "G20 ", "G90 ", "G0 Z0.1969 ", "G0 X1.0 Y0.0 ", "G1 Z-0.1 F10.0 ", "F20.0 ", "G90 ",
+    ]
 
 
 def test_restart_follows_modal_moves_without_a_g_word(job):
@@ -269,7 +291,7 @@ def test_restart_follows_modal_moves_without_a_g_word(job):
 
     job.actions.processGCode()
 
-    assert drain(job.gcode_queue)[3] == "G0 X30.0 Y50.0 F300.0"
+    assert drain(job.gcode_queue)[3:] == ["G0 X30.0 Y50.0 ", "F300.0 ", "G90 "]
 
 
 def test_resume_returns_to_a_modal_move_without_a_g_word(job):
@@ -277,15 +299,15 @@ def test_resume_returns_to_a_modal_move_without_a_g_word(job):
 
     job.actions.resumeRun()
 
-    assert drain(job.gcode_queue)[3] == "G0 X30.0 Y40.0 F300.0"
+    assert drain(job.gcode_queue)[3:6] == ["G0 X30.0 Y40.0 ", "G1 Z-3.0 F100.0 ", "F300.0 "]
 
 
-def test_restart_takes_a_bare_feed_word_as_the_xy_feed(job):
+def test_restart_restores_a_bare_feed_word_as_the_modal_feed(job):
     load(job, ["G90", "G1 F450", "G1 X10 Y20", "G1 X30"], 3)
 
     job.actions.processGCode()
 
-    assert drain(job.gcode_queue)[3] == "G0 X10.0 Y20.0 F450.0"
+    assert drain(job.gcode_queue)[3:] == ["G0 X10.0 Y20.0 ", "F450.0 ", "G90 "]
 
 
 def test_restart_follows_numbered_modal_moves(job):
@@ -293,7 +315,7 @@ def test_restart_follows_numbered_modal_moves(job):
 
     job.actions.processGCode()
 
-    assert drain(job.gcode_queue)[3] == "G0 X30.0 Y40.0 F300.0"
+    assert drain(job.gcode_queue)[3:] == ["G0 X30.0 Y40.0 ", "F300.0 ", "G90 "]
 
 
 def test_resume_while_the_job_is_already_running_moves_nothing(job):
