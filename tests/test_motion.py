@@ -328,3 +328,13 @@ def test_resume_while_the_job_is_already_running_moves_nothing(job):
 
     assert drain(job.gcode_queue) == []
     assert job.uploadFlag == 1
+
+
+@pytest.mark.parametrize("units, before, after", [("MM", [], []), ("INCHES", ["G21"], ["G20"])])
+def test_touch_z_probes_without_setting_the_modal_feed(job, units, before, after):
+    set_machine_units(job, units)
+    depth = job.config.getValue("Advanced Settings", "maxTouchProbePlungeDistance")
+
+    job.actions.processAction({"data": {"command": "touchZ", "arg": "", "arg1": ""}})
+
+    assert drain(job.gcode_queue) == [*before, "G90 G38.2 Z-" + str(depth) + " M02", *after, "G10 Z0 "]

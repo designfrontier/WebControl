@@ -932,7 +932,8 @@ class Actions(MakesmithInitFuncs):
             if self.data.units == "INCHES":
                 revertToInches = True
                 self.data.gcode_queue.put("G21")
-            self.data.gcode_queue.put("G90 G38.2 Z-" + plungeDepth + " F1 M02")
+            # The firmware probes at a fixed 60 mm/min; an F here would only become the job's modal feed.
+            self.data.gcode_queue.put("G90 G38.2 Z-" + plungeDepth + " M02")
             if revertToInches:
                 self.data.gcode_queue.put("G20")
             # don't think this line is needed
