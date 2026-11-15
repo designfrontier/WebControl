@@ -5,7 +5,9 @@
 mod decimal;
 pub mod firmware_gcode;
 pub mod load;
+pub mod position;
 pub mod py;
+pub mod restart;
 pub mod sanitise;
 pub mod shift;
 mod words;
