@@ -207,7 +207,8 @@ fn an_alarm_rewinds_to_the_oldest_line_not_acknowledged() {
     assert!(written(&rig.advance(300)).is_empty());
     assert!(written(&rig.rx("ok")).is_empty(), "a stale ack releases nothing");
     rig.rx("<Idle,MPos:0.00,0.00,0.00,WPos:0,0,0>");
-    assert_eq!(written(&rig.act("defineZ0")), ["G10 Z0"], "a status report after the input ran dry ends the resync");
+    assert_eq!(written(&rig.act("reportSettings")), ["$$"], "a status report after the input ran dry ends the resync");
+    assert!(written(&rig.act("defineZ0")).is_empty(), "the alarm holds every other command until Stop");
 }
 
 #[test]

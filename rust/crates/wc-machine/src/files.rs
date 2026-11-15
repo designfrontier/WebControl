@@ -413,8 +413,8 @@ impl Machine {
     }
 
     fn send_gcode(&mut self, text: String, effects: &mut Vec<Effect>) -> Reply {
-        if self.probing {
-            effects.push(alert(PROBING));
+        if self.probing || self.alarm_held() {
+            effects.push(alert(if self.probing { PROBING } else { crate::alarm::HELD }));
             return Reply::Failed;
         }
         self.queue(split_lines(&text).map(String::from).collect::<Vec<_>>());

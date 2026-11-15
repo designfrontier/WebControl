@@ -324,6 +324,8 @@ pub struct Machine {
     /// A G38.2 (Touch Z, typed or from the file) is queued or descending.
     pub(crate) probing: bool,
     pub(crate) job: Job,
+    /// The alarm the controller raised, shown until Stop or Play clears it; nothing that moves is written meanwhile.
+    pub(crate) alarm: Option<String>,
     /// Gcode loads being built off the machine task; Play waits for them.
     pub(crate) loads: usize,
     pub(crate) leds: Leds,
@@ -385,6 +387,7 @@ impl Machine {
             positioning: Positioning::Absolute,
             probing: false,
             job: Job::default(),
+            alarm: None,
             loads: 0,
             leds: Leds::default(),
             leds_shown: Leds::default(),
