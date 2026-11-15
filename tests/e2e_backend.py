@@ -24,8 +24,38 @@ def prepare_home(port):
     return home
 
 
+class NoCamera:
+    """Stands in for cv2.VideoCapture so an e2e run never opens the host's camera."""
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def isOpened(self):
+        return False
+
+    def read(self):
+        return False, None
+
+    def get(self, prop):
+        return 0.0
+
+    def set(self, prop, value):
+        return False
+
+    def release(self):
+        pass
+
+
+def disable_camera():
+    import cv2
+
+    cv2.VideoCapture = NoCamera
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("E2E_BACKEND_PORT", "5055"))
+    # main.py's webcam module opens camera 0 at startup to read its settings.
+    disable_camera()
     os.environ["HOME"] = prepare_home(port)
     # webbrowser honours $BROWSER; `true` turns main.py's open-a-tab into a no-op.
     os.environ["BROWSER"] = "true"
