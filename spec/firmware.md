@@ -77,10 +77,12 @@ it leaves the modal F at the XY feed instead of the file's. The boot feed rate i
   recompute R, so after every boot the firmware runs R = 10.1 until `$13` is written. WebControl only sends `$13`
   when it differs, so in practice the firmware runs 10.1.
 - π is 3.14159 for R and the under-sprocket chain wrap. The firmware computes in float32.
-- Chain density 0.14 × 9.8 / 1000 = 0.001372 N/mm (Python used 0.0013). Holey calibration ignores `$45`, `$37` and
-  `$7`, and always fits triangular. The firmware switches to the old triangular model when `$46 ≤ 0`.
+- Chain density 0.14 × 9.8 / 1000 = 0.001372 N/mm. Holey calibration uses the same density and π, R =
+  distPerRot / (2 × 3.14159) and `$45` from the settings; it ignores `$37` and `$7`, and always fits triangular. The
+  firmware switches to the old triangular model when `$46 ≤ 0`.
 - The clamp works on each axis independently. 51.29x also clamps inside the quadrilateral solve.
-- Measured: the R and density differences each move chain lengths by about 0.03–0.12 mm.
+- Measured, before holey calibration took the firmware's values: the R and density differences each moved chain
+  lengths by about 0.03–0.12 mm.
 
 ## 7. Pause, tool change, alarms
 
@@ -123,7 +125,7 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
 | A5 | Medium | Z-limit commands do nothing on 51.27/51.28, overwrite `$43`/`$44` on 51.291, store nothing on 51.292. |
 | A6 | Medium | When the firmware stops itself (ALARM, overflow), acks are lost and streaming blocks until Stop. |
 | A7 | Medium | touchZ's `F1` leaves the modal feed at 1 mm/min; G38.2 ignores F anyway. |
-| A8 | Low–Med | Holey calibration's model differs from the firmware's: R (10.2 vs 10.1 vs distPerRot), density, `$45`, `$37`, `$7`. |
+| A8 | Low | Holey calibration fits with R = distPerRot / (2 × 3.14159), but the firmware runs R = 10.1 until `$13` is written (§6); it ignores `$37` and `$7`. |
 | A9 | Low–Med | The version only reaches the console; all 51.29x builds report 51.29. |
 | A10 | Low | An unclosed `(` reaches the firmware and hangs 51.27; `!`, `~` and backtick inside a line act as realtime commands. |
 | A11 | Low | `$45` and fractional `$10`/`$11`/`$15` are rewritten on every connect; NaN parses as 1. |

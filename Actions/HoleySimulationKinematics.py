@@ -1,6 +1,9 @@
 import math
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
 
+# The firmware's literal for pi in its sprocket radius and chain-wrap maths.
+FIRMWARE_PI = 3.14159
+
 
 class Kinematics(MakesmithInitFuncs):
     '''
@@ -85,7 +88,7 @@ class Kinematics(MakesmithInitFuncs):
 
     leftChainTolerance = 0
     rightChainTolerance = 0
-    chainDensity = .0013  # N/mm
+    chainDensity = 0.14 * 9.8 / 1000  # N/mm, hard-coded in the firmware's triangular inverse
     chainElasticity = 5.1685e-6  # mm/mm/N
     sledWeight = 97.9  # N
 
@@ -167,8 +170,8 @@ class Kinematics(MakesmithInitFuncs):
             Chain2Angle = math.asin((self._yCordOfMotor - yTarget) / Motor2Distance) - math.asin(
                 self.R / Motor2Distance)
 
-            Chain1AroundSprocket = self.R * (3.14159 - Chain1Angle)
-            Chain2AroundSprocket = self.R * (3.14159 - Chain2Angle)
+            Chain1AroundSprocket = self.R * (FIRMWARE_PI - Chain1Angle)
+            Chain2AroundSprocket = self.R * (FIRMWARE_PI - Chain2Angle)
 
             xTangent1 = -self._xCordOfMotor - self.R * math.sin(Chain1Angle)
             yTangent1 = self._yCordOfMotor - self.R * math.cos(Chain1Angle)
@@ -567,7 +570,7 @@ class Kinematics(MakesmithInitFuncs):
         if firmwareKey in self.FLOAT_SETTINGS:
             setattr(self, self.FLOAT_SETTINGS[firmwareKey], number)
         elif firmwareKey == 13:
-            self.R = number / math.pi / 2
+            self.R = number / (2.0 * FIRMWARE_PI)
         elif firmwareKey == 38:
             self.chainOverSprocket = int(number)
         elif firmwareKey == 7:
@@ -577,7 +580,7 @@ class Kinematics(MakesmithInitFuncs):
 
     def initializeSettings(self):
         self.D = float(self.data.config.getValue("Maslow Settings","motorSpacingX"))
-        self.R = float(self.data.config.getValue("Computed Settings","distPerRot"))/math.pi/2
+        self.R = float(self.data.config.getValue("Computed Settings", "distPerRot")) / (2.0 * FIRMWARE_PI)
         self.machineHeight = float(self.data.config.getValue("Maslow Settings","bedHeight"))
         self.machineWidth = float(self.data.config.getValue("Maslow Settings", "bedWidth"))
         self.motorOffsetY = float(self.data.config.getValue("Maslow Settings", "motorOffsetY"))

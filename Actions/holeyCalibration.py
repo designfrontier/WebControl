@@ -168,6 +168,10 @@ class HoleyCalibration(MakesmithInitFuncs):
         self.kin.leftChainTolerance = self.SP_leftChainTolerance
         self.kin.rightChainTolerance = self.SP_rightChainTolerance
         self.kin.chainOverSprocket = self.SP_chainOverSprocket
+        distPerRot = float(self.data.config.getValue("Computed Settings", "distPerRot"))
+        self.kin.R = distPerRot / (2.0 * kinematics.FIRMWARE_PI)
+        chainElasticity = self.data.config.getValue("Advanced Settings", "chainElasticity")
+        self.kin.chainElasticity = kinematics.Kinematics.chainElasticity if chainElasticity is None else float(chainElasticity)
         self.kin.recomputeGeometry()
         self.IdealLengthArray = self.CalculateMeasurements(IdealCoordinates)
 
