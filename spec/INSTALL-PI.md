@@ -132,7 +132,8 @@ bash webcontrol-rs-<version>-aarch64/install-pi.sh webcontrol-rs-<version>-aarch
    rule that lets the service run `systemctl poweroff` and nothing else.
 3. Installs `avrdude` for the firmware upgrade, if it is missing.
 4. Enables and starts `webcontrol-rs`. If a `webcontrol.service` from an older WebControl is running on the same disk,
-   it leaves that one holding the port and tells you to run `wc-switch rust` when it is idle.
+   it leaves that one holding the port and tells you to run `wc-switch rust` when it is idle; one that is enabled but
+   stopped it disables, so it cannot take the port at the next boot.
 
 ## 6. Verify
 

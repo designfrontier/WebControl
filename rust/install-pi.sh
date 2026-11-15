@@ -37,7 +37,11 @@ command -v avrdude > /dev/null || "${APT[@]}"
 echo "Installed $("$opt/webcontrol-rs" --version 2> /dev/null || echo webcontrol-rs) for $user."
 if "${SYSTEMCTL[@]}" is-active --quiet webcontrol; then
   echo "webcontrol.service, an older WebControl, is running and keeps port 5000. When it is idle: wc-switch rust"
-elif "${SYSTEMCTL[@]}" is-active --quiet webcontrol-rs; then
+  exit 0
+fi
+# A stopped but enabled older WebControl would race webcontrol-rs for the port at the next boot.
+if "${SYSTEMCTL[@]}" is-enabled --quiet webcontrol 2> /dev/null; then "${SYSTEMCTL[@]}" disable webcontrol; fi
+if "${SYSTEMCTL[@]}" is-active --quiet webcontrol-rs; then
   "${SYSTEMCTL[@]}" enable webcontrol-rs
   echo "webcontrol-rs is still running the previous binary, so a job carries on. When the machine is idle:"
   echo "  sudo systemctl restart webcontrol-rs"

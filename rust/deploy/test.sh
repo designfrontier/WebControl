@@ -20,7 +20,7 @@ case "\$1" in
   enable) [ "\$3" = webcontrol-rs ] && echo '{"backend":"rust","jobInProgress":false}' > "$work/state" \
           || echo '{"jobInProgress":false}' > "$work/state" ;;
   is-active) if grep -qx "\${!#}" "$work/active" 2> /dev/null; then echo active; else echo inactive; exit 3; fi ;;
-  is-enabled) echo enabled ;;
+  is-enabled) if grep -qx "\${!#}" "$work/enabled" 2> /dev/null; then echo enabled; else echo disabled; exit 1; fi ;;
 esac
 EOF
 chmod +x "$work/bin/"*
@@ -32,7 +32,7 @@ check() {
   if "$@"; then echo "ok   $name"; else echo "FAIL $name"; failures=$((failures + 1)); fi
 }
 
-reset() { rm -f "$work/calls" "$work/state" "$work/active"; }
+reset() { rm -f "$work/calls" "$work/state" "$work/active" "$work/enabled"; }
 
 switch_to_rust() {
   reset
@@ -177,6 +177,13 @@ an_update_waits_for_a_restart() {
     grep -q "sudo systemctl restart webcontrol-rs" "$work/out"
 }
 
+disables_a_stopped_older_webcontrol() {
+  reset
+  echo webcontrol > "$work/enabled"
+  install_pi > /dev/null &&
+    [ "$(grep -v is- "$work/calls" | tail -2)" = "$(printf 'systemctl disable webcontrol\nsystemctl enable --now webcontrol-rs')" ]
+}
+
 reinstall_keeps_the_previous_binary() {
   install_pi > /dev/null && [ -f "$work/root/opt/webcontrol-rs/webcontrol-rs.prev" ]
 }
@@ -184,6 +191,8 @@ reinstall_keeps_the_previous_binary() {
 check "install-pi.sh installs, enables and starts webcontrol-rs" installs_and_starts_when_nothing_runs
 check "install-pi.sh leaves a running older WebControl alone" leaves_an_older_webcontrol_running
 check "install-pi.sh does not restart a running webcontrol-rs" an_update_waits_for_a_restart
+check "install-pi.sh disables a stopped older WebControl so it cannot take the port at boot" \
+  disables_a_stopped_older_webcontrol
 check "install-pi.sh keeps the previous binary as .prev" reinstall_keeps_the_previous_binary
 check "install-pi.sh installs avrdude for the firmware upgrade" installs_avrdude_unless_present
 
