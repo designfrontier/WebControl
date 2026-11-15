@@ -7,7 +7,7 @@
       "variant": "holey",
       "version": "51.27"
     },
-    "webcontrolCommit": "c859cea"
+    "webcontrolCommit": "81ff3d4"
   },
   "setup": {
     "units": "MM",
@@ -18,12 +18,16 @@
     "start": "boot"
   },
   "events": [
-    {"type": "rx", "line": "PCB v1.6 TLE9201  Detected"},
-    {"type": "rx", "line": "FAKE_SERVO off"},
+    {"type": "rx", "line": "PCB v1.1 Detected"},
     {"type": "rx", "line": "Grbl v1.00"},
     {"type": "rx", "line": "ready"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "[Forward Calculating Position]"},
+    {"type": "rx", "line": "position loaded at:"},
+    {"type": "rx", "line": "247.79"},
+    {"type": "rx", "line": "-5.88"},
+    {"type": "rx", "line": "G21"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "$$ \n"},
     {"type": "rx", "line": "$0=2438.40000000 (Machine width, mm)"},
@@ -43,8 +47,10 @@
     {"type": "rx", "line": "$46=97.90000000"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "G90"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "B05  \n"},
+    {"type": "rx", "line": "B05"},
     {"type": "rx", "line": "Firmware Version 51.27"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "$13=63.5000 \n"},

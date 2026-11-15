@@ -7,14 +7,24 @@
       "variant": "holey",
       "version": "51.27"
     },
-    "webcontrolCommit": "c859cea"
+    "webcontrolCommit": "81ff3d4"
   },
   "setup": {
     "units": "MM",
     "home": {
       "x": 0,
       "y": 0
-    }
+    },
+    "bootBanner": [
+      "PCB v1.1 Detected",
+      "Grbl v1.00",
+      "ready",
+      "ok",
+      "[Forward Calculating Position]",
+      "position loaded at:",
+      "247.79",
+      "-5.88"
+    ]
   },
   "events": [
     {"type": "http", "method": "POST", "path": "/api/calibration/holey", "json": {"measurements": [966.0, 964.5, 965.8, 964.9, 711.6, 710.9, 711.4, 1199.5, 1198.2, 1199.1, 1198.6, 254.3]}, "status": 200},

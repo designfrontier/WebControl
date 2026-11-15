@@ -7,18 +7,30 @@
       "variant": "holey",
       "version": "51.27"
     },
-    "webcontrolCommit": "1d58697"
+    "webcontrolCommit": "81ff3d4"
   },
   "setup": {
     "units": "MM",
     "home": {
       "x": 0,
       "y": 0
-    }
+    },
+    "bootBanner": [
+      "PCB v1.1 Detected",
+      "Grbl v1.00",
+      "ready",
+      "ok",
+      "[Forward Calculating Position]",
+      "position loaded at:",
+      "247.79",
+      "-5.88"
+    ]
   },
   "events": [
     {"type": "ui", "action": {"command": "touchZ", "arg": "", "arg1": ""}},
     {"type": "tx", "bytes": "G90 G38.2 Z-10 \n"},
+    {"type": "rx", "line": "G90 "},
+    {"type": "rx", "line": "G38.2 Z-10"},
     {"type": "rx", "line": "probing for z axis zero"},
     {"type": "rx", "line": "max depth -10.00 mm."},
     {"type": "rx", "line": "feedrate 39.94 mm per min."},
@@ -29,12 +41,16 @@
     {"type": "expect", "alerts": [{"title": "Touch Z Failed", "message": "Z was not zeroed"}]},
     {"type": "ui", "action": {"command": "moveZ", "arg": "raise", "arg1": "5"}},
     {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "G21"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G91  \n"},
+    {"type": "rx", "line": "G91"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G00 Z5.0  \n"},
+    {"type": "rx", "line": "G00 Z5.0"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "G90"},
     {"type": "rx", "line": "ok"}
   ]
 }

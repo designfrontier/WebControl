@@ -7,7 +7,7 @@
       "variant": "holey",
       "version": "51.27"
     },
-    "webcontrolCommit": "c859cea"
+    "webcontrolCommit": "81ff3d4"
   },
   "setup": {
     "units": "MM",
@@ -17,31 +17,52 @@
     },
     "gcode": {
       "path": "gcode/square_mm.nc"
-    }
+    },
+    "bootBanner": [
+      "PCB v1.1 Detected",
+      "Grbl v1.00",
+      "ready",
+      "ok",
+      "[Forward Calculating Position]",
+      "position loaded at:",
+      "247.79",
+      "-5.88"
+    ]
   },
   "events": [
     {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
     {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "G21"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "G90"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G0 Z5  \n"},
+    {"type": "rx", "line": "G0 Z5"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G0 X22.8456 Y3.00  \n"},
+    {"type": "rx", "line": "G0 X22.8456 Y3.00"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G1 Z-1.5 F127  \n"},
+    {"type": "rx", "line": "G1 Z-1.5 F127"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G1 X42.8456 F600  \n"},
+    {"type": "rx", "line": "G1 X42.8456 F600"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G1 Y23.00  \n"},
+    {"type": "rx", "line": "G1 Y23.00"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G1 X22.8456  \n"},
+    {"type": "rx", "line": "G1 X22.8456"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G1 Y3.00  \n"},
+    {"type": "rx", "line": "G1 Y3.00"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G0 Z5  \n"},
+    {"type": "rx", "line": "G0 Z5"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "M5  \n"},
+    {"type": "rx", "line": "M5"},
     {"type": "rx", "line": "ok"},
     {"type": "expect", "state": {"uploadFlag": 0, "jobInProgress": false, "gcodeIndex": 0}}
   ]

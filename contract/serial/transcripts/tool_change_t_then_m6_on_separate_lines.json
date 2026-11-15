@@ -7,7 +7,7 @@
       "variant": "holey",
       "version": "51.27"
     },
-    "webcontrolCommit": "9b31f6c"
+    "webcontrolCommit": "81ff3d4"
   },
   "setup": {
     "units": "MM",
@@ -24,17 +24,33 @@
         "M6",
         "G0 X2"
       ]
-    }
+    },
+    "bootBanner": [
+      "PCB v1.1 Detected",
+      "Grbl v1.00",
+      "ready",
+      "ok",
+      "[Forward Calculating Position]",
+      "position loaded at:",
+      "247.79",
+      "-5.88"
+    ]
   },
   "events": [
     {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
     {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "G21"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "G90"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G0 X1  \n"},
+    {"type": "rx", "line": "G0 X1"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "T2 M6  \n"},
+    {"type": "rx", "line": "T2 "},
+    {"type": "rx", "line": "Tool change to tool 2"},
+    {"type": "rx", "line": "M6"},
     {"type": "rx", "line": "Tool Change: Please insert tool 2"},
     {"type": "rx", "line": "Maslow Paused"},
     {"type": "expect", "state": {"currentTool": 2, "uploadFlag": 0}},
@@ -43,16 +59,22 @@
     {"type": "rx", "line": "ok"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "G21"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "G90"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G0 Z5.0  \n"},
+    {"type": "rx", "line": "G0 Z5.0"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G0 X1.0 Y0.0  \n"},
+    {"type": "rx", "line": "G0 X1.0 Y0.0"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "G90"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G0 X2  \n"},
+    {"type": "rx", "line": "G0 X2"},
     {"type": "rx", "line": "ok"},
     {"type": "expect", "state": {"uploadFlag": 0, "jobInProgress": false, "gcodeIndex": 0}}
   ]

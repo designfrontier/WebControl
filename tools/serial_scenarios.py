@@ -1,4 +1,5 @@
 """Scenarios the recorder turns into contract/serial transcripts: a setup and steps, without the tx lines."""
+import owner_machine
 
 STATUS = "<Idle,MPos:{x:.2f},{y:.2f},{z:.2f},WPos:0.000,0.000,0.000>"
 
@@ -42,11 +43,14 @@ def wait_tx(pattern):
     return {"type": "waitTx", "pattern": pattern}
 
 
-def firmware(ack=None, flush=False, rule=None, forget=False):
+def firmware(ack=None, flush=False, rule=None, forget=False, echo=None, reports=None):
     '''
     forget: the model drops what it holds and ignores every line written so far, so the scenario answers them itself.
+    echo: the model prints what 51.27 prints before running a line (its echo, tool and unsupported notes).
+    reports: called with each line before its ok, for the status reports (and ticks) to send while it runs.
     '''
-    return {"type": "firmware", "ack": ack, "flush": flush, "rule": rule, "forget": forget}
+    return {"type": "firmware", "ack": ack, "flush": flush, "rule": rule, "forget": forget, "echo": echo,
+            "reports": reports}
 
 
 def pauses_on(pattern, *replies):
@@ -57,12 +61,18 @@ SCENARIOS = {}
 
 
 def scenario(name, description, setup, steps, firmware_meta=None, timing=None):
+    '''
+    A 51.27 scenario answers as the owner's controller does: its boot banner and its echo of each line.
+    '''
+    firmware_meta = firmware_meta or {"variant": "holey", "version": "51.27"}
+    real = firmware_meta["version"] == "51.27"
+    connected = setup.get("start", "connected") == "connected"
     SCENARIOS[name] = {
         "name": name,
         "description": description,
-        "firmware": firmware_meta or {"variant": "holey", "version": "51.27"},
-        "setup": setup,
-        "steps": steps,
+        "firmware": firmware_meta,
+        "setup": {**setup, "bootBanner": owner_machine.BOOT} if real and connected else setup,
+        "steps": [firmware(echo=True)] + steps if real else steps,
         **({"timing": timing} if timing else {}),
     }
 
@@ -70,7 +80,7 @@ def scenario(name, description, setup, steps, firmware_meta=None, timing=None):
 MM = {"units": "MM", "home": {"x": 0, "y": 0}}
 INCHES = {"units": "INCHES", "home": {"x": 0, "y": 0}}
 BUFFERED = {"Maslow Settings": {"bufferOn": 1}}
-BANNER = ["PCB v1.6 TLE9201  Detected", "FAKE_SERVO off", "Grbl v1.00", "ready"]
+BANNER = owner_machine.BOOT_BANNER
 SLED_HALTED = ("ALARM: The sled is not keeping up with its expected position and has halted. Click the 'Stop' button "
                "to clear the alarm. More information at: https://github.com/MaslowCNC/Firmware/wiki/Keeping-Up  ")
 TOOL_2 = ["Tool Change: Please insert tool 2", "Maslow Paused"]
@@ -94,13 +104,14 @@ def resync(x=0.0, y=0.0, z=0.0):
 scenario(
     "connect_boot_handshake",
     "The port opens and the controller boots: WebControl sends units, $$ and G90 once the boot ok arrives, then the "
-    "B05 version query and the $13 write the banner queued. The B05 reply is parsed.",
-    {**MM, "start": "boot"},
-    [rx(line) for line in BANNER] + [
-        rx("ok", "the boot ok releases the queued commands"), idle(),
-        expect(state={"firmwareBuild": "51.27", "controllerBoard": "PCB v1.6 TLE9201  Detected"},
-               emitted=[{"command": "controllerMessage", "data": "Firmware Version 51.27"}]),
-    ],
+    "B05 version query and the $13 write the banner queued. The B05 reply is parsed. The controller's lines are the "
+    "owner's 51.27 on a PCB v1.1 board, its full $$ report included, so nothing differs and nothing more is written.",
+    {**MM, "start": "boot", "settings": owner_machine.SETTINGS},
+    [firmware(rule={"pattern": r"^\$\$", "replies": owner_machine.SETTINGS_REPORT}), *[rx(line) for line in BANNER],
+     rx("ok", "the boot ok releases the queued commands"), *[rx(line) for line in owner_machine.POSITION_LOADED],
+     idle(),
+     expect(state={"firmwareBuild": "51.27", "controllerBoard": "PCB v1.1 Detected"},
+            emitted=[{"command": "controllerMessage", "data": "Firmware Version 51.27"}])],
 )
 
 SETTINGS_REPORT = [
@@ -115,7 +126,7 @@ scenario(
     "adopted without a write; $3, which differs, is rewritten; $45 printed rounded to 8 decimals is left alone.",
     {**MM, "start": "boot"},
     [firmware(rule={"pattern": r"^\$\$", "replies": SETTINGS_REPORT}), *[rx(line) for line in BANNER], rx("ok"),
-     idle(),
+     *[rx(line) for line in owner_machine.POSITION_LOADED], idle(),
      expect(settings=[{"section": "Advanced Settings", "key": "maxZRPM", "value": "12.6"},
                       {"section": "Advanced Settings", "key": "axisDetachTime", "value": "2000"},
                       {"section": "Advanced Settings", "key": "propWeightV", "value": "1"},
@@ -128,8 +139,8 @@ scenario(
     "A boot that reports `error: EEPROM read fail` (every firmware upgrade or downgrade) gets every setting written "
     "back, unknown keys from their defaults, then a $$ to verify, and the user is told.",
     {**MM, "start": "boot"},
-    [rx(BANNER[0]), rx(BANNER[1]), rx("error: EEPROM read fail. Using default settings."), rx(BANNER[2]),
-     rx(BANNER[3]), rx("ok"), idle(),
+    [rx(BANNER[0]), rx("error: EEPROM read fail. Using default settings."), rx(BANNER[1]), rx(BANNER[2]), rx("ok"),
+     idle(),
      expect(alerts=[{"title": "Alert", "message": "lost its settings (EEPROM read fail)"}],
             settings=[{"section": "Advanced Settings", "key": "maxZRPM", "value": "12.6"}])],
 )
@@ -295,11 +306,15 @@ scenario(
 )
 
 
-def slow_ok(seconds=4, z=-1.5):
+def slow_ok(free_space=True):
     '''
-    A long move: no ok for `seconds`, while the firmware's own status reports keep the link alive.
+    A 4 s move: no ok, while the firmware's own reports, recorded mid-cut on the owner's machine, keep the link alive.
+    free_space=False leaves out the [PE:] lines, whose free space (127) was recorded with nothing buffered.
     '''
-    return [step for n in range(seconds) for step in (status(0, 0, z), tick(1.0, "still moving; no ok yet"))]
+    reports = owner_machine.CUTTING_REPORTS + owner_machine.CUTTING_REPORTS[:2]
+    return [step for status_line, position_error in reports
+            for step in (rx(status_line), *([rx(position_error)] if free_space else []),
+                         tick(owner_machine.REPORT_INTERVAL))]
 
 
 scenario(
@@ -315,7 +330,8 @@ scenario(
     "Buffered: the buffer fills, then the oldest line's ok takes 4 s with status reports in between. Nothing more "
     "goes out until that ok frees its bytes.",
     {**MM, "gcode": gcode("long_cut_mm.nc"), "settings": BUFFERED},
-    [ui("startRun"), wait_tx("X20 Y10"), firmware(ack=False), idle(), *slow_ok(z=-2), firmware(ack=True), idle(),
+    [ui("startRun"), wait_tx("X20 Y10"), firmware(ack=False), idle(), *slow_ok(free_space=False),
+     firmware(ack=True), idle(),
      expect(state=FINISHED)],
 )
 
@@ -521,3 +537,7 @@ scenario(
     [http("/api/calibration/holey", json={"measurements": HOLEY_MEASUREMENTS}, status=200), idle(),
      http("/api/calibration/holey/accept", json={}, status=200), idle()],
 )
+
+# ----- real jobs from the owner's machine -----
+
+import real_job_scenarios  # noqa: E402,F401  registers its scenarios, built from the helpers above

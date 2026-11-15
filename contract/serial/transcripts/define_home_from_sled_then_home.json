@@ -7,7 +7,7 @@
       "variant": "holey",
       "version": "51.27"
     },
-    "webcontrolCommit": "c859cea"
+    "webcontrolCommit": "81ff3d4"
   },
   "setup": {
     "units": "MM",
@@ -19,30 +19,48 @@
       "x": 12.34,
       "y": -5.5,
       "z": 0.0
-    }
+    },
+    "bootBanner": [
+      "PCB v1.1 Detected",
+      "Grbl v1.00",
+      "ready",
+      "ok",
+      "[Forward Calculating Position]",
+      "position loaded at:",
+      "247.79",
+      "-5.88"
+    ]
   },
   "events": [
     {"type": "ui", "action": {"command": "defineHome", "arg": "", "arg1": ""}},
     {"type": "expect", "state": {"home": {"x": 12.34, "y": -5.5}}, "emitted": [{"command": "homePositionMessage", "data": {"xval": 12.34, "yval": -5.5}}]},
     {"type": "ui", "action": {"command": "home", "arg": "", "arg1": ""}},
     {"type": "tx", "bytes": "G90   \n"},
+    {"type": "rx", "line": "G90"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G00 Z5.0 \n"},
+    {"type": "rx", "line": "G00 Z5.0"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G00 X12.34 Y-5.5  \n"},
+    {"type": "rx", "line": "G00 X12.34 Y-5.5"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G00 Z0  \n"},
+    {"type": "rx", "line": "G00 Z0"},
     {"type": "rx", "line": "ok"},
     {"type": "ui", "action": {"command": "defineHome", "arg": 10, "arg1": 5}},
     {"type": "expect", "state": {"home": {"x": 254.0, "y": 127.0}}},
     {"type": "ui", "action": {"command": "home", "arg": "", "arg1": ""}},
     {"type": "tx", "bytes": "G90   \n"},
+    {"type": "rx", "line": "G90"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G00 Z5.0 \n"},
+    {"type": "rx", "line": "G00 Z5.0"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G00 X254.0 Y127.0  \n"},
+    {"type": "rx", "line": "G00 X254.0 Y127.0"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G00 Z0  \n"},
+    {"type": "rx", "line": "G00 Z0"},
     {"type": "rx", "line": "ok"}
   ]
 }

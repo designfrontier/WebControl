@@ -45,6 +45,10 @@ def apply_firmware_step(model, step, written):
         model.seen = len(written)
     if step.get("ack") is not None:
         model.ack = step["ack"]
+    if step.get("echo") is not None:
+        model.echo = step["echo"]
+    if step.get("reports") is not None:
+        model.reports = step["reports"]
     rule = step.get("rule")
     if rule:
         model.add_rule(rule["pattern"], rule["replies"], rule.get("hold", False))

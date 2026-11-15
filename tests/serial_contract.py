@@ -23,6 +23,7 @@ FORMAT_VERSION = 1
 TIMING = {"quiet": 0.1, "txTimeout": 2.0, "settle": 1.0}
 BOOT_BANNER = ["PCB v1.6 TLE9201  Detected", "FAKE_SERVO off", "Grbl v1.00", "ready", "ok"]
 EEPROM_REWRITE_NOTICE = "Change in setting, rewriting EEPROM"
+MPOS = re.compile(r"MPos:(-?[0-9.]+),(-?[0-9.]+),")
 REALTIME = ("!", "~")
 # The whole run, prelude included, may not take longer than this on the fake clock.
 FAKE_TIME_LIMIT = 600.0
@@ -111,6 +112,11 @@ class Firmware:
         self.pending = deque()
         self.held = False
         self.seen = 0
+        self.echo = False
+        self.head_echoed = False
+        # Called with each line before its ok: what the controller reports while the line runs.
+        self.reports = None
+        self.position = lambda: (0.0, 0.0)
         self.rules = [(re.compile(r"^B05\b"), ["Firmware Version " + version], False)]
         if build is not None and build.startswith("51.29") and build != "51.29x":
             self.rules.append((re.compile(r"^\$\d+="), setting_write_replies, False))
@@ -125,6 +131,7 @@ class Firmware:
     def flush(self):
         self.pending.clear()
         self.held = False
+        self.head_echoed = False
 
     def respond(self, written):
         '''
@@ -136,16 +143,30 @@ class Firmware:
             if text == "!":
                 self.flush()
                 out.append("ok")
+                out.extend(self.position_loaded() if self.echo else [])
             elif text == "~":
                 out.append("ok")
                 if self.held:
                     self.held = False
-                    self.pending.popleft()
+                    self._done()
                     out.append("ok")
             else:
                 self.pending.append(text)
         self.seen = len(written)
         return out + self._run()
+
+    def echo_head(self):
+        '''
+        The echo of the line the firmware starts next, once: 51.27 prints it before it runs the line.
+        '''
+        if not self.echo or self.head_echoed or self.held or not self.pending:
+            return []
+        self.head_echoed = True
+        return echo_lines(self.pending[0])
+
+    def _done(self):
+        self.pending.popleft()
+        self.head_echoed = False
 
     def _run(self):
         out = []
@@ -153,13 +174,45 @@ class Firmware:
             line = self.pending[0]
             replies, hold = next(((replies, hold) for pattern, replies, hold in self.rules
                                   if pattern.search(line.strip())), ([], False))
+            out.extend(self.echo_head())
             out.extend(replies(line.strip()) if callable(replies) else replies)
             if hold:
                 self.held = True
                 break
-            self.pending.popleft()
+            out.extend(self.reports(line) if self.reports else [])
+            self._done()
             out.append("ok")
-        return out
+        return out + self.echo_head()
+
+    def position_loaded(self):
+        '''
+        What 51.27 prints when it reloads the sled position after a stop (and on its own after the boot ok).
+        '''
+        x, y = self.position()
+        return [POSITION_LOADED, "position loaded at:", "%.2f" % x, "%.2f" % y]
+
+
+POSITION_LOADED = "[Forward Calculating Position]"
+# 51.27 echoes each G, M or T word of a line with its arguments, as the owner's recordings show.
+ECHO_SPLIT = re.compile(r"(?<=\s)(?=[GMT][0-9])")
+UNSUPPORTED = {"G17"}
+
+
+def echo_lines(line):
+    '''
+    The lines holey 51.27 prints for a line before running it (none for `$` commands).
+    '''
+    text = line.strip()
+    if not text or text[0] in "$!~?":
+        return []
+    return [out for segment in ECHO_SPLIT.split(text) for out in [segment, *segment_notes(segment)]]
+
+
+def segment_notes(segment):
+    word = segment.split()[0]
+    if word[0] == "T":
+        return ["Tool change to tool %d" % int(float(word[1:]))]
+    return ["Command %s unsupported and ignored." % word] if word in UNSUPPORTED else []
 
 
 def setting_write_replies(line):
@@ -246,6 +299,8 @@ class Engine:
         self.meta_firmware = firmware or {"variant": "holey", "version": "51.27"}
         self.clock = Clock()
         self.firmware = Firmware(self.meta_firmware["version"], self.meta_firmware.get("build"))
+        self.sled = (0.0, 0.0)
+        self.firmware.position = lambda: self.sled
         self.recorded = []
         self.emitted = []
         self.emit_mark = 0
@@ -387,7 +442,7 @@ class Engine:
         if self.setup.get("start", "connected") == "connected":
             yield {"type": "_prelude"}
             for line in self.setup.get("bootBanner", BOOT_BANNER):
-                yield {"type": "rx", "line": line}
+                yield controller_event(line)
             yield from self.idle()
             sled = self.setup.get("sled")
             if sled is not None:
@@ -408,7 +463,7 @@ class Engine:
             if not replies:
                 return
             for line in replies:
-                yield {"type": "rx", "line": line}
+                yield controller_event(line)
 
     def wait_tx(self, pattern):
         '''
@@ -423,9 +478,10 @@ class Engine:
             if hit is None and not replies:
                 raise ContractFailure("the backend never wrote a line matching " + repr(pattern))
             for line in replies:
-                yield {"type": "rx", "line": line}
+                yield controller_event(line)
             if hit is not None:
                 self.firmware.hold_unanswered(written[hit])
+                yield from ({"type": "rx", "line": line} for line in self.firmware.echo_head())
                 return
 
     def poll(self, port):
@@ -539,6 +595,7 @@ class Engine:
             self._finish()
         elif kind == "rx":
             self.port.incoming.append(event["line"] + "\r\n")
+            self._watch_controller(event["line"])
         elif kind == "ui":
             action = event["action"]
             self.socket.emit("action", {"data": {"command": action["command"], "arg": action.get("arg", ""),
@@ -554,6 +611,14 @@ class Engine:
         elif kind != "_settle":
             raise ContractFailure(self._where() + "unknown event type " + kind)
         return True
+
+    def _watch_controller(self, line):
+        '''
+        Keeps the controller model's sled position, which it prints after a stop, at the last status report's.
+        '''
+        mpos = MPOS.search(line)
+        if mpos:
+            self.sled = (float(mpos.group(1)), float(mpos.group(2)))
 
     def _http(self, event):
         method = event.get("method", "POST")
@@ -586,6 +651,13 @@ class Engine:
         self.emit_mark = len(self.emitted)
         if problems:
             raise ContractFailure(self._where() + "; ".join(problems))
+
+
+def controller_event(reply):
+    '''
+    A controller model's reply as an event: a line, or an event (a tick) it times its lines with.
+    '''
+    return {"type": "rx", "line": reply} if isinstance(reply, str) else reply
 
 
 def status_line(sled):

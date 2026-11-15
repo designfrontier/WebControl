@@ -7,7 +7,7 @@
       "variant": "holey",
       "version": "51.27"
     },
-    "webcontrolCommit": "6dceb8d"
+    "webcontrolCommit": "81ff3d4"
   },
   "setup": {
     "units": "MM",
@@ -15,35 +15,57 @@
     "home": {
       "x": 100.3,
       "y": -50.25
-    }
+    },
+    "bootBanner": [
+      "PCB v1.1 Detected",
+      "Grbl v1.00",
+      "ready",
+      "ok",
+      "[Forward Calculating Position]",
+      "position loaded at:",
+      "247.79",
+      "-5.88"
+    ]
   },
   "events": [
     {"type": "ui", "action": {"command": "moveZ", "arg": "raise", "arg1": "0.25"}},
     {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "G21"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G91  \n"},
+    {"type": "rx", "line": "G91"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G00 Z6.35  \n"},
+    {"type": "rx", "line": "G00 Z6.35"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "G90"},
     {"type": "rx", "line": "ok"},
     {"type": "ui", "action": {"command": "moveZ", "arg": "raise", "arg1": "0.25"}},
     {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "G21"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G91  \n"},
+    {"type": "rx", "line": "G91"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G00 Z6.35  \n"},
+    {"type": "rx", "line": "G00 Z6.35"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "G90"},
     {"type": "rx", "line": "ok"},
     {"type": "ui", "action": {"command": "moveZ", "arg": "raise", "arg1": "0.25"}},
     {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "G21"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G91  \n"},
+    {"type": "rx", "line": "G91"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G00 Z6.35  \n"},
+    {"type": "rx", "line": "G00 Z6.35"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "G90"},
     {"type": "rx", "line": "ok"},
     {"type": "expect", "state": {"units": "MM", "home": {"x": 100.3, "y": -50.25}}}
   ]
