@@ -11,7 +11,7 @@ export const systemActions = ["shutdown", "TurnOffRPI", "update", "updatePyInsta
 
 export const systemEvents = {} satisfies EventSchemas;
 
-/** The socket.io namespace LogStreamer pushes log lines on. */
+/** The namespace the log viewer receives log lines on. */
 export const LOGS_NAMESPACE = "/MaslowCNCLogs";
 
 /** LogStreamer's `message` payloads: a line of the full or abridged log, or a periodic logger state. */
