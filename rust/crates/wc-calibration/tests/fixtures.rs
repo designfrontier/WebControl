@@ -134,6 +134,7 @@ fn described(accept: &Accept, geometry: &Value) -> Vec<Value> {
     };
     accept
         .queued(lookup(geometry))
+        .expect("finite")
         .iter()
         .map(|line| match line.strip_prefix('$').and_then(|rest| rest.split_once('=')) {
             Some((key, value)) => {
@@ -163,8 +164,12 @@ fn accept_queues_the_python_fixture_commands() {
     let holey = holey::calibrate(&settings, &measurements).expect("holey");
     assert_eq!(described(&holey.accept(), geometry), *fixture["holey"]["queued"].as_array().expect("queued"));
 
+    // Rust-intended deviation (owner decision 3): Z rises to the safe height before Python's `G0 X0 Y0`.
+    let mut expected = fixture["triangular"]["queued"].as_array().expect("queued").clone();
+    let centre = expected.iter().position(|line| line == &json!({"gcode": "G0 X0 Y0 "})).expect("the move to centre");
+    expected.insert(centre, json!({"gcode": "G0 Z7.5 "}));
     let triangular = triangular::calculate(&settings, &fixture["triangular"]["inputs"]).expect("triangular");
-    assert_eq!(described(&triangular.accept(), geometry), *fixture["triangular"]["queued"].as_array().expect("queued"));
+    assert_eq!(described(&triangular.accept(7.5), geometry), expected);
 }
 
 #[test]

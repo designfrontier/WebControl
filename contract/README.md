@@ -246,10 +246,15 @@ allow both; `tests/test_contract.py` checks Python only.
 - **Cross-origin WebSockets** are refused with 403, as socket.io's same-origin default refuses them.
 - **A client that falls behind** gets the current state again (see "Plain WebSocket transport").
 - **Board size cap** (wart 15) and **the line limit in bytes** (wart 16).
-- **Calibration Accept** also refuses results that are not finite numbers.
-- **The computed X/Y** in `errorValueMessage` is worked out in float32, as the firmware does.
 - **Stored settings keep their JSON types:** a setting stored as a number stays a number, and one stored as text
   stays text, when Rust writes `webcontrol.json`.
+- **Computed sled position in float32** (decision 6, 2026-11-15). `errorValueMessage.computedX/Y` solve the chain
+  lengths of a `[PE:` report with the firmware's own float32 triangular kinematics (including its pre-catenary model
+  when `sledWeight` is 0 or less), stopping at 0.001 mm of chain, where Python solves in `f64` to 1e-9 mm. The two
+  differ by about 0.002 mm; quadrilateral kinematics still use the `f64` model. Every value is exactly a float32.
+- **Calibration Accept refusals.** `POST /api/calibration/{triangular,holey}/accept` also answers its 409 when the
+  triangular Accept has no finite Z-axis safe height to rise to before it moves (decision 3; see
+  `serial/README.md`, "Rust-intended deviations") and when a value it would save or send is not finite.
 - **Slow answers come after the push they used to precede.** Rust solves `errorValueMessage.computedX/Y` and works
   out `gcodePositionMessage` off the machine task, so neither delays Stop. Each push goes out when its work finishes,
   after pushes the same event made at once. While a solve runs, only the newest report waits and the others are

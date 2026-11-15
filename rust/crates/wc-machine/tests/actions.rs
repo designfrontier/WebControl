@@ -287,9 +287,12 @@ fn error_reports_are_fractions_of_the_limit() {
     assert_eq!(holey[0]["leftError"], 0.25);
     assert_eq!(holey[0]["rightError"], 0.5);
     assert_eq!(holey[0]["computedEnabled"], 1);
-    // Python's HoleySimulationKinematics.forward(1650, 1651, 0, 0) on the default settings.
+    // Float32 as the firmware computes (owner decision 6): within 0.005 mm of Python's f64
+    // HoleySimulationKinematics.forward(1650, 1651, 0, 0) on the default settings, but not equal to it.
     let (x, y) = (holey[0]["computedX"].as_f64().unwrap(), holey[0]["computedY"].as_f64().unwrap());
-    assert!((x - -0.5903697011988455).abs() < 1e-9 && (y - 126.41059578749022).abs() < 1e-9, "({x}, {y})");
+    assert_eq!((x as f32 as f64, y as f32 as f64), (x, y), "float32 values");
+    assert!((x - -0.5903697011988455).abs() < 5e-3 && (y - 126.41059578749022).abs() < 5e-3, "({x}, {y})");
+    assert_ne!((x, y), (-0.5903697011988455, 126.41059578749022));
     assert!(pushed(&rig.rx("[PE:0.5001,-1.0,120,1650.0,1651.0]"), "errorValueMessage").is_empty());
     let short = pushed(&rig.rx("[PE:0.1,0.1,120]"), "errorValueMessage");
     assert_eq!((&short[0]["computedEnabled"], &short[0]["computedX"]), (&json!(0), &json!(-999999.0)));

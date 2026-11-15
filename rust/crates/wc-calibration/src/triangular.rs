@@ -184,15 +184,17 @@ pub fn calculate_inputs(settings: &MachineSettings, inputs: &Inputs) -> Result<T
 
 impl TriangularResult {
     /// `acceptTriangularCalibrationResults`: saves the three values, then returns to the centre in millimetres.
-    pub fn accept(&self) -> Accept {
+    /// Unlike Python, it raises the bit to `safe_height_mm` before that move (owner decision 3).
+    pub fn accept(&self, safe_height_mm: f64) -> Accept {
         let write = |section, key, value: f64| SettingWrite { section, key, value: python_float_str(value) };
+        let raise = format!("G0 Z{} ", python_float_str(safe_height_mm));
         Accept {
             writes: vec![
                 write("Maslow Settings", "motorOffsetY", self.motor_y_offset),
                 write("Advanced Settings", "rotationRadius", self.rotation_radius),
                 write("Advanced Settings", "chainSagCorrection", self.chain_sag_correction),
             ],
-            gcode: ["G21 ", "G90 ", "G40 ", "G0 X0 Y0 "].map(String::from).to_vec(),
+            gcode: ["G21 ", "G90 ", "G40 ", &raise, "G0 X0 Y0 "].map(String::from).to_vec(),
         }
     }
 }

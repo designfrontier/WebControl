@@ -7,7 +7,8 @@ them: where it says "per B7" or "wart 5", read that section.
 
 Owner decisions taken as given: Rust; the target is Raspberry Pi OS Lite 64-bit on a Pi 3B, from a microSD card that
 also holds the Python install; the two backends run as two systemd services, one at a time; holey calibration uses
-`levenberg-marquardt` + `nalgebra` and must match the fixtures; optical calibration comes last and is experimental;
+`wc-calibration/src/trf.rs`, a step-for-step port of scipy's trust-region-reflective `least_squares` on `nalgebra`,
+and must match the fixtures (decision 5, below); optical calibration comes last and is experimental;
 the 51.292 upgrade is one click and follows C.
 
 ## Owner decisions (2026-11-14)
@@ -42,6 +43,9 @@ These also override anything below; `contract/README.md` ("Rust-intended differe
   calibration Accept refuses non-finite values; the live computed X/Y uses float32, as the firmware does;
   `deploy.sh build` without Docker warns and builds without the 51.292 image rather than failing; stored settings
   keep their JSON types.
+- **3. Triangular Accept raises Z** to the Z-axis safe height before its `G0 X0 Y0`, and is refused without a finite
+  safe height. A Rust-intended deviation (`contract/serial/README.md`).
+- **5. Holey calibration uses `wc-calibration/src/trf.rs`**, the scipy TRF port, not the `levenberg-marquardt` crate.
 
 ## 0. Recommendations up front
 
@@ -78,7 +82,7 @@ The workspace goes in `rust/` at the repo root (`rust/Cargo.toml`, crates in `ru
 | `wc-config` | Reads and writes `~/.WebControl/webcontrol.json` compatibly; the settings table from `defaultwebcontrol.json` (embedded); computed settings (`computeSettings`, run at startup, on every settings write, after both imports and after a restore, and checked against Python by `tests/fixtures/compute/`); the directory layout (`gcode/`, `boards/`, `imports/`, `downloads/`); `safePaths` | `config/config.py` minus firmware sync, `File/safePaths.py`, `File/retention.py` | wc-protocol |
 | `wc-gcode` | Load filter (spacing, truncate), comment stripping, sanitiser (B5), home shift (`rust_decimal`), the T rule (`firmwareGcode.py`), `gcodeStateAt` and the restart sequence, zMoves, `findPositionAt`, the 3D line model and its gzip payload, board model, cut grid and board file format | `File/gcodeFile.py`, `Connection/firmwareGcode.py`, restart half of `Actions/actions.py`, `Boards/` | wc-protocol |
 | `wc-kinematics` | Firmware-exact triangular and quadrilateral inverse/forward (B14), float32 where the firmware is | `Actions/HoleySimulationKinematics.py` | nalgebra |
-| `wc-calibration` | Holey `Calibrate` (LM), test pattern, accept commands; triangular `calculate`, pattern, accept | `Actions/holeyCalibration.py`, `Actions/triangularCalibration.py` | wc-kinematics, levenberg-marquardt |
+| `wc-calibration` | Holey `Calibrate` (scipy TRF port, `trf.rs`), test pattern, accept commands; triangular `calculate`, pattern, accept | `Actions/holeyCalibration.py`, `Actions/triangularCalibration.py` | wc-kinematics, nalgebra |
 | `wc-firmware` | Sans-IO link: line classifier (status, `[PE:`, `ok`, `error:`, `ALARM:`, `Buffer overflow!`, `Maslow Paused`, `Tool Change:`, `Message:`, boot banners, `Firmware Version`, `$` reports, B04 glued status, 51.291 glued `ok`); character-count flow control (B3, B4, B6); boot detection and version/fingerprint (B2, B8, `firmwareFacts.py`); per-version `$` key table and the sync planner (B9, B12); the avrdude flash procedure (C) | `Connection/serialPortThread.py` (accounting), `Connection/firmwareFacts.py`, `Background/messageProcessor.py` (classification), `config.syncFirmwareKey` and friends, `Actions/firmware.py` | wc-protocol |
 | `wc-machine` | The machine core (§1.2): job state machine, gates, pause/tool-change/alarm model, settings sync on boot, PID tests, the UI projection (position/health/status throttling); plus the tokio shell that owns the port | `Actions/actions.py` (dispatch), `Background/UIProcessor.py`, `DataStructures/data.py` | all of the above, tokio, tokio-serial |
 | `wc-sim` | Firmware simulator (§5.4) implementing the same port trait; also behind `--simulate` in the binary for e2e and demos | `tests/test_serial_streaming.py` FakePort | wc-firmware |
@@ -167,7 +171,7 @@ enum PauseCause { User, ProgramPause, ToolChange { tool: u32 }, ManualZ, Control
 ## 2. Library choices (validated)
 
 Spike: `rust-spike/` in the session scratchpad. It builds axum (ws + multipart), tokio, tokio-serial, serde_json,
-rust_decimal, flate2, levenberg-marquardt 0.14 + nalgebra 0.33, rust-embed and tracing, with a jsonschema contract
+rust_decimal, flate2, levenberg-marquardt 0.14 (since replaced, below) + nalgebra 0.33, rust-embed and tracing, with a jsonschema contract
 test. It cross-compiles from the arm64 Mac with
 `cargo zigbuild --release --target aarch64-unknown-linux-gnu.2.36` (zig from the `ziglang` pip package, so there is
 no Homebrew dependency). The binary ran correctly in `linux/arm64` Docker on `debian:bookworm-slim` (glibc 2.36) and
@@ -181,7 +185,7 @@ no Homebrew dependency). The binary ran correctly in `linux/arm64` Docker on `de
 | JSON | `serde`, `serde_json` | Settings keep `serde_json::Value` for unknown fields |
 | Home shift | `rust_decimal` | `95.8967 + 1e-4 = 95.8968` exact. Use `round_dp_with_strategy(MidpointNearestEven)` (Python's Decimal default) and print `-0` as `0` |
 | gzip | `flate2` | The payloads are compared by inflated JSON value, never by compressed bytes |
-| Least squares | `levenberg-marquardt` 0.14 + `nalgebra` 0.33 | Converges in the spike. Python uses scipy `least_squares` (TRF, 2-point Jacobian, `diff_step=0.1`, `ftol=1e-11`): risk 4 |
+| Least squares | `nalgebra` 0.33 and `wc-calibration/src/trf.rs` | The spike's `levenberg-marquardt` 0.14 converged but stopped elsewhere than Python. `trf.rs` ports scipy 1.9's `least_squares` (TRF, 2-point Jacobian, `diff_step=0.1`, `ftol=1e-11`) step for step, so it lands on Python's five decimals; `tests/fixtures/trf_path.json` pins its iteration path (risk 4) |
 | Embedding | `rust-embed` 8 | `frontend/dist` (1.3 MB), `docs/` (1.6 MB), `static/images` (1.3 MB) |
 | Logging | `tracing`, `tracing-subscriber`, `tracing-appender` | journald gets stdout. The log viewer's `/MaslowCNCLogs` feed is a tracing layer |
 | Schema tests | `jsonschema` 0.61 (dev) | Draft 2020-12 and the closed-schema trick from `test_contract.py` work in the spike |
@@ -278,8 +282,10 @@ directly, with the README's rules:
 - quadrilateral cases evaluated on one fresh model in file order
 - `null` expected means the input is refused
 
-`accept_commands.json` is compared line for line. The fixtures stay Python-generated and are never regenerated from
-Rust.
+`accept_commands.json` is compared line for line, except that the triangular Accept's `G0 Z<safe height>` is
+inserted before `G0 X0 Y0` (decision 3). The fixtures stay Python-generated and are never regenerated from Rust.
+`wc-calibration/tests/fixtures/trf_path.json` adds scipy's per-iteration path for the holey fit, and
+`wc-kinematics/tests/fixtures/firmware32.json` the firmware's float32 kinematics for the live computed position.
 
 ### 5.2 Other golden fixtures (new, Python-generated)
 
@@ -510,10 +516,11 @@ M5 routes and M6a can follow M1/M2 while M4 is under way.
    avrdude can always reflash.
 3. **The shared `webcontrol.json` is corrupted or reshaped** so that Python misbehaves after switching back.
    *Mitigation:* §7 format rules, preserving unknown fields, `.pre-rs` snapshot, the CI round-trip test.
-4. **Holey LM lands outside the fixture tolerances.** scipy uses TRF with a relative 2-point step of 0.1; LM with an
-   analytic or finite-difference Jacobian stops elsewhere. The README allows 1e-3 on `Opt_*`, but `totalError` is
-   held to 1e-6. *Mitigation:* do M5a first among the pure work. If `totalError` disagrees while `Opt_*` passes, ask
-   the owner to loosen `totalError`'s tolerance in the fixture (a Python-side change), not to match scipy's path.
+4. **The holey fit lands outside the fixture tolerances.** scipy uses TRF with a relative 2-point step of 0.1; LM
+   with an analytic or finite-difference Jacobian stops elsewhere. *Resolved (decision 5):* `trf.rs` is scipy's
+   algorithm, matching every fixture case to Python's five decimals, and
+   `wc-calibration/tests/fixtures/trf_path.json` (recorded from scipy by `regenerate_trf_path.py` beside it) holds
+   each iteration's nfev, cost, reduction, step and optimality, so a change to the solver's path fails CI.
 5. **Port open and reset semantics.** Python toggles parity and reopens to reset the board, then waits for boot.
    tokio-serial asserts DTR on open (HUPCL), which should reset the Mega, but this is unverified. A12 says never
    gate on the boot `ok`. *Mitigation:* M1 explicitly pulses DTR and has a timeout path that sends B05 anyway;

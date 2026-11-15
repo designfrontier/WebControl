@@ -43,7 +43,7 @@ fn an_error_report_is_solved_off_the_task_and_pushed_when_the_solve_comes_back()
     assert_eq!(solve.len(), 1);
     let answer = pushed(&finish(&mut rig, solve[0].clone()), "errorValueMessage");
     assert_eq!((&answer[0]["leftError"], &answer[0]["computedEnabled"]), (&json!(0.25), &json!(1)));
-    assert!((answer[0]["computedY"].as_f64().unwrap() - 126.41059578749022).abs() < 1e-9, "{answer:?}");
+    assert_eq!(answer[0]["computedY"], json!(126.40874481201172), "the firmware's float32 solve");
 }
 
 #[test]

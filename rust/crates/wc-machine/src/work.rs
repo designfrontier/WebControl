@@ -52,7 +52,7 @@ impl Work {
     pub fn run(self) -> Event {
         Event::Computed(match self {
             Work::ComputedPosition { mut model, chains: (left, right), guess, mut report } => {
-                let computed = model.forward_from(left, right, guess);
+                let computed = model.forward_as_firmware(left, right, guess);
                 (report.computed_x, report.computed_y) =
                     computed.unwrap_or((NO_COMPUTED_POSITION, NO_COMPUTED_POSITION));
                 Done::ComputedPosition { model, report }
