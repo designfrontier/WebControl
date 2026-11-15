@@ -42,7 +42,7 @@ case "$command" in
     # shellcheck disable=SC2029 # $stage is meant to expand here.
     ssh "$host" "rm -rf $stage && mkdir -p $stage"
     scp "$binary" "$rust/install-pi.sh" "$rust/deploy/webcontrol-rs.service" "$rust/deploy/webcontrol-conflicts.conf" \
-      "$rust/deploy/wc-switch" "$host:$stage/"
+      "$rust/deploy/wc-switch" "$rust/deploy/webcontrol-rs.sudoers" "$host:$stage/"
     ssh -t "$host" "bash $stage/install-pi.sh $stage"
     ;;
   push)

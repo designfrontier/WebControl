@@ -101,6 +101,11 @@ chmod +x "$work/bin/"*
 touch "$work/webcontrol-rs"
 deploy() { PATH="$work/bin:$PATH" WC_BINARY="$work/webcontrol-rs" WC_SKIP_BUILD=1 "$here/../deploy.sh" "$@"; }
 
+install_stages_the_sudoers_rule() {
+  reset
+  deploy install pi@other.local > /dev/null && grep -q "scp .*webcontrol-rs.sudoers pi@other.local:" "$work/calls"
+}
+
 push_to_the_new_card_by_default() {
   reset
   echo '{"jobInProgress":false}' > "$work/state"
@@ -119,13 +124,14 @@ rollback_swaps_prev_back() {
   deploy rollback pi@other.local > /dev/null && grep -q "ssh pi@other.local .*webcontrol-rs.prev" "$work/calls"
 }
 
+check "install stages the power-off sudoers rule" install_stages_the_sudoers_rule
 check "push copies to pi@maslow-next.local and restarts only a running Rust backend" push_to_the_new_card_by_default
 check "push refuses while a job is in progress" push_refuses_during_a_job
 check "rollback puts the previous binary back" rollback_swaps_prev_back
 
 stage="$work/stage"
 mkdir -p "$stage"
-cp "$here/webcontrol-rs.service" "$here/webcontrol-conflicts.conf" "$here/wc-switch" "$stage/"
+cp "$here/webcontrol-rs.service" "$here/webcontrol-conflicts.conf" "$here/wc-switch" "$here/webcontrol-rs.sudoers" "$stage/"
 printf '#!/bin/sh\necho "webcontrol-rs test"\n' > "$stage/webcontrol-rs"
 install_pi() {
   PATH="$work/bin:$PATH" WC_ROOT="$work/root" WC_SYSTEMCTL=systemctl WC_SUDO=env WC_USER=maker \
@@ -140,6 +146,9 @@ installs_beside_python_without_starting() {
     grep -q "^Conflicts=webcontrol.service$" "$work/root/etc/systemd/system/webcontrol-rs.service" &&
     grep -q "^Conflicts=webcontrol-rs.service$" "$work/root/etc/systemd/system/webcontrol.service.d/conflicts.conf" &&
     [ -x "$work/root/usr/local/bin/wc-switch" ] &&
+    grep -qx "maker ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff" "$work/root/etc/sudoers.d/webcontrol-rs" &&
+    [ "$(stat -c %a "$work/root/etc/sudoers.d/webcontrol-rs" 2> /dev/null ||
+      stat -f %Lp "$work/root/etc/sudoers.d/webcontrol-rs")" = 440 ] &&
     [ "$(cat "$work/calls")" = "systemctl daemon-reload" ] &&
     grep -q "Python backend is untouched" "$work/out"
 }
