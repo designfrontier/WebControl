@@ -269,3 +269,10 @@ def test_rollback_needs_the_saved_v094_unit(tmp_path):
     result = run_install_script(tmp_path, settings_prelude(tmp_path) + fake_systemd(tmp_path, "") + "rollback")
     assert result.returncode != 0
     assert not (tmp_path / "sudo.log").exists()
+
+
+def test_the_pi_guide_copies_no_firmware_so_upgrade_firmware_has_nothing_to_flash():
+    with open(os.path.join(REPO, "spec", "INSTALL-PI.md")) as handle:
+        guide = handle.read()
+    rsync = guide[guide.index("rsync -az"):guide.index("pi@192.168.86.155:webcontrol-source/")]
+    assert "--exclude /firmware" in rsync

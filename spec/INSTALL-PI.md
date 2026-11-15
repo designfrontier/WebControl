@@ -20,8 +20,9 @@ What carries over and what changes:
   one.
 - **Re-run holey calibration once.** The solver's library version differs from v0.94's, so the calibration numbers
   can shift slightly. Re-run holey calibration before the next real cut.
-- **Leave the controller firmware alone.** A source install carries no firmware `.hex` files, so don't use Upgrade
-  Firmware from this build. The firmware already on the controller is fine.
+- **Leave the controller firmware alone.** Step 2 leaves `firmware/` out, so the Pi has no firmware `.hex` files and
+  Upgrade Firmware stops with "No firmware file found" before it touches the controller. The firmware already on
+  the controller is fine.
 
 ## 0. Check what the Pi runs (read only, 2 minutes)
 
@@ -69,6 +70,7 @@ git switch build/pi-packaging        # or master, once this is merged
 (cd frontend && npm ci && npm run build)
 rsync -az --delete \
   --exclude .git --exclude .venv --exclude node_modules --exclude build --exclude releases --exclude .claude \
+  --exclude /firmware --exclude /dist \
   ./ pi@192.168.86.155:webcontrol-source/
 ```
 
