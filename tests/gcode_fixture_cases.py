@@ -258,7 +258,7 @@ def info_cases(data):
 
 
 def _board_file(info, cells):
-    return json.dumps(info) + "\n" + base64.b64encode(gzip.compress(json.dumps(cells).encode())).decode() + "\n"
+    return json.dumps(info) + "\n" + base64.b64encode(gzip.compress(json.dumps(cells).encode(), mtime=0)).decode() + "\n"
 
 
 def file_cases(data, tmp):
