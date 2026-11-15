@@ -91,7 +91,8 @@ The script runs as `pi` and calls `sudo` itself. It:
 4. Finds v0.94's `webcontrol.service`, saves a copy of it as `webcontrol-v094.service` (disabled), and stages the new
    unit in `build/webcontrol.service`. **It does not stop, disable or replace v0.94.**
 
-It warns if `pi` is not in the `dialout` group, which it needs to open `/dev/ttyACM0`.
+It warns if `pi` is not in the `dialout` group, which it needs to open `/dev/ttyACM0`. It stops if v0.94's unit runs
+as a different user than the one running the script, because the settings live in that user's `~/.WebControl`.
 
 ## 4. Switch (machine idle)
 

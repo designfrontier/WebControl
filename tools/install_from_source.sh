@@ -28,6 +28,13 @@ say() { printf '\n==> %s\n' "$*"; }
 die() { printf '\nERROR: %s\n' "$*" >&2; exit 1; }
 
 is_ours() { [ -f "$1" ] && grep -qF "$marker" "$1"; }
+# Where systemd loads webcontrol.service from, if that is not this script's unit: /etc, /lib or elsewhere.
+v094_unit() {
+  local path
+  path="$(systemctl show -p FragmentPath --value webcontrol.service 2>/dev/null || true)"
+  [ -z "$path" ] || [ ! -f "$path" ] || is_ours "$path" || echo "$path"
+}
+unit_user() { local user; user="$(sed -n 's/^User=//p' "$1" | tail -n 1)"; echo "${user:-root}"; }
 port_busy() { ss -ltnH "sport = :$port" 2>/dev/null | grep -q .; }
 find_uv() { command -v uv || { [ -x "$HOME/.local/bin/uv" ] && echo "$HOME/.local/bin/uv"; } || true; }
 # dpkg reports the userland, which is 32-bit on some Pis whose kernel uname calls aarch64.
@@ -46,10 +53,11 @@ explain_python() {
 
 report_old_webcontrol() {
   say "Looking for an existing WebControl (v0.94)"
-  local found=0
-  if [ -f "$unit" ] && ! is_ours "$unit"; then
-    echo "systemd unit $unit (the webcontrol-pi image's unit):"
-    grep -E '^(ExecStart|WorkingDirectory|User)=' "$unit" | sed 's/^/    /'
+  local found=0 v094
+  v094="$(v094_unit)"
+  if [ -n "$v094" ]; then
+    echo "systemd unit $v094 (the webcontrol-pi image's unit):"
+    grep -E '^(ExecStart|WorkingDirectory|User)=' "$v094" | sed 's/^/    /'
     found=1
   fi
   systemctl list-unit-files --type=service --no-legend 2>/dev/null | awk '{print "    service: " $1 " (" $2 ")"}' |
@@ -65,6 +73,16 @@ report_old_webcontrol() {
   done
   crontab -l 2>/dev/null | grep -i webcontrol | sed 's/^/    crontab: /' && found=1
   [ "$found" = 1 ] || echo "none found"
+}
+
+# The service runs as whoever runs this script, so v0.94's user must match or the settings would not carry over.
+check_same_user() {
+  local v094 owner
+  v094="$(v094_unit)"
+  [ -n "$v094" ] || { [ -f "$old_unit" ] && v094="$old_unit"; } || return 0
+  owner="$(unit_user "$v094")"
+  [ "$owner" = "$(id -un)" ] || die "v0.94 runs as $owner ($v094), so its settings are in ~$owner/.WebControl.
+  Run this script as $owner, so the new service runs as $owner and uses the same settings."
 }
 
 check_dist() {
@@ -200,14 +218,16 @@ EOF
 }
 
 install_unit() {
+  local v094
   write_unit
-  if [ -f "$unit" ] && ! is_ours "$unit"; then
+  v094="$(v094_unit)"
+  if [ -n "$v094" ]; then
     if [ ! -f "$old_unit" ]; then
       say "Keeping a copy of the v0.94 unit as $old_unit (disabled, for rollback)"
-      sudo cp "$unit" "$old_unit"
+      sudo cp "$v094" "$old_unit"
       sudo systemctl daemon-reload
     fi
-    say "Staged the new unit at $staged; $unit still belongs to v0.94"
+    say "Staged the new unit at $staged; webcontrol.service still belongs to v0.94"
     print_switch_help
     return 0
   fi
@@ -241,8 +261,10 @@ wait_for_server() {
 
 activate() {
   [ -f "$staged" ] || die "run tools/install_from_source.sh first (no staged unit at $staged)"
-  if [ -f "$unit" ] && ! is_ours "$unit"; then
-    [ -f "$old_unit" ] || sudo cp "$unit" "$old_unit"
+  local v094
+  v094="$(v094_unit)"
+  if [ -n "$v094" ]; then
+    [ -f "$old_unit" ] || sudo cp "$v094" "$old_unit"
     say "Stopping and disabling the v0.94 webcontrol.service"
     sudo systemctl disable --now webcontrol
   fi
@@ -271,6 +293,7 @@ main() {
   [ "$(id -u)" != 0 ] || die "run this as your normal user (for example pi), not with sudo; it calls sudo when it needs to"
   [ "$(uname -s)" = Linux ] || die "this installs a systemd service on Raspberry Pi OS; on macOS use the README's dev setup"
   cd "$repo"
+  check_same_user
   if [ "$mode" = activate ]; then
     activate
     return

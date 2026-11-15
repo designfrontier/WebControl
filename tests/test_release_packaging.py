@@ -155,3 +155,45 @@ def test_64_bit_pi_os_gets_the_libraries_pypi_opencv_loads(tmp_path):
     packages = installed_packages(tmp_path)
     assert {"libgl1", "libglib2.0-0"} <= set(packages)
     assert "libavcodec58" not in packages
+
+
+def v094_unit_file(tmp_path, user_line):
+    (tmp_path / "lib").mkdir(exist_ok=True)
+    unit = tmp_path / "lib" / "webcontrol.service"
+    unit.write_text(f"[Service]\nExecStart=/home/pi/webcontrol/webcontrol\n{user_line}\n")
+    return unit
+
+
+def fake_systemd(tmp_path, fragment, active=()):
+    """Bash that fakes systemctl: webcontrol.service loads from fragment, and the units in active are running."""
+    actives = " ".join(active)
+    return (
+        f'old_unit="{tmp_path}/webcontrol-v094.service"; '
+        f'systemctl() {{ case "$*" in "show -p FragmentPath --value webcontrol.service") echo "{fragment}" ;; '
+        f'"is-active --quiet "*|"is-enabled --quiet "*) case " {actives} " in *" ${{@: -1}} "*) return 0 ;; esac; return 1 ;; '
+        f'*) return 1 ;; esac; }}; port_busy() {{ return 1; }}; '
+    )
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+def test_a_v094_unit_outside_etc_is_kept_for_rollback_and_left_running(tmp_path):
+    unit = v094_unit_file(tmp_path, f"User={subprocess.check_output(['id', '-un'], text=True).strip()}")
+    source_install_script(tmp_path, fake_systemd(tmp_path, unit, active=["webcontrol"]) + "install_unit")
+    log = (tmp_path / "sudo.log").read_text()
+    assert f"sudo cp {unit} {tmp_path}/webcontrol-v094.service" in log
+    assert "install -m 644" not in log and "restart" not in log
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+@pytest.mark.parametrize("user_line", ["User=somebody-else", ""])
+def test_refuses_to_run_as_a_different_user_than_v094(tmp_path, user_line):
+    unit = v094_unit_file(tmp_path, user_line)
+    result = run_install_script(tmp_path, fake_systemd(tmp_path, unit) + "check_same_user")
+    assert result.returncode != 0
+    assert "/.WebControl" in result.stderr
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+def test_runs_as_the_same_user_as_v094(tmp_path):
+    unit = v094_unit_file(tmp_path, f"User={subprocess.check_output(['id', '-un'], text=True).strip()}")
+    source_install_script(tmp_path, fake_systemd(tmp_path, unit) + "check_same_user")
