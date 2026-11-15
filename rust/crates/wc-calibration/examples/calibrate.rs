@@ -1,6 +1,5 @@
 //! Runs a calibration against the settings in `<home>/.WebControl/webcontrol.json` and prints what Accept would
 //! send, to compare with Python's numbers (spec/rust-checklists/M5.md). Read-only: it never writes the file.
-//!
 //! cargo run -p wc-calibration --example calibrate -- <home> holey M1 ... M12
 //! cargo run -p wc-calibration --example calibrate -- <home> triangular cut12 cut34 cut5 bitDiameter
 
