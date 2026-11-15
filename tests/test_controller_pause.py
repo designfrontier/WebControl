@@ -111,3 +111,8 @@ def test_home_cannot_be_moved_while_a_tool_change_waits_outside_a_job(job):
     assert alerts(job) == [
         "Cannot issue command while a tool change waits. Press Resume or STOP before setting home or running a PID test."
     ]
+
+
+@pytest.mark.parametrize("paused", PAUSES, indirect=True)
+def test_a_reloaded_classic_page_offers_resume(paused):
+    assert paused.actions.processSettingRequest("None", "pauseButtonSetting") == ("pauseButtonSetting", "Resume")

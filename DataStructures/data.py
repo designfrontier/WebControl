@@ -8,6 +8,12 @@ from DataStructures.uiQueue import UIQueue
 GCODE_LOCKED_MESSAGE = "Cannot load gcode while a job is running or paused. Stop the job first."
 
 
+def pauseButtonLabel(data):
+    """Resume whenever a job or a tool change is held, including by the controller, which leaves uploadFlag at 0."""
+    held = data.uploadFlag != 0 or data.jobInProgress or data.manualZAxisAdjust
+    return "Pause" if data.uploadFlag == 1 or not held else "Resume"
+
+
 class Data:
     """
 

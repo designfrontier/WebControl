@@ -1,4 +1,4 @@
-from DataStructures.data import GCODE_LOCKED_MESSAGE
+from DataStructures.data import GCODE_LOCKED_MESSAGE, pauseButtonLabel
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
 from File.safePaths import libraryRoot, resolveInside
 from Actions import firmware
@@ -1418,10 +1418,7 @@ class Actions(MakesmithInitFuncs):
             elif setting == "pauseButtonSetting":
                 # send current pause button state
                 try:
-                    if self.data.uploadFlag == 0 or self.data.uploadFlag == 1:
-                        return setting, "Pause"
-                    else:
-                        return setting, "Resume"
+                    return setting, pauseButtonLabel(self.data)
                 except Exception as e:
                     self.data.console_queue.put(str(e))
             else:

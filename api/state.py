@@ -1,5 +1,7 @@
 from flask import Blueprint, current_app, jsonify
 
+from DataStructures.data import pauseButtonLabel
+
 blueprint = Blueprint("state", __name__)
 
 
@@ -19,10 +21,6 @@ def job_status(data):
     }
 
 
-def _held(data):
-    return data.uploadFlag != 0 or data.jobInProgress or data.manualZAxisAdjust
-
-
 def startup_state(data):
     """The computed settings the old UI fetched one settingRequest at a time on connect."""
     config = data.config
@@ -35,7 +33,7 @@ def startup_state(data):
             "x": _number(config.getValue("Advanced Settings", "homeX")),
             "y": _number(config.getValue("Advanced Settings", "homeY")),
         },
-        "pauseButtonSetting": "Pause" if data.uploadFlag == 1 or not _held(data) else "Resume",
+        "pauseButtonSetting": pauseButtonLabel(data),
         **job_status(data),
         "hostAddress": data.hostAddress,
         "controllerFirmwareVersion": _number(data.controllerFirmwareVersion),
