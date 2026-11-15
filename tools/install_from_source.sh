@@ -175,7 +175,7 @@ install_requirements() {
     "$venv/bin/python" -m pip install --upgrade pip
     "$venv/bin/python" -m pip install "${pip_args[@]}"
   fi
-  if ! "$venv/bin/python" -c 'import cv2, gevent, numpy, scipy.optimize, serial, flask_socketio' 2>"$repo/build/import-error.txt"; then
+  if ! "$venv/bin/python" -c 'import cv2, gevent.events, gpiozero, numpy, scipy.optimize, serial, flask_socketio, psutil' 2>"$repo/build/import-error.txt"; then
     cat "$repo/build/import-error.txt" >&2
     find "$venv/lib" -path '*site-packages/cv2/*.so' -exec ldd {} \; 2>/dev/null | grep 'not found' | sort -u | sed 's/^/    missing: /' >&2 || true
     die "the requirements installed but do not import. Install the system libraries listed as missing

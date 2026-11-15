@@ -271,6 +271,11 @@ def test_rollback_needs_the_saved_v094_unit(tmp_path):
     assert not (tmp_path / "sudo.log").exists()
 
 
+def test_the_runtime_requirements_pin_setuptools_because_uv_venvs_lack_pkg_resources():
+    with open(os.path.join(REPO, "requirements.txt")) as handle:
+        assert "setuptools==75.3.0" in handle.read().splitlines()
+
+
 def test_the_pi_guide_copies_no_firmware_so_upgrade_firmware_has_nothing_to_flash():
     with open(os.path.join(REPO, "spec", "INSTALL-PI.md")) as handle:
         guide = handle.read()
