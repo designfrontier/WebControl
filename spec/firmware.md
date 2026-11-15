@@ -155,7 +155,8 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
 4. Realtime: `!` resets accounting (immediate `ok`, no ack for the aborted line); `~` immediate `ok`.
 5. Sanitise outgoing lines: strip comments, reject an unclosed `(`, remove `!`, `~`, backtick, `?` and control
    characters.
-6. ALARM or `Buffer overflow!` halts streaming and requires Stop/resync; a probe `error:` is that line's ack;
+6. ALARM or `Buffer overflow!` halts streaming and rewinds the job to the oldest unacknowledged line; acks are
+   ignored until a status report (the resync); a probe `error:` is that line's ack;
    `$RST` has no `ok` of its own; detect a trailing glued `ok` on 51.291.
 7. Parse every message type above, including B04's glued status line.
 8. B05 after every boot; parse `^Firmware Version\s+([\d.]+)`; fingerprint 51.29x; record the PCB/driver banner.
@@ -165,7 +166,8 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
     on the first motion line; restart with a G1 Z plunge at an explicit feed, then restore the file's last F, if it set one
     (without one the plunge feed stays modal).
 11. Never auto-send `~`; stop streaming before any line the firmware will pause on (using its T semantics); emit
-    `T<n> M6`; require Stop after an ALARM.
+    `T<n> M6`. After an ALARM or `Buffer overflow!`, Play resumes from the oldest unacknowledged line, returning at
+    safe height (`alarm_mid_cut_rewinds_and_resumes`); Stop also clears it (owner decision, 2026-11-15).
 12. Z limits: hide below 51.292 and never send B17/B18/B19; on 51.292+ use `$63`/`$64` (mm, shifted by zeroing)
     and B20 to read them.
 13. Spindle on 51.29x: send `S` on its own line after M3.

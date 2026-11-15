@@ -187,3 +187,31 @@ until a `VERSION` bump changes them.
     (`/editGCode` resends it itself). A load waits for one already running, and `startRun` is refused meanwhile;
     a load that finishes after a job has started is dropped with a 500 and the job keeps its gcode. The board resend
     after any `action` (wart 12) ends the spinner early too.
+15. **Board size cap (Rust-intended).** Rust grids a board of at most 2^24 one-inch cells (about a 340-foot square).
+    Opening, trimming or marking a larger one fails (`/openBoard` and `/trimBoard` answer as failed; the board is
+    left as it was) instead of allocating the grid. Python has no cap.
+16. **The serial line limit counts bytes (Rust-intended).** See `serial/README.md`, Known warts 7.
+
+## Rust backend: intended differences
+
+Where `webcontrol-rs` answers differently from Python on purpose (owner decisions in `spec/RUST-PLAN.md`). The
+schemas allow both; `tests/test_contract.py` checks Python only.
+
+- **Resume after an ALARM or overflow** (same as Python): the job rewinds to the oldest unacknowledged line and Play
+  resumes from there, returning at safe height (`serial/transcripts/alarm_mid_cut_rewinds_and_resumes.json`). Stop
+  also clears it.
+- **A link lost mid-job** pauses the job and rewinds it to the oldest unacknowledged line, so Play after the
+  controller reconnects resumes there. Python pauses without rewinding, so the lines lost from the
+  controller's buffer are skipped.
+- **No controller, no machine commands.** Actions that would send to the controller alert `The controller is not
+  connected.` and send nothing. Python accepts them.
+- **Queued settings lines survive Stop.** Stop drops queued job and jog lines, but a settings write already queued
+  for the controller still goes out, so the controller and `webcontrol.json` agree.
+- **409 reason phrase.** A 409 says `409 Conflict`; the message is in the JSON body only (wart 8 describes Python's).
+- **Cross-origin WebSockets** are refused with 403, as socket.io's same-origin default refuses them.
+- **A client that falls behind** gets the current state again (see "Plain WebSocket transport").
+- **Board size cap** (wart 15) and **the line limit in bytes** (wart 16).
+- **Calibration Accept** also refuses results that are not finite numbers.
+- **The computed X/Y** in `errorValueMessage` is worked out in float32, as the firmware does.
+- **Stored settings keep their JSON types:** a setting stored as a number stays a number, and one stored as text
+  stays text, when Rust writes `webcontrol.json`.
