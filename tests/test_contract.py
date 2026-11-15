@@ -1,5 +1,6 @@
 """Checks the Flask app against contract/, the frozen frontend <-> backend spec generated from frontend/src/protocol."""
 import base64
+import gzip
 import io
 import inspect
 import json
@@ -15,6 +16,7 @@ import main
 from Actions.actions import Actions
 from Background import UIProcessor as ui_processor_module
 from Background.UIProcessor import UIProcessor
+from File import gcodeFile as gcode_file_module
 from DataStructures.data import GCODE_LOCKED_MESSAGE
 from conftest import REPO
 from helpers import NAMESPACE, drain, messages
@@ -25,7 +27,7 @@ SKIPPED_METHODS = {"HEAD", "OPTIONS"}
 # Messages the backend sends only from paths these tests cannot reach without a controller or a classic client.
 UNEXERCISED_MESSAGES = {
     "closeAlertModals": "answers the classic UI's alertModalClosed",
-    "showFPSpinner": "sent only with a non-empty gcode or board payload",
+    "showFPSpinner": "sent only with a non-empty gcode or board payload; test_gzip_payloads_inflate_to_their_schemas",
 }
 
 
@@ -49,8 +51,9 @@ def closed(schema):
     return {"additionalProperties": False, **result} if lists_properties else result
 
 
-def validate(schema_path, value):
-    errors = [error.message for error in Draft202012Validator(closed(load(schema_path))).iter_errors(value)]
+def validate(schema_path, value, strict=True):
+    schema = closed(load(schema_path)) if strict else load(schema_path)
+    errors = [error.message for error in Draft202012Validator(schema).iter_errors(value)]
     assert errors == [], f"{schema_path}: {errors}"
 
 
@@ -230,6 +233,7 @@ def restored(data):
     board = data.boardManager.currentBoard
     saved_board = {key: list(value) if isinstance(value, list) else value for key, value in board.__dict__.items()}
     saved_gcode = (list(data.gcode), data.gcodeIndex, data.gcodeFile.filename)
+    saved_drawing = (list(data.gcodeFile.line3D), data.compressedGCode3D)
     saved_config = [
         (section, key, data.config.getValue(section, key))
         for section, key in [("Maslow Settings", "openFile"), ("Computed Settings", "lastSelectedDirectory")]
@@ -240,6 +244,7 @@ def restored(data):
     data.boardManager.currentBoard = board
     board.__dict__.update(saved_board)
     data.gcode, data.gcodeIndex, data.gcodeFile.filename = saved_gcode
+    data.gcodeFile.line3D[:], data.compressedGCode3D = saved_drawing
     for section, key, value in saved_config:
         data.config.setValue(section, key, value, recursionBreaker=True)
     data.triangularCalibration.hasResult = False
@@ -373,3 +378,36 @@ def test_ui_processor_messages_match_their_schemas(ui, data, socket_client):
     unexercised = set(MESSAGES) - {m["command"] for m in sent} - set(UNEXERCISED_MESSAGES)
     assert unexercised == set()
 
+
+class InlineThread:
+    def __init__(self, target):
+        self.target = target
+
+    def start(self):
+        self.target()
+
+
+def inflated(emitted, command):
+    payload = [p for event, p in emitted if event == "message" and p["command"] == command][-1]["data"]
+    return json.loads(gzip.decompress(payload))
+
+
+def test_gzip_payloads_inflate_to_their_schemas(ui, restored, monkeypatch):
+    processor, emitted = ui
+    monkeypatch.setattr(gcode_file_module, "threading", SimpleNamespace(Thread=InlineThread))
+    gcode = "G20\nG0 X1 Y1 Z0.25\nG1 Z-0.1 F20\nG1 X3 Y2 F40\nG2 X4 Y3 I1 J0\nG0 Z0.25\nM6 T2\nG0 X0 Y0\n"
+    assert restored.gcodeFile.loadUpdateFile(gcode) is True
+    restored.actions.processAction({"data": {"command": "boardProcessGCode", "arg": "", "arg1": ""}})
+    processor.sendGcodeUpdate()
+    processor.sendBoardUpdate()
+
+    moves = inflated(emitted, "gcodeUpdateCompressed")
+    assert {move["type"] for move in moves} >= {"line", "circle"}
+    # Each move also carries color and radius, always null, which the UI ignores.
+    validate(INDEX["payloads"]["gcodeUpdateCompressed"], moves, strict=False)
+    cells = inflated(emitted, "boardCutDataUpdateCompressed")
+    assert True in cells
+    validate(INDEX["payloads"]["boardCutDataUpdateCompressed"], cells)
+    for event, payload in emitted:
+        if payload["command"] in ("showFPSpinner", "gcodeUpdateCompressed", "boardCutDataUpdateCompressed"):
+            validate(MESSAGES[payload["command"]]["schema"], decoded(payload))

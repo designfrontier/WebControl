@@ -58,8 +58,8 @@ npm test             # src/contract/build.test.ts fails if contract/ is stale
   calls.
 - `tests/test_contract.py` checks that Flask registers every endpoint and socket event listed, that
   `Actions.processAction` handles exactly the listed actions and refuses each in exactly the run states its gate
-  lists, and validates real GET responses, successful writes, 4xx bodies and every `message` UIProcessor emits against
-  the schemas.
+  lists, and validates real GET responses, successful writes, 4xx bodies, every `message` UIProcessor emits and
+  what a real gcode file's gzip payloads inflate to against the schemas.
 
 ## Versioning
 
