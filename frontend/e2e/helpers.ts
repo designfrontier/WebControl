@@ -2,6 +2,38 @@ import { expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { io } from "socket.io-client";
 
+/** A test's own connection to /MaslowCNC, over whichever transport the backend speaks. */
+export type BackendSocket = { emit: (event: string, data: unknown) => void; disconnect: () => void };
+
+const NAMESPACE = "/MaslowCNC";
+
+const socketIo = (baseURL: string) =>
+  new Promise<BackendSocket>((resolve, reject) => {
+    const socket = io(`${baseURL}${NAMESPACE}`, { transports: ["polling"] });
+    socket.on("connect", () =>
+      resolve({ emit: (event, data) => socket.emit(event, data), disconnect: () => socket.disconnect() }),
+    );
+    socket.on("connect_error", reject);
+  });
+
+/** The plain-WebSocket transport (contract/README.md): ready once the server's connect frame arrives. */
+const webSocket = (baseURL: string) =>
+  new Promise<BackendSocket>((resolve, reject) => {
+    const socket = new WebSocket(`${baseURL.replace(/^http/, "ws")}/ws?ns=${encodeURIComponent(NAMESPACE)}`);
+    const backend: BackendSocket = {
+      emit: (event, data) => socket.send(JSON.stringify({ ns: NAMESPACE, event, data })),
+      disconnect: () => socket.close(),
+    };
+    socket.addEventListener("message", (message) => {
+      if ((JSON.parse(String(message.data)) as { event: string }).event === "connect") resolve(backend);
+    });
+    socket.addEventListener("error", () => reject(new Error(`WebSocket to ${baseURL} failed`)));
+  });
+
+/** `E2E_BACKEND=rust` runs the specs against webcontrol-rs, which speaks plain WebSockets. */
+export const connectBackend = (baseURL: string) =>
+  process.env.E2E_BACKEND === "rust" ? webSocket(baseURL) : socketIo(baseURL);
+
 export const waitForServer = (page: Page) =>
   expect(page.getByText(/^Server: connected/)).toBeVisible({ timeout: 15_000 });
 
@@ -35,8 +67,7 @@ const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Stops any job and unloads the gcode, so Play reaches the "No GCode file loaded." alert. */
 export const resetMachine = async (baseURL: string) => {
-  const socket = io(`${baseURL}/MaslowCNC`, { transports: ["polling"] });
-  await new Promise((resolve) => socket.on("connect", () => resolve(null)));
+  const socket = await connectBackend(baseURL);
   const action = (command: string) => socket.emit("action", { data: { command, arg: "", arg1: "" } });
   action("stopRun");
   await pause(300);
