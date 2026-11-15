@@ -38,8 +38,8 @@ WebSockets, and shares `~/.WebControl` with the Python install.
   then embeds it in any build (CI's cross-build and `deploy.sh build` do). Without it the upgrade wizard refuses
 - `cargo test -p wc-machine --test upgrade`: the upgrade rehearsal against `wc-sim` with a fake avrdude (success,
   sync failure and retry, wrong banner and rollback, EEPROM reset and migration)
-- `E2E_BACKEND=rust npm run test:e2e` in `frontend/`: every Playwright spec against the binary (the optical and
-  no-controller Z-axis cases are skipped)
+- `E2E_BACKEND=rust npm run test:e2e` in `frontend/`: every Playwright spec against the binary (the optical
+  calibration case is skipped)
 
 ## The Pi
 
