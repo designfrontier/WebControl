@@ -192,7 +192,7 @@ INFO_EDITS = [
 
 
 def _board_state(board):
-    return {"info": json.loads(board.getBoardInfoJSON()), "cutPoints": board.getCutPoints()}
+    return {"info": json.loads(board.getBoardInfoJSON()), "cutPoints": list(board.getCutPoints())}
 
 
 def _fresh(board, spec):
