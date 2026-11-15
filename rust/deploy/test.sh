@@ -19,7 +19,7 @@ echo "systemctl \$*" >> "$work/calls"
 case "\$1" in
   enable) [ "\$3" = webcontrol-rs ] && echo '{"backend":"rust","jobInProgress":false}' > "$work/state" \
           || echo '{"jobInProgress":false}' > "$work/state" ;;
-  is-active) echo active ;;
+  is-active) if grep -qx "\${!#}" "$work/active" 2> /dev/null; then echo active; else echo inactive; exit 3; fi ;;
   is-enabled) echo enabled ;;
 esac
 EOF
@@ -32,7 +32,7 @@ check() {
   if "$@"; then echo "ok   $name"; else echo "FAIL $name"; failures=$((failures + 1)); fi
 }
 
-reset() { rm -f "$work/calls" "$work/state"; }
+reset() { rm -f "$work/calls" "$work/state" "$work/active"; }
 
 switch_to_rust() {
   reset
@@ -62,11 +62,15 @@ force_during_a_job() {
 
 time_out_when_nothing_answers() {
   reset
+  cp "$work/bin/systemctl" "$work/systemctl.saved"
   cat > "$work/bin/systemctl" <<EOF
 #!/usr/bin/env bash
 echo "systemctl \$*" >> "$work/calls"
 EOF
-  ! run rust 2> "$work/err" && grep -q "did not answer as rust" "$work/err"
+  local result=0
+  { ! run rust 2> "$work/err" && grep -q "did not answer as rust" "$work/err"; } || result=1
+  mv "$work/systemctl.saved" "$work/bin/systemctl"
+  return "$result"
 }
 
 status_lists_both_units() {
@@ -145,7 +149,7 @@ installs_avrdude_unless_present() {
   install_pi > /dev/null && { grep -q "^apt" "$work/apt" || command -v avrdude > /dev/null; }
 }
 
-installs_beside_python_without_starting() {
+installs_and_starts_when_nothing_runs() {
   reset
   install_pi > "$work/out" &&
     [ -x "$work/root/opt/webcontrol-rs/webcontrol-rs" ] &&
@@ -156,15 +160,30 @@ installs_beside_python_without_starting() {
     grep -qx "maker ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff" "$work/root/etc/sudoers.d/webcontrol-rs" &&
     [ "$(stat -c %a "$work/root/etc/sudoers.d/webcontrol-rs" 2> /dev/null ||
       stat -f %Lp "$work/root/etc/sudoers.d/webcontrol-rs")" = 440 ] &&
-    [ "$(cat "$work/calls")" = "systemctl daemon-reload" ] &&
-    grep -q "Python backend is untouched" "$work/out"
+    [ "$(tail -1 "$work/calls")" = "systemctl enable --now webcontrol-rs" ] &&
+    grep -q "webcontrol-rs is running and starts at boot" "$work/out"
+}
+
+leaves_an_older_webcontrol_running() {
+  reset
+  echo webcontrol > "$work/active"
+  install_pi > "$work/out" && ! grep -q "enable" "$work/calls" && grep -q "wc-switch rust" "$work/out"
+}
+
+an_update_waits_for_a_restart() {
+  reset
+  echo webcontrol-rs > "$work/active"
+  install_pi > "$work/out" && [ "$(tail -1 "$work/calls")" = "systemctl enable webcontrol-rs" ] &&
+    grep -q "sudo systemctl restart webcontrol-rs" "$work/out"
 }
 
 reinstall_keeps_the_previous_binary() {
   install_pi > /dev/null && [ -f "$work/root/opt/webcontrol-rs/webcontrol-rs.prev" ]
 }
 
-check "install-pi.sh installs beside Python and starts nothing" installs_beside_python_without_starting
+check "install-pi.sh installs, enables and starts webcontrol-rs" installs_and_starts_when_nothing_runs
+check "install-pi.sh leaves a running older WebControl alone" leaves_an_older_webcontrol_running
+check "install-pi.sh does not restart a running webcontrol-rs" an_update_waits_for_a_restart
 check "install-pi.sh keeps the previous binary as .prev" reinstall_keeps_the_previous_binary
 check "install-pi.sh installs avrdude for the firmware upgrade" installs_avrdude_unless_present
 

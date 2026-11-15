@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Runs on the Pi: installs webcontrol-rs beside the Python backend without starting it.
+# Runs on the Pi: installs webcontrol-rs, enables it and starts it unless it is already running.
 #   bash install-pi.sh <dir with webcontrol-rs, the unit, the drop-in, wc-switch and the sudoers rule>
-# The Python webcontrol.service stays enabled and running; switch with `wc-switch rust`.
+# A running webcontrol.service (an older WebControl on the same disk) keeps the port; switch with `wc-switch rust`.
 set -euo pipefail
 
 src="${1:?usage: install-pi.sh <staging dir>}"
@@ -35,4 +35,13 @@ rm -f "$rule"
 command -v avrdude > /dev/null || "${APT[@]}"
 
 echo "Installed $("$opt/webcontrol-rs" --version 2> /dev/null || echo webcontrol-rs) for $user."
-echo "The Python backend is untouched. Try Rust with: wc-switch rust   (back with: wc-switch python)"
+if "${SYSTEMCTL[@]}" is-active --quiet webcontrol; then
+  echo "webcontrol.service, an older WebControl, is running and keeps port 5000. When it is idle: wc-switch rust"
+elif "${SYSTEMCTL[@]}" is-active --quiet webcontrol-rs; then
+  "${SYSTEMCTL[@]}" enable webcontrol-rs
+  echo "webcontrol-rs is still running the previous binary, so a job carries on. When the machine is idle:"
+  echo "  sudo systemctl restart webcontrol-rs"
+else
+  "${SYSTEMCTL[@]}" enable --now webcontrol-rs
+  echo "webcontrol-rs is running and starts at boot: http://$(hostname).local:5000/"
+fi
