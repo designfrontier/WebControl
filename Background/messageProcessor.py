@@ -83,7 +83,7 @@ class MessageProcessor(MakesmithInitFuncs):
                     # received an error message from forward.kinematics that chain lengths don't resolve.
                     # send to UIProcessor for processing.
                     self.data.ui_controller_queue.put(message)
-            elif message[0:6] == "ALARM:":
+            elif message[0:6] == "ALARM:" or message[0:16] == "Buffer overflow!":
                 # something bad happened, likley sled not keeping up.
                 # keep track of upload status, pause run, and send to UIProcessor for processing.
                 self.data.previousUploadStatus = self.data.uploadFlag

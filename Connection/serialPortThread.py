@@ -22,6 +22,7 @@ class SerialPortThread(MakesmithInitFuncs):
     # Minimum time between lines sent to allow Arduino to cope
     # could be smaller (0.02) however larger number doesn't seem to impact performance
     MINTimePerLine = 0.05
+    RESYNC_DELAY = 0.25
 
     serialInstance = None
 
@@ -30,6 +31,7 @@ class SerialPortThread(MakesmithInitFuncs):
         self.lastWriteTime = time.time()
         self.bufferSpace = self.bufferSize  # The amount of space currently available in the buffer
         self.lengthOfLastLineStack = deque()
+        self.resyncAfter = None
 
     def _write(self, message, isQuickCommand=False):
         '''
@@ -57,10 +59,7 @@ class SerialPortThread(MakesmithInitFuncs):
             # because it is the first message sent, otherwise put it at the end (left) because it is the last message sent
             if isQuickCommand:
                 if message[0] == "!":
-                    # if we've just sent a stop command, the buffer is now empty on the arduino side
-                    self.lengthOfLastLineStack.clear()
-                    self.bufferSpace = self.bufferSize - len(message)
-                    self.lengthOfLastLineStack.append(len(message))
+                    self._awaitResync()
                 else:
                     self.lengthOfLastLineStack.append(len(message))
             else:
@@ -91,6 +90,19 @@ class SerialPortThread(MakesmithInitFuncs):
             self.lastWriteTime = time.time()
         else:
             self.data.console_queue.put("Skipping: " + str(message).rstrip('\n'))
+
+    def _awaitResync(self):
+        '''
+        The controller has flushed its buffer, but acks sent before it did may still be in flight. Ignore acks
+        and hold regular lines until a status report sent after they would have arrived.
+        '''
+        self._emptyAccounting()
+        self.machineIsReadyForData = False
+        self.resyncAfter = time.time() + self.RESYNC_DELAY
+
+    def _emptyAccounting(self):
+        self.lengthOfLastLineStack.clear()
+        self.bufferSpace = self.bufferSize
 
     def _getFirmwareVersion(self):
         '''
@@ -395,12 +407,20 @@ class SerialPortThread(MakesmithInitFuncs):
         except:
             pass
 
+        if self.resyncAfter is not None:
+            if lineFromMachine.startswith("<") and time.time() >= self.resyncAfter:
+                self.resyncAfter = None
+                self._emptyAccounting()
+                self.machineIsReadyForData = True
         # Check if a line has been completed
-        if lineFromMachine == "ok\r\n" or (len(lineFromMachine) >= 6 and lineFromMachine[0:6] == "error:"):
+        elif lineFromMachine == "ok\r\n" or (len(lineFromMachine) >= 6 and lineFromMachine[0:6] == "error:"):
             self.machineIsReadyForData = True
             if bool(self.lengthOfLastLineStack) is True:  # if we've sent lines to the machine
                 # free up that space in the buffer
                 self.bufferSpace = (self.bufferSpace + self.lengthOfLastLineStack.pop())
+        # The firmware stops itself on these and never acks the lines it held.
+        if lineFromMachine.startswith(("ALARM:", "Buffer overflow!")):
+            self._awaitResync()
 
 
         # Write to the machine if ready
@@ -420,7 +440,8 @@ class SerialPortThread(MakesmithInitFuncs):
         # Send the next line of gcode to the machine if we're running a program and uploadFlag is enabled. Will
         # send lines to buffer if there is space and the feature is turned on
         # Also, don't send if there's still data in gcode_queue.
-        if self.data.uploadFlag == 1 and len(self.data.gcode) > 0 and self.data.gcode_queue.empty():
+        if (self.data.uploadFlag == 1 and len(self.data.gcode) > 0 and self.data.gcode_queue.empty()
+                and self.resyncAfter is None):
             if self.weAreBufferingLines:
                 try:
                     line = self._sanitise(self.data.gcode[self.data.gcodeIndex])

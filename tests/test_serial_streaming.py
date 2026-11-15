@@ -399,3 +399,90 @@ def test_realtime_commands_sent_on_purpose_still_go_out(data, serial):
     port = serial.run(on_poll=once_after(serial.clock, 0, queue_commands))
 
     assert "~" in port.sent
+
+
+STATUS = "<Idle,MPos:0.00,0.00,0.00,WPos:0.000,0.000,0.000>\r\n"
+
+
+def every_poll(*hooks):
+    return lambda port: [hook(port) for hook in hooks]
+
+
+def status_reports_until(clock, end):
+    """Sends a status report every 0.2 s of fake time, as the firmware does, until `end` seconds from now."""
+    stop_at = clock.now + end
+    state = {"next": clock.now}
+
+    def hook(port):
+        if state["next"] <= clock.now < stop_at:
+            port.incoming.append(STATUS)
+            state["next"] = clock.now + 0.2
+
+    return hook
+
+
+def sent_after(port, line):
+    return port.sent[port.sent.index(line) + 1:]
+
+
+@pytest.mark.parametrize("halt", [
+    "ALARM: The sled is not keeping up with its expected position and has halted.\r\n",
+    "Buffer overflow!\r\n",
+])
+def test_manual_commands_go_out_after_the_controller_halts_itself(data, serial, halt):
+    data.gcode = [f"G1 X{n} " for n in range(50)]
+    data.uploadFlag = 1
+
+    def stop_acking(port):
+        port.ack = False
+
+    def controller_halts(port):
+        port.incoming.append(halt)
+        data.uploadFlag = 0  # as MessageProcessor does on this line
+        data.gcode_queue.put("G0 X99")
+
+    port = serial.run(buffer=True, on_poll=every_poll(
+        once_after(serial.clock, 0, lambda port: drain(data.gcode_queue)),
+        once_after(serial.clock, 0.5, stop_acking),
+        once_after(serial.clock, 1, controller_halts),
+        status_reports_until(serial.clock, 3),
+    ))
+
+    assert port.sent[-1] == "G0 X99 "
+
+
+def test_a_stale_ok_after_a_stop_does_not_let_two_unacked_lines_into_the_controller(data, serial):
+    def outstanding_line(port):
+        port.ack = False
+        data.gcode_queue.put("G0 X0")
+
+    def late_oks(port):
+        port.incoming.extend(["ok\r\n", "ok\r\n"])  # the outstanding line's ack, then the stop's
+        data.gcode_queue.put("G0 X1")
+        data.gcode_queue.put("G0 X2")
+
+    port = serial.run(on_poll=every_poll(
+        once_after(serial.clock, 0, lambda port: drain(data.gcode_queue)),
+        once_after(serial.clock, 0.5, outstanding_line),
+        once_after(serial.clock, 1, lambda port: data.quick_queue.put("!")),
+        once_after(serial.clock, 1.05, late_oks),
+        status_reports_until(serial.clock, 3),
+    ))
+
+    assert sent_after(port, "!") == ["G0 X1 "]
+
+
+def test_a_resume_sent_while_resyncing_after_a_stop_does_not_block_manual_commands(data, serial):
+    def stop_then_resume(port):
+        port.ack = False
+        data.quick_queue.put("!")
+        data.quick_queue.put("~")
+        data.gcode_queue.put("G0 X1")
+
+    port = serial.run(on_poll=every_poll(
+        once_after(serial.clock, 0, lambda port: drain(data.gcode_queue)),
+        once_after(serial.clock, 1, stop_then_resume),
+        status_reports_until(serial.clock, 3),
+    ))
+
+    assert sent_after(port, "!") == ["~", "G0 X1 "]

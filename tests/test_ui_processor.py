@@ -3,6 +3,7 @@ import json
 import pytest
 
 from Background.UIProcessor import UIProcessor
+from helpers import drain
 
 SAVED_DATA = ["gcode", "gcodeIndex", "zval", "xval_prev", "yval_prev", "zval_prev", "time_prev", "velocity_prev"]
 
@@ -81,3 +82,19 @@ def test_the_status_message_carries_the_job_state_and_goes_out_when_it_changes(u
 
     latest = status_messages(emitted)[-1]
     assert (latest["uploadFlag"], latest["jobInProgress"], latest["manualZAxisAdjust"]) == (0, True, True)
+
+
+def test_a_buffer_overflow_raises_an_alarm(ui, data, monkeypatch):
+    emitted = []
+    monkeypatch.setattr("Background.UIProcessor.socketio.emit", lambda *args, **kwargs: emitted.append(args))
+    monkeypatch.setattr(ui, "performHealthCheck", lambda: None)
+    monkeypatch.setattr(ui, "performStatusCheck", lambda: None)
+    data.config.firstRun = False
+    drain(data.ui_controller_queue)
+    data.ui_controller_queue.put("Buffer overflow!\r\n")
+
+    with ui.app.app_context():
+        ui.processPass()
+
+    alarms = [json.loads(payload["data"])["message"] for _, payload in emitted if payload["command"] == "alarm"]
+    assert alarms == ["Alarm: Controller Buffer Overflow"]

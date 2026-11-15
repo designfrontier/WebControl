@@ -164,6 +164,8 @@ class UIProcessor:
                             self.sendAlarm("Alarm: Position Lost.  Reset Chains.")
                         else:
                             self.sendAlarm(message);
+                    elif message[0:16] == "Buffer overflow!":
+                        self.sendAlarm("Alarm: Controller Buffer Overflow")
                     elif message[0:6] == "Unable to":
                         # not sure what this is for.. probably legacy or something.. TODO: cleanup
                         if message.find("The sled is not keeping up") != -1:

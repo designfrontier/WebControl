@@ -76,11 +76,15 @@ def alarm(app, data, serial):  # noqa: F811
     from_controller(app, data, "ALARM: The sled is not keeping up with its expected position and has halted.\r\n")
 
 
+def buffer_overflow(app, data, serial):  # noqa: F811
+    from_controller(app, data, "Buffer overflow!\r\n")
+
+
 def connection_loss(app, data, serial):  # noqa: F811
     serial.run(on_poll=once_after(serial.clock, 1, lambda port: setattr(port, "ack", False)))
 
 
-PAUSES = [user_pause, m0_pause, tool_change, controller_pause, adjust_z_message, alarm, connection_loss]
+PAUSES = [user_pause, m0_pause, tool_change, controller_pause, adjust_z_message, alarm, buffer_overflow, connection_loss]
 
 
 def post(client, path):
@@ -108,7 +112,7 @@ def test_every_kind_of_pause_keeps_the_job_in_progress(app, job, serial, pause):
 
 
 @pytest.mark.parametrize("path", ["/openGCode", "/uploadGCode", "/editGCode"])
-@pytest.mark.parametrize("pause", [controller_pause, adjust_z_message, alarm])
+@pytest.mark.parametrize("pause", [controller_pause, adjust_z_message, alarm, buffer_overflow])
 def test_gcode_cannot_be_loaded_after_the_controller_pauses_the_job(app, client, job, serial, pause, path):  # noqa: F811
     start(job)
     pause(app, job, serial)
