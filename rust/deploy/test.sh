@@ -154,9 +154,11 @@ cp "$here/webcontrol-rs.service" "$here/webcontrol-conflicts.conf" "$here/wc-swi
   "$here/../webcontrol-update" "$stage/"
 printf '#!/bin/sh\necho "webcontrol-rs test"\n' > "$stage/webcontrol-rs"
 printf '#!/bin/sh\necho "apt $*" >> "%s/apt"\n' "$work" > "$work/bin/apt"
-chmod +x "$work/bin/apt"
+printf '#!/bin/sh\n[ ! -f "%s/visudo-rejects" ]\n' "$work" > "$work/bin/visudo"
+printf '#!/bin/sh\necho "$*" >> "%s/sudo"\nexec "$@"\n' "$work" > "$work/bin/sudo-log"
+chmod +x "$work/bin/apt" "$work/bin/visudo" "$work/bin/sudo-log"
 install_pi() {
-  PATH="$work/bin:$PATH" WC_ROOT="$work/root" WC_SYSTEMCTL=systemctl WC_SUDO=env WC_USER=maker WC_APT=apt \
+  PATH="$work/bin:$PATH" WC_ROOT="$work/root" WC_SYSTEMCTL=systemctl WC_SUDO=sudo-log WC_USER=maker WC_APT=apt \
     bash "$here/../install-pi.sh" "$stage"
 }
 
@@ -202,6 +204,22 @@ disables_a_stopped_older_webcontrol() {
     [ "$(grep -v is- "$work/calls" | tail -2)" = "$(printf 'systemctl disable webcontrol\nsystemctl enable --now webcontrol-rs')" ]
 }
 
+checks_the_sudoers_rule_through_sudo() {
+  reset
+  rm -f "$work/sudo"
+  install_pi > /dev/null && grep -q "^visudo -cqf " "$work/sudo"
+}
+
+refuses_a_sudoers_rule_visudo_rejects() {
+  reset
+  rm -rf "$work/root"
+  touch "$work/visudo-rejects"
+  ! install_pi > /dev/null 2>&1 && [ ! -e "$work/root/etc/sudoers.d/webcontrol-rs" ]
+  local refused=$?
+  rm -f "$work/visudo-rejects"
+  return "$refused"
+}
+
 reinstall_keeps_the_previous_binary() {
   install_pi > /dev/null && [ -f "$work/root/opt/webcontrol-rs/webcontrol-rs.prev" ]
 }
@@ -211,6 +229,8 @@ check "install-pi.sh leaves a running older WebControl alone" leaves_an_older_we
 check "install-pi.sh does not restart a running webcontrol-rs" an_update_waits_for_a_restart
 check "install-pi.sh disables a stopped older WebControl so it cannot take the port at boot" \
   disables_a_stopped_older_webcontrol
+check "install-pi.sh checks the sudoers rule with visudo through sudo" checks_the_sudoers_rule_through_sudo
+check "install-pi.sh refuses a sudoers rule visudo rejects" refuses_a_sudoers_rule_visudo_rejects
 check "install-pi.sh keeps the previous binary as .prev" reinstall_keeps_the_previous_binary
 check "install-pi.sh installs avrdude for the firmware upgrade" installs_avrdude_unless_present
 

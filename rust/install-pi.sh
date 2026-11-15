@@ -28,7 +28,8 @@ sed "s/^User=.*/User=$user/" "$src/webcontrol-rs.service" | "${SUDO[@]}" tee "$u
 # Power-off from the UI; a sudoers file that fails visudo would lock sudo out, so it is checked first.
 rule="$(mktemp)"
 sed "s/^pi /$user /" "$src/webcontrol-rs.sudoers" > "$rule"
-if [ -z "$root" ]; then visudo -cqf "$rule" || { echo "the sudoers rule does not parse" >&2; exit 1; }; fi
+# Through sudo: visudo is in /usr/sbin, which is not on pi's PATH.
+"${SUDO[@]}" visudo -cqf "$rule" || { echo "the sudoers rule does not parse" >&2; exit 1; }
 "${SUDO[@]}" install -m 440 "$rule" "$root/etc/sudoers.d/webcontrol-rs"
 rm -f "$rule"
 "${SYSTEMCTL[@]}" daemon-reload
