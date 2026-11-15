@@ -191,6 +191,30 @@ On the Mac, repeat step 5. Then run `tools/install_from_source.sh` on the Pi. It
 leaves the running service alone, so a cut in progress carries on. With the machine idle, run
 `tools/install_from_source.sh --activate` to restart it on the new code.
 
+## Updating on the Pi
+
+Once the Rust backend is installed (`rust/install-pi.sh`, see `rust/README.md`), update it on the Pi itself. With the
+machine idle (no job running or paused, no tool change waiting, no probe), run as `pi`:
+
+```sh
+webcontrol-update
+```
+
+It asks for the `sudo` password once, then installs the latest **published** GitHub Release if it is newer than
+the installed one. A release stays a draft until you publish it on GitHub, and drafts are invisible to the updater,
+so publish the release first. `webcontrol-update --status` shows the installed version, the backup and the latest
+published release; `--version v0.2.0` installs a particular release.
+
+Before it installs, it checks the download's SHA-256 and backs up the current install to
+`/opt/webcontrol-rs/backup`: the binary, the systemd unit and drop-in, `wc-switch`, `webcontrol-update`, the sudoers
+rule and `~/.WebControl/webcontrol.json`. There is one backup; each update deletes the previous one first. After
+the restart it waits up to a minute for the service, `/api/state` with the new version and, if one was connected,
+the controller. If any of that fails it restores the backup by itself and prints `ROLLED BACK`. To go back by hand,
+run `webcontrol-update --rollback`; it keeps the backup.
+
+The backup covers only the last update. The deeper fallback is still the SSD or the old card: power off, boot from
+it (step 8), and look at this card later.
+
 ## Testing the install without a Pi
 
 `tools/test-install/run.sh` runs steps 4–6 in Debian Trixie and Bookworm arm64 containers with systemd, then checks
