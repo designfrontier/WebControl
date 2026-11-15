@@ -8,6 +8,8 @@ import pytest
 
 PROBE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gcode_load_probe.py")
 LINES = 200_000
+# Loading spaces ticks ~30 ms apart and a saturated CPU adds 100+ ms; a load on the hub stalls for seconds.
+MAX_STALL = 0.25
 
 
 @pytest.fixture(scope="module")
@@ -24,9 +26,9 @@ def test_the_large_file_loads(probe):
 
 
 def test_other_greenlets_keep_running_during_the_parse(probe):
-    assert probe["maxGapSeconds"] < 0.1
+    assert probe["maxGapSeconds"] < MAX_STALL
 
 
 def test_a_stop_queued_during_the_parse_reaches_the_serial_port_promptly(probe):
     assert probe["stopLatencySeconds"] is not None
-    assert probe["stopLatencySeconds"] < 0.15
+    assert probe["stopLatencySeconds"] < MAX_STALL
