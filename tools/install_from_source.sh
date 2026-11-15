@@ -49,7 +49,7 @@ is_py39() { "$1" -c 'import sys; sys.exit(sys.version_info[:2] != (3, 9))' 2>/de
 
 explain_python() {
   die "Python 3.9 was not found, and WebControl's pinned requirements need it.
-  Raspberry Pi OS 11 (Bullseye) ships Python 3.9 as python3. Buster has 3.7 and Bookworm 3.11.
+  Raspberry Pi OS 11 (Bullseye) ships Python 3.9 as python3. 64-bit Buster has 3.7 and Bookworm 3.11.
   On those, install uv, open a new shell, and re-run this script; uv downloads its own Python 3.9:
     curl -LsSf https://astral.sh/uv/install.sh | sh"
 }
@@ -60,7 +60,7 @@ report_old_webcontrol() {
   v094="$(v094_unit)"
   if [ -n "$v094" ]; then
     echo "systemd unit $v094 (the webcontrol-pi image's unit):"
-    grep -E '^(ExecStart|WorkingDirectory|User)=' "$v094" | sed 's/^/    /'
+    grep -E '^(ExecStart|WorkingDirectory|User)=' "$v094" | sed 's/^/    /' || true
     found=1
   fi
   systemctl list-unit-files --type=service --no-legend 2>/dev/null | awk '{print "    service: " $1 " (" $2 ")"}' |
@@ -254,7 +254,7 @@ wait_for_server() {
   say "Waiting for http://localhost:$port$path"
   for attempt in $(seq 1 120); do
     if curl -fsS -o /dev/null "http://localhost:$port$path"; then
-      echo "WebControl is up after ${attempt}s: http://$(hostname -I | awk '{print $1}'):$port/ and /next/"
+      echo "WebControl is up after ${attempt}s: http://$(hostname -I | awk '{print $1}'):$port$path"
       return 0
     fi
     sleep 1
@@ -275,9 +275,6 @@ activate() {
   v094="$(v094_unit)"
   [ -z "$v094" ] || from_v094=1
   ! systemctl is-active --quiet webcontrol-v094 || from_v094=1
-  if [ "$from_v094" = 1 ] || { [ -f "$old_unit" ] && [ ! -f "$settings_v094" ]; }; then
-    save_v094_settings
-  fi
   if [ -n "$v094" ]; then
     [ -f "$old_unit" ] || sudo cp "$v094" "$old_unit"
     say "Stopping and disabling the v0.94 webcontrol.service"
@@ -285,6 +282,9 @@ activate() {
   fi
   if systemctl is-active --quiet webcontrol-v094 || systemctl is-enabled --quiet webcontrol-v094; then
     sudo systemctl disable --now webcontrol-v094
+  fi
+  if [ "$from_v094" = 1 ] || { [ -f "$old_unit" ] && [ ! -f "$settings_v094" ]; }; then
+    save_v094_settings
   fi
   sudo install -m 644 "$staged" "$unit"
   sudo systemctl daemon-reload
