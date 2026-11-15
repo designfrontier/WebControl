@@ -8,6 +8,7 @@ src="${1:?usage: install-pi.sh <staging dir>}"
 root="${WC_ROOT:-}"
 read -r -a SYSTEMCTL <<< "${WC_SYSTEMCTL:-sudo systemctl}"
 read -r -a SUDO <<< "${WC_SUDO:-sudo}"
+read -r -a APT <<< "${WC_APT:-sudo apt-get install -y avrdude}"
 user="${WC_USER:-${SUDO_USER:-$(id -un)}}"
 opt="$root/opt/webcontrol-rs"
 units="$root/etc/systemd/system"
@@ -30,6 +31,8 @@ if [ -z "$root" ]; then visudo -cqf "$rule" || { echo "the sudoers rule does not
 "${SUDO[@]}" install -m 440 "$rule" "$root/etc/sudoers.d/webcontrol-rs"
 rm -f "$rule"
 "${SYSTEMCTL[@]}" daemon-reload
+# The firmware upgrade reads and writes the controller's flash with avrdude.
+command -v avrdude > /dev/null || "${APT[@]}"
 
 echo "Installed $("$opt/webcontrol-rs" --version 2> /dev/null || echo webcontrol-rs) for $user."
 echo "The Python backend is untouched. Try Rust with: wc-switch rust   (back with: wc-switch python)"
