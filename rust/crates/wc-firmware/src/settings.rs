@@ -214,7 +214,13 @@ pub fn written_line(settings: &Settings, firmware: f64, stored: &Stored) -> Opti
 /// was stored.
 pub fn write(settings: &mut Settings, firmware: f64, section: &str, key: &str, value: &Value) -> Option<Vec<String>> {
     let stored = settings.store(section, key, value)?;
+    let line = written_line(settings, firmware, &stored);
+    Some(line.into_iter().chain(recompute(settings, firmware)).collect())
+}
+
+/// `Config.computeSettings(doAll=True)` on its own, as startup, the imports and a restore run it: the `$` lines
+/// for the derived settings it changed.
+pub fn recompute(settings: &mut Settings, firmware: f64) -> Vec<String> {
     let computed = settings.compute();
-    let lines = std::iter::once(&stored).chain(&computed).filter_map(|s| written_line(settings, firmware, s));
-    Some(lines.collect())
+    computed.iter().filter_map(|stored| written_line(settings, firmware, stored)).collect()
 }
