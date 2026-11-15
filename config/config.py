@@ -629,6 +629,20 @@ class Config(MakesmithInitFuncs):
             "$O=" + str(31) + "," + str(15) + "," + str(42) + "," + str(42) + " "
         )
 
+    def firmwareKeyOption(self, firmwareKey):
+        return next(
+            (option for section in self.settings.values() for option in section
+             if option.get("firmwareKey") == firmwareKey),
+            None,
+        )
+
+    def writeOnlyFirmwareSettings(self):
+        '''
+        Lines for the settings the firmware applies only when written, never when it loads them at boot.
+        '''
+        # Settings.cpp sets the kinematics sprocket radius R from $13 on a write only; it boots with R = 10.1.
+        return [self.firmwareKeyString(13, float(self.firmwareKeyOption(13)["value"]))]
+
     def receivedSetting(self, message):
         """
         This parses a settings report from the machine, usually received in
