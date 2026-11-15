@@ -47,6 +47,14 @@ fn status_reports_carry_the_state_and_the_machine_position() {
     );
 }
 
+/// Line noise decodes to U+FFFD; a report ending in one must not take the machine task down with it.
+#[test]
+fn a_status_report_ending_in_a_multibyte_character_drops_that_character() {
+    let line = "<Idle,MPos:1,2,3\u{FFFD}";
+    assert_eq!(classify(line), Reply::Status(Status { mode: RunMode::Idle, x: 1.0, y: 2.0, z: 3.0 }));
+    assert_eq!(classify("<Idle,MPos:1,2,3é"), classify(line));
+}
+
 /// Ported from test_ui_processor: the field count tells holey reports from stock ones.
 #[test]
 fn position_error_reports_are_parsed_by_their_field_count() {

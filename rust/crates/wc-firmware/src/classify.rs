@@ -78,10 +78,10 @@ fn parse_status(line: &str) -> Option<Status> {
     } else {
         RunMode::Unknown
     };
-    let start = line.find("MPos:")? + "MPos:".len();
-    // Without WPos Python's find() gives -1, which slices off the closing `>`.
-    let end = line[start..].find("WPos:").map_or(line.len().saturating_sub(1).max(start), |at| start + at);
-    let mut numbers = line[start..end].split(',').map(|n| n.trim().parse::<f64>());
+    let body = &line[line.find("MPos:")? + "MPos:".len()..];
+    // Without WPos Python's find() gives -1, which slices off the last character, normally the closing `>`.
+    let last_char = body.char_indices().next_back().map_or(0, |(at, _)| at);
+    let mut numbers = body[..body.find("WPos:").unwrap_or(last_char)].split(',').map(|n| n.trim().parse::<f64>());
     let mut next = || numbers.next().and_then(Result::ok);
     Some(Status { mode, x: next()?, y: next()?, z: next()? })
 }
