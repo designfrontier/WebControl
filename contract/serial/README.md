@@ -305,25 +305,39 @@ and `DataStructures/loggingQueue.py` at fe1f113:
 15.20: Logging suspended due to user idle time > 60 seconds   <- log.txt only
 ```
 
-- `log.txt` has everything; status (`<`) and `[PE:...]` lines are only there, and it stops while logging is
-  suspended (`loggingTimeout`). `alog.txt` has every non-status line, suspended or not.
-- `Sent: ` lines end with the backend's trailing space(s); the newline it wrote is not in the log (it always is one
-  `\n`). `Send FAILED: ` marks a write that raised.
-- Lines are buffered and flushed in batches by a thread, so a crash loses the last few.
+- `log.txt` has everything; lines starting `<` or `[` (status, `[PE:...]`) are only there, and it stops while
+  logging is suspended (`loggingTimeout`). `alog.txt` has every other line, suspended or not, in the same order.
+- Writes from the G-code queue and file end with the backend's trailing space(s); realtime `!` and `~` have none. The
+  newline written is not in the log (it always is one `\n`). `Send FAILED: ` marks a write that raised.
+- WebControl's own `message_queue` puts are logged like controller lines: calibration input errors (`Message: Please
+  enter a number for ...`, `Message: The measurement between ... seems wrong.` followed by more lines with no time) and
+  `Message: Cannot open import file.`
+- Lines are buffered and appended in batches by a new thread each time, without a lock, so a crash loses the last few
+  (and can leave a cut-off line or NUL bytes the next start's header is glued onto), batches can land out of order,
+  and time can step back. The clock is wall time, which a Pi sets from NTP after boot.
 
 `tools/import_v094_log.py log.txt [--alog alog.txt] --out DIR` splits the log at every `+++++` header and at every
-connect, and writes one recording per connect, named by its start time, for `convert_recording.py`:
+connect, and writes one recording per connect, named by its start time, for `convert_recording.py`. It reads both
+files a line at a time and writes as it goes, so an 8 GB log needs no more memory than a small one:
 
 - v0.94 sends `B05`, the units and `$$` when it opens the port, so a connect starts at each `Sent: B05`, or at the
   boot banner (`PCB v1.`, `Grbl v1.00`, `ready`) up to 10 s before it. Lines before a process's first connect are
   dropped.
-- `Sent: X` becomes a tx of `X\n`; any other entry an rx of the line plus `\r\n`. `Ground Control Version` and the
-  suspend/resume markers are dropped; a `Send FAILED:` write is left out with a warning.
+- `Sent: X` becomes a tx of `X\n`; any other entry an rx of the line plus `\r\n`. Only `\n` ends a line; other
+  control characters stay in the data. `Ground Control Version`, the suspend/resume markers and the WebControl
+  messages above are dropped; a `Send FAILED:` write is left out with a warning.
+- A header glued onto a cut-off line still starts a new process; the cut-off line, and a cut-off last line, are left
+  out with a warning. Where time steps back, the rest of the process is shifted forward by the step, with a warning,
+  so `t` never decreases.
 - The session line gets the units from the first `G20`/`G21` written, and the settings WebControl ended the handshake
-  with: each `$n=` value from the `$$` reply, replaced by any `$n=` WebControl wrote, mapped back to setting keys through
-  `defaultwebcontrol.json`'s `firmwareKey`. Home and the G-code file are not in the log.
-- With `--alog`, entries `log.txt` lacks inside a suspended window are taken from `alog.txt`, matched by the header's
-  start time.
+  (its first 10 s) with: each `$n=` value from the `$$` reply, replaced by any `$n=` WebControl wrote, mapped back to
+  setting keys through `defaultwebcontrol.json`'s `firmwareKey`. Home and the G-code file are not in the log.
+- A connect is split into parts (`, part 2` in `source`, same units and settings) at the first write after
+  `--split-idle` seconds without one (default 1800) and after `--max-records` records (default 500000). A later part
+  starts mid-connection.
+- With `--alog`, the two files are walked in step, start by start: entries only `alog.txt` has (written while logging
+  was suspended, including the one that triggered the suspend) go in before the next `log.txt` entry, and the entry
+  that ended the suspend, which both files have, is kept once.
 
 UI actions are not in v0.94 logs, so the transcript needs its `ui` events added by hand where the TODO comments are.
 v0.94's handshake (`B05` first) also differs from today's, so a converted session is a starting point: keep the part
