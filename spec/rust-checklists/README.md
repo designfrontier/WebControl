@@ -40,7 +40,7 @@ Both backends share `~/.WebControl`. Each checklist that writes it starts with a
 | 0 | [`../INSTALL-PI.md`](../INSTALL-PI.md) | The card boots 64-bit Raspberry Pi OS Lite (trixie, or bookworm) with the Python backend working | No | Pull the card |
 | 1 | [`M0.md`](M0.md) | `rust/deploy.sh install`, `wc-switch rust`: the UI over plain WebSockets, the help pages, the log viewer, restarts | No (the port is never opened) | `wc-switch python` |
 | 2 | [`M1.md`](M1.md) | The serial link: connect, firmware version, jog, Z, home, Stop mid-jog, ports, power-off | Yes: jogs | `wc-switch python` |
-| 3 | [`M2.md`](M2.md) | Settings saved in Python's format, the full settings push and `$$` check after every controller boot, setup screens | Yes: motors and sprockets | `wc-switch python`, then check Python reads the shared file |
+| 3 | [`M2.md`](M2.md) | Settings saved in Python's format, the `$$` check after every controller boot, writing only what differs and `$13`, setup screens | Yes: motors and sprockets | `wc-switch python`, then check Python reads the shared file |
 | 4 | [`M3.md`](M3.md) | Gcode and board files, the time budget, backup, restore, diagnostics and imports (M3a and M3b) | No | `wc-switch python`; Python opens what Rust saved |
 | 5 | [`M4.md`](M4.md) | Jobs: an air cut (Play, Pause, Resume, Stop, restart, M0, tool change), refusals, GPIO, then one real cut | Yes: an air cut, then a real cut | `wc-switch python`; Play there once |
 | 6 | [`M5.md`](M5.md) | Calibration: holey and triangular Calculate and Accept give Python's numbers, and the holey test pattern is air-cut (M5a and M5b) | Yes: the test pattern, in the air | `wc-switch python`; the calibration page shows what Rust left |

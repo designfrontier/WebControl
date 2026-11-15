@@ -71,6 +71,37 @@ the raw line, re-send B05 on any boot banner (`PCB v1.`, `Grbl v1.00`, `ready`),
   (0 until `$29` is sent).
 - Resync noise: `$45` and fractional `$10`/`$11`/`$15` are re-sent on every connect.
 
+### `$` writes with side effects
+
+`settingsStoreGlobalSetting` (`Settings.cpp`) stores the value and ends every successful write with
+`settingsSaveToEEprom()` (an EEPROM write; 51.292 prints `Change in setting, rewriting EEPROM`). It never compares the
+new value with the old one, so writing a value the controller already holds repeats every side effect below.
+Checked in S126, H27, H28, H291, H292 and H293; the switch is the same in all of them except where a column says so.
+
+| Key | Side effect beyond storing | S126 | H27/H28 | H291 | H292/H293 |
+|---|---|---|---|---|---|
+| `$0`-`$8` | `kinematics.init()` | yes | yes | yes | yes |
+| `$12` | `changeEncoderResolution()` on L and R (repoints `_encoderSteps`, sets the gearbox RPM resolution); `settingsLoadOldSteps()` once the old-settings flags clear; `kinematics.init()` | yes | yes | yes | yes |
+| `$13` | sets `kinematics.R` (the only path, §6); `settingsLoadOldSteps()` as `$12`; `kinematics.init()` | yes | yes | yes | yes |
+| `$19` / `$20` | `zAxis.changePitch()` / `changeEncoderResolution()`; `settingsLoadOldSteps()` as `$12` | yes | yes | yes | yes |
+| `$21`-`$28` | `setPIDValues()` on L and R | yes | yes | yes | yes |
+| `$29`-`$36` | `setPIDValues()` on Z | yes | yes | yes | yes |
+| **`$38`** | **`settingsSaveStepstoEEprom()`, then `setupAxes()`, which re-runs `encoder.setup()` (reattaching the encoder interrupts), `motor.setupMotor()` (detached, PWM 0) and the PID setup for L, R and Z on the live board, reassigns the AUX pins and drives the laser pin low; then `settingsLoadStepsFromEEprom()`, each axis `write(read())` and `kinematics.init()`** | yes | yes | yes | yes |
+| `$39` | `setPWMPrescalers()`: clears and sets the prescalers of timers 2, 3 and 4 (motor PWM) live; the same call boot makes, so the same value leaves them as they were | yes | yes | yes | yes |
+| `$40`, `$41` | `kinematics.init()` | store only | yes | yes | yes |
+| `$43`-`$46` | `kinematics.init()` | rejected | yes | yes | yes |
+| `$60`, `$61` | prints `new spindle min=`/`max=` | rejected | rejected | yes | yes |
+| `$63`, `$64` | prints `new zaxis upper limit=`/`lower limit=` | rejected | rejected | rejected | yes |
+
+`settingsLoadOldSteps()` acts only in `STATE_OLD_SETTINGS` (a 1.26-era EEPROM): it sets each axis position from the
+old step counts and wipes them. Every other key only stores.
+
+**`$38` is the one key whose write re-initialises the axes.** On the owner's 51.27 PCB v1.1 (2026-11-15), after
+Rust's connect wrote every setting, `$38` included, no motor moved: every XY move raised `ALARM: The sled is not
+keeping up` within 0.5 s, and status reports showed MPos (the setpoint) advancing while the `[PE:]` chain lengths and
+Z MPos never changed. Python v0.94 wrote only `$13` on the same machine minutes earlier, and it moved. So WebControl
+never writes `$38` when `$$` shows the controller holds it, and after any `$38` write it resets the controller (B2).
+
 ## 5. Feed rate on Z moves
 
 F is per minute in current units, stored as mm/min (×25.4 under G20), clamped to [1, `$15`], and modal (G0 sets it
@@ -154,7 +185,16 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
 
 1. 57600 8N1; send `\n`, parse `\r\n`; don't gate the first send only on the boot `ok`.
 2. Treat any line containing `PCB v1.`, `Grbl v1.00` or `ready` as a boot. On each boot reset units, G90, tool and
-   accounting, then B05 → units → G90 → full settings push → `$$` verify.
+   accounting, then B05 → units → G90 → `$$` → write only the keys `$$` shows differ (at the printed precision, B9),
+   plus `$13` once (§6) → `$$` again only if a key other than `$13` was written. Keys `$$` does not report are not
+   written; a blank one it reports is adopted. Never write a key the controller already holds: writing `$38` re-runs
+   `setupAxes()` on the live board and the motors stop following ("`$` writes with side effects", §4). When `$38`
+   must be written (it differs, an EEPROM reset, the C6 migration, a settings change, a restore), write it with the
+   other `$` lines, then, once they are answered, close and reopen the port, which drops DTR and resets the Mega.
+   Refuse every action that could move the machine until the next boot banner; if the port reopens without one (a
+   board that does not reset on DTR), alert that the controller must be power-cycled and keep refusing until a banner
+   comes. After the reboot `$$` shows `$38` held, so nothing restarts again; a `$38` that still differs then is not
+   written again (one restart per attempt, with an alert). Never write `$38` while a job holds the machine.
 3. Character-count flow control against 126 bytes; free on `ok`/`error:`; hard-reject lines over 126 characters;
    optionally resync from the PE `space` field when idle.
 4. Realtime: `!` resets accounting (immediate `ok`, no ack for the aborted line); `~` immediate `ok`.
@@ -165,8 +205,10 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
    `$RST` has no `ok` of its own; detect a trailing glued `ok` on 51.291.
 7. Parse every message type above, including B04's glued status line.
 8. B05 after every boot; parse `^Firmware Version\s+([\d.]+)`; fingerprint 51.29x; record the PCB/driver banner.
-9. Settings: per-version key/type table; compare at the printed precision; push the full set after every boot,
-   including `$13` (sets R) and `$18`, `$9`, `$28`, `$36`; treat `EEPROM read fail` as a factory reset.
+9. Settings: per-version key/type table; compare at the printed precision; after every boot write what `$$` shows
+   differs, `$18`, `$9`, `$28` and `$36` included, and `$13` (sets R) once (B2); treat `EEPROM read fail` as a factory
+   reset: push the full set (blanks from their defaults), except a `$38` that `$$` shows already matches, and apply
+   B2's restart if `$38` went out.
 10. Feed model: modal F clamped to [1, `$15`]; G0 at `$15`; Z clamped to `$18 × |$19|`; G38.2 at 60 mm/min. Emit F
     on the first motion line; restart with a G1 Z plunge at an explicit feed, then restore the file's last F, if it set one
     (without one the plunge feed stays modal). Never lower before travel (owner decision, 2026-11-15): before the XY
@@ -207,9 +249,10 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
 4. **Flash:** `!`, close the port, block reconnects, run avrdude with verify, retry once on a sync failure.
 5. **Post-flash:** the banner's driver and PCB must match pre-flight (else roll back); B05 must report `51.29`;
    expect `EEPROM read fail`.
-6. **Settings migration:** push the complete set, including `$18` = 12.6 for the stock Z motor, `$9`, `$28`, `$36`
-   and an explicit `$17`; set `$63`/`$64` on 51.292+; never send `$60`/`$61` on 51.291; verify with `$$`; re-send
-   units and G90.
+6. **Settings migration:** read `$$`, then push the complete set, including `$18` = 12.6 for the stock Z motor,
+   `$9`, `$28`, `$36` and an explicit `$17`; set `$63`/`$64` on 51.292+; never send `$60`/`$61` on 51.291; skip a
+   `$38` the `$$` shows already held. A `$38` written here (the factory value is 1) restarts the controller as B2
+   says; the push after that boot skips it and verifies with `$$`; re-send units and G90.
 7. **Self-test:** with the chains slack, B04 must pass both directions on L, R and Z; re-zero Z; compare B10 chain
    lengths with pre-flight and guide B08/B02 if they differ.
 8. **Rollback:** reflash the saved hex, then push the full settings again (downgrades reset too).
