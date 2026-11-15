@@ -11,7 +11,7 @@ use crate::commands;
 use crate::machine::{Effect, Link, Machine, RunState, alert, broadcast};
 
 const SENDING: &str = "Cannot issue command while sending gcode.";
-const PROBING: &str = "Wait for Touch Z to finish or press Stop";
+pub(crate) const PROBING: &str = "Wait for Touch Z to finish or press Stop";
 const NOT_CONNECTED: &str = "The controller is not connected.";
 const Z_LIMITS_UNSUPPORTED: &str = "Z-axis limits need holey firmware 51.292 or later.";
 const CLEARED_Z_LIMIT_MM: i32 = 9999;
@@ -31,7 +31,7 @@ const ALWAYS: [&str; 10] = [
 const SAFE_WHILE_PROBING: [&str; 7] =
     ["stopRun", "stopZ", "pauseRun", "createDirectory", "toggleCamera", "statusRequest", "queryCamera"];
 /// Commands that reach the controller, so they need it connected.
-const MACHINE_COMMANDS: [&str; 15] = [
+const MACHINE_COMMANDS: [&str; 17] = [
     "move",
     "moveTo",
     "moveZ",
@@ -47,6 +47,8 @@ const MACHINE_COMMANDS: [&str; 15] = [
     "setMinZ",
     "clearZ",
     "getZlimits",
+    "cutTriangularCalibrationPattern",
+    "cutHoleyCalibrationPattern",
 ];
 
 fn is_blank(value: &Value) -> bool {
@@ -134,6 +136,7 @@ impl Machine {
             "startRun" => self.start_run(),
             _ if crate::setup::COMMANDS.contains(&command) => self.setup_action(action, effects),
             _ if crate::pid::COMMANDS.contains(&command) => self.pid_action(action),
+            _ if crate::calibration::COMMANDS.contains(&command) => self.calibration_action(command),
             _ => Some(format!("Function not currently implemented.. Sorry.[{command}]")),
         };
         if let Some(text) = failure {

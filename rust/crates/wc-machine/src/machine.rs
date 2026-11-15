@@ -293,6 +293,9 @@ pub struct Machine {
     /// What the next B10 `[Measure` reply is for.
     pub(crate) measure: Option<Measure>,
     pub(crate) pid: Pid,
+    pub(crate) calibration: crate::calibration::Results,
+    /// The forward-kinematics model for the computed sled position, kept current by every `$` write.
+    pub(crate) kinematics: wc_kinematics::Kinematics,
 }
 
 pub(crate) fn broadcast<M: Message>(message: &M) -> Effect {
@@ -307,6 +310,7 @@ impl Machine {
     pub fn new(host_address: &str, settings: Settings) -> Machine {
         let units = Units::from_setting(&settings.text_or_empty("Computed Settings", "units"));
         let workpiece = Arc::new(bed_board(&settings));
+        let kinematics = crate::ui::computed_model(&settings);
         let settings = Arc::new(settings);
         Machine {
             host_address: host_address.into(),
@@ -339,6 +343,8 @@ impl Machine {
             last_status: None,
             measure: None,
             pid: Pid::default(),
+            calibration: crate::calibration::Results::default(),
+            kinematics,
         }
     }
 

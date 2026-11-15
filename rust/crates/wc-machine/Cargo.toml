@@ -12,9 +12,11 @@ serde.workspace = true
 serde_json.workspace = true
 tokio = { workspace = true, features = ["io-util"] }
 tracing.workspace = true
+wc-calibration.workspace = true
 wc-config.workspace = true
 wc-firmware.workspace = true
 wc-gcode.workspace = true
+wc-kinematics.workspace = true
 wc-protocol.workspace = true
 
 [dev-dependencies]
