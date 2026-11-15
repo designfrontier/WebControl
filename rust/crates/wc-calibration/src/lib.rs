@@ -6,6 +6,7 @@ mod accept;
 pub mod holey;
 mod python;
 mod settings;
+mod trf;
 pub mod triangular;
 
 use std::fmt;
