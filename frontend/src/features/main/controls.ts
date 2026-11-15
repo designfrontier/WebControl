@@ -2,8 +2,10 @@ import type { Units } from "../../protocol";
 import type { RunState } from "../../state/machine";
 
 export interface ControlAvailability {
-  /** Jog, home, macros, Z moves, units: everything the server refuses while gcode streams. */
+  /** Jog, home, macros, Z moves: everything the server refuses while gcode streams. */
   manual: boolean;
+  /** The unit switches, which the Rust backend refuses while the gcode is locked. */
+  units: boolean;
   /** Set Home Here, which processAction refuses while paused as well as while running. */
   defineHome: boolean;
   play: boolean;
@@ -12,7 +14,7 @@ export interface ControlAvailability {
   step: boolean;
 }
 
-const CONTROLS: Record<RunState, ControlAvailability> = {
+const CONTROLS: Record<RunState, Omit<ControlAvailability, "units">> = {
   idle: { manual: true, defineHome: true, play: true, pause: false, step: true },
   running: { manual: false, defineHome: false, play: false, pause: true, step: false },
   paused: { manual: true, defineHome: false, play: false, pause: true, step: true },
@@ -21,11 +23,12 @@ const CONTROLS: Record<RunState, ControlAvailability> = {
 
 /**
  * The old UI's disabler / gcdisabler / ndisabler classes, keyed by uploadFlag. Stop is always available.
- * `homeLocked` is selectGcodeLocked: home also waits for a tool change outside a job to be resumed.
+ * `gcodeLocked` is selectGcodeLocked: home and the unit switches also wait for a tool change outside a job.
  */
-export const controlsFor = (runState: RunState, homeLocked = false): ControlAvailability => ({
+export const controlsFor = (runState: RunState, gcodeLocked = false): ControlAvailability => ({
   ...CONTROLS[runState],
-  defineHome: CONTROLS[runState].defineHome && !homeLocked,
+  units: CONTROLS[runState].manual && !gcodeLocked,
+  defineHome: CONTROLS[runState].defineHome && !gcodeLocked,
 });
 
 const MM_PER_INCH = 25.4;

@@ -127,6 +127,10 @@ enum PauseCause { User, ProgramPause, ToolChange { tool: u32 }, ManualZ, Control
 - **Gates in one function.** `fn allowed(state: &RunState, gate: Gate) -> bool` implements the README table,
   including the two firmware pauses that refuse machine commands (`holds_job_lines`, and `ManualZ` outside a tool
   change). A test loads `index.json` and checks every action's `allowedDuring` against it (§3.2).
+- **Job lock (owner decision 2, 2026-11-15).** The `noJob` lock (`Machine::gcode_locked`: a job in progress or a
+  tool change waiting) is the one source of truth for refusing settings writes, quick configure, the unit switches,
+  the imports, the restore and `/sendGCode` with 409 (an alert for `updateSetting`), as `contract/README.md` "Job
+  lock" lists. It is a Rust-intended deviation; Python allows them.
 - **Wire compatibility.** `statusMessage.uploadFlag` (0/1/2/-1), `pauseButtonSetting`, `jobInProgress` and
   `manualZAxisAdjust` are derived from `RunState` in one projection function. They are never stored.
 - **`Stopping` is visible.** In Python a Stop was a flag write followed by hoping the serial thread saw it. Here a

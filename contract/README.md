@@ -51,6 +51,26 @@ Schemas describe the wire: what is actually sent, before the UI coerces anything
 properties; ignore unknown fields. A backend still sends none: `tests/test_contract.py` fails on a field the
 schema does not list, so a new one goes into `frontend/src/protocol/` first. Fields marked as numbers-or-numeric-text really do arrive both ways.
 
+## Job lock (Rust backend only)
+
+A Rust-intended deviation (owner decision 2, 2026-11-15). While a job holds the gcode (`noJob`'s locked states:
+streaming, paused, a controller pause, or a tool change waiting), the Rust backend refuses everything that changes
+the settings or sends the controller lines outside the job, so a cut never meets a changed machine or a stray line:
+
+| Request                                                | Refusal                                                                  |
+| ------------------------------------------------------ | ------------------------------------------------------------------------ |
+| `PUT /api/settings/{sectionId}` (including `COMport`)  | `409 {"error": "Cannot change settings while a job is running or paused. Stop the job first."}` |
+| `POST /api/machine/quick-configure`                    | the same 409                                                             |
+| `/importFile`, `/importFileWCJSON`, `/importRestoreWebControl` | `409 {"status": 409, "error": <the same text>}`, before the upload is saved or unpacked |
+| `/sendGCode`                                           | `409 {"status": 409, "error": "Cannot send gcode while a job is running or paused. Stop the job first."}` |
+| `updateSetting` event (the unit switches)              | an alert with the settings text                                          |
+
+Python refuses none of these (it switches units while paused, and alerts `Cannot change units while sending gcode.`
+only while streaming). A `COMport` change mid-cut used to close the port without `!`; it is now refused and the cut
+goes on. The 409s keep the default reason phrase. Their contract entries say "Rust backend only", and
+`tests/test_contract.py` lists them in `RUST_ONLY_RESPONSES`. The UI disables these controls while
+`selectGcodeLocked` holds and shows the server's message if one is refused anyway.
+
 ## Regenerating and checking
 
 ```sh

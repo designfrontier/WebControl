@@ -1,7 +1,7 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { SettingsSection } from "../../protocol";
-import { fakeFetch, jsonResponse } from "../../test/fakeFetch";
+import { fakeFetch, jsonResponse, startupState } from "../../test/fakeFetch";
 import { currentPath, renderApp } from "../../test/render";
 import { gpioSection, maslowSection, setting, webcontrolSection } from "./fixtures";
 
@@ -127,6 +127,37 @@ describe("SettingsPage", () => {
         .map((o) => o.textContent),
     ).toEqual(["/dev/ttyACM0", "/dev/ttyUSB0"]);
     expect(ports).toHaveValue("/dev/ttyACM0");
+  });
+
+  it("keeps Save disabled during a job, saying why", async () => {
+    const { fetch } = settingsServer();
+    const locked = fakeFetch({ "GET /api/state": startupState({ jobInProgress: true }) });
+    const { user } = renderApp("/settings", {
+      fetch: (input, init) => (String(input) === "/api/state" ? locked(input, init) : fetch(input, init)),
+    });
+    await form();
+    expect(
+      await screen.findByText(/A job is running or paused. Stop the job first to change the settings/),
+    ).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Serial Connection"), "/dev/ttyACM1");
+    expect(saveButton()).toBeDisabled();
+  });
+
+  it("shows the server's reason when a save is refused during a job", async () => {
+    const fetch = fakeFetch({
+      "GET /api/settings/maslow": maslowSection(),
+      "PUT /api/settings/maslow": () =>
+        jsonResponse({ error: "Cannot change settings while a job is running or paused. Stop the job first." }, 409),
+    });
+    const { user } = renderApp("/settings", { fetch });
+    await form();
+    await user.type(screen.getByLabelText("Distance Between Motors"), "1");
+    await user.click(saveButton());
+    expect(
+      await screen.findByText(
+        "Saving failed: Cannot change settings while a job is running or paused. Stop the job first.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("shows an unset port before any scan", async () => {
