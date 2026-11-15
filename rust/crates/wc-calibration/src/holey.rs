@@ -126,17 +126,23 @@ pub fn calibrate(settings: &MachineSettings, values: &[Value]) -> Result<HoleyRe
     calibrate_measurements(settings, &parse_measurements(values)?)
 }
 
-pub fn calibrate_measurements(
-    settings: &MachineSettings,
-    measured: &[f64; MEASUREMENTS],
-) -> Result<HoleyResult, CalibrationError> {
+/// The least-squares fit of the four parameter deltas, or `None` where scipy (or the kinematics) would raise.
+fn fit(settings: &MachineSettings, measured: &[f64; MEASUREMENTS]) -> Option<trf::Fitted> {
     let (base, chains, measured) = (model(settings), chain_lengths(settings), Residuals::from(*measured));
     // `LengthDeltaFromIdeal`: measured minus calculated, for each of M1 to M12.
     let residuals = |params: &Params| {
         let holes = holes_for(&base, &chains, params)?;
         Some(measured - Residuals::from(measurements_of(&holes, base.machine_height)))
     };
-    let fitted = trf::least_squares(residuals, Params::zeros()).ok_or(CalibrationError::NoSolution)?;
+    trf::least_squares(residuals, Params::zeros())
+}
+
+pub fn calibrate_measurements(
+    settings: &MachineSettings,
+    measured: &[f64; MEASUREMENTS],
+) -> Result<HoleyResult, CalibrationError> {
+    let base = model(settings);
+    let fitted = fit(settings, measured).ok_or(CalibrationError::NoSolution)?;
     let deltas = fitted.x;
     if !deltas.iter().all(|d| d.is_finite()) {
         return Err(CalibrationError::NoSolution);
@@ -183,4 +189,57 @@ pub fn test_pattern(settings: &MachineSettings, inches: bool) -> Vec<String> {
         .chain(["G0 X0 Y0".to_string(), "M5".to_string()])
         .chain(inches.then(|| "G20".to_string()))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::Value;
+
+    use super::*;
+
+    fn read(path: &str) -> Value {
+        let path = format!("{}/{path}", env!("CARGO_MANIFEST_DIR"));
+        serde_json::from_str(&std::fs::read_to_string(path).expect("fixture")).expect("json")
+    }
+
+    /// Four significant figures above a noise `floor`: SVD and Jacobian rounding move the late digits, a change of
+    /// path moves the first.
+    fn close(actual: f64, expected: f64, floor: f64) -> bool {
+        (actual - expected).abs() <= 1e-4 * expected.abs() + floor
+    }
+
+    fn check(name: &str, i: usize, what: &str, actual: Option<f64>, expected: &Value, floor: f64) {
+        match (actual, expected.as_f64()) {
+            (None, None) => {}
+            (Some(actual), Some(expected)) if close(actual, expected, floor) => {}
+            (actual, _) => panic!("{name}, iteration {i}: {what} {actual:?} != {expected}"),
+        }
+    }
+
+    /// `tests/fixtures/trf_path.json`, recorded from scipy by `regenerate_trf_path.py` beside it. Under the fit's own
+    /// ftol and gtol the values are noise, so they only need to stay there.
+    #[test]
+    fn the_fit_takes_scipy_s_path_iteration_by_iteration() {
+        let path = read("tests/fixtures/trf_path.json");
+        let geometry = &path["geometry"];
+        let settings =
+            MachineSettings::from_lookup(|section, key| geometry[section][key].as_str().map(str::to_string)).unwrap();
+        let recorded = path["cases"].as_array().expect("cases");
+        assert_eq!(recorded.len(), 8);
+        recorded.iter().for_each(|case| {
+            let name = case["name"].as_str().unwrap();
+            let measured = parse_measurements(case["measurements"].as_array().unwrap()).unwrap();
+            let iterations = fit(&settings, &measured).expect("fit").iterations;
+            let expected = case["iterations"].as_array().unwrap();
+            assert_eq!(iterations.len(), expected.len(), "{name}: iterations");
+            let noise = trf::FTOL * expected[0]["cost"].as_f64().unwrap();
+            iterations.iter().zip(expected).enumerate().for_each(|(i, (actual, expected))| {
+                assert_eq!(Some(actual.nfev as u64), expected["nfev"].as_u64(), "{name}, iteration {i}: nfev");
+                check(name, i, "cost", Some(actual.cost), &expected["cost"], noise);
+                check(name, i, "reduction", actual.reduction, &expected["costReduction"], noise);
+                check(name, i, "step", actual.step_norm, &expected["stepNorm"], 1e-6);
+                check(name, i, "optimality", Some(actual.optimality), &expected["optimality"], trf::GTOL);
+            });
+        });
+    }
 }
