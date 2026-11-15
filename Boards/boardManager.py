@@ -1,10 +1,12 @@
 import base64
 import math
+import traceback
 
 # import numpy as np
 # from scipy.spatial import ConvexHull
 
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
+from DataStructures.offHub import runOffHub
 from Boards.boards import Board
 
 
@@ -133,32 +135,50 @@ class BoardManager(MakesmithInitFuncs):
         Using the gcode in memory, mark the areas in the array that the gcode passes through at a height less than 0.
         :return:
         '''
-        boardWidth = self.currentBoard.width
-        boardHeight = self.currentBoard.height
-        boardLeftX = self.currentBoard.centerX - boardWidth/2
-        boardRightX = self.currentBoard.centerX + boardWidth / 2
-        boardTopY = self.currentBoard.centerY + boardHeight / 2
-        boardBottomY = self.currentBoard.centerY - boardHeight / 2
+        board = self.currentBoard
+        try:
+            cutPoints = runOffHub(self._markCutCells, board, self.data.units, list(self.data.gcodeShift),
+                                  self.data.gcodeFile.line3D)
+        except Exception:
+            self.data.console_queue.put(traceback.format_exc())
+            return False
+        # send this array to the current board for updating
+        board.updateCutPoints(cutPoints)
+        # update the UI clients.
+        self.data.ui_queue1.put("Action", "boardUpdate", "")
+        return True
+
+    def _markCutCells(self, board, units, gcodeShift, lines):
+        '''
+        Runs off the hub, so it reads only its arguments.
+        :return: one boolean per square inch of `board`, True where the gcode cuts below 0
+        '''
+        boardWidth = board.width
+        boardHeight = board.height
+        boardLeftX = board.centerX - boardWidth/2
+        boardRightX = board.centerX + boardWidth / 2
+        boardTopY = board.centerY + boardHeight / 2
+        boardBottomY = board.centerY - boardHeight / 2
 
         # calculate the extents of the array and its offset.
         pointsX = math.ceil(boardWidth)
         pointsY = math.ceil(boardHeight)
-        offsetX = pointsX / 2 - self.currentBoard.centerX
-        offsetY = pointsY / 2 - self.currentBoard.centerY
+        offsetX = pointsX / 2 - board.centerX
+        offsetY = pointsY / 2 - board.centerY
 
-        if self.data.units == "MM":
+        if units == "MM":
             scale = 1/25.4
         else:
             scale = 1
-        homeX = self.data.gcodeShift[0]*scale
-        homeY = self.data.gcodeShift[1]*scale
+        homeX = gcodeShift[0]*scale
+        homeY = gcodeShift[1]*scale
 
 
         # initialize an array
         cutPoints = [False for i in range( pointsX * pointsY )]
 
         # process gcode
-        for line in self.data.gcodeFile.line3D:
+        for line in lines:
             if line.type == "circle":
                 if line.points[0][0] + homeX >= boardLeftX and line.points[0][0] + homeX <= boardRightX and line.points[0][1] + homeY >= boardBottomY and line.points[0][1] + homeY <= boardTopY and line.points[0][2] < 0:
                     pointx = self.constrain(round(line.points[0][0] + offsetX + homeX), 0, pointsX)
@@ -209,11 +229,7 @@ class BoardManager(MakesmithInitFuncs):
                                 pointy = self.constrain(round(line.points[x][1] + offsetY + homeY), 0, pointsY)
                                 cutPoints[pointx + pointy * pointsX] = True
 
-        # send this array to the current board for updating
-        self.currentBoard.updateCutPoints(cutPoints)
-        # update the UI clients.
-        self.data.ui_queue1.put("Action", "boardUpdate", "")
-        return True
+        return cutPoints
 
     def clearBoard(self):
         '''

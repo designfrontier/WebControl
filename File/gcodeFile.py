@@ -1,12 +1,18 @@
+from DataStructures.data import GCODE_LOCKED_MESSAGE
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
+from DataStructures.offHub import Collected, runOffHub
 
-import threading
+import copy
 import json
 import re
 import math
 from decimal import Decimal, InvalidOperation
 import gzip
 import io
+import traceback
+import types
+
+from gevent.lock import Semaphore
 
 
 class Line:
@@ -21,6 +27,22 @@ class Line:
 
 # The controller works in 32-bit floats, so digits past this are noise.
 MAX_SHIFT_DECIMALS = 6
+PARSE_CHUNK_LINES = 1000
+PREVIEW_CHUNK_MOVES = 500
+
+
+def _gzipJsonList(items):
+    '''
+    Gzips the same bytes as json.dumps(items), encoded in chunks so no one C call holds the GIL for long.
+    :return: (uncompressed length, compressed bytes)
+    '''
+    chunks = [json.dumps(items[start:start + PREVIEW_CHUNK_MOVES])[1:-1]
+              for start in range(0, len(items), PREVIEW_CHUNK_MOVES)]
+    pieces = ["["] + [piece for index, chunk in enumerate(chunks) for piece in ([", "] if index else []) + [chunk]] + ["]"]
+    out = io.BytesIO()
+    with gzip.GzipFile(fileobj=out, mode="w") as f:
+        [f.write(piece.encode()) for piece in pieces]
+    return sum(len(piece) for piece in pieces), out.getvalue()
 
 
 class GCodeFile(MakesmithInitFuncs):
@@ -44,6 +66,7 @@ class GCodeFile(MakesmithInitFuncs):
 
     filename = ""
     line3D = []
+    loadLock = Semaphore()
     '''
     prependString is defined here so it can be persistent across each 'moveOneLine'.  That way, if a gcode line
     does not contain a valid gcode, it uses the previous line's gcode.  Thanks to @amantalion for discovering the
@@ -84,113 +107,154 @@ class GCodeFile(MakesmithInitFuncs):
 
 
     def loadUpdateFile(self, gcode=""):
+        '''
+        Loads the named file, or `gcode` when given, building its preview on a worker thread.
+        Loads run one at a time: a second waits for the first, so the last one requested wins.
+        '''
         print("At loadUpdateFile")
-        gcodeLoad = False
-        if gcode=="":
-            gcodeLoad = True
-        if self.data.units == "MM":
-            self.canvasScaleFactor = self.MILLIMETERS
-        else:
-            self.canvasScaleFactor = self.INCHES
-        self.data.gcodeFileUnits = self.data.units
+        filename = self.data.gcodeFile.filename if gcode == "" else None
+        with self.loadLock:
+            return self._load(filename, gcode)
 
-        if gcode == "":
-            filename = self.data.gcodeFile.filename
+    def isLoading(self):
+        return self.loadLock.locked()
+
+    def _load(self, filename, gcode):
+        fromFile = filename is not None
+        self.canvasScaleFactor = self.MILLIMETERS if self.data.units == "MM" else self.INCHES
+        self.data.gcodeFileUnits = self.data.units
+        if fromFile:
             self.data.gcodeShift[0] = round(float(self.data.config.getValue("Advanced Settings", "homeX")),4)
             self.data.gcodeShift[1] = round(float(self.data.config.getValue("Advanced Settings", "homeY")),4)
-
-            del self.line3D[:]
             if filename == "":  # Blank the g-code if we're loading "nothing"
+                self.line3D = []
                 self.data.gcode = ""
                 self.data.gcodeIndex = 0
                 return False
 
-            try:
-                filterfile = open(filename, "r")
-            except Exception as e:
-                self.data.console_queue.put(str(e))
-                self.data.console_queue.put("Gcode File Error")
-                self.data.ui_queue1.put("Alert", "Alert", "Cannot open gcode file.")
-                self.data.gcodeFile.filename = ""
-                return False
-            rawfilters = filterfile.read()
-            filterfile.close()  # closes the filter save file
-        else:
-            del self.line3D[:]
-            rawfilters = gcode
-
+        digits = None
+        if self.data.config.getValue("Advanced Settings", "truncate") == 1:
+            digits = self.data.config.getValue("Advanced Settings", "digits")
+        self.data.ui_queue1.put("Action", "gcodeLoadStarted", "")
         try:
-            filtersparsed = rawfilters #get rid of this if above is uncommented)
-            '''
-            filtersparsed = re.sub(
-                r";([^\n]*)\n", "\n", filtersparsed
-            )  # replace standard ; initiated gcode comments with newline
-            '''
-            #print(filtersparsed)
-            filtersparsed = re.sub(r"\n\n", "\n", filtersparsed)  # removes blank lines
-            filtersparsed = re.sub(
-                r"([0-9])([GXYZIJFTM]) *", "\\1 \\2", filtersparsed
-            )  # put spaces between gcodes
-            filtersparsed = re.sub(r"  +", " ", filtersparsed)  # condense space runs
-            value = self.data.config.getValue("Advanced Settings", "truncate")
-
-            if value == 1:
-                digits = self.data.config.getValue("Advanced Settings", "digits")
-                filtersparsed = re.sub(
-                    r"([+-]?\d*\.\d{1," + digits + "})(\d*)", r"\g<1>", filtersparsed
-                )  # truncates all long floats to 4 decimal places, leaves shorter floats
-                self.truncate = int(digits)
-            else:
-                self.truncate = -1
-            filtersparsed = re.split(
-                "\n", filtersparsed
-            )  # splits the gcode into elements to be added to the list
-            filtersparsed = [x.lstrip() for x in filtersparsed] # remove leading spaces
-            filtersparsed = [
-                x + " " for x in filtersparsed
-            ]  # adds a space to the end of each line
-            filtersparsed = [x.replace("X ", "X") for x in filtersparsed]
-            filtersparsed = [x.replace("Y ", "Y") for x in filtersparsed]
-            filtersparsed = [x.replace("Z ", "Z") for x in filtersparsed]
-            filtersparsed = [x.replace("I ", "I") for x in filtersparsed]
-            filtersparsed = [x.replace("J ", "J") for x in filtersparsed]
-            filtersparsed = [x.replace("F ", "F") for x in filtersparsed]
-            self.data.gcode = "[]"
-            self.data.gcode = filtersparsed
-            self.data.gcodeIndex = 0 if gcodeLoad else min(self.data.gcodeIndex, len(self.data.gcode) - 1)
-
-
-
-            # Find gcode indicies of z moves
-            self.data.zMoves = [0]
-            zList = []
-            for index, line in enumerate(self.data.gcode):
-                filtersparsed = re.sub(r'\(([^)]*)\)', '', line)  # replace mach3 style gcode comments with newline
-                line = re.sub(r';([^\n]*)?', '\n',filtersparsed)  # replace standard ; initiated gcode comments with newline
-                if not line.isspace(): # if all spaces, don't send.  likely a comment. #if line.find("(") == -1:
-                    if line.find("G20") != -1:
-                        self.data.tolerance = 0.020
-                        self.data.config.setValue("Computed Settings", "tolerance", self.data.tolerance)
-                    if line.find("G21") != -1:
-                        self.data.tolerance = 0.50
-                        self.data.config.setValue("Computed Settings", "tolerance", self.data.tolerance)
-                    z = self._wordValue("Z", line)
-                    if z is not None:
-                        zList.append(z)
-                        if len(zList) == 1 or not self.isClose(zList[-1], zList[-2]):
-                            self.data.zMoves.append(index)
+            worker = runOffHub(self._build, self._workerCopy(), filename, gcode, digits)
         except Exception as e:
-            self.data.console_queue.put(str(e))
-            self.data.console_queue.put("Gcode File Error")
-            self.data.ui_queue1.put("Alert", "Alert", "Cannot open gcode file.")
-            self.data.gcodeFile.filename = ""
-            return False
-        self.updateGcode()
-        if gcodeLoad:
-            self.data.serialRecorder.gcodeLoaded(self.data.gcodeFile.filename, len(self.data.gcode))
+            self.data.console_queue.put(traceback.format_exc())
+            return self._loadFailed(filename, str(e), "Cannot open gcode file.")
+        # A calibration pattern can start a job while the worker runs; its gcode must not be replaced.
+        if self.data.gcodeLocked():
+            return self._loadFailed(filename, GCODE_LOCKED_MESSAGE, GCODE_LOCKED_MESSAGE)
+        self._adopt(worker, fromFile)
+        if fromFile:
+            self.data.serialRecorder.gcodeLoaded(filename, len(self.data.gcode))
         self.data.gcodeFile.isChanged = True
         self.data.actions.sendGCodePositionUpdate(self.data.gcodeIndex, recalculate=True)
         return True
+
+    def _loadFailed(self, filename, reason, alert):
+        self.data.console_queue.put(reason)
+        self.data.console_queue.put("Gcode File Error")
+        self.data.ui_queue1.put("Alert", "Alert", alert)
+        # A load queued behind this one may already have named its own file.
+        if filename is not None and self.data.gcodeFile.filename == filename:
+            self.data.gcodeFile.filename = ""
+        # Resending the current preview ends the spinner clients showed when the load started.
+        self.data.ui_queue1.put("Action", "gcodeUpdate", "")
+        return False
+
+    def _workerCopy(self):
+        '''A copy that builds into its own lists, with a `data` holding only what the parse reads and writes.'''
+        worker = copy.copy(self)
+        worker.line3D = []
+        worker.data = types.SimpleNamespace(
+            units=self.data.units,
+            gcodeFileUnits=self.data.gcodeFileUnits,
+            tolerance=self.data.tolerance,
+            toleranceChanged=False,
+            gcode=[],
+            zMoves=[0],
+            compressedGCode3D=None,
+            console_queue=Collected(),
+            ui_queue1=Collected(),
+            gcodeFile=worker,
+        )
+        return worker
+
+    @staticmethod
+    def _build(worker, filename, gcode, digits):
+        if filename is not None:
+            with open(filename, "r") as gcodeFile:
+                gcode = gcodeFile.read()
+        worker._parse(gcode, digits)
+        worker._buildPreview()
+        return worker
+
+    def _adopt(self, worker, fromFile):
+        built = worker.data
+        self.data.gcode = built.gcode
+        self.data.gcodeIndex = 0 if fromFile else min(self.data.gcodeIndex, len(built.gcode) - 1)
+        self.data.zMoves = built.zMoves
+        if built.toleranceChanged:
+            self.data.tolerance = built.tolerance
+            self.data.config.setValue("Computed Settings", "tolerance", built.tolerance)
+        self.data.gcodeFileUnits = built.gcodeFileUnits
+        self.data.compressedGCode3D = built.compressedGCode3D
+        self.__dict__.update({key: value for key, value in vars(worker).items() if key != "data"})
+        built.console_queue.replayOnto(self.data.console_queue)
+        built.ui_queue1.replayOnto(self.data.ui_queue1)
+
+    @staticmethod
+    def _tidy(text, digits):
+        '''Spaces out and optionally truncates the words in `text`; no pattern here matches across a newline.'''
+        text = re.sub(r"([0-9])([GXYZIJFTM]) *", "\\1 \\2", text)  # put spaces between gcodes
+        text = re.sub(r"  +", " ", text)  # condense space runs
+        if digits is None:
+            return text
+        # truncates all long floats to `digits` decimal places, leaves shorter floats
+        return re.sub(r"([+-]?\d*\.\d{1," + digits + r"})(\d*)", r"\g<1>", text)
+
+    def _parse(self, rawfilters, digits):
+        '''
+        Splits and tidies the gcode into self.data.gcode and finds the indices of its z moves.
+        '''
+        lines = re.sub(r"\n\n", "\n", rawfilters).split("\n")  # removes blank lines
+        self.truncate = int(digits) if digits is not None else -1
+        # One regex call holds the GIL throughout, so a whole file at once would stall the hub.
+        filtersparsed = [
+            line
+            for start in range(0, len(lines), PARSE_CHUNK_LINES)
+            for line in self._tidy("\n".join(lines[start:start + PARSE_CHUNK_LINES]), digits).split("\n")
+        ]
+        filtersparsed = [x.lstrip() for x in filtersparsed] # remove leading spaces
+        filtersparsed = [
+            x + " " for x in filtersparsed
+        ]  # adds a space to the end of each line
+        filtersparsed = [x.replace("X ", "X") for x in filtersparsed]
+        filtersparsed = [x.replace("Y ", "Y") for x in filtersparsed]
+        filtersparsed = [x.replace("Z ", "Z") for x in filtersparsed]
+        filtersparsed = [x.replace("I ", "I") for x in filtersparsed]
+        filtersparsed = [x.replace("J ", "J") for x in filtersparsed]
+        filtersparsed = [x.replace("F ", "F") for x in filtersparsed]
+        self.data.gcode = filtersparsed
+
+        # Find gcode indicies of z moves
+        self.data.zMoves = [0]
+        zList = []
+        for index, line in enumerate(self.data.gcode):
+            filtersparsed = re.sub(r'\(([^)]*)\)', '', line)  # replace mach3 style gcode comments with newline
+            line = re.sub(r';([^\n]*)?', '\n',filtersparsed)  # replace standard ; initiated gcode comments with newline
+            if not line.isspace(): # if all spaces, don't send.  likely a comment. #if line.find("(") == -1:
+                if line.find("G20") != -1:
+                    self.data.tolerance = 0.020
+                    self.data.toleranceChanged = True
+                if line.find("G21") != -1:
+                    self.data.tolerance = 0.50
+                    self.data.toleranceChanged = True
+                z = self._wordValue("Z", line)
+                if z is not None:
+                    zList.append(z)
+                    if len(zList) == 1 or not self.isClose(zList[-1], zList[-2]):
+                        self.data.zMoves.append(index)
 
     def _wordValue(self, letter, gCodeLine):
         '''
@@ -489,7 +553,8 @@ class GCodeFile(MakesmithInitFuncs):
 
         """
 
-        del self.line3D[:]
+        # Replaced, never emptied in place: a board worker may still be reading the old list.
+        self.line3D = []
 
     def clearGcodeFile(self):
         """
@@ -498,10 +563,8 @@ class GCodeFile(MakesmithInitFuncs):
 
         """
 
-        del self.line3D[:]
-
         self.data.gcode = []
-        self.updateGcode()
+        self._buildPreview()
         self.data.gcodeFile.isChanged = True
 
 
@@ -668,40 +731,10 @@ class GCodeFile(MakesmithInitFuncs):
             self.drawMCommand(mString)
 
 
-    def callBackMechanism(self):
+    def _buildPreview(self):
         """
-        Call the loadNextLine function in background.
+        Draws self.data.gcode into a fresh line3D and gzips it into self.data.compressedGCode3D.
         """
-
-        for _ in range(min(len(self.data.gcode), self.maxNumberOfLinesToRead)):
-            self.loadNextLine()
-
-        tstr = json.dumps([ob.__dict__ for ob in self.data.gcodeFile.line3D])
-        out = io.BytesIO()
-        with gzip.GzipFile(fileobj=out, mode="w") as f:
-            f.write(tstr.encode())
-        self.data.compressedGCode3D = out.getvalue()
-
-        self.data.console_queue.put("uncompressed:"+str(len(tstr)))
-        self.data.console_queue.put("compressed3D:"+str(len(self.data.compressedGCode3D)))
-
-
-    def updateGcode(self):
-        """
-        updateGcode parses the gcode commands and calls the appropriate drawing function for the
-        specified command.
-        """
-        # reset variables
-        self.data.backgroundRedraw = False
-        if (self.data.units=="INCHES"):
-            scaleFactor = 1.0;
-        else:
-            scaleFactor = 1/25.4;
-        #before, gcode shift = home X
-        #old #self.xPosition = self.data.gcodeShift[0] * scaleFactor
-        #old #self.yPosition = self.data.gcodeShift[1] * scaleFactor
-        #self.xPosition = float(self.data.config.getValue("Advanced Settings", "homeX")) * scaleFactor #test123
-        #self.yPosition = float(self.data.config.getValue("Advanced Settings", "homeY")) * scaleFactor #test123
         self.xPosition = 0
         self.yPosition = 0
         self.zPosition = 0
@@ -725,10 +758,13 @@ class GCodeFile(MakesmithInitFuncs):
             self.data.console_queue.put(errorText)
             self.data.ui_queue1.put("Alert", "Alert", errorText)
 
+        for _ in range(min(len(self.data.gcode), self.maxNumberOfLinesToRead)):
+            self.loadNextLine()
 
-        th = threading.Thread(target=self.callBackMechanism)
-        th.start()
+        uncompressed, self.data.compressedGCode3D = _gzipJsonList([ob.__dict__ for ob in self.line3D])
 
+        self.data.console_queue.put("uncompressed:"+str(uncompressed))
+        self.data.console_queue.put("compressed3D:"+str(len(self.data.compressedGCode3D)))
 
     def getLinePoints(self):
 

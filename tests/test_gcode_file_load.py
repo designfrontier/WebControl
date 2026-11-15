@@ -1,17 +1,6 @@
-import types
-
 import pytest
 
-import File.gcodeFile as gcode_file
 from helpers import decode_ui_message, drain
-
-
-class InlineThread:
-    def __init__(self, target=None, **kwargs):
-        self.target = target
-
-    def start(self):
-        self.target()
 
 
 @pytest.fixture
@@ -42,8 +31,7 @@ def test_editing_the_gcode_shorter_keeps_the_index_inside_it(data, loaded_gcode)
     assert data.gcodeIndex == len(data.gcode) - 1
 
 
-def test_the_preview_skips_a_word_it_cannot_read_and_draws_the_rest(data, loaded_gcode, monkeypatch):
-    monkeypatch.setattr(gcode_file, "threading", types.SimpleNamespace(Thread=InlineThread))
+def test_the_preview_skips_a_word_it_cannot_read_and_draws_the_rest(data, loaded_gcode):
     [drain(queue) for queue in (data.console_queue, data.ui_queue1)]
 
     assert data.gcodeFile.loadUpdateFile("G0 X1\nG1 X2 Z`3\nG1 X3 Y4\n") is True

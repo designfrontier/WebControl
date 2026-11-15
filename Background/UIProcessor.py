@@ -509,6 +509,10 @@ class UIProcessor:
         if msg["command"] == "Action":
             if msg["message"] == "gcodeUpdate":
                 self.sendGcodeUpdate()
+            elif msg["message"] == "gcodeLoadStarted":
+                # 0 bytes: the payload is still being built; gcodeUpdateCompressed ends the spinner.
+                socketio.emit("message", {"command": "showFPSpinner", "data": 0, "dataFormat": "int"},
+                              namespace="/MaslowCNC")
             elif msg["message"] == "boardUpdate":
                 self.sendBoardUpdate()
             elif msg["message"] == "unitsUpdate":

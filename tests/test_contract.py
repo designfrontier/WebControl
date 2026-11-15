@@ -16,7 +16,6 @@ import main
 from Actions.actions import Actions
 from Background import UIProcessor as ui_processor_module
 from Background.UIProcessor import UIProcessor
-from File import gcodeFile as gcode_file_module
 from DataStructures.data import GCODE_LOCKED_MESSAGE
 from conftest import REPO
 from helpers import NAMESPACE, drain, messages
@@ -27,7 +26,6 @@ SKIPPED_METHODS = {"HEAD", "OPTIONS"}
 # Messages the backend sends only from paths these tests cannot reach without a controller or a classic client.
 UNEXERCISED_MESSAGES = {
     "closeAlertModals": "answers the classic UI's alertModalClosed",
-    "showFPSpinner": "sent only with a non-empty gcode or board payload; test_gzip_payloads_inflate_to_their_schemas",
 }
 
 
@@ -344,6 +342,7 @@ QUEUED = [
     ("Action", "distToMoveUpdate", ""),
     ("Action", "unitsUpdateZ", ""),
     ("Action", "distToMoveUpdateZ", ""),
+    ("Action", "gcodeLoadStarted", ""),
     ("Action", "gcodeUpdate", ""),
     ("Action", "boardUpdate", ""),
     ("TextMessage", "", "Connected on port /dev/ttyACM0"),
@@ -380,14 +379,6 @@ def test_ui_processor_messages_match_their_schemas(ui, data, socket_client):
     assert unexercised == set()
 
 
-class InlineThread:
-    def __init__(self, target):
-        self.target = target
-
-    def start(self):
-        self.target()
-
-
 def inflated(emitted, command):
     payload = [p for event, p in emitted if event == "message" and p["command"] == command][-1]["data"]
     return json.loads(gzip.decompress(payload))
@@ -395,7 +386,6 @@ def inflated(emitted, command):
 
 def test_gzip_payloads_inflate_to_their_schemas(ui, restored, monkeypatch):
     processor, emitted = ui
-    monkeypatch.setattr(gcode_file_module, "threading", SimpleNamespace(Thread=InlineThread))
     gcode = "G20\nG0 X1 Y1 Z0.25\nG1 Z-0.1 F20\nG1 X3 Y2 F40\nG2 X4 Y3 I1 J0\nG0 Z0.25\nM6 T2\nG0 X0 Y0\n"
     assert restored.gcodeFile.loadUpdateFile(gcode) is True
     restored.actions.processAction({"data": {"command": "boardProcessGCode", "arg": "", "arg1": ""}})
