@@ -19,6 +19,10 @@ The Python backend stays installed and working on the card throughout. Only one 
 - **A bad card:** power off, pull the microSD card, power on. The Pi boots v0.94 from the SSD as before
   (`spec/INSTALL-PI.md`, step 8).
 
+Each checklist installs with `rust/deploy.sh` from the Mac. A release tarball installs the same files: on the Pi,
+`bash webcontrol-rs-<version>-aarch64/install-pi.sh webcontrol-rs-<version>-aarch64` (`rust/README.md`, Releases).
+It then prints the release version where a checklist expects `0.1.0`.
+
 Both backends share `~/.WebControl`. Each checklist that writes it starts with a backup to the Mac
 (`scp -r pi@maslow.local:.WebControl ~/webcontrol-backup-<milestone>/`). Never edit the original.
 

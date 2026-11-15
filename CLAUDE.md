@@ -7,7 +7,8 @@
 ### Key directories
 
 - `.github/workflows/` — CI: frontend lint/typecheck/test/build, backend pytest, PyInstaller onedir smoke, Playwright e2e,
-  and the Rust job (fmt, clippy, tests, 95% per-crate coverage, aarch64 cross-build, e2e smoke)
+  and the Rust job (fmt, clippy, tests, 95% per-crate coverage, aarch64 cross-build, e2e smoke); `release.yml`
+  builds the Rust Pi install assets (`rust/scripts/release.sh`) and drafts a GitHub Release for a `v*` tag
 - `Actions/` — `actions.py` dispatches every UI action (jog, home, run/pause/stop, settings, firmware upgrade, backup); plus triangular, holey, optical calibration and GPIO actions
 - `api/` — JSON blueprint mounted at `/api` for the new frontend; every `api/<feature>.py` exposing `blueprint` auto-registers
 - `Background/` — long-running worker loops: controller message routing, UI socket push (`UIProcessor`), log streaming, webcam capture, console/WebMCP queue
