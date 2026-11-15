@@ -120,6 +120,15 @@ fn leading_tool(line: &str) -> Option<u32> {
     text.contains(['G', 'M']).then(|| number.parse().ok()).flatten()
 }
 
+/// The number after each `M`, as the firmware reads it: `M06` is 6, `M6.1` is not.
+fn m_codes(text: &str) -> impl Iterator<Item = f64> + '_ {
+    text.match_indices('M').filter_map(|(at, _)| {
+        let rest = &text[at + 1..];
+        let end = rest.find(|c: char| !(c.is_ascii_digit() || c == '.')).unwrap_or(rest.len());
+        rest[..end].parse().ok()
+    })
+}
+
 impl Sim {
     pub fn new(build: Build) -> Sim {
         Sim {
@@ -321,7 +330,7 @@ impl Sim {
         if let Some(tool) = leading_tool(text) {
             self.tool_change_to(tool, text, out)?;
         }
-        if wc_firmware::words::pauses_firmware(text) {
+        if m_codes(text).any(|m| m == 0.0 || m == 1.0) {
             out.push("Maslow Paused".into());
             self.held = Some(Hold::Pause);
             return Some(0);
@@ -341,7 +350,7 @@ impl Sim {
     }
 
     fn tool_change_to(&mut self, tool: u32, text: &str, out: &mut Vec<String>) -> Option<()> {
-        if !wc_firmware::words::changes_tool(text) || tool == self.tool {
+        if !m_codes(text).any(|m| m == 6.0) || tool == self.tool {
             return Some(());
         }
         self.tool = tool;

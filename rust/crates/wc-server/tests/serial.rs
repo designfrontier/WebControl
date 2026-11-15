@@ -40,7 +40,7 @@ async fn the_serial_port_carries_lines_both_ways() {
     controller.write_all(b"Firmware Version 51.27\r\n").unwrap();
     let mut lines = BufReader::new(reader).lines();
     let line = tokio::time::timeout(Duration::from_secs(5), lines.next_line()).await.unwrap().unwrap();
-    assert_eq!(line.as_deref(), Some("Firmware Version 51.27\r"));
+    assert_eq!(line.as_deref(), Some("Firmware Version 51.27"));
 }
 
 #[tokio::test]

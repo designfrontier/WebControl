@@ -34,20 +34,26 @@ impl LineProblem {
         }
     }
 
+    /// What is wrong, as the end of a sentence about the line or command.
+    pub fn reason(&self) -> String {
+        match self {
+            LineProblem::UnclosedComment => "has an unclosed comment, which hangs the controller.".to_string(),
+            LineProblem::TooLong { written } => {
+                format!("is {written} characters; the controller accepts at most {BUFFER_SIZE}.")
+            }
+        }
+    }
+
     /// The alert's title and text for the 0-based `index` of the refused line.
     pub fn alert(&self, index: usize) -> (String, String) {
-        let (reason, advice) = match self {
-            LineProblem::UnclosedComment => (
-                "has an unclosed comment, which hangs the controller.".to_string(),
-                "Resume stops here again: stop the job, fix the file and load it again.",
-            ),
-            LineProblem::TooLong { written } => (
-                format!("is {written} characters; the controller accepts at most {BUFFER_SIZE}."),
+        let advice = match self {
+            LineProblem::UnclosedComment => "Resume stops here again: stop the job, fix the file and load it again.",
+            LineProblem::TooLong { .. } => {
                 "Resume stops here again: stop the job, fix the file (e.g. enable Truncate Floating Point Numbers) \
-                 and load it again.",
-            ),
+                 and load it again."
+            }
         };
-        (format!("Line {}", self.title()), format!("Line {} {reason} {advice}", index + 1))
+        (format!("Line {}", self.title()), format!("Line {} {} {advice}", index + 1, self.reason()))
     }
 }
 

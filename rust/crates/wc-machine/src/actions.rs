@@ -233,7 +233,7 @@ impl Machine {
     /// A macro that would pause the controller or switch units waits for M4, which knows how to follow it.
     fn run_macro(&mut self, command: &str) -> Option<String> {
         let text = self.settings.text_or_empty("Maslow Settings", command);
-        let line = wc_firmware::line::sanitise(&text);
+        let line = wc_gcode::sanitise::sanitise(&text);
         if let Some(reason) = self.unsupported(&line) {
             return Some(format!("That macro {reason}"));
         }

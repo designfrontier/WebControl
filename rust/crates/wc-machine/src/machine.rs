@@ -6,7 +6,8 @@ use std::time::Duration;
 use serde_json::{Map, Value, json};
 use wc_config::Settings;
 use wc_firmware::Accounting;
-use wc_firmware::line::Positioning;
+use wc_gcode::Positioning;
+use wc_gcode::restart::positioning_word;
 use wc_protocol::main::{ActivateModal, ConnectionStatus, HostAddress, LinkStatus, PauseButton, StatusMessage, Units};
 use wc_protocol::{Action, Envelope, Message, Push};
 
@@ -131,7 +132,7 @@ impl Snapshot {
     pub fn status(&self) -> StatusMessage {
         StatusMessage {
             upload_flag: self.upload_flag,
-            positioning_mode: self.positioning.code(),
+            positioning_mode: u8::from(self.positioning == Positioning::Relative),
             current_tool: self.current_tool,
             job_in_progress: self.job_in_progress,
             manual_z_axis_adjust: self.manual_z_axis_adjust,
@@ -152,7 +153,7 @@ impl Snapshot {
             "manualZAxisAdjust": self.manual_z_axis_adjust,
             "pauseButtonSetting": self.pause_button,
             "currentTool": self.current_tool,
-            "positioningMode": self.positioning.word(),
+            "positioningMode": positioning_word(self.positioning).trim(),
             "controllerFirmwareVersion": self.controller_firmware_version,
             "controllerBoard": self.controller_board,
             "firmwareBuild": self.firmware_build,
@@ -270,7 +271,7 @@ impl Machine {
 
     /// Loads a file as `/openGCode` would; M3 adds the route, transcripts and tests use it directly.
     pub fn load_gcode(&mut self, text: &str) {
-        self.gcode = crate::job::load(text);
+        self.gcode = wc_gcode::load::filter(text, None).unwrap_or_default();
         self.index = 0;
     }
 

@@ -2050,6 +2050,7 @@ dependencies = [
  "tracing",
  "wc-config",
  "wc-firmware",
+ "wc-gcode",
  "wc-protocol",
  "wc-sim",
  "wc-testkit",
@@ -2097,7 +2098,6 @@ name = "wc-sim"
 version = "0.1.0"
 dependencies = [
  "tokio",
- "wc-firmware",
 ]
 
 [[package]]

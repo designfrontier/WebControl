@@ -96,6 +96,17 @@ fn a_tool_change_pauses_only_for_a_new_leading_tool() {
 }
 
 #[test]
+fn m_words_are_read_as_numbers() {
+    let mut sim = sim();
+    assert_eq!(send(&mut sim, "M1.5\n"), ["ok"]);
+    assert_eq!(send(&mut sim, "T4 M6.1\n"), ["ok"]);
+    assert_eq!(send(&mut sim, "M\n"), ["ok"]);
+    assert_eq!(send(&mut sim, "M01\n"), ["Maslow Paused"]);
+    send(&mut sim, "~");
+    assert_eq!(send(&mut sim, "T4 M06\n"), ["Tool Change: Please insert tool 4"]);
+}
+
+#[test]
 fn a_probe_touches_or_misses() {
     let mut sim = sim();
     sim.receive(b"G0 Z5\n", 0);

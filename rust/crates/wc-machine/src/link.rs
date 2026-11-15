@@ -7,9 +7,11 @@ use serde_json::Value;
 use wc_firmware::boot::{
     BOOT_BANNER_WINDOW_MS, EEPROM_READ_FAIL, EEPROM_REWRITE_NOTICE, board_banner, ends_boot, is_boot_banner,
 };
-use wc_firmware::line::{positioning_set_by, problem_with, sanitise};
 use wc_firmware::settings::{Sync, boot_push, sync_reported};
 use wc_firmware::{Reply, classify, split_glued};
+use wc_gcode::firmware_gcode::{changes_tool, only_selects_tool, pauses_firmware};
+use wc_gcode::sanitise::{problem_with, sanitise};
+use wc_gcode::shift::{HomeShift, positioning_set_by, shift_to_home};
 use wc_protocol::main::{ActivateModal, Alarm, ClearAlarm, ControllerMessage, PauseButton, RequestedSetting, Units};
 
 use crate::machine::{Controller, Effect, Link, Machine, Queued, RunState, alert, broadcast};
@@ -360,12 +362,12 @@ impl Machine {
         }
         let command = format!("{command} ");
         if let Some(problem) = problem_with(&command) {
-            let reason = format!("That command {}", problem.reason);
-            effects.push(broadcast(&ActivateModal::titled_alert(&format!("Command {}", problem.title), &reason)));
+            let reason = format!("That command {}", problem.reason());
+            effects.push(broadcast(&ActivateModal::titled_alert(&format!("Command {}", problem.title()), &reason)));
             self.probing = self.probing && !command.contains("G38.2");
             return false;
         }
-        if wc_firmware::words::only_selects_tool(&command) {
+        if only_selects_tool(&command) {
             return false;
         }
         let id = self.write(&command, None, now, effects);
@@ -402,19 +404,13 @@ impl Machine {
             return self.end_job();
         };
         let line = sanitise(raw);
-        let skipped = line.trim().is_empty() || wc_firmware::words::only_selects_tool(&line);
+        let skipped = line.trim().is_empty() || only_selects_tool(&line);
         if !skipped {
-            let mode = positioning_set_by(&line).unwrap_or(self.positioning);
-            let home = (
-                self.settings.number("Advanced Settings", "homeX"),
-                self.settings.number("Advanced Settings", "homeY"),
-            );
-            let shifted = match mode {
-                wc_firmware::line::Positioning::Absolute => crate::job::move_line(&line, home),
-                wc_firmware::line::Positioning::Relative => line.clone(),
-            };
+            let home = |key: &str| self.settings.number("Advanced Settings", key);
+            let shift = HomeShift::from_home(home("homeX"), home("homeY"), None);
+            let shifted = shift_to_home(&line, self.positioning, &shift);
             if let Some(problem) = problem_with(&shifted) {
-                return self.refuse_line(problem.title, &problem.reason, effects);
+                return self.refuse_line(problem.title(), &problem.reason(), effects);
             }
             if let Some(reason) = self.unsupported(&line) {
                 return self.refuse_line("Not Supported Yet", reason, effects);
@@ -433,7 +429,7 @@ impl Machine {
             Units::Mm => line.contains("G20"),
             Units::Inches => line.contains("G21"),
         };
-        if wc_firmware::words::pauses_firmware(line) || wc_firmware::words::changes_tool(line) {
+        if pauses_firmware(line) || changes_tool(line) {
             Some("pauses the controller (M0, M1 or M6), which this version of webcontrol-rs cannot resume yet.")
         } else if switches_units {
             Some("switches units, which this version of webcontrol-rs does not follow yet.")

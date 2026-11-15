@@ -3,7 +3,6 @@
 
 mod actions;
 pub mod commands;
-pub mod job;
 mod link;
 mod machine;
 mod shell;

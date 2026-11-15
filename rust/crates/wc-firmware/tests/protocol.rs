@@ -1,8 +1,6 @@
 use wc_firmware::boot::{
     board_banner, ends_boot, firmware_build, is_boot_banner, parse_firmware_version, supports_z_limits,
 };
-use wc_firmware::line::{Positioning, positioning_set_by, problem_with, sanitise, strip_comments};
-use wc_firmware::words::{changes_tool, only_selects_tool, pauses_firmware};
 use wc_firmware::{Accounting, BUFFER_SIZE, PositionError, Reply, RunMode, Status, classify, split_glued};
 
 #[test]
@@ -122,49 +120,4 @@ fn accounting_counts_bytes_until_each_ack() {
     assert!(accounting.is_empty());
     assert_eq!(accounting.acked(), None);
     assert_eq!(accounting.oldest_index(), None);
-}
-
-/// Ported from test_serial_streaming: comments and realtime characters never reach the controller.
-#[test]
-fn lines_are_sanitised_before_they_go_out() {
-    assert_eq!(strip_comments("G0 X1 (move) Y2 ; done"), "G0 X1  Y2 ");
-    assert_eq!(strip_comments("a(b(c)d)"), "ad)");
-    assert_eq!(strip_comments("G0 (unclosed"), "G0 (unclosed");
-    assert_eq!(sanitise("G0 X1!~`?\u{7}\u{7f} Y2 (c)"), "G0 X1 Y2 ");
-}
-
-#[test]
-fn unclosed_comments_and_over_long_lines_are_refused() {
-    let unclosed = problem_with("G0 (oops").unwrap();
-    assert_eq!(unclosed.title, "Unclosed Comment");
-    assert_eq!(problem_with(&"X".repeat(125)), None, "126 bytes with the newline fit");
-    let long = problem_with(&"X".repeat(126)).unwrap();
-    assert_eq!(
-        (long.title, long.reason.as_str()),
-        ("Too Long", "is 127 characters; the controller accepts at most 126.")
-    );
-    assert!(long.advice.contains("Truncate"));
-}
-
-#[test]
-fn the_positioning_mode_follows_the_last_g90_or_g91() {
-    assert_eq!(positioning_set_by("G91 G0 X1"), Some(Positioning::Relative));
-    assert_eq!(positioning_set_by("G91 G90"), Some(Positioning::Absolute));
-    assert_eq!(positioning_set_by("G0 X1"), None);
-    assert_eq!([Positioning::Absolute, Positioning::Relative].map(|p| (p.code(), p.word())), [(0, "G90"), (1, "G91")]);
-}
-
-/// Ported from test_program_pause / test_tool_change: which words pause the firmware.
-#[test]
-fn m0_m1_and_m6_are_found_however_they_are_padded() {
-    ["M0", "M1", "M00", "M01", "G0 X1 M0", "M000"].iter().for_each(|l| assert!(pauses_firmware(l), "{l}"));
-    ["M10", "M100", "M3", "M1.5", "M", "G0 X1"].iter().for_each(|l| assert!(!pauses_firmware(l), "{l}"));
-    ["M6", "M06", "T2 M6", "M6 T2"].iter().for_each(|l| assert!(changes_tool(l), "{l}"));
-    ["M60", "M16", "M6.1", "T2"].iter().for_each(|l| assert!(!changes_tool(l), "{l}"));
-}
-
-#[test]
-fn a_lone_t_only_selects_a_tool() {
-    ["T2", " T2 ", "T 2", "N10 T2", "N10T2.", "T2.5 "].iter().for_each(|l| assert!(only_selects_tool(l), "{l}"));
-    ["T", "T2 M6", "G0 T2", "N T2", "NT2", "T2 X1", "2"].iter().for_each(|l| assert!(!only_selects_tool(l), "{l}"));
 }
