@@ -17,6 +17,10 @@ This class is not MakesmithInitFuncs inherited, so it doesn't have direct access
 passed the app.  
 '''
 
+# No firmware reports motor power; the classic UI shows this value as green.
+MOTOR_POWER = 15
+
+
 def _firmware_version(data):
     try:
         return float(data.controllerFirmwareVersion)
@@ -164,6 +168,8 @@ class UIProcessor:
                             self.sendAlarm("Alarm: Position Lost.  Reset Chains.")
                         else:
                             self.sendAlarm(message);
+                    elif message[0:16] == "Buffer overflow!":
+                        self.sendAlarm("Alarm: Controller Buffer Overflow")
                     elif message[0:6] == "Unable to":
                         # not sure what this is for.. probably legacy or something.. TODO: cleanup
                         if message.find("The sled is not keeping up") != -1:
@@ -205,27 +211,6 @@ class UIProcessor:
                 self.app.data.xval = float(valz[0])
                 self.app.data.yval = float(valz[1])
                 self.app.data.zval = float(valz[2])
-
-                startpt = message.find("PWR:") + 4
-                if startpt > 4:
-                    endpt = message.find(">", startpt)
-                    numz = message[startpt:endpt]
-                    valz = numz.split(",")
-                    lpwr = abs(int(valz[0]))
-                    rpwr = abs(int(valz[1]))
-                    zpwr = abs(int(valz[2]))
-                else:
-                    #No PWR message from Maslow, so just say 15/255% to keep it green.
-                    lpwr = 15
-                    rpwr = 15
-                    zpwr = 15
-
-                startpt = message.find("F:") + 2
-                if startpt > 2:
-                    endpt = message.find(",", startpt)
-                    numz = message[startpt:endpt+1]
-                    valz = numz.split(",")
-                    self.app.data.feedRate= abs(float(valz[0]))
 
                 if math.isnan(self.app.data.xval):
                     self.sendControllerMessage("Unable to resolve x Kinematics.")
@@ -270,9 +255,9 @@ class UIProcessor:
                 "rqvel": self.app.data.feedRate,
                 "pcom": percentComplete,
                 "state": state,
-                "lpwr": lpwr,
-                "rpwr": rpwr,
-                "zpwr": zpwr
+                "lpwr": MOTOR_POWER,
+                "rpwr": MOTOR_POWER,
+                "zpwr": MOTOR_POWER
             }
             # call command to send the position data
             self.sendPositionMessage(position)
@@ -295,42 +280,15 @@ class UIProcessor:
         if limit != 0:
             try:
                 with self.app.app_context():
-                    startpt = message.find(':') + 1
-                    endpt = message.find(',', startpt)
-                    leftErrorValueAsString = message[startpt:endpt]
-                    self.app.data.leftError = float(leftErrorValueAsString) / limit
-
-                    startpt = endpt + 1
-                    endpt = message.find(',', startpt)
-                    rightErrorValueAsString = message[startpt:endpt]
-                    self.app.data.rightError = float(rightErrorValueAsString) / limit
-
-                    # the two custom firmwares were modified to send the chain lengths as well as the error.  This
-                    # allows for forward kinematics to be performed to get sled location.
-                    if self.app.data.controllerFirmwareVersion > 50 and self.app.data.controllerFirmwareVersion < 150:
-
-                        startpt = endpt + 1
-                        endpt = message.find(',', startpt)
-                        bufferSizeValueAsString = message[startpt:endpt]
-                        self.app.data.bufferSize = int(bufferSizeValueAsString)
-
-                        startpt = endpt + 1
-                        endpt = message.find(',', startpt)
-                        leftChainLengthAsString = message[startpt:endpt]
-                        self.app.data.leftChain = float(leftChainLengthAsString)
-
-                        startpt = endpt + 1
-                        endpt = message.find(']', startpt)
-                        rightChainLengthAsString = message[startpt:endpt]
-                        self.app.data.rightChain = float(rightChainLengthAsString)
-
+                    fields = message[message.find(':') + 1:message.find(']')].split(',')
+                    self.app.data.leftError = float(fields[0]) / limit
+                    self.app.data.rightError = float(fields[1]) / limit
+                    self.app.data.bufferSize = int(fields[2])
+                    # Holey and optical firmware add the chain lengths, which allow a forward kinematics position.
+                    if len(fields) >= 5:
+                        self.app.data.leftChain = float(fields[3])
+                        self.app.data.rightChain = float(fields[4])
                     else:
-                        # if not custom firmware, then just buffer size remains.
-                        startpt = endpt + 1
-                        endpt = message.find(']', startpt)
-                        bufferSizeValueAsString = message[startpt:endpt]
-                        self.app.data.bufferSize = int(bufferSizeValueAsString)
-                        # regardless of setting, if not custom firmware there cannot be a forward kinematic compute
                         computedEnabled = 0
 
                     computed = None

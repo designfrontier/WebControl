@@ -1,9 +1,11 @@
 import copy
 import time
+from types import SimpleNamespace
 
 import numpy
 import pytest
 
+import Actions.opticalCalibration as optical_module
 from Actions.opticalCalibration import OpticalCalibration
 from api.calibration import OPTICAL_DEFAULTS
 from helpers import drain
@@ -44,7 +46,7 @@ class FakeCamera:
 
 @pytest.fixture
 def optical(data, monkeypatch):
-    monkeypatch.setattr(time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(optical_module, "time", SimpleNamespace(sleep=lambda seconds: None, time=time.time))
     optical = OpticalCalibration()
     optical.data = data
     optical.markerX = optical.markerY = 60 / 25.4

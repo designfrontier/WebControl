@@ -22,6 +22,7 @@ class SerialPortThread(MakesmithInitFuncs):
     # Minimum time between lines sent to allow Arduino to cope
     # could be smaller (0.02) however larger number doesn't seem to impact performance
     MINTimePerLine = 0.05
+    RESYNC_DELAY = 0.25
 
     serialInstance = None
 
@@ -29,13 +30,16 @@ class SerialPortThread(MakesmithInitFuncs):
         self.machineIsReadyForData = False  # Tracks whether last command was acked
         self.lastWriteTime = time.time()
         self.bufferSpace = self.bufferSize  # The amount of space currently available in the buffer
-        self.lengthOfLastLineStack = deque()
+        self.unackedLines = deque()  # (length, gcode index or None) per line sent, newest on the left
+        self.resyncAfter = None
+        self.caughtUpSinceHalt = False
 
-    def _write(self, message, isQuickCommand=False):
+    def _write(self, message, isQuickCommand=False, gcodeIndex=None):
         '''
         Sends messages to controller.  No change from what I can tell from ground control
         :param message:
         :param isQuickCommand:
+        :param gcodeIndex: the file line being sent, if any, so a halt can rewind to it.
         :return:
         '''
         taken = time.time() - self.lastWriteTime
@@ -57,14 +61,11 @@ class SerialPortThread(MakesmithInitFuncs):
             # because it is the first message sent, otherwise put it at the end (left) because it is the last message sent
             if isQuickCommand:
                 if message[0] == "!":
-                    # if we've just sent a stop command, the buffer is now empty on the arduino side
-                    self.lengthOfLastLineStack.clear()
-                    self.bufferSpace = self.bufferSize - len(message)
-                    self.lengthOfLastLineStack.append(len(message))
+                    self._awaitResync()
                 else:
-                    self.lengthOfLastLineStack.append(len(message))
+                    self.unackedLines.append((len(message), None))
             else:
-                self.lengthOfLastLineStack.appendleft(len(message))
+                self.unackedLines.appendleft((len(message), gcodeIndex))
 
             '''
             Monitor gcode for positioning mode change requests
@@ -91,6 +92,29 @@ class SerialPortThread(MakesmithInitFuncs):
             self.lastWriteTime = time.time()
         else:
             self.data.console_queue.put("Skipping: " + str(message).rstrip('\n'))
+
+    def _awaitResync(self):
+        '''
+        The controller has flushed its buffer, but acks sent before it did may still be in flight or unread. Ignore
+        acks and hold regular lines until a status report read after the input ran dry past the resync delay.
+        '''
+        self._emptyAccounting()
+        self.machineIsReadyForData = False
+        self.resyncAfter = time.time() + self.RESYNC_DELAY
+        self.caughtUpSinceHalt = False
+
+    def _rewindToDroppedLines(self):
+        '''
+        The controller drops every line it hadn't finished, so a resume must start from the oldest of them.
+        '''
+        dropped = [index for _length, index in self.unackedLines if index is not None]
+        if dropped and self.data.jobInProgress:
+            self.data.gcodeIndex = min(dropped)
+            self.data.actions.sendGCodePositionUpdate(self.data.gcodeIndex, recalculate=True)
+
+    def _emptyAccounting(self):
+        self.unackedLines.clear()
+        self.bufferSpace = self.bufferSize
 
     def _getFirmwareVersion(self):
         '''
@@ -120,6 +144,12 @@ class SerialPortThread(MakesmithInitFuncs):
         filtersparsed = re.sub(r'\(([^)]*)\)', '', line)  # mach3 style ( ) comments
         return re.sub(r';([^\n]*)?', '', filtersparsed)  # standard ; comments
 
+    def _sanitise(self, line):
+        '''
+        Strips comments, and the characters the firmware acts on as realtime commands anywhere in a line.
+        '''
+        return re.sub(r'[!~`?\x00-\x1f\x7f]', '', self._stripComments(line))
+
     def _positioningModeSetBy(self, line):
         '''
         :return: 0 if the line switches to absolute (G90), 1 if to relative (G91), None if it does neither.
@@ -140,20 +170,50 @@ class SerialPortThread(MakesmithInitFuncs):
         '''
         return self.data.gcodeFile.moveLine(line) if self._positioningModeOf(line) == 0 else line
 
+    def _problemWith(self, line):
+        '''
+        :param line: the line exactly as it will be written, without its newline.
+        :return: (title, reason, advice) if the controller can't safely take the line, else None.
+        '''
+        if "(" in line:
+            # 51.27 loops forever on a comment.
+            return ("Unclosed Comment", "has an unclosed comment, which hangs the controller.",
+                    "Resume stops here again: stop the job, fix the file and load it again.")
+        written = len(line) + 1
+        if written > self.bufferSize:
+            # The firmware's ring overflows and it then runs the line's unread tail as a command.
+            return ("Too Long", "is " + str(written) + " characters; the controller accepts at most "
+                    + str(self.bufferSize) + ".",
+                    "Resume stops here again: stop the job, fix the file (e.g. enable Truncate Floating Point "
+                    "Numbers) and load it again.")
+        return None
+
+    def _streamProblem(self, line):
+        return None if line.isspace() else self._problemWith(self._shiftToHome(line))
+
+    def _refuseStreamLine(self, problem):
+        title, reason, advice = problem
+        self.data.ui_queue1.put("Alert", "Line " + title,
+                                "Line " + str(self.data.gcodeIndex + 1) + " " + reason + " " + advice)
+        self.data.actions.pauseRun()
+
     def sendNextLine(self):
         """
             Sends the next line of gcode to the machine
         """
         if self.data.gcodeIndex < len(self.data.gcode):
             runGeneration = self.data.runGeneration
-            line = self._stripComments(self.data.gcode[self.data.gcodeIndex])
+            line = self._sanitise(self.data.gcode[self.data.gcodeIndex])
+            problem = self._streamProblem(line)
+            if problem is not None:
+                return self._refuseStreamLine(problem)
             # check if command is going to be issued that pauses the controller.
             self.managePause(line)
             self.manageToolChange(line)
             if not line.isspace(): # if all spaces, don't send.  likely a comment.
                 positioningMode = self._positioningModeOf(line)
                 line = self._shiftToHome(line)
-                self._write(line)
+                self._write(line, gcodeIndex=self.data.gcodeIndex)
                 try:
                     self._afterLineSent(line, positioningMode)
                 except Exception as e:
@@ -357,15 +417,26 @@ class SerialPortThread(MakesmithInitFuncs):
                 lineFromMachine = self.serialInstance.readline().decode()
                 self.lastMessageTime = time.time()
                 self.data.message_queue.put(lineFromMachine)
+            elif self.resyncAfter is not None and time.time() >= self.resyncAfter:
+                self.caughtUpSinceHalt = True
         except:
             pass
 
+        if self.resyncAfter is not None:
+            if lineFromMachine.startswith("<") and self.caughtUpSinceHalt:
+                self.resyncAfter = None
+                self._emptyAccounting()
+                self.machineIsReadyForData = True
         # Check if a line has been completed
-        if lineFromMachine == "ok\r\n" or (len(lineFromMachine) >= 6 and lineFromMachine[0:6] == "error:"):
+        elif lineFromMachine == "ok\r\n" or (len(lineFromMachine) >= 6 and lineFromMachine[0:6] == "error:"):
             self.machineIsReadyForData = True
-            if bool(self.lengthOfLastLineStack) is True:  # if we've sent lines to the machine
+            if bool(self.unackedLines) is True:  # if we've sent lines to the machine
                 # free up that space in the buffer
-                self.bufferSpace = (self.bufferSpace + self.lengthOfLastLineStack.pop())
+                self.bufferSpace = (self.bufferSpace + self.unackedLines.pop()[0])
+        # The firmware stops itself on these and never acks the lines it held.
+        if lineFromMachine.startswith(("ALARM:", "Buffer overflow!")):
+            self._rewindToDroppedLines()
+            self._awaitResync()
 
 
         # Write to the machine if ready
@@ -381,32 +452,19 @@ class SerialPortThread(MakesmithInitFuncs):
         if self.bufferSpace == self.bufferSize:
             if self.data.gcode_queue.empty() != True:
                 if self.machineIsReadyForData:
-                    command = self._stripComments(self.data.gcode_queue.get_nowait())
-                    # if there's something left..
-                    if len(command) != 0:
-                        command = command + " "
-                        self.manageToolChange(command)
-                        self._write(command)
-                        # if units have changed, update settings and notify UI clients to stay in sync
-                        if command.find("G20") != -1:
-                            if self.data.units != "INCHES":
-                                self.data.actions.updateSetting("toInches", 0, True)  # value = doesn't matter
-                        if command.find("G21") != -1:
-                            if self.data.units != "MM":
-                                self.data.actions.updateSetting("toMM", 0, True)  # value = doesn't matter
-                        # send updated gcode position to UI clients
-                        self.data.actions.sendGCodePositionUpdate(self.data.gcodeIndex, recalculate=True)
+                    self._sendQueuedCommand(self.data.gcode_queue.get_nowait())
         # Send the next line of gcode to the machine if we're running a program and uploadFlag is enabled. Will
         # send lines to buffer if there is space and the feature is turned on
         # Also, don't send if there's still data in gcode_queue.
-        if self.data.uploadFlag == 1 and len(self.data.gcode) > 0 and self.data.gcode_queue.empty():
+        if (self.data.uploadFlag == 1 and len(self.data.gcode) > 0 and self.data.gcode_queue.empty()
+                and self.resyncAfter is None):
             if self.weAreBufferingLines:
                 try:
-                    line = self._stripComments(self.data.gcode[self.data.gcodeIndex])
-                    # if there is space in the buffer for the line as it will be written, newline included
-                    fits = line.isspace() or self.bufferSpace > len(self._shiftToHome(line) + "\n")
-                    # A line longer than the whole buffer goes out alone, as in unbuffered mode, so the run can't stall.
-                    if fits or self._controllerIsIdle():
+                    line = self._sanitise(self.data.gcode[self.data.gcodeIndex])
+                    # sendNextLine refuses a problem line at once, so it needn't wait for room.
+                    fits = (line.isspace() or self._streamProblem(line) is not None
+                            or self.bufferSpace >= len(self._shiftToHome(line) + "\n"))
+                    if fits:
                         self.sendNextLine()
                 except IndexError:
                     self.data.console_queue.put("index error when reading gcode")
@@ -414,6 +472,25 @@ class SerialPortThread(MakesmithInitFuncs):
                     # index error (file deleted...etc)
             elif self._controllerIsIdle():
                 self.sendNextLine()
+
+    def _sendQueuedCommand(self, command):
+        command = self._sanitise(command)
+        if len(command) == 0:
+            return
+        command = command + " "
+        problem = self._problemWith(command)
+        if problem is not None:
+            title, reason, _advice = problem
+            self.data.ui_queue1.put("Alert", "Command " + title, "That command " + reason)
+            return
+        self.manageToolChange(command)
+        self._write(command)
+        # if units have changed, update settings and notify UI clients to stay in sync
+        if command.find("G20") != -1 and self.data.units != "INCHES":
+            self.data.actions.updateSetting("toInches", 0, True)  # value = doesn't matter
+        if command.find("G21") != -1 and self.data.units != "MM":
+            self.data.actions.updateSetting("toMM", 0, True)  # value = doesn't matter
+        self.data.actions.sendGCodePositionUpdate(self.data.gcodeIndex, recalculate=True)
 
     def _controllerIsIdle(self):
         '''

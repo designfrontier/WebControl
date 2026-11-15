@@ -3,6 +3,7 @@ import json
 import pytest
 
 from Background.UIProcessor import UIProcessor
+from helpers import drain
 
 SAVED_DATA = ["gcode", "gcodeIndex", "zval", "xval_prev", "yval_prev", "zval_prev", "time_prev", "velocity_prev"]
 
@@ -81,3 +82,64 @@ def test_the_status_message_carries_the_job_state_and_goes_out_when_it_changes(u
 
     latest = status_messages(emitted)[-1]
     assert (latest["uploadFlag"], latest["jobInProgress"], latest["manualZAxisAdjust"]) == (0, True, True)
+
+
+def test_a_buffer_overflow_raises_an_alarm(ui, data, monkeypatch):
+    emitted = []
+    monkeypatch.setattr("Background.UIProcessor.socketio.emit", lambda *args, **kwargs: emitted.append(args))
+    monkeypatch.setattr(ui, "performHealthCheck", lambda: None)
+    monkeypatch.setattr(ui, "performStatusCheck", lambda: None)
+    data.config.firstRun = False
+    drain(data.ui_controller_queue)
+    data.ui_controller_queue.put("Buffer overflow!\r\n")
+
+    with ui.app.app_context():
+        ui.processPass()
+
+    alarms = [json.loads(payload["data"])["message"] for _, payload in emitted if payload["command"] == "alarm"]
+    assert alarms == ["Alarm: Controller Buffer Overflow"]
+
+
+@pytest.fixture
+def error_report(ui, data, monkeypatch):
+    settings = {"positionErrorLimit": "2.0", "computedPosition": "0"}
+    real_get_value = data.config.getValue
+    monkeypatch.setattr(data.config, "getValue", lambda section, key: settings.get(key) or real_get_value(section, key))
+    for key in ["leftError", "rightError", "leftError_prev", "rightError_prev", "computedX", "computedY",
+                "leftChain", "rightChain", "bufferSize"]:
+        monkeypatch.setattr(data, key, getattr(data, key))
+    drain(data.console_queue)
+    return ui
+
+
+@pytest.mark.parametrize("version", [0, 1.26, 51.27])
+def test_a_holey_error_report_is_parsed_by_its_field_count(error_report, data, monkeypatch, version):
+    monkeypatch.setattr(data, "controllerFirmwareVersion", version)
+
+    error_report.setErrorOnScreen("[PE:0.5,0.25,120,1650.5,1700.25]\r\n")
+
+    assert (data.leftError, data.rightError, data.bufferSize) == (0.25, 0.125, 120)
+    assert (data.leftChain, data.rightChain) == (1650.5, 1700.25)
+    assert drain(data.console_queue) == []
+
+
+@pytest.mark.parametrize("version", [0, 1.26, 51.27])
+def test_a_stock_error_report_is_parsed_by_its_field_count(error_report, data, monkeypatch, version):
+    monkeypatch.setattr(data, "controllerFirmwareVersion", version)
+    monkeypatch.setattr(data, "leftChain", 1.0)
+
+    error_report.setErrorOnScreen("[PE:0.5,0.25,120]\r\n")
+
+    assert (data.leftError, data.rightError, data.bufferSize, data.leftChain) == (0.25, 0.125, 120, 1.0)
+    assert drain(data.console_queue) == []
+
+
+
+def test_the_position_message_reports_default_motor_power_and_feed(ui, data, monkeypatch):
+    sent = []
+    monkeypatch.setattr(ui, "sendPositionMessage", sent.append)
+    monkeypatch.setattr(data, "feedRate", 20)
+
+    ui.setPosOnScreen("<Idle,MPos:9.0,8.0,7.0,WPos:0.0,0.0,0.0>\r\n")
+
+    assert {key: sent[0][key] for key in ["lpwr", "rpwr", "zpwr", "rqvel"]} == {"lpwr": 15, "rpwr": 15, "zpwr": 15, "rqvel": 20}
