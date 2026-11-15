@@ -175,6 +175,29 @@ Either flash the same OS to the SSD with Imager and repeat steps 3–6 on it, or
 
 ## Updating
 
-With the machine idle, either install a new release with the commands in step 5 and then
+With the machine idle (no job running or paused, no tool change waiting, no probe), run on the Pi as `pi`:
+
+```sh
+webcontrol-update
+```
+
+It asks for the `sudo` password once, then installs the latest **published** GitHub Release if it is newer than
+the installed one. A release stays a draft until you publish it on GitHub, and drafts are invisible to the updater,
+so publish the release first. `webcontrol-update --status` shows the installed version, the backup and the latest
+published release; `--version v0.2.0` installs a particular release.
+
+Before it installs, it checks the download's SHA-256 and backs up the current install to
+`/opt/webcontrol-rs/backup`: the binary, the systemd unit and drop-in, `wc-switch`, `webcontrol-update`, the sudoers
+rule and `~/.WebControl/webcontrol.json`. There is one backup; each update replaces the previous one once the new one
+is complete. It will not restart a `webcontrol-rs` that is running but not answering, since it may be mid-job, and
+if a job starts while it installs it puts the old files back and restarts nothing. After the restart it waits up to
+a minute for the service, `/api/state` with the new version and, if one was connected, the controller. If any of
+that fails it restores the backup by itself and prints `ROLLED BACK`. To go back by hand, run
+`webcontrol-update --rollback`; it keeps the backup.
+
+The backup covers only the last update. The deeper fallback is still the SSD or the old card: power off, boot from
+it (step 8), and look at this card later.
+
+Without a published release, install a build with the commands in step 5 and then
 `sudo systemctl restart webcontrol-rs` (the install never restarts a running service, so a job in progress carries
 on), or run `rust/deploy.sh push` from the Mac, which refuses while a job is running and restarts the service itself.

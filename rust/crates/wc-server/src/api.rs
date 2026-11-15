@@ -47,6 +47,7 @@ pub(crate) async fn state(State(state): State<AppState>) -> Json<StartupState> {
             .map(|n| Macro::new(n, &settings.text_or_empty("Maslow Settings", &format!("macro{n}_title"))))
             .collect(),
         backend: Backend::Rust,
+        version: crate::VERSION.into(),
     })
 }
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds webcontrol-rs for the Pi and installs or updates it there, from the Mac.
 #   rust/deploy.sh build                 frontend/dist + the aarch64 binary (glibc 2.36: bookworm and trixie)
-#   rust/deploy.sh install  [host]       first time: binary, systemd unit, drop-in and wc-switch; starts it
+#   rust/deploy.sh install  [host]       first time: binary, systemd unit, drop-in, wc-switch and webcontrol-update; starts it
 #   rust/deploy.sh push     [host]       new binary; restarts webcontrol-rs only if it is running
 #   rust/deploy.sh rollback [host]       swap the previous binary back
 set -euo pipefail
@@ -56,8 +56,8 @@ case "$command" in
     stage=/tmp/webcontrol-rs-install
     # shellcheck disable=SC2029 # $stage is meant to expand here.
     ssh "$host" "rm -rf $stage && mkdir -p $stage"
-    scp "$binary" "$rust/install-pi.sh" "$rust/deploy/webcontrol-rs.service" "$rust/deploy/webcontrol-conflicts.conf" \
-      "$rust/deploy/wc-switch" "$rust/deploy/webcontrol-rs.sudoers" "$host:$stage/"
+    scp "$binary" "$rust/install-pi.sh" "$rust/webcontrol-update" "$rust/deploy/webcontrol-rs.service" \
+      "$rust/deploy/webcontrol-conflicts.conf" "$rust/deploy/wc-switch" "$rust/deploy/webcontrol-rs.sudoers" "$host:$stage/"
     ssh -t "$host" "bash $stage/install-pi.sh $stage"
     ;;
   push)

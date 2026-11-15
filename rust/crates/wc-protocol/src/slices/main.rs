@@ -312,4 +312,6 @@ pub struct StartupState {
     pub firmware_build: Option<String>,
     pub macros: Vec<Macro>,
     pub backend: Backend,
+    /// The webcontrol-rs release (Rust only), which `webcontrol-update` checks after a restart.
+    pub version: String,
 }

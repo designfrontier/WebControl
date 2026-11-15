@@ -29,6 +29,7 @@ fn startup_state() -> StartupState {
         firmware_build: None,
         macros: vec![Macro::new(1, "Spindle on"), Macro::new(2, "")],
         backend: Backend::Rust,
+        version: "1.2.3".into(),
     }
 }
 
@@ -88,6 +89,7 @@ fn the_startup_state_fits_get_api_state() {
     let body = serde_json::to_value(startup_state()).unwrap();
     contract().validate_response("GET", "/api/state", 200, &ResponseBody::Json(body.clone())).unwrap();
     assert_eq!(body["backend"], "rust");
+    assert_eq!(body["version"], "1.2.3");
     assert_eq!(body["unitsZ"], "INCHES");
     assert_eq!(body["controllerBoard"], Value::Null);
     assert_eq!(body["macros"][0], json!({"command": "macro1", "title": "Spindle on"}));

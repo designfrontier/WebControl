@@ -35,8 +35,8 @@ expected_contents() {
   local top=webcontrol-rs-1.2.3-aarch64
   {
     printf '%s\n' "$top" "$top/rust-checklists"
-    printf "$top/%s\n" webcontrol-rs install-pi.sh wc-switch webcontrol-rs.service webcontrol-conflicts.conf \
-      webcontrol-rs.sudoers README.md
+    printf "$top/%s\n" webcontrol-rs install-pi.sh webcontrol-update wc-switch webcontrol-rs.service \
+      webcontrol-conflicts.conf webcontrol-rs.sudoers README.md
     (cd "$repo/spec" && find rust-checklists -type f) | sed "s|^|$top/|"
   } | sort
 }
@@ -50,6 +50,8 @@ packages_the_install_files() {
     [ -x "$work/x/webcontrol-rs-1.2.3-aarch64/webcontrol-rs" ] &&
     cmp -s "$work/x/webcontrol-rs-1.2.3-aarch64/webcontrol-rs" "$work/webcontrol-rs" &&
     cmp -s "$work/x/webcontrol-rs-1.2.3-aarch64/install-pi.sh" "$repo/rust/install-pi.sh" &&
+    [ -x "$work/x/webcontrol-rs-1.2.3-aarch64/webcontrol-update" ] &&
+    cmp -s "$work/x/webcontrol-rs-1.2.3-aarch64/webcontrol-update" "$repo/rust/webcontrol-update" &&
     cmp -s "$work/x/webcontrol-rs-1.2.3-aarch64/webcontrol-rs.service" "$repo/rust/deploy/webcontrol-rs.service" &&
     cmp -s "$work/x/webcontrol-rs-1.2.3-aarch64/README.md" "$repo/rust/README.md"
 }

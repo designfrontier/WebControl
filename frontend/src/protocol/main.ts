@@ -129,6 +129,8 @@ export const startupStateSchema = z.object({
   macros: z.array(z.object({ command: z.enum(["macro1", "macro2"]), title: z.string() })),
   /** Which backend answered; `wc-switch` reads it. Absent from older Python builds. */
   backend: z.enum(["python", "rust"]).optional(),
+  /** The webcontrol-rs release, such as "0.2.0". Rust only; Python never sends it. */
+  version: z.string().optional(),
 });
 export type StartupState = z.infer<typeof startupStateSchema>;
 
