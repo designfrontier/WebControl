@@ -1,7 +1,9 @@
 import { useId, useState } from "react";
 import type { ReactNode } from "react";
-import { useFetch } from "../../app/context";
-import { chainOverSprocketValues } from "../../protocol";
+import { ApiError } from "../../api/http";
+import { useFetch, useMachine } from "../../app/context";
+import { chainOverSprocketValues, errorBodySchema } from "../../protocol";
+import { selectGcodeLocked } from "../../state/machine";
 import type { KinematicsType, QuickConfigure } from "../../protocol";
 import { getQuickConfigure, saveQuickConfigure } from "./api";
 import { LoadStatus } from "./LoadStatus";
@@ -58,6 +60,10 @@ const MmField = ({ name, label, form, invalid, onChange, children }: MmFieldProp
   );
 };
 
+const failure = (error: unknown) =>
+  (error instanceof ApiError && errorBodySchema.safeParse(error.body).data?.error) ||
+  (error instanceof Error ? error.message : String(error));
+
 type Save = { status: "idle" } | { status: "saving" } | { status: "saved" } | { status: "error"; message: string };
 
 const QuickConfigureEditor = ({ initial }: { initial: QuickConfigure }) => {
@@ -67,6 +73,7 @@ const QuickConfigureEditor = ({ initial }: { initial: QuickConfigure }) => {
   const [form, setForm] = useState(() => toForm(initial));
   const [save, setSave] = useState<Save>({ status: "idle" });
   const [touched, setTouched] = useState(false);
+  const locked = useMachine(selectGcodeLocked);
   const invalid = touched ? invalidFields(form) : [];
   const gearboxSpacing = subtractGearbox(form.motorSpacingX);
 
@@ -85,7 +92,7 @@ const QuickConfigureEditor = ({ initial }: { initial: QuickConfigure }) => {
       await saveQuickConfigure(fetchImpl, body);
       setSave({ status: "saved" });
     } catch (error) {
-      setSave({ status: "error", message: error instanceof Error ? error.message : String(error) });
+      setSave({ status: "error", message: failure(error) });
     }
   };
 
@@ -206,7 +213,8 @@ const QuickConfigureEditor = ({ initial }: { initial: QuickConfigure }) => {
       </section>
 
       <div className="form-actions">
-        <button type="submit" className="primary" disabled={save.status === "saving"}>
+        {locked && <p>A job is running or paused. Stop the job first to change the settings.</p>}
+        <button type="submit" className="primary" disabled={save.status === "saving" || locked}>
           {save.status === "saving" ? "Saving…" : "Save configuration"}
         </button>
         <p role="status">

@@ -11,12 +11,17 @@ import {
 
 describe("controlsFor", () => {
   it.each([
-    ["idle", { manual: true, defineHome: true, play: true, pause: false, step: true }],
-    ["running", { manual: false, defineHome: false, play: false, pause: true, step: false }],
-    ["paused", { manual: true, defineHome: false, play: false, pause: true, step: true }],
-    ["unknown", { manual: false, defineHome: false, play: false, pause: false, step: false }],
+    ["idle", { manual: true, units: true, defineHome: true, play: true, pause: false, step: true }],
+    ["running", { manual: false, units: false, defineHome: false, play: false, pause: true, step: false }],
+    ["paused", { manual: true, units: true, defineHome: false, play: false, pause: true, step: true }],
+    ["unknown", { manual: false, units: false, defineHome: false, play: false, pause: false, step: false }],
   ] as const)("gates the controls while %s", (runState, expected) => {
     expect(controlsFor(runState)).toEqual(expected);
+  });
+
+  it("holds home and the unit switches while the gcode is locked", () => {
+    expect(controlsFor("paused", true)).toMatchObject({ manual: true, units: false, defineHome: false });
+    expect(controlsFor("idle", true)).toMatchObject({ manual: true, units: false, defineHome: false });
   });
 });
 

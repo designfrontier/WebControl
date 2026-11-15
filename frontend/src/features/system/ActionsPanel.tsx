@@ -108,7 +108,7 @@ export const ActionsPanel = ({ info }: { info: SystemInfo | null }) => {
               <>
                 <DownloadLink route="downloadDiagnostics">Download diagnostics file</DownloadLink>
                 <DownloadLink route="backupWebControl">Back up WebControl</DownloadLink>
-                <button type="button" disabled={busy} onClick={() => setOpen({ kind: "restore" })}>
+                <button type="button" disabled={gcodeLocked} onClick={() => setOpen({ kind: "restore" })}>
                   Restore WebControl…
                 </button>
               </>

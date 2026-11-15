@@ -125,6 +125,7 @@ describe("ActionsPanel", () => {
     });
     expect(screen.getByRole("button", { name: "Reset home to center" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Sync settings" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Restore WebControl…" })).toBeDisabled();
   });
 
   it("links diagnostics and backup downloads with a fresh cache buster on click", async () => {
@@ -237,6 +238,19 @@ describe("Restore dialog", () => {
     expect(within(dialog()).getByRole("button", { name: "Restore backup" })).toBeEnabled();
     await user.click(within(dialog()).getByRole("button", { name: "Cancel" }));
     onlyActionsOpen();
+  });
+
+  it("shows the server's reason when a restore is refused during a job", async () => {
+    const refused = {
+      status: 409,
+      error: "Cannot change settings while a job is running or paused. Stop the job first.",
+    };
+    const fetch = systemFetch({ "POST /importRestoreWebControl": () => jsonResponse(refused, 409) });
+    const { user } = renderActions({ fetch });
+    await user.click(screen.getByRole("button", { name: "Restore WebControl…" }));
+    await user.upload(within(dialog()).getByLabelText("Backup file"), zip);
+    await user.click(within(dialog()).getByRole("button", { name: "Restore backup" }));
+    expect(await within(dialog()).findByRole("alert")).toHaveTextContent(refused.error);
   });
 
   it("does nothing without a file", async () => {
