@@ -105,6 +105,19 @@ async fn actions_reach_the_machine_and_its_alert_comes_back() {
 }
 
 #[tokio::test]
+async fn a_unit_switch_reaches_the_machine_and_every_client_hears_the_new_units() {
+    let address = serve().await;
+    let mut client = open(&address, "/MaslowCNC").await;
+    for _ in 0..3 {
+        next_frame(&mut client).await;
+    }
+    let switch = json!({"setting": "toMM", "value": "25.4"});
+    send(&mut client, json!({"ns": "/MaslowCNC", "event": "updateSetting", "data": {"data": switch}})).await;
+    let answer = decoded(&next_message(&mut client, "requestedSetting").await).1;
+    assert_eq!(answer, json!({"setting": "units", "value": "MM"}));
+}
+
+#[tokio::test]
 async fn a_setting_request_is_answered_to_everyone() {
     let address = serve().await;
     let mut asker = open(&address, "/MaslowCNC").await;

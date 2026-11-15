@@ -1,6 +1,9 @@
 //! The `system` slice: version and capability info.
 
 use serde::Serialize;
+use serde_json::Value;
+
+use crate::machine::PidKind;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct BundledFirmware {
@@ -28,4 +31,85 @@ pub struct SystemInfo {
     pub firmware_build: Option<String>,
     pub firmware_supports_zaxis_limit: bool,
     pub update: UpdateStatus,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct PidGains {
+    pub kp: String,
+    pub ki: String,
+    pub kd: String,
+}
+
+/// `GET /api/system/pid`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PidSettings {
+    pub velocity: PidGains,
+    pub position: PidGains,
+    pub four_motor: bool,
+}
+
+pub const PID_MOTORS: [&str; 4] = ["L", "R", "M", "N"];
+
+/// A valid `POST /api/system/pid-test` body: each number as typed, since it is spliced into B13/B14.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PidTest {
+    pub kind: PidKind,
+    pub motor: String,
+    /// `(field, text)` in the order the old UI's action carried them.
+    pub fields: Vec<(&'static str, String)>,
+}
+
+const VELOCITY_FIELDS: [&str; 7] = ["start", "stop", "steps", "version", "kp", "ki", "kd"];
+const POSITION_FIELDS: [&str; 8] = ["start", "stop", "steps", "time", "version", "kp", "ki", "kd"];
+
+/// `str(value).strip()` for what JSON carries; a float prints as Python's `repr` does for these magnitudes.
+fn typed_text(value: &Value) -> String {
+    match value {
+        Value::String(text) => text.trim().to_string(),
+        Value::Number(n) if n.is_f64() => {
+            let float = n.as_f64().unwrap_or_default();
+            match float.abs() {
+                magnitude if magnitude >= 1e16 || (magnitude < 1e-4 && magnitude > 0.0) => format!("{float:e}"),
+                _ if float.fract() == 0.0 => format!("{float:.1}"),
+                _ => float.to_string(),
+            }
+        }
+        other => other.to_string(),
+    }
+}
+
+/// `-?(\d+\.?\d*|\.\d+)`: the firmware's parser knows no exponents, `nan`, `inf` or separators.
+fn plain_decimal(text: &str) -> bool {
+    let digits = text.strip_prefix('-').unwrap_or(text);
+    let (whole, fraction) = digits.split_once('.').map_or((digits, None), |(w, f)| (w, Some(f)));
+    let all_digits = |part: &str| part.chars().all(|c| c.is_ascii_digit());
+    match fraction {
+        None => !whole.is_empty() && all_digits(whole),
+        Some(fraction) => all_digits(whole) && all_digits(fraction) && !(whole.is_empty() && fraction.is_empty()),
+    }
+}
+
+impl PidTest {
+    /// `api/system.py`'s `pid_test_action` checks, with its messages.
+    pub fn parse(body: &Value) -> Result<PidTest, String> {
+        let kind = match body.get("kind").and_then(Value::as_str) {
+            Some("velocity") => PidKind::Velocity,
+            Some("position") => PidKind::Position,
+            _ => return Err("kind must be velocity or position".into()),
+        };
+        let motor = body
+            .get("motor")
+            .and_then(Value::as_str)
+            .filter(|m| PID_MOTORS.contains(m))
+            .ok_or_else(|| format!("motor must be one of {}", PID_MOTORS.join(", ")))?;
+        let names: &[&'static str] = if kind == PidKind::Velocity { &VELOCITY_FIELDS } else { &POSITION_FIELDS };
+        let text = |name: &str| body.get(name).filter(|v| v.is_string() || v.is_number()).map(typed_text);
+        let bad: Vec<&str> = names.iter().copied().filter(|n| !text(n).is_some_and(|t| plain_decimal(&t))).collect();
+        if !bad.is_empty() {
+            return Err(format!("not numbers: {}", bad.join(", ")));
+        }
+        let fields = names.iter().map(|name| (*name, text(name).unwrap_or_default())).collect();
+        Ok(PidTest { kind, motor: motor.into(), fields })
+    }
 }

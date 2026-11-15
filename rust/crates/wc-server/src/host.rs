@@ -8,6 +8,7 @@ use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
 
 use tokio::sync::Notify;
+use wc_config::{Paths, Settings};
 use wc_machine::Host;
 
 /// `install-pi.sh` allows exactly this command without a password (`/etc/sudoers.d/webcontrol-rs`).
@@ -106,6 +107,7 @@ pub struct SystemHost {
     cores: Mutex<Vec<(u64, u64)>>,
     power_off: Vec<String>,
     exit: Arc<Notify>,
+    settings: Option<Paths>,
 }
 
 impl SystemHost {
@@ -118,7 +120,13 @@ impl SystemHost {
             cores: Mutex::new(Vec::new()),
             power_off: POWER_OFF.map(String::from).to_vec(),
             exit,
+            settings: None,
         }
+    }
+
+    /// Saves the settings under `paths`; without it they stay in memory.
+    pub fn saving_to(self, paths: Paths) -> SystemHost {
+        SystemHost { settings: Some(paths), ..self }
     }
 
     /// For tests: other places to find ports and CPU times, and another power-off command.
@@ -167,6 +175,15 @@ impl Host for SystemHost {
 
     fn exit(&self) {
         self.exit.notify_one();
+    }
+
+    fn save_settings(&self, settings: &Settings) {
+        let Some(paths) = &self.settings else {
+            return;
+        };
+        if let Err(error) = settings.save(paths) {
+            tracing::error!(%error, file = %paths.settings_file().display(), "could not save the settings");
+        }
     }
 
     fn cpu_load(&self) -> f64 {

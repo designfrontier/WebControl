@@ -11,6 +11,9 @@ use wc_gcode::restart::positioning_word;
 use wc_protocol::main::{ActivateModal, ConnectionStatus, HostAddress, LinkStatus, PauseButton, StatusMessage, Units};
 use wc_protocol::{Action, Envelope, Message, Push};
 
+use crate::edits::{Request, Response};
+use crate::pid::Pid;
+use crate::setup::Measure;
 use crate::ui::{ErrorTracker, PositionTracker};
 
 /// Everything that can happen to the machine.
@@ -23,6 +26,16 @@ pub enum Event {
     SettingRequest {
         section: String,
         setting: String,
+    },
+    /// The front page's unit switches.
+    UpdateSetting {
+        setting: String,
+        value: Value,
+    },
+    /// An HTTP write that needs an answer; the shell pairs the `Respond` effect with the request by `id`.
+    Request {
+        id: u64,
+        request: Request,
     },
     ClientConnected {
         sid: String,
@@ -63,6 +76,12 @@ pub enum Effect {
     ClearLogs,
     PowerOff,
     Exit,
+    Respond {
+        id: u64,
+        response: Response,
+    },
+    /// Write `webcontrol.json`; only the latest one pending matters.
+    SaveSettings(Arc<Settings>),
 }
 
 /// An `Arc` whose equality is identity, so comparing snapshots never walks the settings.
@@ -104,6 +123,8 @@ pub(crate) enum Queued {
     },
     /// Expanded once B05 has answered, so the push knows the firmware version.
     SettingsPush,
+    /// Nothing more is written for this long, as Python's `time.sleep` in the action held the queue.
+    Delay(Duration),
 }
 
 /// What readers see; every field is derived from the machine's state, never stored separately.
@@ -184,6 +205,8 @@ pub(crate) struct Controller {
     /// The G38.2 line awaiting its `ok` or `error:`.
     pub probe: Option<u64>,
     pub eeprom_reset: bool,
+    /// A `Delay` holds writes until then.
+    pub hold_until: Option<Duration>,
 }
 
 impl Controller {
@@ -201,6 +224,7 @@ impl Controller {
             queue: VecDeque::new(),
             probe: None,
             eeprom_reset: false,
+            hold_until: None,
         }
     }
 }
@@ -210,6 +234,8 @@ pub struct Machine {
     /// Opened in place of the `COMport` setting: the simulator's port.
     pub(crate) fixed_port: Option<String>,
     pub(crate) settings: Arc<Settings>,
+    /// The settings as last handed to the writer.
+    pub(crate) saved: Arc<Settings>,
     pub(crate) link: Link,
     pub(crate) controller: Controller,
     pub(crate) firmware_version: f64,
@@ -228,6 +254,9 @@ pub struct Machine {
     pub(crate) errors: ErrorTracker,
     pub(crate) reported_buffer: i64,
     pub(crate) last_status: Option<StatusMessage>,
+    /// What the next B10 `[Measure` reply is for.
+    pub(crate) measure: Option<Measure>,
+    pub(crate) pid: Pid,
 }
 
 pub(crate) fn broadcast<M: Message>(message: &M) -> Effect {
@@ -240,10 +269,12 @@ pub(crate) fn alert(text: &str) -> Effect {
 
 impl Machine {
     pub fn new(host_address: &str, settings: Settings) -> Machine {
+        let settings = Arc::new(settings);
         Machine {
             host_address: host_address.into(),
             fixed_port: None,
-            settings: Arc::new(settings),
+            saved: settings.clone(),
+            settings,
             link: Link::Disconnected { retry_at: Duration::ZERO },
             controller: Controller::new(Duration::ZERO),
             firmware_version: 0.0,
@@ -261,6 +292,8 @@ impl Machine {
             errors: ErrorTracker::default(),
             reported_buffer: 127,
             last_status: None,
+            measure: None,
+            pid: Pid::default(),
         }
     }
 
@@ -284,6 +317,11 @@ impl Machine {
             }
             Event::Action(action) | Event::Stop(action) => self.action(&action, now, &mut effects),
             Event::SettingRequest { section, setting } => self.setting_request(&section, &setting, &mut effects),
+            Event::UpdateSetting { setting, value } => self.update_setting(&setting, &value, &mut effects),
+            Event::Request { id, request } => {
+                let response = self.request(request, now, &mut effects);
+                effects.push(Effect::Respond { id, response });
+            }
             Event::ControllerLine(line) => self.controller_line(&line, now, &mut effects),
             Event::Tick => self.tick(now, &mut effects),
             Event::PortOpened { port } => self.port_opened(port, now, &mut effects),
@@ -297,6 +335,10 @@ impl Machine {
         }
         self.pump(now, &mut effects);
         self.status_if_changed(&mut effects);
+        if !Arc::ptr_eq(&self.settings, &self.saved) {
+            self.saved = self.settings.clone();
+            effects.push(Effect::SaveSettings(self.saved.clone()));
+        }
         effects
     }
 

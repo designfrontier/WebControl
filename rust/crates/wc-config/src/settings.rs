@@ -2,7 +2,7 @@ use serde_json::{Map, Value};
 
 use crate::Paths;
 
-const DEFAULTS: &str = include_str!("../../../../defaultwebcontrol.json");
+pub(crate) const DEFAULTS: &str = include_str!("../../../../defaultwebcontrol.json");
 /// The option fields `Config.addMissingDefaults` copies from the defaults.
 const COPIED_FIELDS: [&str; 9] =
     ["default", "desc", "firmwareKey", "key", "section", "title", "type", "value", "options"];
@@ -31,7 +31,7 @@ pub struct FirmwareOption {
 /// `webcontrol.json`: section name -> list of option objects, unknown fields kept as loaded.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
-    sections: Map<String, Value>,
+    pub(crate) sections: Map<String, Value>,
     source: Source,
 }
 
@@ -78,35 +78,42 @@ fn falsy(value: &Value) -> bool {
 impl Settings {
     /// `webcontrol.json`, else its `.bak`, else the defaults; then any option the defaults have and it lacks.
     pub fn load(paths: &Paths) -> Settings {
-        let file = paths.settings_file();
-        let backup = file.with_extension("json.bak");
-        let read = |path: &std::path::Path| std::fs::read_to_string(path).ok().and_then(|text| parse_object(&text));
-        let (sections, source) = read(&file)
-            .map(|s| (s, Source::File))
-            .or_else(|| read(&backup).map(|s| (s, Source::Backup)))
-            .unwrap_or_else(|| (defaults(), Source::Defaults));
-        let mut settings = Settings { sections, source };
+        let (mut settings, _) = Settings::read(paths);
         settings.add_missing_defaults();
         settings
+    }
+
+    /// The file or its fallback as stored, without the missing defaults.
+    pub(crate) fn read(paths: &Paths) -> (Settings, Source) {
+        let read = |path: &std::path::Path| std::fs::read_to_string(path).ok().and_then(|text| parse_object(&text));
+        let (sections, source) = read(&paths.settings_file())
+            .map(|s| (s, Source::File))
+            .or_else(|| read(&paths.settings_backup()).map(|s| (s, Source::Backup)))
+            .unwrap_or_else(|| (defaults(), Source::Defaults));
+        (Settings { sections, source }, source)
     }
 
     pub fn defaults() -> Settings {
         Settings { sections: defaults(), source: Source::Defaults }
     }
 
-    fn add_missing_defaults(&mut self) {
+    /// True if any option was added.
+    pub(crate) fn add_missing_defaults(&mut self) -> bool {
+        let mut added = false;
         for (name, section) in defaults() {
             let missing: Vec<Value> =
                 options(&section).filter(|o| !has_key(self.sections.get(&name), &o["key"])).map(copied).collect();
             if missing.is_empty() {
                 continue;
             }
+            added = true;
             let target = self.sections.entry(name).or_insert_with(|| Value::Array(Vec::new()));
             match target {
                 Value::Array(list) => list.extend(missing),
                 other => *other = Value::Array(missing),
             }
         }
+        added
     }
 
     pub fn source(&self) -> Source {

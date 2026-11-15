@@ -56,6 +56,8 @@ pub enum Reply {
         key: u32,
         value: f64,
     },
+    /// `[Measure: <mm>]`, B10's chain length.
+    Measured(f64),
     FakeServo(bool),
     MaslowPaused,
     ToolChange {
@@ -94,6 +96,12 @@ fn parse_position_error(line: &str) -> Option<PositionError> {
     Some(PositionError { left: number(0)?, right: number(1)?, space: fields.get(2)?.parse().ok()?, chains })
 }
 
+/// Python reads `message[9:-3]` of the line with its `\r\n`, which drops the closing bracket.
+fn measured(line: &str) -> Option<f64> {
+    let end = line.char_indices().next_back()?.0;
+    line.get(9..end)?.trim().parse::<f64>().ok().filter(|v| v.is_finite())
+}
+
 fn tool_in(line: &str) -> Option<u32> {
     let at = line.find("tool")? + "tool".len();
     let rest = &line[at..];
@@ -117,6 +125,7 @@ pub fn classify(line: &str) -> Reply {
         _ if line.starts_with("[PE:") => {
             parse_position_error(line).map_or_else(|| Reply::Misread(line.into()), Reply::PositionError)
         }
+        _ if line.starts_with("[Measure") => measured(line).map_or_else(|| Reply::Other(line.into()), Reply::Measured),
         _ if line.starts_with("FAKE_SERVO off") => Reply::FakeServo(false),
         _ if line.starts_with("FAKE_SERVO on") => Reply::FakeServo(true),
         _ if line.starts_with("Maslow Paused") => Reply::MaslowPaused,

@@ -1,9 +1,14 @@
-//! `~/.WebControl` as the Python backend lays it out, and `webcontrol.json` read the way `config/config.py` reads
-//! it. Nothing here writes to the shared directory yet: changes live in memory until M2 adds the writer.
+//! `~/.WebControl` as the Python backend lays it out, and `webcontrol.json` read and written the way
+//! `config/config.py` does, so either backend can run on the same files.
 
+mod edit;
+mod file;
+mod json;
 mod python;
 mod settings;
 
+pub use edit::{Stored, python_eq, python_float};
+pub use json::python_json;
 pub use python::{parse_number, python_float_str, python_str};
 pub use settings::{FirmwareOption, Settings, Source};
 

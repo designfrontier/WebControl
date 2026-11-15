@@ -187,13 +187,16 @@ async fn the_websocket_endpoint_needs_an_upgrade_and_a_known_namespace() {
     assert_eq!(get("/ws").await.status, StatusCode::BAD_REQUEST);
 }
 
-/// Endpoints this milestone serves; each later milestone adds its own until it equals the contract.
+/// GET endpoints served so far (the writes are in tests/settings.rs); each later milestone adds its own until it equals the contract.
 const ROUTED: &[(&str, &str)] = &[
     ("GET", "/api/state"),
     ("GET", "/api/main"),
     ("GET", "/api/viewer"),
     ("GET", "/api/settings/{sectionId}"),
     ("GET", "/api/system/info"),
+    ("GET", "/api/machine/setup"),
+    ("GET", "/api/machine/quick-configure"),
+    ("GET", "/api/system/pid"),
     ("GET", "/next/{path}"),
     ("GET", "/static/{filename}"),
 ];

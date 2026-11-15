@@ -56,6 +56,9 @@ fn received(state: &AppState, ns: Namespace, text: &str) {
         Some(ClientEvent::SettingRequest { section, setting }) => {
             state.machine.send(Event::SettingRequest { section, setting })
         }
+        Some(ClientEvent::UpdateSetting { setting, value }) => {
+            state.machine.send(Event::UpdateSetting { setting, value })
+        }
         Some(ClientEvent::Unhandled(event)) => tracing::debug!(event, "event not handled yet"),
         None => tracing::debug!(event = frame.event, "ignoring unknown event"),
     }

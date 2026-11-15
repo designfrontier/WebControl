@@ -3,7 +3,7 @@ use axum::Router;
 use axum::extract::Path;
 use axum::http::{StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{get, post};
 use serde_json::json;
 
 use crate::{AppState, api, assets, ws};
@@ -30,8 +30,12 @@ pub fn router(state: AppState) -> Router {
         .route("/api/state", get(api::state))
         .route("/api/main", get(api::main_screen))
         .route("/api/viewer", get(api::viewer))
-        .route("/api/settings/{section}", get(api::settings_section))
+        .route("/api/settings/{section}", get(api::settings_section).put(api::update_settings))
+        .route("/api/machine/setup", get(api::machine_setup))
+        .route("/api/machine/quick-configure", get(api::quick_configure).post(api::save_quick_configure))
         .route("/api/system/info", get(api::system))
+        .route("/api/system/pid", get(api::pid))
+        .route("/api/system/pid-test", post(api::pid_test))
         .route("/ws", get(ws::upgrade))
         .fallback(fallback)
         .with_state(state)

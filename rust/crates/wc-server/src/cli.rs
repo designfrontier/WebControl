@@ -24,6 +24,9 @@ Usage: webcontrol-rs [--port N] [--home DIR] [--simulate]
   --version    print the version, git commit and contract version
   --help       print this help";
 
+/// How long shutting down waits for the settings writer.
+const SAVE_ON_EXIT: std::time::Duration = std::time::Duration::from_secs(5);
+
 /// The port name `--simulate` connects to.
 pub const SIMULATED_PORT: &str = "simulator";
 
@@ -87,19 +90,23 @@ fn local_ip() -> IpAddr {
 
 pub async fn serve(options: Options, shutdown: impl Future<Output = ()> + Send + 'static) -> std::io::Result<()> {
     let paths = Paths::new(&options.home);
-    let settings = Settings::load(&paths);
+    let (settings, saving) = Settings::open(&paths).map(|settings| (settings, true)).unwrap_or_else(|error| {
+        tracing::error!(%error, "could not prepare ~/.WebControl; settings will not be saved");
+        (Settings::load(&paths), false)
+    });
     tracing::info!(source = ?settings.source(), home = %options.home.display(), "settings loaded");
     let port = options.port.unwrap_or_else(|| settings.web_port());
     let listener = tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port))).await?;
     let bound = listener.local_addr()?;
     let exit = Arc::new(Notify::new());
-    let host = Arc::new(SystemHost::new(&paths.dir(), exit.clone()));
+    let host = SystemHost::new(&paths.dir(), exit.clone());
+    let host = Arc::new(if saving { host.saving_to(paths.clone()) } else { host });
     let machine = Machine::new(&format!("{}:{}", local_ip(), bound.port()), settings);
     let (machine, opener): (Machine, Box<dyn PortOpener>) = match options.simulate {
         true => (machine.on_port(SIMULATED_PORT), Box::new(SimOpener::new(Build::holey_51_27()))),
         false => (machine, Box::new(SerialOpener)),
     };
-    let (machine, _task) = spawn(machine, opener, host);
+    let (machine, task) = spawn(machine, opener, host);
     println!("webcontrol-rs listening on {bound}");
     std::io::stdout().flush()?;
     let state = AppState::new(machine, PingConfig::default());
@@ -111,7 +118,10 @@ pub async fn serve(options: Options, shutdown: impl Future<Output = ()> + Send +
         }
         closing.close_sessions();
     };
-    axum::serve(listener, router(state)).with_graceful_shutdown(stopped).await
+    axum::serve(listener, router(state)).with_graceful_shutdown(stopped).await?;
+    // The machine task ends with the last handle, once its final settings save is on disk.
+    let _ = tokio::time::timeout(SAVE_ON_EXIT, task).await;
+    Ok(())
 }
 
 async fn terminated() {

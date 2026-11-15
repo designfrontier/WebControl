@@ -2,7 +2,7 @@
 //! Rust backend sends after every boot (contract/serial wart 4).
 
 use serde_json::Value;
-use wc_config::{FirmwareOption, Settings, python_str};
+use wc_config::{FirmwareOption, Settings, Stored, python_str};
 
 /// The firmware stores these as (unsigned) ints, so it truncates any fraction written to them.
 pub const INTEGER_KEYS: [u32; 4] = [9, 10, 11, 15];
@@ -173,4 +173,48 @@ pub fn sync_reported(settings: &Settings, firmware: f64, key: u32, reported: f64
         (false, Some(written)) => Sync::Rewrite(setting_line(key, &written)),
         _ => Sync::Agrees,
     }
+}
+
+/// Python's `isPercentClose` with its default 0.01% tolerance.
+fn percent_close(a: f64, b: f64) -> bool {
+    if b == 0.0 { is_close(a, b) } else { ((a / b).abs() - 1.0).abs() < 1e-4 }
+}
+
+/// The non-reported branch of `firmwareValuesMatch`; text Python could not compare is never sent.
+fn unchanged(stored: &Value, previous: &Value) -> bool {
+    let blank = |v: &Value| v == &Value::String(String::new());
+    match (blank(stored), blank(previous), stored_number(stored), stored_number(previous)) {
+        (true, _, _, _) => true,
+        (_, true, _, _) => false,
+        (_, _, Some(a), Some(b)) => is_close(a, b),
+        _ => true,
+    }
+}
+
+/// `syncFirmwareKey` after `setValue`: the `$` line for a stored value the controller should now get.
+pub fn written_line(settings: &Settings, firmware: f64, stored: &Stored) -> Option<String> {
+    let key = stored.firmware_key?;
+    let option = settings.firmware_options().find(|o| o.section == stored.section && o.key == stored.key)?;
+    let applies = firmware > CUSTOM_FIRMWARE || !option.custom;
+    let spindle = option.key == "spindleAutomate";
+    let code = |value: &Value| if spindle { spindle_code(value) } else { value.clone() };
+    let (value, previous) = (code(&option.value), code(&stored.previous));
+    let changed = match key {
+        k if UNSENDABLE_KEYS.contains(&k) => false,
+        k if is_optical(k) => {
+            firmware >= CUSTOM_FIRMWARE
+                && stored_number(&value).zip(stored_number(&previous)).is_some_and(|(a, b)| !percent_close(a, b))
+        }
+        _ => !unchanged(&value, &previous),
+    };
+    (applies && changed && stored_number(&value).is_some()).then(|| setting_line(key, &value))
+}
+
+/// `Config.setValue` then `computeSettings`: every `$` line the write sends, in Python's order; `None` if nothing
+/// was stored.
+pub fn write(settings: &mut Settings, firmware: f64, section: &str, key: &str, value: &Value) -> Option<Vec<String>> {
+    let stored = settings.store(section, key, value)?;
+    let computed = settings.compute();
+    let lines = std::iter::once(&stored).chain(&computed).filter_map(|s| written_line(settings, firmware, s));
+    Some(lines.collect())
 }

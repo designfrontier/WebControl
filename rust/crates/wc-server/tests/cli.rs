@@ -57,7 +57,7 @@ fn the_binary_prints_its_version_and_help() {
 }
 
 #[test]
-fn the_binary_serves_on_the_port_it_reports_and_leaves_the_home_alone() {
+fn the_binary_serves_on_the_port_it_reports_and_prepares_the_home_as_python_does() {
     let home = tempfile::tempdir().unwrap();
     let mut child = binary()
         .args(["--port", "0", "--home"])
@@ -80,7 +80,13 @@ fn the_binary_serves_on_the_port_it_reports_and_leaves_the_home_alone() {
     assert!(child.wait().unwrap().success(), "SIGTERM should shut down cleanly");
     assert!(reply.starts_with("HTTP/1.1 200"), "{reply}");
     assert!(reply.contains("\"backend\":\"rust\""), "{reply}");
-    assert_eq!(std::fs::read_dir(home.path()).unwrap().count(), 0, "the binary wrote to the home directory");
+    let dir = home.path().join(".WebControl");
+    let mut made: Vec<String> =
+        std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    made.sort();
+    assert_eq!(made, ["boards", "gcode", "imports", "webcontrol.json", "webcontrol.json.pre-rs"]);
+    let defaults = include_str!("../../../../defaultwebcontrol.json");
+    assert_eq!(std::fs::read_to_string(dir.join("webcontrol.json")).unwrap(), defaults);
 }
 
 #[test]
@@ -93,16 +99,14 @@ fn the_binary_fails_cleanly_when_its_port_is_taken() {
     assert!(String::from_utf8(out.stderr).unwrap().contains("webcontrol-rs:"));
 }
 
-/// `--simulate` end to end: the UI hears the simulated controller's version, and Shut Down WebControl exits 0.
-#[tokio::test]
-async fn the_simulated_binary_connects_and_shuts_down_from_the_ui() {
+/// Runs `--simulate` until the UI hears `$18` adopted from the boot's `$$`, then shuts it down from the UI.
+async fn simulate_until_adopted_then_shut_down(home: &std::path::Path) {
     use futures_util::{SinkExt, StreamExt};
     use tokio_tungstenite::tungstenite::Message;
 
-    let home = tempfile::tempdir().unwrap();
     let mut child = binary()
         .args(["--simulate", "--port", "0", "--home"])
-        .arg(home.path())
+        .arg(home)
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()
@@ -122,6 +126,23 @@ async fn the_simulated_binary_connects_and_shuts_down_from_the_ui() {
         panic!("the socket closed first");
     };
     tokio::time::timeout(Duration::from_secs(20), version).await.expect("the simulated controller's version");
+    let ask = r#"{"ns":"/MaslowCNC","event":"settingRequest","data":{"data":{"section":"Advanced Settings","setting":"maxZRPM"}}}"#;
+    let adopted = async {
+        loop {
+            socket.send(Message::text(ask)).await.unwrap();
+            while let Some(Ok(message)) = socket.next().await {
+                let text = message.to_text().unwrap_or_default().to_string();
+                if text.contains("requestedSetting") && text.contains("maxZRPM") {
+                    if text.contains("12.6") {
+                        return;
+                    }
+                    break;
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
+    };
+    tokio::time::timeout(Duration::from_secs(30), adopted).await.expect("$18 adopted from the boot's $$");
     let shutdown = r#"{"ns":"/MaslowCNC","event":"action","data":{"data":{"command":"shutdown","arg":"","arg1":""}}}"#;
     socket.send(Message::text(shutdown)).await.unwrap();
     let exited = async {
@@ -134,6 +155,28 @@ async fn the_simulated_binary_connects_and_shuts_down_from_the_ui() {
     };
     let status = tokio::time::timeout(Duration::from_secs(10), exited).await.expect("exits with the socket still open");
     assert!(status.success());
+}
+
+/// `--simulate` end to end: the UI hears the simulated controller's version, and Shut Down WebControl exits 0.
+#[tokio::test]
+async fn the_simulated_binary_connects_and_shuts_down_from_the_ui() {
+    let home = tempfile::tempdir().unwrap();
+    simulate_until_adopted_then_shut_down(home.path()).await;
     let log = std::fs::read_to_string(home.path().join(".WebControl/webcontrol-rs.log")).unwrap();
     assert!(log.contains(": Sent: B05  \n"), "{log}");
+    let saved = wc_config::Settings::load(&wc_config::Paths::new(home.path()));
+    assert_eq!(saved.text("Advanced Settings", "maxZRPM").as_deref(), Some("12.6"), "adopted from $$ and saved");
+}
+
+#[tokio::test]
+async fn a_home_it_cannot_prepare_is_never_written_to() {
+    let home = tempfile::tempdir().unwrap();
+    let dir = home.path().join(".WebControl");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("gcode"), "a file where the gcode directory should be").unwrap();
+    let python = include_str!("../../../../defaultwebcontrol.json");
+    std::fs::write(dir.join("webcontrol.json"), python).unwrap();
+    simulate_until_adopted_then_shut_down(home.path()).await;
+    assert_eq!(std::fs::read_to_string(dir.join("webcontrol.json")).unwrap(), python);
+    assert!(!dir.join("webcontrol.json.pre-rs").exists());
 }

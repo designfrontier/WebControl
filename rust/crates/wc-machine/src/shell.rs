@@ -1,15 +1,17 @@
-use std::collections::VecDeque;
-use std::sync::Arc;
+use std::collections::{HashMap, VecDeque};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde_json::json;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
-use tokio::sync::{broadcast, mpsc, watch};
+use tokio::sync::{broadcast, mpsc, oneshot, watch};
 use tokio::task::JoinHandle;
 use tokio::time::{Instant, MissedTickBehavior};
+use wc_config::Settings;
 use wc_protocol::Push;
 
-use crate::{Effect, Event, Machine, Snapshot};
+use crate::{Effect, Event, Machine, Request, Response, Snapshot};
 
 const TICK: Duration = Duration::from_millis(10);
 const HEALTH: Duration = Duration::from_secs(5);
@@ -48,6 +50,8 @@ pub trait Host: Send + Sync + 'static {
     fn exit(&self);
     /// The busiest core's load in percent.
     fn cpu_load(&self) -> f64;
+    /// Writes `webcontrol.json`; called off the machine task, so a slow card never delays Stop.
+    fn save_settings(&self, _settings: &Settings) {}
 }
 
 /// No controller at all: every open fails, as with nothing plugged in.
@@ -75,6 +79,8 @@ impl Host for NoHost {
     }
 }
 
+type Replies = Arc<Mutex<HashMap<u64, oneshot::Sender<Response>>>>;
+
 /// How sessions and routes reach the machine task. Cloning it is cheap.
 #[derive(Clone)]
 pub struct MachineHandle {
@@ -82,6 +88,8 @@ pub struct MachineHandle {
     realtime: mpsc::UnboundedSender<Event>,
     pushes: broadcast::Sender<Push>,
     snapshot: watch::Receiver<Snapshot>,
+    next_request: Arc<AtomicU64>,
+    replies: Replies,
 }
 
 impl MachineHandle {
@@ -101,6 +109,15 @@ impl MachineHandle {
     pub fn snapshot(&self) -> Snapshot {
         self.snapshot.borrow().clone()
     }
+
+    /// Sends an HTTP write to the machine and waits for its answer; `None` once the machine task has ended.
+    pub async fn request(&self, request: Request) -> Option<Response> {
+        let id = self.next_request.fetch_add(1, Ordering::Relaxed);
+        let (reply, answer) = oneshot::channel();
+        self.replies.lock().expect("replies lock").insert(id, reply);
+        self.commands.send(Event::Request { id, request }).ok()?;
+        answer.await.ok()
+    }
 }
 
 /// A controller line or the end of the port, tagged with the port it came from.
@@ -117,6 +134,8 @@ struct Task<C: Core> {
     pushes: broadcast::Sender<Push>,
     snapshot: watch::Sender<Snapshot>,
     started: Instant,
+    replies: Replies,
+    persist: watch::Sender<Option<Arc<Settings>>>,
 }
 
 async fn read_lines(port: Box<dyn AsyncRead + Send + Unpin>, generation: u64, reads: mpsc::UnboundedSender<Read>) {
@@ -202,6 +221,15 @@ impl<C: Core> Task<C> {
                         self.host.exit();
                         None
                     }
+                    Effect::Respond { id, response } => {
+                        let reply = self.replies.lock().expect("replies lock").remove(&id);
+                        reply.map(|reply| reply.send(response));
+                        None
+                    }
+                    Effect::SaveSettings(settings) => {
+                        self.persist.send_replace(Some(settings));
+                        None
+                    }
                 };
                 pending.extend(follow_up);
             }
@@ -211,14 +239,30 @@ impl<C: Core> Task<C> {
     }
 }
 
-/// Starts the machine task; it ends once every `MachineHandle` is dropped.
+/// Saves the newest settings handed to it, one at a time, until the machine task ends.
+async fn persist(mut latest: watch::Receiver<Option<Arc<Settings>>>, host: Arc<dyn Host>) {
+    while latest.changed().await.is_ok() {
+        let Some(settings) = latest.borrow_and_update().clone() else {
+            continue;
+        };
+        let host = host.clone();
+        let _ = tokio::task::spawn_blocking(move || host.save_settings(&settings)).await;
+    }
+}
+
+/// Starts the machine task; it ends once every `MachineHandle` is dropped, after the last save is written.
 pub fn spawn<C: Core>(core: C, opener: Box<dyn PortOpener>, host: Arc<dyn Host>) -> (MachineHandle, JoinHandle<()>) {
     let (commands, mut command_rx) = mpsc::unbounded_channel();
     let (realtime, mut realtime_rx) = mpsc::unbounded_channel();
     let (reads, mut read_rx) = mpsc::unbounded_channel::<Read>();
     let (pushes, _) = broadcast::channel(PUSH_BACKLOG);
     let (snapshot_tx, snapshot) = watch::channel(core.snapshot());
-    let handle = MachineHandle { commands, realtime, pushes: pushes.clone(), snapshot };
+    let (persist_tx, persist_rx) = watch::channel(None);
+    let writer = tokio::spawn(persist(persist_rx, host.clone()));
+    let replies = Replies::default();
+    let next_request = Arc::new(AtomicU64::new(0));
+    let handle =
+        MachineHandle { commands, realtime, pushes: pushes.clone(), snapshot, next_request, replies: replies.clone() };
     let mut task = Task {
         core,
         opener,
@@ -230,6 +274,8 @@ pub fn spawn<C: Core>(core: C, opener: Box<dyn PortOpener>, host: Arc<dyn Host>)
         pushes,
         snapshot: snapshot_tx,
         started: Instant::now(),
+        replies,
+        persist: persist_tx,
     };
     let join = tokio::spawn(async move {
         let mut clock = tokio::time::interval(TICK);
@@ -253,6 +299,9 @@ pub fn spawn<C: Core>(core: C, opener: Box<dyn PortOpener>, host: Arc<dyn Host>)
             task.step(event).await;
         }
         task.close();
+        task.replies.lock().expect("replies lock").clear();
+        drop(task);
+        let _ = writer.await;
     });
     (handle, join)
 }
