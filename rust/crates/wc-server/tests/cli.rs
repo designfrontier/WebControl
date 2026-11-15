@@ -96,7 +96,9 @@ fn the_binary_fails_cleanly_when_its_port_is_taken() {
     let home = tempfile::tempdir().unwrap();
     let out = binary().args(["--port", &port, "--home"]).arg(home.path()).output().unwrap();
     assert_eq!(out.status.code(), Some(1));
-    assert!(String::from_utf8(out.stderr).unwrap().contains("webcontrol-rs:"));
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    assert!(stderr.contains(&format!("webcontrol-rs: port {port} is in use")), "{stderr}");
+    assert!(stderr.contains("wc-switch status"), "{stderr}");
 }
 
 /// Runs `--simulate` until the UI hears `$18` adopted from the boot's `$$`, then shuts it down from the UI.

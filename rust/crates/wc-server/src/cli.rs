@@ -101,7 +101,15 @@ pub async fn serve(options: Options, shutdown: impl Future<Output = ()> + Send +
     });
     tracing::info!(source = ?settings.source(), home = %options.home.display(), "settings loaded");
     let port = options.port.unwrap_or_else(|| settings.web_port());
-    let listener = tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port))).await?;
+    let listener = tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port))).await.map_err(|error| {
+        match error.kind() {
+            std::io::ErrorKind::AddrInUse => std::io::Error::new(
+                error.kind(),
+                format!("port {port} is in use, probably by the Python backend (see `wc-switch status`)"),
+            ),
+            _ => error,
+        }
+    })?;
     let bound = listener.local_addr()?;
     let exit = Arc::new(Notify::new());
     let host = SystemHost::new(&paths.dir(), exit.clone());
