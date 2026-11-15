@@ -52,7 +52,7 @@ impl Machine {
         self.controller.boot_deadline = Some(now + BOOT_WAIT);
         self.controller.buffering = self.settings.number("Maslow Settings", "bufferOn") != 0.0;
         self.job.controller_reset();
-        self.bit = BitHeight::new(self.units());
+        self.bit = BitHeight::new();
         effects.push(controller_message(&format!("Connected on port {port}")));
         self.link = Link::Connected { port };
         effects.push(broadcast(&self.connection_status()));
@@ -135,7 +135,7 @@ impl Machine {
         self.controller = Controller { eeprom_reset, buffering, ..Controller::new(now) };
         self.rewrite_notice = false;
         self.job.controller_reset();
-        self.bit = BitHeight::new(self.units());
+        self.bit = BitHeight::new();
         self.probing = false;
         self.handshake(now);
     }
@@ -205,6 +205,9 @@ impl Machine {
         }
         controller.ready = true;
         let acked = controller.accounting.acked();
+        if controller.accounting.is_empty() {
+            self.bit.settled();
+        }
         // Identity, not position: a `~` sent mid-probe is acked first with an entry of its own.
         let answered = controller.probe.take_if(|probe| acked.is_some_and(|sent| sent.id == probe.id));
         if let Some(probe) = answered {
@@ -420,12 +423,8 @@ impl Machine {
                     self.mark(mark, effects);
                     false
                 }
-                Queued::Raise(raise) => {
-                    if self.expand_raise(raise, now, effects) {
-                        return;
-                    }
-                    false
-                }
+                // While it waits, nothing after it may go.
+                Queued::Raise(raise) => self.expand_raise(raise, now, effects),
             };
             if written {
                 return;

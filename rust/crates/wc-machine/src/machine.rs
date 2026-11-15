@@ -397,7 +397,7 @@ impl Machine {
             settings_dirty: false,
             ports: Vec::new(),
             position: PositionTracker::default(),
-            bit: crate::clearance::BitHeight::new(units),
+            bit: crate::clearance::BitHeight::new(),
             errors: ErrorTracker::default(),
             reported_buffer: 127,
             last_status: None,

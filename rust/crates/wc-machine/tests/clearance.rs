@@ -5,6 +5,8 @@ mod rig;
 
 use rig::{Rig, alerts, settings, written};
 use serde_json::json;
+use wc_machine::Event;
+use wc_machine::files::Request;
 use wc_protocol::main::PauseButton;
 
 /// `wc_machine`'s wait for a status report when the bit's height is unknown.
@@ -180,6 +182,7 @@ fn booted_without_a_report() -> Rig {
 }
 
 const REPORT_AT_10: &str = "<Idle,MPos:0.00,0.00,10.00,WPos:0.000,0.000,0.000>";
+const REPORT_AT_20: &str = "<Idle,MPos:0.00,0.00,20.00,WPos:0.000,0.000,0.000>";
 
 #[test]
 fn with_no_height_known_the_raise_waits_for_a_fresh_report() {
@@ -315,6 +318,10 @@ fn center_in_inches_never_lowers_the_bit() {
     move_z(&mut rig, "raise", "1");
     rig.act("returnToCenter");
     assert_eq!(rig.run_to_quiet(), ["G90", "G00 Z1.000", "G00 X0.0 Y0.0"]);
+    rig.act("defineZ0");
+    move_z(&mut rig, "raise", "0.3931");
+    rig.act("returnToCenter");
+    assert_eq!(rig.run_to_quiet(), ["G90", "G00 Z0.394", "G00 X0.0 Y0.0"], "rounded up, never down");
 }
 
 #[test]
@@ -327,4 +334,93 @@ fn on_51_29x_a_resumed_spindle_gets_the_files_speed() {
     };
     assert_eq!(spindle("51.29"), ["M3", "S12000.0"]);
     assert_eq!(spindle("51.27"), ["M3"]);
+    assert_eq!(spindle("51.3"), ["M3"]);
+}
+
+#[test]
+fn a_report_read_before_the_handshake_sets_the_units_is_ignored() {
+    let mut rig = Rig::with(settings(&[("Computed Settings", "units", json!("INCHES"))]));
+    rig.open();
+    ["PCB v1.1 Detected", "Grbl v1.00", "ready"].iter().for_each(|line| {
+        rig.rx(line);
+    });
+    rig.rx("<Idle,MPos:0.00,0.00,3.00,WPos:0.000,0.000,0.000>");
+    rig.rx("ok");
+    rig.run_to_quiet();
+    rig.rx("<Idle,MPos:0.00,0.00,0.12,WPos:0.000,0.000,0.000>");
+    rig.act("returnToCenter");
+    assert_eq!(rig.run_to_quiet(), ["G90", "G00 Z0.197", "G00 X0.0 Y0.0"], "0.13 in is below the safe height");
+}
+
+#[test]
+fn a_report_read_while_a_z_move_runs_is_not_the_bits_height() {
+    let mut rig = booted_without_a_report();
+    rig.act_with("moveZ", json!("raise"), json!("20"));
+    rig.advance(100);
+    rig.rx("ok");
+    rig.advance(100);
+    rig.rx("ok");
+    rig.advance(100);
+    rig.rx("<Idle,MPos:0.00,0.00,12.00,WPos:0.000,0.000,0.000>");
+    rig.rx("ok");
+    rig.run_to_quiet();
+    rig.act("returnToCenter");
+    rig.run_to_quiet();
+    rig.rx(REPORT_AT_20);
+    assert_eq!(rig.run_to_quiet(), ["G00 Z20.01", "G00 X0.0 Y0.0"]);
+}
+
+/// A missed Touch Z leaves the height unknown; `[PE:]` lines keep the link alive without telling it.
+fn lose_the_height_by_a_missed_probe(rig: &mut Rig) {
+    rig.act("touchZ");
+    rig.run_to_quiet();
+    rig.rx("error: probe did not connect");
+    (0..4).for_each(|_| {
+        rig.advance(1000);
+        rig.rx("[PE:0.00,0.00,127,1700.00,1700.00]");
+    });
+}
+
+#[test]
+fn each_wait_for_a_report_gets_its_own_time() {
+    let mut rig = booted_without_a_report();
+    rig.act("returnToCenter");
+    rig.run_to_quiet();
+    rig.rx(REPORT_AT_10);
+    rig.run_to_quiet();
+    lose_the_height_by_a_missed_probe(&mut rig);
+    rig.act("returnToCenter");
+    rig.run_to_quiet();
+    assert!(alerts(&rig.advance(1000)).is_empty(), "the first wait's deadline has passed, not this one's");
+    rig.rx(REPORT_AT_20);
+    assert_eq!(rig.run_to_quiet(), ["G00 Z20.01", "G00 X0.0 Y0.0"]);
+}
+
+#[test]
+fn a_raise_after_a_stopped_wait_gets_its_own_time() {
+    let mut rig = booted_without_a_report();
+    rig.act("returnToCenter");
+    rig.run_to_quiet();
+    rig.act("stopRun");
+    rig.advance(300);
+    rig.rx(REPORT_AT_10);
+    rig.run_to_quiet();
+    lose_the_height_by_a_missed_probe(&mut rig);
+    rig.act("returnToCenter");
+    rig.run_to_quiet();
+    assert!(alerts(&rig.advance(1000)).is_empty(), "the stopped wait's deadline is gone");
+    rig.rx(REPORT_AT_20);
+    assert_eq!(rig.run_to_quiet(), ["G00 Z20.01", "G00 X0.0 Y0.0"]);
+}
+
+#[test]
+fn a_report_from_before_a_line_it_cannot_follow_is_stale() {
+    let mut rig = Rig::connected();
+    rig.rx("<Idle,MPos:0.00,0.00,3.00,WPos:0.000,0.000,0.000>");
+    rig.send(Event::Request { id: 1, request: Request::SendGcode("G43 Z30".into()) });
+    rig.run_to_quiet();
+    rig.act("returnToCenter");
+    assert_eq!(rig.run_to_quiet(), ["G90"], "no guess from the report read before the G43");
+    rig.rx("<Idle,MPos:0.00,0.00,30.00,WPos:0.000,0.000,0.000>");
+    assert_eq!(rig.run_to_quiet(), ["G00 Z30.01", "G00 X0.0 Y0.0"]);
 }

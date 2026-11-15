@@ -12,8 +12,8 @@ use crate::gpio::Led;
 use crate::job::{Flow, pause_button};
 use crate::machine::{Effect, Machine, Queued, broadcast};
 
-/// How long a raise waits for a status report when the bit's height is unknown: many reports (one per 200 ms or
-/// less), and less than the link timeout.
+/// The firmware reports about every 200 ms (§2 of spec/firmware.md), so this is many missed reports, yet less than
+/// the link timeout.
 pub const HEIGHT_WAIT: Duration = Duration::from_secs(3);
 const HEIGHT_UNKNOWN_TITLE: &str = "Bit Height Unknown";
 const HEIGHT_UNKNOWN: &str = "The sled did not move: WebControl could not tell how high the bit is, because the \
@@ -24,13 +24,15 @@ const HEIGHT_UNKNOWN: &str = "The sled did not move: WebControl could not tell h
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct BitHeight {
     commanded: CommandedZ,
-    /// MPos z read since the last line that moved Z, in mm.
+    /// MPos z read since the last line that moved Z (or changed units) was acknowledged, in mm.
     reported_mm: Option<f64>,
+    /// Such a line has not been acknowledged yet, so a report may show the bit mid-move.
+    moving: bool,
 }
 
 impl BitHeight {
-    pub fn new(units: Units) -> BitHeight {
-        BitHeight { commanded: CommandedZ::new(units), reported_mm: None }
+    pub fn new() -> BitHeight {
+        BitHeight { commanded: CommandedZ::new(), reported_mm: None, moving: false }
     }
 
     /// Every acknowledged line before a raise has finished, so the commanded Z is where the bit is.
@@ -45,12 +47,19 @@ impl BitHeight {
         }
         if self.commanded.written(line) {
             self.reported_mm = None;
+            self.moving = true;
         }
+    }
+
+    /// Every line written has been acknowledged.
+    pub fn settled(&mut self) {
+        self.moving = false;
     }
 
     /// MPos has two decimals, so the bit may be up to one step above it.
     pub fn reported(&mut self, z: f64) {
-        let mm_per_unit = if self.commanded.units() == Units::Inches { 25.4 } else { 1.0 };
+        let Some(units) = self.commanded.units().filter(|_| !self.moving) else { return };
+        let mm_per_unit = if units == Units::Inches { 25.4 } else { 1.0 };
         self.reported_mm = z.is_finite().then_some((z + 0.01) * mm_per_unit);
     }
 
@@ -58,6 +67,7 @@ impl BitHeight {
     pub fn lost(&mut self) {
         self.commanded.set_z_mm(None);
         self.reported_mm = None;
+        self.moving = false;
     }
 
     pub fn zeroed(&mut self) {

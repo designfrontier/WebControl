@@ -500,11 +500,13 @@ Where the Rust backend writes something different from Python by owner decision.
    line's value. The bit's Z is the Z WebControl last commanded, followed through every line it wrote (relative
    moves, units, `G10 Z0`, a touching probe's zero); when a Stop, an ALARM, a missed probe, a line it cannot follow
    or a reboot leaves that unknown, it is the last status report's MPos z plus one display step (0.01 in the
-   report's units), since MPos has two decimals and is only a lower bound here (`spec/firmware.md` B10, B15). The
-   height is settled when the line reaches the controller, after every line queued before it (a Z jog pressed just
+   report's units), since MPos has two decimals and is only a lower bound here (`spec/firmware.md` B10, B15). A report
+   counts only once the units are known from a `G20`/`G21` WebControl wrote (the handshake's) and while no line that
+   moves Z or changes units is unacknowledged, since the firmware reports mid-move and acks a line when it finishes.
+   The height is settled when the line reaches the controller, after every line queued before it (a Z jog pressed just
    before Resume counts). With neither known then (no Z followed and no report since the last line that moved Z: after
    a Stop, an ALARM or overflow, a missed probe, a reconnect or a reboot), nothing is guessed: the raise, and every
-   command queued after it, waits for a status report read after that point (one comes every 200 ms or less,
+   command queued after it, waits for a status report read after that point (one comes about every 200 ms,
    `spec/firmware.md` §2) and uses its MPos z rounded up. With no report for 3 s it is refused instead: nothing
    queued after it goes out, a `Bit Height Unknown` alert says so, a resume is left paused (Resume tries again) and
    Play mid-file leaves the job stopped at its line. Stop drops the waiting raise at once, as any queued command;

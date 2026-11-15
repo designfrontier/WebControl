@@ -76,6 +76,7 @@ fn a_missed_probe_in_a_file_holds_the_job_at_the_probe_line() {
     rig.rx("ok");
     rig.rx("ok");
     rig.rx("probing for z axis zero");
+    rig.rx("<Idle,MPos:0.00,0.00,-4.00,WPos:0.000,0.000,0.000>");
     let missed = rig.rx("error: probe did not connect");
     assert!(alerts(&missed).iter().any(|alert| alert.contains(MISSED)), "{:?}", alerts(&missed));
     ["program stopped", "z axis not set", ""].iter().for_each(|line| {

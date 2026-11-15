@@ -174,8 +174,9 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
     the bit's Z) in the active units, and no Z move before that travel lowers the bit. The bit's Z is the Z
     WebControl last commanded, or, when a Stop, alarm, probe or reboot left it unknown, the last status report's MPos
     z plus one display step (0.01 in the report's units): MPos is only a lower bound for clearance here, so it is
-    rounded up, never used to restore an exact Z (B15). With no report since the last line that moved Z, the raise
-    waits for one read after every line before it is acked (§2: one per 200 ms or less) and is refused with an alert
+    rounded up, never used to restore an exact Z (B15). A report read before the handshake's G20/G21, or while a line
+    that moves Z or changes units is unacknowledged, is not used. With no report since then, the raise
+    waits for one read after every line before it is acked (about every 200 ms, §2) and is refused with an alert
     after 3 s; it never guesses the safe height.
 11. Never auto-send `~`; stop streaming before any line the firmware will pause on (using its T semantics); emit
     `T<n> M6`. After an ALARM or `Buffer overflow!`, Play resumes from the oldest unacknowledged line, returning at
