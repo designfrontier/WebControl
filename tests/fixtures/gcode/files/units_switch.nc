@@ -1,0 +1,15 @@
+(metric start, inch finish)
+G21
+G90
+G0 Z5
+G0 X25.4 Y25.4
+G1 Z-2.54 F254
+G1 X50.8 F508
+G0 Z5 F1000
+G20
+G0 X2 Y2
+G1 Z-0.1 F10
+G1 X3 F20
+G0 Z0.25
+G21
+G0 X0 Y0
