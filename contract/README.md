@@ -191,3 +191,8 @@ Where the Rust backend deliberately does not copy Python, as the owner decided (
   (`kinematicsTypeComputed`, `distPerRot`, the PID gains, `chainOverSprocketComputed`, `fPWMComputed`), writes the
   derived values that changed to the controller, then sends `$$`, as both backends already do after `/importFile`
   and `/importRestoreWebControl`. Python's `importWebControlJSON` keeps the imported computed values as they are.
+- **Slow answers come after the push they used to precede.** Rust solves `errorValueMessage.computedX/Y` and works
+  out `gcodePositionMessage` off the machine task, so neither delays Stop. Each push goes out when its work finishes,
+  after pushes the same event made at once. While a solve runs, only the newest report waits and the others are
+  dropped. Rust solves only for reports that go out. Python solved on every status line, so in quadrilateral mode the
+  solver starts from a different tilt and computed X/Y can differ from Python's by the solver's tolerance.
