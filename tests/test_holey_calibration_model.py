@@ -5,7 +5,7 @@ import math
 import pytest
 
 import Actions.HoleySimulationKinematics as holeyKinematics
-from Actions.HoleySimulationKinematics import FIRMWARE_PI, Kinematics
+from Actions.HoleySimulationKinematics import Kinematics
 from calibration_helpers import holey_form
 from helpers import drain
 
@@ -46,10 +46,6 @@ def holey(data):
 def set_setting(data, section, key, value):
     data.config.setValue(section, key, value)
     drain(data.gcode_queue)
-
-
-def test_firmware_pi_is_the_literal_the_firmware_uses():
-    assert FIRMWARE_PI == 3.14159
 
 
 def test_the_fit_uses_the_firmware_sprocket_radius(holey, monkeypatch):
@@ -164,9 +160,13 @@ def test_the_simulator_sets_the_sprocket_radius_like_the_firmware(data):
     assert kinematics.R == 63.5 / (2 * 3.14159)
 
 
-def test_the_chain_wrap_uses_the_firmware_pi(monkeypatch):
+def test_the_bottom_feed_chain_wrap_uses_the_firmware_pi(monkeypatch):
     kinematics = firmware_machine(CONFIGURED)
-    wrapped = kinematics.inverse(-600.0, 300.0)
-    monkeypatch.setattr(holeyKinematics, "FIRMWARE_PI", 3.0)
+    x, y = -600.0, 300.0
+    motor_distance = math.hypot(-kinematics._xCordOfMotor - x, kinematics._yCordOfMotor - y)
+    angle = math.asin((kinematics._yCordOfMotor - y) / motor_distance) - math.asin(kinematics.R / motor_distance)
+    left_chain = kinematics.inverse(x, y)[0]
+    monkeypatch.setattr(holeyKinematics, "FIRMWARE_PI", 0.0)
+    left_chain_without_wrap = kinematics.inverse(x, y)[0] + kinematics.R * angle
 
-    assert kinematics.inverse(-600.0, 300.0) != wrapped
+    assert left_chain - left_chain_without_wrap == pytest.approx(kinematics.R * (3.14159 - angle), abs=1e-9)
