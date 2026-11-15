@@ -2,12 +2,12 @@
   "formatVersion": 1,
   "meta": {
     "name": "touch_z_mm",
-    "description": "Touch Z probes with G38.2 down to the plunge limit and then zeroes Z with G10 Z0. The zero is queued with the probe, not after it succeeds.",
+    "description": "Touch Z probes with G38.2 down to the plunge limit; once the probe line's ok shows it touched, Z is zeroed with G10 Z0.",
     "firmware": {
       "variant": "holey",
       "version": "51.27"
     },
-    "webcontrolCommit": "c859cea"
+    "webcontrolCommit": "1d58697"
   },
   "setup": {
     "units": "MM",
@@ -18,9 +18,14 @@
   },
   "events": [
     {"type": "ui", "action": {"command": "touchZ", "arg": "", "arg1": ""}},
-    {"type": "tx", "bytes": "G90 G38.2 Z-10 M02 \n"},
+    {"type": "tx", "bytes": "G90 G38.2 Z-10 \n"},
+    {"type": "rx", "line": "probing for z axis zero"},
+    {"type": "rx", "line": "max depth -10.00 mm."},
+    {"type": "rx", "line": "feedrate 39.94 mm per min."},
+    {"type": "rx", "line": "z axis zeroed"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G10 Z0  \n"},
-    {"type": "rx", "line": "ok"}
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "noAlerts": [{"title": "Touch Z"}]}
   ]
 }

@@ -572,3 +572,13 @@ def test_a_status_report_still_queued_from_before_a_stop_does_not_end_the_resync
     ))
 
     assert sent_after(port, "!") == ["G0 X1 "]
+
+
+def test_a_stop_or_alarm_during_a_probe_forgets_it(data):
+    thread = SerialPortThread()
+    thread.data = data
+    thread.probeInFlight = True
+
+    thread._awaitResync()
+
+    assert thread.probeInFlight is False

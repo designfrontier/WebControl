@@ -332,13 +332,13 @@ def test_resume_while_the_job_is_already_running_moves_nothing(job):
 
 
 @pytest.mark.parametrize("units, depth", [("MM", "10"), ("INCHES", "0.3937")])
-def test_touch_z_probes_in_the_machines_units_without_setting_the_modal_feed(job, units, depth):
+def test_touch_z_queues_only_the_probe_in_the_machines_units_without_a_feed(job, units, depth):
     set_machine_units(job, units)
     job.config.setValue("Advanced Settings", "maxTouchProbePlungeDistance", "10", recursionBreaker=True)
 
     job.actions.processAction({"data": {"command": "touchZ", "arg": "", "arg1": ""}})
 
-    assert drain(job.gcode_queue) == ["G90 G38.2 Z-" + depth + " M02", "G10 Z0 "]
+    assert drain(job.gcode_queue) == ["G90 G38.2 Z-" + depth]
 
 
 @pytest.mark.parametrize(

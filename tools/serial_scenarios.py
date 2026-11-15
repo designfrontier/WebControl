@@ -194,19 +194,36 @@ scenario(
     + [expect(state={"units": "MM", "home": {"x": 100.3, "y": -50.25}})],
 )
 
+# What G38() prints on 51.27 before the probe line's ok or error; the feed is the boot feed clamped to zMaxFeed.
+PROBING = ["probing for z axis zero", "max depth -10.00 mm.", "feedrate 39.94 mm per min."]
+PROBE_TOUCHED = PROBING + ["z axis zeroed"]
+PROBE_MISSED = PROBING + ["error: probe did not connect", "program stopped", "z axis not set", ""]
+
 scenario(
     "touch_z_mm",
-    "Touch Z probes with G38.2 down to the plunge limit and then zeroes Z with G10 Z0. The zero is queued with the "
-    "probe, not after it succeeds.",
+    "Touch Z probes with G38.2 down to the plunge limit; once the probe line's ok shows it touched, Z is zeroed "
+    "with G10 Z0.",
     {**MM},
-    [ui("touchZ"), idle()],
+    [firmware(rule={"pattern": r"G38\.2", "replies": PROBE_TOUCHED}), ui("touchZ"), idle(),
+     expect(noAlerts=[{"title": "Touch Z"}])],
 )
 
 scenario(
     "touch_z_inches",
     "Touch Z on an inch machine probes in inches: the plunge limit (mm) is converted, so the units never change.",
     {"units": "INCHES", "home": {"x": 3.9488, "y": 0}},
-    [ui("touchZ"), idle(), expect(state={"units": "INCHES", "home": {"x": 3.9488, "y": 0}})],
+    [firmware(rule={"pattern": r"G38\.2", "replies": PROBE_TOUCHED}), ui("touchZ"), idle(),
+     expect(state={"units": "INCHES", "home": {"x": 3.9488, "y": 0}})],
+)
+
+scenario(
+    "touch_z_probe_fails_leaves_z_alone",
+    "A probe that never touches: the firmware's `error: probe did not connect` stands in for the line's ok, so "
+    "nothing zeroes Z and the user is told. The next command goes out as usual.",
+    {**MM},
+    [ui("touchZ"), wait_tx(r"G38\.2"), firmware(forget=True), *[rx(line) for line in PROBE_MISSED], idle(),
+     expect(alerts=[{"title": "Touch Z Failed", "message": "Z was not zeroed"}]),
+     ui("moveZ", "raise", "5"), idle()],
 )
 
 # ----- streaming -----

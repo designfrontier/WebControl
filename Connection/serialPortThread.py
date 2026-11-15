@@ -34,6 +34,7 @@ class SerialPortThread(MakesmithInitFuncs):
         self.unackedLines = deque()  # (length, gcode index or None) per line sent, newest on the left
         self.resyncAfter = None
         self.caughtUpSinceHalt = False
+        self.probeInFlight = False
 
     def _write(self, message, isQuickCommand=False, gcodeIndex=None):
         '''
@@ -101,6 +102,7 @@ class SerialPortThread(MakesmithInitFuncs):
         acks and hold regular lines until a status report read after the input ran dry past the resync delay.
         '''
         self._emptyAccounting()
+        self.probeInFlight = False
         self.machineIsReadyForData = False
         self.resyncAfter = time.time() + self.RESYNC_DELAY
         self.caughtUpSinceHalt = False
@@ -434,6 +436,8 @@ class SerialPortThread(MakesmithInitFuncs):
             if bool(self.unackedLines) is True:  # if we've sent lines to the machine
                 # free up that space in the buffer
                 self.bufferSpace = (self.bufferSpace + self.unackedLines.pop()[0])
+            if self.probeInFlight:
+                self._probeFinished(lineFromMachine == "ok\r\n")
         # The firmware stops itself on these and never acks the lines it held.
         if lineFromMachine.startswith(("ALARM:", "Buffer overflow!")):
             self._rewindToDroppedLines()
@@ -487,12 +491,26 @@ class SerialPortThread(MakesmithInitFuncs):
             return
         command = self.manageToolChange(command)
         self._write(command)
+        # Queued commands go out one at a time, so the next ok or error: answers the probe.
+        self.probeInFlight = "G38.2" in command
         # if units have changed, update settings and notify UI clients to stay in sync
         if command.find("G20") != -1 and self.data.units != "INCHES":
             self.data.actions.updateSetting("toInches", 0, True)  # value = doesn't matter
         if command.find("G21") != -1 and self.data.units != "MM":
             self.data.actions.updateSetting("toMM", 0, True)  # value = doesn't matter
         self.data.actions.sendGCodePositionUpdate(self.data.gcodeIndex, recalculate=True)
+
+    def _probeFinished(self, touched):
+        '''
+        The firmware answers a probe that never touched with `error: probe did not connect` instead of ok.
+        '''
+        self.probeInFlight = False
+        if touched:
+            self.data.actions.defineZ0()
+        else:
+            self.data.ui_queue1.put("Alert", "Touch Z Failed",
+                                    "The probe did not touch the plate, so Z was not zeroed. Check the plate and its "
+                                    "clip, then try again.")
 
     def _controllerIsIdle(self):
         '''

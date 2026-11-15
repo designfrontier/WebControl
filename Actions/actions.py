@@ -924,15 +924,14 @@ class Actions(MakesmithInitFuncs):
 
     def touchZ(self):
         '''
-        Probes down with G38.2 to the plunge limit, in the machine's units, then zeroes Z.
-        :return:
+        Probes down with G38.2 to the plunge limit, in the machine's units. The serial thread zeroes Z once the
+        probe line is acknowledged with ok.
         '''
         try:
             plungeDepthMM = float(self.data.config.getValue("Advanced Settings", "maxTouchProbePlungeDistance"))
             plungeDepth = ("%.4f" % (plungeDepthMM * self.unitScale("MM", self.data.units))).rstrip("0").rstrip(".")
             # The firmware probes at a fixed 60 mm/min; an F here would only become the job's modal feed.
-            self.data.gcode_queue.put("G90 G38.2 Z-" + plungeDepth + " M02")
-            self.data.measureRequest = self.defineZ0()
+            self.data.gcode_queue.put("G90 G38.2 Z-" + plungeDepth)
             return True
         except Exception as e:
             self.data.console_queue.put(str(e))
