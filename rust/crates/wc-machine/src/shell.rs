@@ -1,5 +1,5 @@
 use std::collections::{HashMap, VecDeque};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use serde_json::json;
@@ -36,7 +36,7 @@ impl Core for Machine {
 /// An open serial port, split.
 pub type Serial = (Box<dyn AsyncRead + Send + Unpin>, Box<dyn AsyncWrite + Send + Unpin>);
 
-/// Opens the controller's port: the real serial device, or the simulator.
+/// Opens the controller's port: the real serial device, or the simulator. Called on the blocking pool.
 pub trait PortOpener: Send + 'static {
     fn open(&mut self, port: &str) -> std::io::Result<Serial>;
 }
@@ -152,15 +152,32 @@ impl MachineHandle {
     }
 }
 
-/// A controller line or the end of the port, tagged with the port it came from.
+/// A port event or controller line, tagged with the port it came from.
 type Read = (u64, Event);
+
+/// What the machine writes, as the port's writer task takes it.
+enum Out {
+    Line(Vec<u8>),
+    Realtime(Vec<u8>),
+}
+
+impl Out {
+    fn stops(&self) -> bool {
+        matches!(self, Out::Realtime(bytes) if bytes.starts_with(b"!"))
+    }
+}
+
+/// An open (or opening) port: the writer's queue, and the task that opens, reads and writes it.
+struct Port {
+    out: mpsc::UnboundedSender<Out>,
+    task: JoinHandle<()>,
+}
 
 struct Task<C: Core> {
     core: C,
-    opener: Box<dyn PortOpener>,
+    opener: Arc<Mutex<Box<dyn PortOpener>>>,
     host: Arc<dyn Host>,
-    writer: Option<Box<dyn AsyncWrite + Send + Unpin>>,
-    reader: Option<JoinHandle<()>>,
+    port: Option<Port>,
     generation: u64,
     reads: mpsc::UnboundedSender<Read>,
     pushes: broadcast::Sender<Push>,
@@ -189,6 +206,101 @@ async fn make_directories(
     }
 }
 
+/// The next thing to write: a realtime byte before any line. A `!` drops the lines queued before it, which the
+/// controller would have flushed had they reached it.
+fn next_out(queued: &mut VecDeque<Out>) -> Option<Out> {
+    let Some(at) = queued.iter().position(|out| matches!(out, Out::Realtime(_))) else {
+        return queued.pop_front();
+    };
+    if queued[at].stops() && at > 0 {
+        tracing::warn!(dropped = at, "lines queued behind a Stop were never written");
+        queued.drain(..at);
+        return queued.pop_front();
+    }
+    queued.remove(at)
+}
+
+/// Writes what the machine sends until the port fails or closes. A `!` cuts short a line still being written.
+/// Never flushes: on a serial port that is `tcdrain`, which blocks until the line has left at 57600 baud.
+async fn write_port(
+    mut port: Box<dyn AsyncWrite + Send + Unpin>,
+    mut outgoing: mpsc::UnboundedReceiver<Out>,
+    generation: u64,
+    reads: mpsc::UnboundedSender<Read>,
+) {
+    let mut queued = VecDeque::new();
+    loop {
+        while let Ok(out) = outgoing.try_recv() {
+            queued.push_back(out);
+        }
+        let written = match next_out(&mut queued) {
+            None => match outgoing.recv().await {
+                Some(out) => {
+                    queued.push_back(out);
+                    continue;
+                }
+                None => return,
+            },
+            Some(Out::Realtime(bytes)) => port.write_all(&bytes).await,
+            Some(Out::Line(bytes)) => {
+                let write = port.write_all(&bytes);
+                tokio::pin!(write);
+                loop {
+                    tokio::select! {
+                        biased;
+                        Some(out) = outgoing.recv() => {
+                            let stops = out.stops();
+                            queued.push_back(out);
+                            if stops {
+                                tracing::warn!("a Stop cut short the line being written");
+                                break Ok(());
+                            }
+                        }
+                        written = &mut write => break written,
+                    }
+                }
+            }
+        };
+        if written.is_err() {
+            let _ = reads.send((generation, Event::PortClosed));
+            return;
+        }
+    }
+}
+
+/// Opens `name` on the blocking pool, then reads and writes it until the machine closes it.
+async fn run_port(
+    opener: Arc<Mutex<Box<dyn PortOpener>>>,
+    name: String,
+    outgoing: mpsc::UnboundedReceiver<Out>,
+    generation: u64,
+    reads: mpsc::UnboundedSender<Read>,
+) {
+    let port = name.clone();
+    let opened =
+        tokio::task::spawn_blocking(move || opener.lock().unwrap_or_else(PoisonError::into_inner).open(&port)).await;
+    match opened.unwrap_or_else(|panic| Err(std::io::Error::other(panic))) {
+        Ok((reader, writer)) => {
+            let _ = reads.send((generation, Event::PortOpened { port: name }));
+            let reading = read_lines(reader, generation, reads.clone());
+            tokio::join!(reading, write_port(writer, outgoing, generation, reads));
+        }
+        Err(error) => {
+            let _ = reads.send((generation, Event::PortFailed { port: name, error: error.to_string() }));
+        }
+    }
+}
+
+/// Runs `work` on the blocking pool and hands its event back to the machine task.
+fn off_task(events: &mpsc::UnboundedSender<Event>, work: impl FnOnce() -> Event + Send + 'static) {
+    let events = events.clone();
+    tokio::spawn(async move {
+        if let Ok(event) = tokio::task::spawn_blocking(work).await {
+            let _ = events.send(event);
+        }
+    });
+}
+
 async fn read_lines(port: Box<dyn AsyncRead + Send + Unpin>, generation: u64, reads: mpsc::UnboundedSender<Read>) {
     let mut lines = BufReader::new(port).split(b'\n');
     while let Ok(Some(line)) = lines.next_segment().await {
@@ -202,23 +314,18 @@ async fn read_lines(port: Box<dyn AsyncRead + Send + Unpin>, generation: u64, re
 
 impl<C: Core> Task<C> {
     fn close(&mut self) {
-        self.writer = None;
-        if let Some(reader) = self.reader.take() {
-            reader.abort();
+        if let Some(port) = self.port.take() {
+            port.task.abort();
         }
         self.generation += 1;
     }
 
-    fn open(&mut self, port: String) -> Event {
-        match self.opener.open(&port) {
-            Ok((reader, writer)) => {
-                self.close();
-                self.writer = Some(writer);
-                self.reader = Some(tokio::spawn(read_lines(reader, self.generation, self.reads.clone())));
-                Event::PortOpened { port }
-            }
-            Err(error) => Event::PortFailed { port, error: error.to_string() },
-        }
+    /// Writes made before the port has opened go out once it has.
+    fn open(&mut self, name: String) {
+        self.close();
+        let (out, outgoing) = mpsc::unbounded_channel();
+        let opening = run_port(self.opener.clone(), name, outgoing, self.generation, self.reads.clone());
+        self.port = Some(Port { out, task: tokio::spawn(opening) });
     }
 
     fn log(&self, line: &str) {
@@ -230,85 +337,50 @@ impl<C: Core> Task<C> {
         });
     }
 
-    async fn write(&mut self, bytes: &[u8]) -> Option<Event> {
-        let writer = self.writer.as_mut()?;
-        let written = async {
-            writer.write_all(bytes).await?;
-            writer.flush().await
-        };
-        written.await.err().map(|_| Event::PortClosed)
+    fn write(&self, out: Out) {
+        if let Some(port) = &self.port {
+            let _ = port.out.send(out);
+        }
     }
 
-    async fn step(&mut self, event: Event) {
-        let mut pending = VecDeque::from([event]);
-        while let Some(event) = pending.pop_front() {
-            let effects = self.core.handle(event, self.started.elapsed());
-            for effect in effects {
-                let follow_up = match effect {
-                    Effect::Write(bytes) | Effect::Realtime(bytes) => self.write(&bytes).await,
-                    Effect::Push(push) => {
-                        let _ = self.pushes.send(push);
-                        None
-                    }
-                    Effect::OpenPort(port) => Some(self.open(port)),
-                    Effect::ClosePort => {
-                        self.close();
-                        None
-                    }
-                    Effect::ListPorts => Some(Event::Ports(self.host.list_ports())),
-                    Effect::Log(line) => {
-                        self.log(&line);
-                        None
-                    }
-                    Effect::ClearLogs => {
-                        self.host.clear_logs();
-                        None
-                    }
-                    Effect::PowerOff => {
-                        self.host.power_off();
-                        None
-                    }
-                    Effect::Exit => {
-                        self.host.exit();
-                        None
-                    }
-                    Effect::Respond { id, response } => {
-                        if let Some(answer) = self.responses.remove(&id) {
-                            let _ = answer.send(response);
-                        }
-                        None
-                    }
-                    Effect::SaveSettings(settings) => {
-                        self.persist.send_replace(Some(settings));
-                        None
-                    }
-                    Effect::Firmware(job) => {
-                        let (host, jobs) = (self.host.clone(), self.jobs.clone());
-                        tokio::spawn(async move {
-                            let result = tokio::task::spawn_blocking(move || host.firmware(job)).await;
-                            let result = result.unwrap_or_else(|e| JobResult::Saved(Err(e.to_string())));
-                            let _ = jobs.send(Event::FirmwareDone(result));
-                        });
-                        None
-                    }
-                    Effect::CreateDirectory(name) => {
-                        let _ = self.directories.send(name);
-                        None
-                    }
-                    Effect::Reply { id, reply } => {
-                        if let Some(answer) = self.requests.remove(&id) {
-                            let _ = answer.send(reply);
-                        }
-                        None
-                    }
-                    Effect::Leds(leds) => {
-                        self.host.leds(leds);
-                        None
-                    }
-                };
-                pending.extend(follow_up);
+    fn effect(&mut self, effect: Effect) {
+        match effect {
+            Effect::Write(bytes) => self.write(Out::Line(bytes)),
+            Effect::Realtime(bytes) => self.write(Out::Realtime(bytes)),
+            Effect::Push(push) => drop(self.pushes.send(push)),
+            Effect::OpenPort(port) => self.open(port),
+            Effect::ClosePort => self.close(),
+            Effect::ListPorts => {
+                let host = self.host.clone();
+                off_task(&self.jobs, move || Event::Ports(host.list_ports()));
             }
+            Effect::Log(line) => self.log(&line),
+            Effect::ClearLogs => self.host.clear_logs(),
+            Effect::PowerOff => self.host.power_off(),
+            Effect::Exit => self.host.exit(),
+            Effect::Respond { id, response } => {
+                if let Some(answer) = self.responses.remove(&id) {
+                    let _ = answer.send(response);
+                }
+            }
+            Effect::SaveSettings(settings) => drop(self.persist.send_replace(Some(settings))),
+            Effect::Firmware(job) => {
+                let host = self.host.clone();
+                off_task(&self.jobs, move || Event::FirmwareDone(host.firmware(job)));
+            }
+            Effect::CreateDirectory(name) => drop(self.directories.send(name)),
+            Effect::Reply { id, reply } => {
+                if let Some(answer) = self.requests.remove(&id) {
+                    let _ = answer.send(reply);
+                }
+            }
+            Effect::Leds(leds) => self.host.leds(leds),
         }
+    }
+
+    fn step(&mut self, event: Event) {
+        let effects = self.core.handle(event, self.started.elapsed());
+        effects.into_iter().for_each(|effect| self.effect(effect));
         let next = self.core.snapshot();
         self.snapshot.send_if_modified(|current| std::mem::replace(current, next) != *current);
     }
@@ -341,10 +413,9 @@ pub fn spawn<C: Core>(core: C, opener: Box<dyn PortOpener>, host: Arc<dyn Host>)
     let handle = MachineHandle { commands, realtime, pushes: pushes.clone(), snapshot };
     let mut task = Task {
         core,
-        opener,
+        opener: Arc::new(Mutex::new(opener)),
         host,
-        writer: None,
-        reader: None,
+        port: None,
         generation: 0,
         reads,
         pushes,
@@ -385,10 +456,14 @@ pub fn spawn<C: Core>(core: C, opener: Box<dyn PortOpener>, host: Arc<dyn Host>)
                     }
                     None => break,
                 },
-                _ = health.tick() => Event::Health { cpu: task.host.cpu_load() },
+                _ = health.tick() => {
+                    let host = task.host.clone();
+                    off_task(&task.jobs, move || Event::Health { cpu: host.cpu_load() });
+                    continue;
+                }
                 _ = clock.tick() => Event::Tick,
             };
-            task.step(event).await;
+            task.step(event);
         }
         task.close();
         drop(task);

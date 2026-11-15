@@ -1,11 +1,14 @@
 //! The tokio shell: the machine task's channels, the port it owns and the host it reaches.
 
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll, ready};
 use std::time::Duration;
 
 use serde_json::{Value, json};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, DuplexStream, Lines};
-use tokio::sync::mpsc;
+use tokio::io::{AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader, DuplexStream, Lines};
+use tokio::sync::{AcquireError, OwnedSemaphorePermit, Semaphore, mpsc};
 use wc_config::Settings;
 use wc_machine::files::{Reply, Request};
 use wc_machine::gpio::{Button, Leds};
@@ -126,6 +129,7 @@ impl Core for Echo {
                 return vec![Effect::Leds(Leds { play: true, ..Leds::default() })];
             }
             Event::Button(button) => (format!("{button:?}"), Effect::Realtime(b"!\n".to_vec())),
+            Event::Action(a) if a.command == "resume" => (a.command.clone(), Effect::Realtime(b"~\n".to_vec())),
             Event::Action(a) => (a.command.clone(), Effect::Write(format!("{}\n", a.command).into_bytes())),
             Event::Stop(a) => (a.command.clone(), Effect::Realtime(b"!\n".to_vec())),
             _ => return Vec::new(),
@@ -202,6 +206,99 @@ async fn the_configured_port_is_opened_and_carries_the_handshake() {
         .map(|push| push.data)
         .collect();
     assert!(logs.iter().any(|log| log["log"] == "alog" && log["data"].as_str().unwrap().ends_with(": Sent: B05  \n")));
+}
+
+type Acquire = Pin<Box<dyn Future<Output = Result<OwnedSemaphorePermit, AcquireError>> + Send>>;
+
+/// A port that takes a line only when the test lets one through; realtime bytes always pass.
+struct Gate {
+    permits: Arc<Semaphore>,
+    waiting: Option<Acquire>,
+    written: Arc<Mutex<Vec<String>>>,
+}
+
+impl AsyncWrite for Gate {
+    fn poll_write(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<std::io::Result<usize>> {
+        if !buf.starts_with(b"!") && !buf.starts_with(b"~") {
+            let permits = self.permits.clone();
+            let permit =
+                ready!(self.waiting.get_or_insert_with(|| Box::pin(permits.acquire_owned())).as_mut().poll(cx));
+            self.waiting = None;
+            permit.unwrap().forget();
+        }
+        self.written.lock().unwrap().push(String::from_utf8_lossy(buf).trim_end().to_string());
+        Poll::Ready(Ok(buf.len()))
+    }
+    fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+    fn poll_shutdown(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+}
+
+struct Gated(Option<Gate>);
+
+impl PortOpener for Gated {
+    fn open(&mut self, _: &str) -> std::io::Result<Serial> {
+        let gate = self.0.take().expect("opened once");
+        Ok((Box::new(tokio::io::empty()), Box::new(gate)))
+    }
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn realtime_bytes_jump_the_queued_lines_and_a_stop_drops_them() {
+    let (permits, written) = (Arc::new(Semaphore::new(0)), Arc::new(Mutex::new(Vec::new())));
+    let gate = Gate { permits: permits.clone(), waiting: None, written: written.clone() };
+    let core = Echo { seen: Arc::default(), inner: with_port() };
+    let (handle, _task) = spawn(core, Box::new(Gated(Some(gate))), Arc::new(NoHost));
+    let send = |commands: &[&str]| commands.iter().for_each(|c| handle.send(Event::Action(action(c))));
+    let settle = || tokio::time::sleep(Duration::from_millis(10));
+    send(&["open", "zero", "resume"]);
+    settle().await;
+    assert_eq!(*written.lock().unwrap(), ["~"], "nothing had gone out, so ~ went first");
+    permits.add_permits(1);
+    send(&["one"]);
+    settle().await;
+    send(&["two", "three", "resume"]);
+    settle().await;
+    assert_eq!(*written.lock().unwrap(), ["~", "zero"], "one waits on the port, and ~ waits for it");
+    permits.add_permits(1);
+    settle().await;
+    assert_eq!(*written.lock().unwrap(), ["~", "zero", "one", "~"]);
+    handle.send(Event::Action(action("stopRun")));
+    handle.send(Event::Action(action("after")));
+    settle().await;
+    permits.add_permits(1);
+    settle().await;
+    let expected = ["~", "zero", "one", "~", "!", "after"];
+    assert_eq!(*written.lock().unwrap(), expected, "two was cut short and three dropped");
+}
+
+/// Panics on its first open, as a driver might; the next attempt still gets the opener.
+struct Panicky {
+    opens: Arc<Mutex<usize>>,
+}
+
+impl PortOpener for Panicky {
+    fn open(&mut self, port: &str) -> std::io::Result<Serial> {
+        let mut opens = self.opens.lock().unwrap();
+        *opens += 1;
+        if *opens == 1 {
+            drop(opens);
+            panic!("the driver fell over");
+        }
+        NoPort.open(port)
+    }
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn an_opener_that_panics_is_a_failed_open_and_is_tried_again() {
+    let opens = Arc::new(Mutex::new(0));
+    let (handle, _task) = spawn(with_port(), Box::new(Panicky { opens: opens.clone() }), Arc::new(NoHost));
+    tokio::time::sleep(Duration::from_secs(6)).await;
+    assert_eq!(*opens.lock().unwrap(), 2);
+    assert_eq!(handle.snapshot().link, LinkStatus::Disconnected);
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]

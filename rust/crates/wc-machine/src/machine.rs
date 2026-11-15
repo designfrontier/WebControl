@@ -411,6 +411,10 @@ impl Machine {
             }
             Event::ControllerLine(line) => self.controller_line(&line, now, &mut effects),
             Event::Tick => self.tick(now, &mut effects),
+            Event::PortOpened { .. } | Event::PortFailed { .. } if self.link == Link::HandedOff => {
+                // An open still on its way when a rollback took the link; avrdude needs the port.
+                effects.extend(matches!(event, Event::PortOpened { .. }).then_some(Effect::ClosePort));
+            }
             Event::PortOpened { port } => self.port_opened(port, now, &mut effects),
             Event::PortFailed { port, error } => {
                 tracing::debug!(port, error, "could not open the controller's port");
