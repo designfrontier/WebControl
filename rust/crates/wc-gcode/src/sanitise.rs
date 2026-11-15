@@ -104,6 +104,13 @@ mod tests {
     }
 
     #[test]
+    fn a_blank_line_is_never_refused_however_long() {
+        assert_eq!(stream_problem(&" ".repeat(200), Positioning::Absolute, &NO_SHIFT), None);
+        assert_eq!(stream_problem(&"\x1c".repeat(200), Positioning::Absolute, &NO_SHIFT), None);
+        assert_eq!(stream_problem("", Positioning::Absolute, &NO_SHIFT), None);
+    }
+
+    #[test]
     fn the_alerts_name_the_line_and_the_fix() {
         assert_eq!(
             LineProblem::UnclosedComment.alert(4),
