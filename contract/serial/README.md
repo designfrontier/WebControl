@@ -241,8 +241,8 @@ With **WebControl Settings → Record serial traffic** on, the Python backend ap
 
 | `type`    | Fields                                                     |
 | --------- | ---------------------------------------------------------- |
-| `session` | `started` (ISO wall time), `webcontrol`, `port`, `units`, `home`, `settings` (Maslow and Advanced sections, key → value) |
-| `tx`      | `data` (the exact bytes written), `cause` (the `seq` of the UI action that caused it, if any) |
+| `session` | `started` (ISO wall time), `webcontrol`, `port`, `units`, `home`, `settings` (Maslow and Advanced sections, key → value); `source` for an imported log |
+| `tx`      | `data` (the exact bytes written), `cause` (the `seq` of the most recent UI action, if any) |
 | `rx`      | `data` (the line as read, with its `\r\n`)                 |
 | `ui`      | `seq`, `command`, `arg`, `arg1`                            |
 | `gcode`   | `filename`, `lines` (a file was loaded)                    |
@@ -252,10 +252,20 @@ Writing happens on a background thread from a bounded queue: a full queue drops 
 never slows streaming. Files rotate at 5 MB (`<session>.jsonl`, `<session>.1.jsonl`, ...) and the directory keeps the
 newest 40 files.
 
-`tools/convert_recording.py <recording.jsonl> [--gcode file.nc] [--name name]` writes a transcript skeleton: setup
-from the `session` line (start `boot` when the recording begins at the connect), `ui`, `rx` and `tx` events in order,
-`tick` for gaps of 0.25 s or more, and a `comment` on every tx with no known cause. Status reports are kept (they end
-resyncs) unless `--drop-status`. Expect events are not invented; add them by hand, then replay.
+`tools/convert_recording.py <recording.jsonl>... [--gcode file.nc] [--name name]` writes a transcript skeleton to
+`transcripts/` (and copies the G-code into `gcode/`):
+
+- setup from the `session` line: start `boot` (a session begins at the connect), its units and home, and only the
+  settings that differ from `defaultwebcontrol.json`;
+- `ui`, `rx` and `tx` events in order, with `tick` for every gap of 0.25 s or more (capped at 4.5 s, under the 5 s
+  link timeout);
+- a `TODO` comment on the first write of any burst that follows a second or more without writes and no recorded action
+  (every such burst in a v0.94 log), and a comment where the recorder dropped records;
+- the firmware from the `B05` reply (and 51.292 from its rewrite notice).
+
+Status reports are kept (they end resyncs) unless `--drop-status`. Expect events are not invented; add them by hand,
+trim, then replay. `tests/test_convert_recording.py` records sessions through the backend recorder, converts them and
+replays the result.
 
 ## v0.94 logs
 
@@ -281,9 +291,24 @@ and `DataStructures/loggingQueue.py` at fe1f113:
 - Lines are buffered and flushed in batches by a thread, so a crash loses the last few.
 
 `tools/import_v094_log.py log.txt [--alog alog.txt] --out DIR` splits the log at every `+++++` header and at every
-connect (the `Sent:` of the units line that follows the boot banner) and writes one recording per session, which
-`convert_recording.py` then turns into a transcript skeleton. With `--alog`, lines `log.txt` lost while suspended are
-taken from `alog.txt`. UI actions are not in v0.94 logs; the converter marks every tx as having no known cause.
+connect, and writes one recording per connect, named by its start time, for `convert_recording.py`:
+
+- v0.94 sends `B05`, the units and `$$` when it opens the port, so a connect starts at each `Sent: B05`, or at the
+  boot banner (`PCB v1.`, `Grbl v1.00`, `ready`) up to 10 s before it. Lines before a process's first connect are
+  dropped.
+- `Sent: X` becomes a tx of `X\n`; any other entry an rx of the line plus `\r\n`. `Ground Control Version` and the
+  suspend/resume markers are dropped; a `Send FAILED:` write is left out with a warning.
+- The session line gets the units from the first `G20`/`G21` written, and the settings WebControl ended the handshake
+  with: each `$n=` value from the `$$` reply, replaced by any `$n=` WebControl wrote, mapped back to setting keys through
+  `defaultwebcontrol.json`'s `firmwareKey`. Home and the G-code file are not in the log.
+- With `--alog`, entries `log.txt` lacks inside a suspended window are taken from `alog.txt`, matched by the header's
+  start time.
+
+UI actions are not in v0.94 logs, so the transcript needs its `ui` events added by hand where the TODO comments are.
+v0.94's handshake (`B05` first) also differs from today's, so a converted session is a starting point: keep the part
+that shows the behaviour (usually a job), restart it from `start: connected`, and re-record or hand-fix the tx.
+`tests/fixtures/v094/` holds a synthetic log and alog in this format; `tests/test_import_v094_log.py` checks the
+importer against it.
 
 ## Known warts
 
