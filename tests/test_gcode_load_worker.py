@@ -221,3 +221,22 @@ def test_a_board_worker_exception_is_logged_and_reported(data, monkeypatch):
 
     assert "cells broke" in "\n".join(drain(data.console_queue))
     assert ("Alert", "Alert", "Error with processing gcode") in ui_messages(data)
+
+
+def test_a_queued_file_load_keeps_its_own_name(data, loader, monkeypatch, tmp_path):
+    log = []
+    slow_builds(monkeypatch, log)
+    first, second = tmp_path / "first.nc", tmp_path / "second.nc"
+    first.write_text("G0 X1\n")
+    second.write_text("G0 X2\n")
+    loader.filename = str(first)
+
+    loads = [gevent.spawn(loader.loadUpdateFile)]
+    gevent.sleep(0.05)
+    loader.filename = str(second)
+    loads.append(gevent.spawn(loader.loadUpdateFile))
+    gevent.joinall(loads)
+
+    assert [load.value for load in loads] == [True, True]
+    assert data.gcode[0] == "G0 X2 "
+    assert loader.filename == str(second)

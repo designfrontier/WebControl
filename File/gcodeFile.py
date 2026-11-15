@@ -144,7 +144,7 @@ class GCodeFile(MakesmithInitFuncs):
         # A calibration pattern can start a job while the worker runs; its gcode must not be replaced.
         if self.data.gcodeLocked():
             return self._loadFailed(filename, GCODE_LOCKED_MESSAGE, GCODE_LOCKED_MESSAGE)
-        self._adopt(worker, fromFile)
+        self._adopt(worker, filename)
         if fromFile:
             self.data.serialRecorder.gcodeLoaded(filename, len(self.data.gcode))
         self.data.gcodeFile.isChanged = True
@@ -189,17 +189,19 @@ class GCodeFile(MakesmithInitFuncs):
         worker._buildPreview()
         return worker
 
-    def _adopt(self, worker, fromFile):
+    def _adopt(self, worker, filename):
         built = worker.data
         self.data.gcode = built.gcode
-        self.data.gcodeIndex = 0 if fromFile else min(self.data.gcodeIndex, len(built.gcode) - 1)
+        self.data.gcodeIndex = 0 if filename is not None else min(self.data.gcodeIndex, len(built.gcode) - 1)
         self.data.zMoves = built.zMoves
         if built.toleranceChanged:
             self.data.tolerance = built.tolerance
             self.data.config.setValue("Computed Settings", "tolerance", built.tolerance)
         self.data.gcodeFileUnits = built.gcodeFileUnits
         self.data.compressedGCode3D = built.compressedGCode3D
-        self.__dict__.update({key: value for key, value in vars(worker).items() if key != "data"})
+        # The worker copied filename before any queued request renamed it.
+        self.__dict__.update({key: value for key, value in vars(worker).items() if key not in ("data", "filename")})
+        self.filename = self.filename if filename is None else filename
         built.console_queue.replayOnto(self.data.console_queue)
         built.ui_queue1.replayOnto(self.data.ui_queue1)
 
