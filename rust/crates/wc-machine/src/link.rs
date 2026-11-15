@@ -12,8 +12,9 @@ use wc_firmware::{Reply, classify, split_glued};
 use wc_gcode::firmware_gcode::{only_selects_tool, tool_change_line};
 use wc_gcode::sanitise::{problem_with, sanitise};
 use wc_gcode::shift::positioning_set_by;
-use wc_protocol::main::{ActivateModal, Alarm, ClearAlarm, ControllerMessage, PauseButton, Units};
+use wc_protocol::main::{ActivateModal, Alarm, ControllerMessage, PauseButton, Units};
 
+use crate::alarm::survives_alarm;
 use crate::clearance::BitHeight;
 use crate::gpio::Led;
 use crate::job::{Flow, pause_button};
@@ -185,6 +186,9 @@ impl Machine {
         {
             probe.zeroed = true;
         }
+        if line == "position loaded at:" {
+            self.controller.stop_reload = false;
+        }
         let reply = classify(line);
         self.acknowledge(line, &reply, effects);
         self.react(line, reply, now, effects);
@@ -270,14 +274,14 @@ impl Machine {
                     _ if text.contains("Position Lost") => "Alarm: Position Lost.  Reset Chains.".into(),
                     other => other,
                 };
-                effects.push(broadcast(&Alarm { message }));
+                self.latch_alarm(message, true, effects);
             }
             Reply::BufferOverflow => {
                 self.halt(now, effects);
-                effects.push(broadcast(&Alarm { message: "Alarm: Controller Buffer Overflow".into() }));
+                self.latch_alarm("Alarm: Controller Buffer Overflow".into(), true, effects);
             }
             Reply::FirmwareVersion(version) => {
-                effects.push(broadcast(&ClearAlarm::new()));
+                effects.push(self.alarm_after_boot());
                 effects.push(controller_message(line));
                 self.firmware_version = version.unwrap_or(self.firmware_version);
                 if let Some(version) = version {
@@ -303,7 +307,7 @@ impl Machine {
         } else if text.contains("Unable to find valid") {
             // Setting the sprockets to zero reports a zero chain length, which is expected.
             if !(text.contains("lengths 0.00") || text.contains(", 0.00")) {
-                effects.push(broadcast(&Alarm { message: text.into() }));
+                self.unplaceable_sled(text.into(), effects);
             }
         } else {
             effects.push(broadcast(&ActivateModal::notification(body, false)));
@@ -396,6 +400,7 @@ impl Machine {
             false => self.controller.accounting.is_empty() && self.controller.ready,
         };
         self.job.flow == Flow::Streaming
+            && !self.alarm_held()
             && !self.probing
             && !self.gcode.is_empty()
             && self.controller.queue.is_empty()
@@ -409,6 +414,10 @@ impl Machine {
             let Some(next) = self.controller.queue.pop_front() else {
                 break;
             };
+            if self.alarm_held() && !survives_alarm(&next) {
+                tracing::warn!(?next, "dropped: an alarm holds the controller");
+                continue;
+            }
             let written = match next {
                 Queued::SettingsPush => {
                     self.expand_settings_push(effects);

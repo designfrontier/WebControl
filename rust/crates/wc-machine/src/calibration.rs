@@ -231,6 +231,9 @@ impl Machine {
         if self.probing {
             return Response::error(409, crate::actions::PROBING);
         }
+        if self.alarm_held() {
+            return Response::error(409, crate::alarm::HELD);
+        }
         if let Err(refused) = self.accept_result(kind) {
             return Response::error(409, &refused.message(NOTHING_TO_ACCEPT));
         }

@@ -228,7 +228,8 @@ impl Machine {
     /// or higher, and lowers the bit only if it is still the bit that paused there.
     pub(crate) fn resume_run(&mut self, now: Duration, effects: &mut Vec<Effect>) -> Option<String> {
         let tool_change = self.job.manual_z == Some(true);
-        let manual = self.job.manual_z == Some(false);
+        // An alarm stopped the firmware, so it no longer waits for Z: the job returns as from any other halt.
+        let manual = self.job.manual_z == Some(false) && !self.alarm_held();
         if self.job.flow == Flow::Streaming && !manual {
             // A second Resume must not lift and replunge mid-cut.
             return None;
@@ -249,6 +250,7 @@ impl Machine {
             self.job.paused_at = None;
             self.push_gcode_position(effects);
             self.job.flow = Flow::Streaming;
+            self.clear_alarm(effects);
         }
         effects.push(pause_button(PauseButton::Pause));
         self.leds.set(Led::Pause, false);
@@ -261,6 +263,7 @@ impl Machine {
         self.measure = None;
         self.pid.end_tests();
         self.realtime("!", now, effects);
+        self.controller.stop_reload = true;
         self.drop_user_commands();
         self.end_job();
         let job = &mut self.job;
@@ -278,6 +281,7 @@ impl Machine {
 
     pub(crate) fn stop_run(&mut self, now: Duration, effects: &mut Vec<Effect>) -> Option<String> {
         self.stopped(now, effects);
+        self.alarm = None;
         self.push_line_position(effects);
         effects.push(broadcast(&ClearAlarm::new()));
         self.leds.light(Led::Stop);

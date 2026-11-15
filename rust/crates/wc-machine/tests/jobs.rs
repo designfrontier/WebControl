@@ -128,7 +128,10 @@ fn a_controller_pause_lets_jogs_through_and_play_resumes_with_tilde() {
     alarm.rx("ALARM: Position Lost");
     alarm.advance(300);
     alarm.rx("<Idle,MPos:0.00,0.00,0.00,WPos:0,0,0>");
-    assert!(alerts(&alarm.act_with("move", json!("right"), json!("10"))).is_empty());
+    alarm.clear_written();
+    let jog = alarm.act_with("move", json!("right"), json!("10"));
+    assert!(alerts(&jog)[0].contains("Press Stop to clear it, or Play"), "{jog:?}");
+    assert!(written(&jog).is_empty() && alarm.run_to_quiet().is_empty(), "an alarm refuses jogs");
     assert_eq!(written(&alarm.act("startRun")), ["~"], "Play resumes an alarmed job");
 }
 

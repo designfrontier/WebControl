@@ -154,8 +154,9 @@ So the timing tolerance is: a write may come any time between the previous event
 is spelled out with `tick`: after `!`, an ALARM or `Buffer overflow!` the backend ignores acks and holds lines until
 it reads a status report once its input has run dry at least 0.25 s after the halt, so those transcripts `tick`
 0.3 s and then send a status report; `stop_ignores_a_status_report_read_too_soon` pins that an earlier report
-releases nothing. The backend
-treats 5 s without any controller line as a lost connection, so no transcript waits that long without an rx.
+releases nothing. After an ALARM or overflow the resync releases only `$` and modal lines: anything that moves waits
+for Stop, or Play on the held job (Rust-intended deviation 4). The backend treats 5 s without any controller line as a
+lost connection, so no transcript waits that long without an rx.
 
 The Python recorder used the same rules, so a recorded transcript replayed: its controller model answered only once
 the backend had been quiet for `quiet` seconds, one line per settle.
@@ -196,6 +197,7 @@ the backend had been quiet for `quiet` seconds, one line per settle.
 | `stop_with_a_stale_ok_in_flight` | a late ok after `!` does not release the next command early |
 | `stop_ignores_a_status_report_read_too_soon` | a status report within 0.25 s of `!` does not end the resync |
 | `alarm_mid_cut_rewinds_and_resumes` | ALARM: halt, rewind to the oldest unacknowledged line, Play resumes there |
+| `alarm_mid_home_holds_the_plunge_until_stop` | The owner's Home with the motor supply off: ALARM mid-travel; Home's `G00 Z0` never goes out, a jog is refused, Stop clears it and the next jog goes |
 | `buffer_overflow_halts_streaming` | `Buffer overflow!` and its buffer dump: halt, rewind, Stop |
 | `line_too_long_pauses_the_job` | a line over 126 bytes as written is never sent; the job pauses with an alert |
 | `unclosed_comment_pauses_the_job` | an unclosed `(` is never sent; the job pauses with an alert |
@@ -517,3 +519,9 @@ Where the Rust backend writes something different from Python by owner decision.
    (`spec/firmware.md` §9, B13), so a resume or restart that restores `M3` or `M4` on a controller reporting 51.29
    follows it with the file's last `S` on its own line (`S12000.0`), if the file set one. On 51.27 and stock the
    restart sends the bare `M3`, as before. Transcript: `resume_on_51_292_sets_the_spindle_speed_after_m3`.
+4. **An alarm holds everything that moves** (2026-11-15). Python's resync after an ALARM or `Buffer overflow!`
+   (35363b3) released the commands still queued behind the halted line once the status report came, so on the owner's
+   machine Home's `G00 Z0` went out 0.4 s after the firmware had flushed the travel (v0.94 never acked the halted line
+   and so held its queue until Stop). Rust drops those commands and refuses new ones until Stop, or Play on the held
+   job (`spec/firmware.md` B17). Transcript: `alarm_mid_home_holds_the_plunge_until_stop`, built from the owner's
+   `webcontrol-rs.log` lines.
