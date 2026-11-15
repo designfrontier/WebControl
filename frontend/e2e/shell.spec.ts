@@ -64,6 +64,7 @@ test("a server alert stacks above an open modal and leaves it usable", async ({ 
     // The alert is on top: Actions behind it is inert, so its buttons cannot be clicked.
     const sync = actions.getByRole("button", { name: "Sync settings" });
     await expect(sync.click({ trial: true, timeout: 1_000 })).rejects.toThrow();
+    await alert.getByRole("button", { name: "Stop machine" }).click({ trial: true, timeout: 1_000 });
 
     const seen = await closeServerDialogs(page);
     expect(seen.join("\n")).toContain("No GCode file loaded.");
