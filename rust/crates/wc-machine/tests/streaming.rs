@@ -6,6 +6,8 @@ mod rig;
 use rig::sim::SimRig;
 use rig::{Rig, alerts, pushed, settings, written};
 use serde_json::json;
+use wc_machine::Event;
+use wc_machine::files::{Origin, Request};
 
 fn file(lines: &[&str]) -> String {
     lines.iter().map(|line| format!("{line}\n")).collect()
@@ -223,4 +225,26 @@ fn an_air_cut_against_the_simulator_runs_every_pause_and_ends_where_the_file_doe
     assert!(written.contains(&"G1 Z-1.0 F100.0  ".to_string()), "{written:?}");
     assert_eq!(rig.sim.position(), [0.0, 0.0, 5.0]);
     assert_eq!(rig.sim.overflows(), 0);
+}
+
+#[test]
+fn moving_the_controller_to_another_port_mid_job_pauses_it() {
+    let mut rig = Rig::connected_with(settings(&[("Maslow Settings", "COMport", json!("/dev/ttyACM0"))]));
+    rig.machine.load_gcode(&file(&["G0 X1", "G0 X2"]));
+    rig.act("startRun");
+    let body = json!({"values": {"COMport": "/dev/ttyUSB0"}});
+    let request = wc_machine::Request::UpdateSettings { section: "maslow".into(), body };
+    rig.send(Event::Edit { id: 1, request });
+    let snapshot = rig.machine.snapshot();
+    assert_eq!((snapshot.upload_flag, snapshot.job_in_progress, snapshot.gcode_index), (2, true, 0));
+}
+
+#[test]
+fn an_inch_files_line_position_is_shown_in_the_machines_mm() {
+    let mut rig = Rig::connected();
+    let gcode = wc_machine::files::Gcode::parse("G0 X2\nG20\nG0 X1\n", &settings(&[])).unwrap();
+    let load = Request::LoadGcode { gcode: Box::new(gcode), file: None, origin: Origin::Open };
+    rig.send(Event::Request { id: 1, request: load });
+    let effects = rig.act("stopRun");
+    assert_eq!(pushed(&effects, "gcodePositionMessage")[0]["xval"], 2.0 * 25.4);
 }
