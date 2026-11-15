@@ -239,3 +239,52 @@ async fn a_client_closing_ends_its_session() {
     let mut other = open(&address, "/MaslowCNC").await;
     handshake(&mut other).await;
 }
+
+/// Floods every new UI client with pushes and records each Stop it handles.
+struct Flood(Machine, std::sync::Arc<tokio::sync::Notify>);
+
+impl Core for Flood {
+    fn handle(&mut self, event: Event, now: Duration) -> Vec<Effect> {
+        match event {
+            Event::ClientConnected { .. } => {
+                let payload = vec![b'x'; 256 * 1024];
+                (0..128).map(|_| Effect::Push(Push::message(Envelope::base64("gcodeUpdate", Some(&payload))))).collect()
+            }
+            Event::Stop(_) => {
+                self.1.notify_one();
+                Vec::new()
+            }
+            other => self.0.handle(other, now),
+        }
+    }
+    fn snapshot(&self) -> Snapshot {
+        self.0.snapshot()
+    }
+}
+
+/// A client text frame with an all-zero mask, so the payload goes out as written.
+fn masked_text(text: &str) -> Vec<u8> {
+    let length = u16::try_from(text.len()).unwrap();
+    let mut frame = vec![0x81, 0x80 | 126];
+    frame.extend(length.to_be_bytes());
+    frame.extend([0; 4]);
+    frame.extend(text.as_bytes());
+    frame
+}
+
+#[tokio::test]
+async fn stop_reaches_the_machine_while_the_client_is_not_reading_its_pushes() {
+    let stopped = std::sync::Arc::new(tokio::sync::Notify::new());
+    let (machine, _task) = spawn(Flood(Machine::new("h"), stopped.clone()), None);
+    let address = serve_with(machine, PingConfig::default()).await;
+    let socket = tokio::net::TcpSocket::new_v4().unwrap();
+    socket.set_recv_buffer_size(4096).unwrap();
+    let mut raw = socket.connect(address.parse().unwrap()).await.unwrap();
+    let upgrade = "GET /ws?ns=%2FMaslowCNC HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\
+        Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n";
+    raw.write_all(upgrade.as_bytes()).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    raw.write_all(&masked_text(&action("stopRun", "").to_string())).await.unwrap();
+    let heard = tokio::time::timeout(Duration::from_secs(3), stopped.notified()).await;
+    assert!(heard.is_ok(), "Stop waited behind pushes the client had not read");
+}

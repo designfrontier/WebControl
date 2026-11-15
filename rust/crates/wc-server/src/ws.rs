@@ -7,6 +7,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
+use tokio::sync::Notify;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::time::{Instant, interval_at, sleep_until};
 use wc_machine::Event;
@@ -59,38 +60,51 @@ async fn session(socket: WebSocket, ns: Namespace, state: AppState) {
         state.machine.send(Event::ClientConnected { sid: sid.clone() });
     }
     tracing::info!(sid, ns = ns.path(), "client connected");
-    let mut pings = interval_at(Instant::now() + state.ping.interval, state.ping.interval);
-    let mut pong_deadline: Option<Instant> = None;
-    loop {
-        tokio::select! {
-            incoming = rx.next() => match incoming {
-                Some(Ok(Message::Text(text))) => received(&state, ns, text.as_str()),
-                Some(Ok(Message::Pong(_))) => pong_deadline = None,
-                Some(Ok(Message::Close(_))) | Some(Err(_)) | None => break,
-                Some(Ok(_)) => {}
-            },
-            push = pushes.recv() => match push {
-                Ok(push) if is_for(&push, ns, &sid) => {
-                    if tx.send(Message::text(push.frame().encode())).await.is_err() {
-                        break;
-                    }
-                }
-                Ok(_) => {}
-                Err(RecvError::Lagged(missed)) => tracing::warn!(sid, missed, "client fell behind; pushes dropped"),
-                Err(RecvError::Closed) => break,
-            },
-            _ = pings.tick() => {
-                if tx.send(Message::Ping(Default::default())).await.is_err() {
-                    break;
-                }
-                pong_deadline.get_or_insert(Instant::now() + state.ping.timeout);
-            }
-            _ = sleep_until(pong_deadline.unwrap_or_else(Instant::now)), if pong_deadline.is_some() => {
-                tracing::info!(sid, "no pong; closing");
-                let _ = tx.send(Message::Close(None)).await;
-                break;
+    let pongs = Notify::new();
+    // Reading runs beside writing so a client slow to take its pushes can still Stop at once.
+    let reader = async {
+        while let Some(Ok(message)) = rx.next().await {
+            match message {
+                Message::Text(text) => received(&state, ns, text.as_str()),
+                Message::Pong(_) => pongs.notify_one(),
+                Message::Close(_) => break,
+                _ => {}
             }
         }
+    };
+    let writer = async {
+        let mut pings = interval_at(Instant::now() + state.ping.interval, state.ping.interval);
+        let mut pong_deadline: Option<Instant> = None;
+        loop {
+            tokio::select! {
+                push = pushes.recv() => match push {
+                    Ok(push) if is_for(&push, ns, &sid) => {
+                        if tx.send(Message::text(push.frame().encode())).await.is_err() {
+                            break;
+                        }
+                    }
+                    Ok(_) => {}
+                    Err(RecvError::Lagged(missed)) => tracing::warn!(sid, missed, "client fell behind; pushes dropped"),
+                    Err(RecvError::Closed) => break,
+                },
+                _ = pongs.notified() => pong_deadline = None,
+                _ = pings.tick() => {
+                    if tx.send(Message::Ping(Default::default())).await.is_err() {
+                        break;
+                    }
+                    pong_deadline.get_or_insert(Instant::now() + state.ping.timeout);
+                }
+                _ = sleep_until(pong_deadline.unwrap_or_else(Instant::now)), if pong_deadline.is_some() => {
+                    tracing::info!(sid, "no pong; closing");
+                    let _ = tx.send(Message::Close(None)).await;
+                    break;
+                }
+            }
+        }
+    };
+    tokio::select! {
+        _ = reader => {}
+        _ = writer => {}
     }
     tracing::info!(sid, ns = ns.path(), "client disconnected");
 }
