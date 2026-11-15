@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "meta": {
     "name": "touch_z_without_zeroing_alerts",
-    "description": "Rust only: an `ok` for a probe with no `z axis zeroed` before it (no Z axis attached, or the target is the current Z; holey GCode.cpp G38) means Z was not zeroed, so the user is told. Python says nothing.",
+    "description": "An `ok` for a probe with no `z axis zeroed` before it (no Z axis attached, or the target is the current Z; holey GCode.cpp G38) means Z was not zeroed, so the user is told. Python says nothing.",
     "firmware": {
       "variant": "holey",
       "version": "51.27"

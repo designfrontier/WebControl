@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "meta": {
     "name": "probe_in_file_misses_and_waits_at_the_probe",
-    "description": "Rust only: a G38.2 from the file that never touches: the firmware's `error: probe did not connect` answers it and the firmware stops (`sys.stop`). The job is held at the probe line with the Touch Z Failed alert, and Play returns at safe height and probes again. Python streams on after the miss.",
+    "description": "A G38.2 from the file that never touches: the firmware's `error: probe did not connect` answers it and the firmware stops (`sys.stop`). The job is held at the probe line with the Touch Z Failed alert, and Play returns at safe height and probes again. Python streams on after the miss.",
     "firmware": {
       "variant": "holey",
       "version": "51.27"

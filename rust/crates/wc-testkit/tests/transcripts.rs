@@ -21,32 +21,11 @@ fn every_transcript_fits_the_schema_and_the_serde_types() {
 }
 
 #[test]
-fn rust_overrides_fit_the_schema_and_replace_shared_transcripts_by_name() {
-    let validator = schema_validator();
-    let overrides = Transcript::overrides();
-    assert!(!overrides.is_empty());
-    overrides.iter().for_each(|(path, transcript)| {
-        let text = std::fs::read_to_string(path).unwrap();
-        let raw: Value = serde_json::from_str(&text).unwrap();
-        assert!(validator.iter_errors(&raw).next().is_none(), "{}", path.display());
-        assert_eq!(path.file_stem().unwrap().to_str().unwrap(), transcript.meta.name);
-        assert!(transcript.meta.description.starts_with("Rust"), "{} says why Rust differs", transcript.meta.name);
-    });
-    let shared = Transcript::corpus();
-    let rust_only: Vec<&str> = overrides
-        .iter()
-        .map(|(_, t)| t)
-        .filter(|t| !shared.iter().any(|(_, s)| s.meta.name == t.meta.name))
-        .inspect(|t| assert!(t.meta.description.starts_with("Rust only"), "{} replaces nothing", t.meta.name))
-        .map(|t| t.meta.name.as_str())
-        .collect();
-    assert!(rust_only.contains(&"touch_z_without_zeroing_alerts"), "{rust_only:?}");
-    let rust = Transcript::rust_corpus();
-    assert_eq!(rust.len(), shared.len() + rust_only.len(), "each override replaces one shared transcript or none");
-    let names: Vec<&str> = rust.iter().map(|(_, t)| t.meta.name.as_str()).collect();
+fn the_corpus_is_sorted_by_name() {
+    let corpus = Transcript::corpus();
+    let names: Vec<&str> = corpus.iter().map(|(_, t)| t.meta.name.as_str()).collect();
     assert!(names.windows(2).all(|pair| pair[0] < pair[1]), "sorted and unique");
-    let replaced = rust.iter().find(|(_, t)| t.meta.name == "connect_boot_handshake").unwrap();
-    assert!(replaced.0.to_string_lossy().contains("transcripts-rust"));
+    assert!(names.contains(&"touch_z_without_zeroing_alerts"), "{names:?}");
 }
 
 #[test]

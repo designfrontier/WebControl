@@ -233,7 +233,7 @@
             "gcodeIndex": { "type": "integer", "minimum": 0, "description": "The next file line to send." },
             "units": { "enum": ["MM", "INCHES"] },
             "manualZAxisAdjust": { "type": "boolean" },
-            "probing": { "type": "boolean", "description": "A G38.2 probe is queued or descending (Rust only)." },
+            "probing": { "type": "boolean", "description": "A G38.2 probe is queued or descending." },
             "pauseButtonSetting": { "enum": ["Pause", "Resume"] },
             "currentTool": { "type": "integer" },
             "positioningMode": { "enum": ["G90", "G91"] },

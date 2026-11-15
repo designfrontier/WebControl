@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "meta": {
     "name": "probe_in_file_waits_for_the_touch",
-    "description": "Rust only: buffered streaming stops behind a G38.2 from the file until the controller answers it, as Touch Z does: nothing more is written, moving actions are refused and actions that move nothing still run. Python streams on behind the probe and does not track it.",
+    "description": "Buffered streaming stops behind a G38.2 from the file until the controller answers it, as Touch Z does: nothing more is written, moving actions are refused and actions that move nothing still run. Python streams on behind the probe and does not track it.",
     "firmware": {
       "variant": "holey",
       "version": "51.27"

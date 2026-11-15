@@ -2,12 +2,12 @@
   "formatVersion": 1,
   "meta": {
     "name": "connect_eeprom_read_fail_restores_settings",
-    "description": "A boot that reports `error: EEPROM read fail` (every firmware upgrade or downgrade) gets every setting written back, unknown keys from their defaults, then a $$ to verify, and the user is told.",
+    "description": "Wart 4, not copied: a boot that reports `error: EEPROM read fail` (every firmware upgrade or downgrade) gets the same push as any boot, with the keys WebControl never knew written from their defaults, then a $$ to verify, and the user is told.",
     "firmware": {
       "variant": "holey",
       "version": "51.27"
     },
-    "webcontrolCommit": "81ff3d4"
+    "webcontrolCommit": "877ba83"
   },
   "setup": {
     "units": "MM",
@@ -18,25 +18,20 @@
     "start": "boot"
   },
   "events": [
-    {"type": "rx", "line": "PCB v1.1 Detected"},
+    {"type": "rx", "line": "PCB v1.6 TLE9201  Detected"},
+    {"type": "rx", "line": "FAKE_SERVO off"},
     {"type": "rx", "line": "error: EEPROM read fail. Using default settings."},
-    {"type": "tx", "bytes": "G21  \n"},
     {"type": "rx", "line": "Grbl v1.00"},
     {"type": "rx", "line": "ready"},
+    {"type": "rx", "line": "ok", "comment": "nothing goes out before the boot ends"},
+    {"type": "tx", "bytes": "B05  \n", "comment": "B05 first, so the push below knows the firmware"},
+    {"type": "rx", "line": "Firmware Version 51.27"},
     {"type": "rx", "line": "ok"},
-    {"type": "tx", "bytes": "$$ \n"},
-    {"type": "rx", "line": "G21"},
+    {"type": "tx", "bytes": "G21  \n"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G90  \n"},
     {"type": "rx", "line": "ok"},
-    {"type": "tx", "bytes": "B05  \n"},
-    {"type": "rx", "line": "G90"},
-    {"type": "rx", "line": "ok"},
-    {"type": "tx", "bytes": "$13=63.5000 \n"},
-    {"type": "rx", "line": "B05"},
-    {"type": "rx", "line": "Firmware Version 51.27"},
-    {"type": "rx", "line": "ok"},
-    {"type": "tx", "bytes": "$0=2438.4 \n"},
+    {"type": "tx", "bytes": "$0=2438.4 \n", "comment": "every setting the firmware takes, in key order, $13 included"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "$1=1219.2 \n"},
     {"type": "rx", "line": "ok"},
@@ -61,6 +56,8 @@
     {"type": "tx", "bytes": "$11=1651 \n"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "$12=8113.73 \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "$13=63.5000 \n"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "$15=800 \n"},
     {"type": "rx", "line": "ok"},
@@ -124,8 +121,7 @@
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "$46=97.9000 \n"},
     {"type": "rx", "line": "ok"},
-    {"type": "tx", "bytes": "$$ \n"},
-    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "$$ \n", "comment": "then read them back to verify"},
     {"type": "rx", "line": "ok"},
     {"type": "expect", "alerts": [{"title": "Alert", "message": "lost its settings (EEPROM read fail)"}], "settings": [{"section": "Advanced Settings", "key": "maxZRPM", "value": "12.6"}]}
   ]

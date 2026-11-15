@@ -1,4 +1,4 @@
-//! Replays `contract/serial/` transcripts (with the Rust overrides) against `Machine` with a fake port and clock.
+//! Replays the `contract/serial/` transcripts against `Machine` with a fake port and clock.
 
 use std::collections::BTreeMap;
 use std::time::Duration;
@@ -143,7 +143,7 @@ impl SerialBackend for MachineBackend {
 }
 
 fn corpus() -> Vec<Transcript> {
-    Transcript::rust_corpus().into_iter().map(|(_, t)| t).collect()
+    Transcript::corpus().into_iter().map(|(_, t)| t).collect()
 }
 
 #[test]
@@ -154,19 +154,10 @@ fn every_transcript_passes() {
     assert!(failures.is_empty(), "{} failing:\n{}", failures.len(), failures.join("\n"));
 }
 
-/// Python's handshake order is a wart the Rust backend must not copy (contract/serial README, wart 4).
-#[test]
-fn the_python_connect_transcripts_fail_on_the_rust_handshake() {
-    let python = Transcript::corpus().into_iter().find(|(_, t)| t.meta.name == "connect_boot_handshake").unwrap().1;
-    let err = replay(&mut MachineBackend::new(), &python).unwrap_err();
-    assert!(err.contains("expected tx \"G21  \\n\", got \"B05  \\n\""), "{err}");
-}
-
 /// The milestone's hardware check, simulated: edit a setting, power-cycle the controller, and every setting goes out
-/// again with the new value and `$13`, then `$$` verifies. Rust only (wart 4), so it is built from the Rust
-/// handshake transcript rather than kept beside it.
+/// again with the new value and `$13`, then `$$` verifies. Built from the handshake transcript.
 fn edit_then_reboot() -> Transcript {
-    let path = wc_testkit::repo_root().join("contract/serial/transcripts-rust/connect_boot_handshake.json");
+    let path = wc_testkit::repo_root().join("contract/serial/transcripts/connect_boot_handshake.json");
     let mut raw: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     raw["meta"]["name"] = "settings_edit_then_reboot_repushes_everything".into();
     raw["setup"]["start"] = "connected".into();
