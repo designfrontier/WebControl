@@ -19,4 +19,8 @@ fn main() {
             .unwrap_or_else(|| "unknown".into())
     });
     println!("cargo:rustc-env=WC_GIT_SHA={sha}");
+    println!("cargo:rerun-if-env-changed=WC_VERSION");
+    let version = std::env::var("WC_VERSION").ok().filter(|v| !v.is_empty());
+    let version = version.unwrap_or_else(|| std::env::var("CARGO_PKG_VERSION").expect("CARGO_PKG_VERSION"));
+    println!("cargo:rustc-env=WC_VERSION={version}");
 }

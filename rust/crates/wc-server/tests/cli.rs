@@ -40,6 +40,13 @@ fn version_and_help_are_commands() {
     assert!(text.contains(&format!("contract {}", wc_protocol::CONTRACT_VERSION)), "{text}");
 }
 
+#[test]
+fn the_version_line_starts_with_the_release_version_the_packaging_script_checks() {
+    assert!(!wc_server::VERSION.is_empty());
+    assert!(version_text().starts_with(&format!("webcontrol-rs {} (", wc_server::VERSION)));
+    assert!(version_text().starts_with(wc_server::cli::VERSION_PREFIX));
+}
+
 fn binary() -> Command {
     Command::new(env!("CARGO_BIN_EXE_webcontrol-rs"))
 }

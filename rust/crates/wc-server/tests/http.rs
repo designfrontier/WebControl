@@ -355,6 +355,7 @@ async fn api_system_info_reports_the_controller_and_platform() {
         (json!(null), json!(false))
     );
     assert_eq!(info["update"], json!({"available": false, "version": null}));
+    assert_eq!(info["version"], json!(wc_server::VERSION));
     assert_eq!(
         (info["firmwareUpgrade"]["target"].clone(), info["firmwareUpgrade"]["stage"].clone()),
         (json!("51.292"), json!("idle"))
