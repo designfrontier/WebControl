@@ -166,8 +166,8 @@ fn setting_requests_decode_and_other_events_are_named_but_not_decoded_yet() {
     );
     assert_eq!(ClientEvent::from_frame(&frame("settingRequest", json!({"data": {"section": 1}}))), None);
     assert_eq!(ClientEvent::from_frame(&frame("settingRequest", json!({}))), None);
-    let later = frame("checkForGCodeUpdate", json!({}));
-    assert_eq!(ClientEvent::from_frame(&later), Some(ClientEvent::Unhandled("checkForGCodeUpdate".into())));
+    let later = frame("opticalCalibration", json!({}));
+    assert_eq!(ClientEvent::from_frame(&later), Some(ClientEvent::Unhandled("opticalCalibration".into())));
     assert_eq!(ClientEvent::from_frame(&frame("bogus", json!({}))), None);
 }
 

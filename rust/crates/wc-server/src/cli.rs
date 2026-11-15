@@ -109,7 +109,7 @@ pub async fn serve(options: Options, shutdown: impl Future<Output = ()> + Send +
     let (machine, task) = spawn(machine, opener, host);
     println!("webcontrol-rs listening on {bound}");
     std::io::stdout().flush()?;
-    let state = AppState::new(machine, PingConfig::default());
+    let state = AppState::new(machine, PingConfig::default(), paths);
     let closing = state.clone();
     let stopped = async move {
         tokio::select! {

@@ -208,6 +208,21 @@ impl Message for RequestedSetting {
     const COMMAND: &'static str = "requestedSetting";
 }
 
+/// The file's position at the current line, for the viewer's marker; in the machine's units.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GcodePositionMessage {
+    pub xval: f64,
+    pub yval: f64,
+    pub zval: f64,
+    pub gcode_line: String,
+    pub gcode_line_index: usize,
+}
+
+impl Message for GcodePositionMessage {
+    const COMMAND: &'static str = "gcodePositionMessage";
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GcodeLine {

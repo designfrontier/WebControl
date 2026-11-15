@@ -32,10 +32,10 @@ pub struct FirmwareOption {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
     pub(crate) sections: Map<String, Value>,
-    source: Source,
+    pub(crate) source: Source,
 }
 
-fn parse_object(text: &str) -> Option<Map<String, Value>> {
+pub(crate) fn parse_object(text: &str) -> Option<Map<String, Value>> {
     match serde_json::from_str(text) {
         Ok(Value::Object(map)) => Some(map),
         _ => None,

@@ -61,7 +61,7 @@ impl Machine {
         lines.map(|lines| self.queue(lines)).is_some()
     }
 
-    pub(crate) fn request(&mut self, request: Request, now: Duration, effects: &mut Vec<Effect>) -> Response {
+    pub(crate) fn edit(&mut self, request: Request, now: Duration, effects: &mut Vec<Effect>) -> Response {
         match request {
             Request::UpdateSettings { section, body } => self.update_section(&section, &body, now, effects),
             Request::QuickConfigure(body) => self.quick_configure(&body),

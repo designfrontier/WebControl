@@ -1,4 +1,5 @@
-//! The machine's reach into the computer it runs on: serial ports, the serial log file, CPU load, power-off.
+//! The machine's reach into the computer it runs on: serial ports, the serial log file, CPU load, power-off,
+//! `webcontrol.json` and gcode library directories.
 
 use std::fs::{File, OpenOptions};
 use std::io::Write;
@@ -8,6 +9,7 @@ use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
 
 use tokio::sync::Notify;
+use wc_config::library::resolve_inside;
 use wc_config::{Paths, Settings};
 use wc_machine::Host;
 
@@ -81,18 +83,18 @@ fn clear(path: &Path) -> std::io::Result<()> {
 }
 
 /// The serial log, written on its own thread so a slow card never stalls the machine task.
-fn log_writer(path: PathBuf) -> Sender<LogCommand> {
+fn log_writer(log: PathBuf) -> Sender<LogCommand> {
     let (sender, commands) = channel::<LogCommand>();
     std::thread::spawn(move || {
         let mut failed = false;
         commands.iter().for_each(|command| {
             let result = match command {
-                LogCommand::Append(text) => append(&path, &text),
-                LogCommand::Clear => clear(&path),
+                LogCommand::Append(text) => append(&log, &text),
+                LogCommand::Clear => clear(&log),
                 LogCommand::Flush(done) => done.send(()).map_err(std::io::Error::other),
             };
             if let (Err(error), false) = (&result, failed) {
-                tracing::warn!(%error, path = %path.display(), "serial log write failed");
+                tracing::warn!(%error, path = %log.display(), "serial log write failed");
             }
             failed = result.is_err();
         });
@@ -101,6 +103,7 @@ fn log_writer(path: PathBuf) -> Sender<LogCommand> {
 }
 
 pub struct SystemHost {
+    dir: PathBuf,
     dev: PathBuf,
     log: Mutex<Sender<LogCommand>>,
     stat: PathBuf,
@@ -111,9 +114,10 @@ pub struct SystemHost {
 }
 
 impl SystemHost {
-    /// Logs to `<dir>/webcontrol-rs.log`; `exit` is notified when the UI asks WebControl to shut down.
+    /// Logs to `<dir>/webcontrol-rs.log`, makes gcode directories in `<dir>/gcode`; `exit` is notified when the UI asks WebControl to shut down.
     pub fn new(dir: &Path, exit: Arc<Notify>) -> SystemHost {
         SystemHost {
+            dir: dir.into(),
             dev: "/dev".into(),
             log: Mutex::new(log_writer(dir.join(LOG_FILE))),
             stat: "/proc/stat".into(),
@@ -184,6 +188,18 @@ impl Host for SystemHost {
         if let Err(error) = settings.save(paths) {
             tracing::error!(%error, file = %paths.settings_file().display(), "could not save the settings");
         }
+    }
+
+    /// `createDirectory`: one new directory inside the gcode library, as Python's `os.mkdir`.
+    fn create_directory(&self, name: &str) -> bool {
+        let made =
+            resolve_inside(&self.dir.join("gcode"), &[name]).map_err(|error| error.to_string()).and_then(|path| {
+                match path.is_dir() {
+                    true => Ok(()),
+                    false => std::fs::create_dir(&path).map_err(|error| error.to_string()),
+                }
+            });
+        made.inspect_err(|error| tracing::warn!(error, name, "could not create the directory")).is_ok()
     }
 
     fn cpu_load(&self) -> f64 {

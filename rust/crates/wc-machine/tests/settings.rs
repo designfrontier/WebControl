@@ -11,7 +11,7 @@ use wc_machine::{Effect, Event, Request, Response};
 use wc_testkit::contract::{Contract, ResponseBody};
 
 fn respond(rig: &mut Rig, request: Request) -> (Response, Vec<Effect>) {
-    let effects = rig.send(Event::Request { id: 7, request });
+    let effects = rig.send(Event::Edit { id: 7, request });
     let response = effects
         .iter()
         .find_map(|effect| match effect {

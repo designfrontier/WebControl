@@ -121,7 +121,7 @@ impl SerialBackend for MachineBackend {
             ("POST", "/api/system/pid-test") => Request::PidTest(body),
             _ => return 404,
         };
-        let effects = self.machine.handle(Event::Request { id: 1, request }, self.now);
+        let effects = self.machine.handle(Event::Edit { id: 1, request }, self.now);
         let status = effects.iter().find_map(|effect| match effect {
             Effect::Respond { response, .. } => Some(response.status),
             _ => None,

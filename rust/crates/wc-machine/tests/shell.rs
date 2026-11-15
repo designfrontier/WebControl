@@ -7,6 +7,7 @@ use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, DuplexStream, Lines};
 use tokio::sync::mpsc;
 use wc_config::Settings;
+use wc_machine::files::{Reply, Request};
 use wc_machine::{Core, Effect, Event, Host, Machine, NoHost, NoPort, PortOpener, Serial, Snapshot, spawn};
 use wc_protocol::main::LinkStatus;
 use wc_protocol::{Action, Envelope, Namespace, Push};
@@ -76,6 +77,13 @@ impl Host for Recorder {
     }
     fn cpu_load(&self) -> f64 {
         12.5
+    }
+    fn save_settings(&self, settings: &Settings) {
+        self.note(&format!("save {}", settings.text_or_empty("Computed Settings", "lastSelectedDirectory")));
+    }
+    fn create_directory(&self, name: &str) -> bool {
+        self.note(&format!("mkdir {name}"));
+        name != "refused"
     }
 }
 
@@ -276,6 +284,8 @@ fn the_null_host_and_port_do_nothing() {
     host.power_off();
     host.exit();
     assert_eq!(host.cpu_load(), 0.0);
+    host.save_settings(&Settings::defaults());
+    assert!(!host.create_directory("jobs"));
     assert!(NoPort.open("/dev/ttyACM0").is_err());
 }
 
@@ -301,6 +311,9 @@ impl Host for Disk {
         let value = settings.value("Maslow Settings", "macro1_title").cloned().unwrap_or_default();
         self.saved.lock().unwrap().push(value);
     }
+    fn create_directory(&self, _: &str) -> bool {
+        false
+    }
 }
 
 #[tokio::test]
@@ -309,9 +322,9 @@ async fn a_request_is_answered_and_its_change_saved_before_the_task_ends() {
     let (handle, task) = spawn(Machine::new("h", Settings::defaults()), Box::new(NoPort), disk.clone());
     let body = json!({"values": {"macro1_title": "Spindle"}});
     let request = wc_machine::Request::UpdateSettings { section: "maslow".into(), body };
-    let response = handle.request(request).await.unwrap();
+    let response = handle.edit(request).await.unwrap();
     assert_eq!(response.status, 200);
-    let missing = handle.request(wc_machine::Request::UpdateSettings { section: "x".into(), body: json!({}) });
+    let missing = handle.edit(wc_machine::Request::UpdateSettings { section: "x".into(), body: json!({}) });
     assert_eq!(missing.await.unwrap().status, 404);
     drop(handle);
     tokio::time::timeout(Duration::from_secs(5), task).await.unwrap().unwrap();
@@ -321,6 +334,7 @@ async fn a_request_is_answered_and_its_change_saved_before_the_task_ends() {
     disk.clear_logs();
     disk.power_off();
     disk.exit();
+    assert!(!disk.create_directory("jobs"));
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -330,5 +344,131 @@ async fn the_default_host_saves_nothing_and_a_finished_task_answers_none() {
     let other = handle.clone();
     task.abort();
     let _ = task.await;
-    assert_eq!(other.request(wc_machine::Request::QuickConfigure(json!({}))).await, None);
+    assert_eq!(other.edit(wc_machine::Request::QuickConfigure(json!({}))).await, None);
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn a_request_is_answered_and_its_setting_saved_through_the_host() {
+    let host = Arc::new(Recorder::default());
+    let (handle, task) = spawn(Machine::new("h", Settings::defaults()), Box::new(NoPort), host.clone());
+    let change = ("Computed Settings".to_string(), "lastSelectedDirectory".to_string(), json!("jobs"));
+    assert_eq!(handle.request(Request::SetSettings(vec![change])).await, Reply::Done);
+    assert_eq!(handle.snapshot().settings.text_or_empty("Computed Settings", "lastSelectedDirectory"), "jobs");
+    drop(handle);
+    task.await.unwrap();
+    assert_eq!(host.calls(), ["save jobs"]);
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn a_request_to_a_finished_machine_fails() {
+    let (handle, task) = spawn(Machine::new("h", Settings::defaults()), Box::new(NoPort), Arc::new(NoHost));
+    task.abort();
+    let _ = task.await;
+    assert_eq!(handle.request(Request::SendGcode("G0 X1".into())).await, Reply::Failed);
+}
+
+/// Answers nothing, so a request's reply never comes.
+struct Silent(Machine);
+
+impl Core for Silent {
+    fn handle(&mut self, _: Event, _: Duration) -> Vec<Effect> {
+        vec![Effect::Reply { id: 999, reply: Reply::Done }]
+    }
+    fn snapshot(&self) -> Snapshot {
+        self.0.snapshot()
+    }
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn a_request_the_core_never_answers_fails_when_the_task_ends() {
+    let (handle, task) = spawn(Silent(Machine::new("h", Settings::defaults())), Box::new(NoPort), Arc::new(NoHost));
+    let waiting = tokio::spawn({
+        let handle = handle.clone();
+        async move { handle.request(Request::SendGcode("G0".into())).await }
+    });
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    drop(handle);
+    task.abort();
+    assert_eq!(waiting.await.unwrap(), Reply::Failed);
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn create_directory_asks_the_host_and_lists_only_what_it_made() {
+    let host = Arc::new(Recorder::default());
+    let (handle, _task) = spawn(Machine::new("h", Settings::defaults()), Box::new(NoPort), host.clone());
+    let mut pushes = handle.subscribe();
+    let create = |name: &str| Action { command: "createDirectory".into(), arg: json!(name), arg1: json!("") };
+    handle.send(Event::Action(create("refused")));
+    handle.send(Event::Action(create("jobs")));
+    let directory = loop {
+        let push = pushes.recv().await.unwrap();
+        if push.data["command"] == "updateDirectories" {
+            break push.data["data"].clone();
+        }
+    };
+    assert_eq!(directory, json!("{\"directory\":\"jobs\"}"));
+    assert_eq!(host.calls(), ["mkdir refused", "mkdir jobs"]);
+}
+
+/// A host whose directory creation hangs until the test lets it go, like a card stalled on its journal.
+struct StalledDisk {
+    release: Mutex<std::sync::mpsc::Receiver<()>>,
+}
+
+impl Host for StalledDisk {
+    fn list_ports(&self) -> Vec<String> {
+        Vec::new()
+    }
+    fn log(&self, _: &str) {}
+    fn clear_logs(&self) {}
+    fn power_off(&self) {}
+    fn exit(&self) {}
+    fn cpu_load(&self) -> f64 {
+        0.0
+    }
+    fn save_settings(&self, _: &Settings) {}
+    fn create_directory(&self, _: &str) -> bool {
+        self.release.lock().unwrap().recv().is_ok()
+    }
+}
+
+/// Asks for a directory on `mkdir`, and pushes a marker on Stop.
+struct MakesDirectories {
+    inner: Machine,
+}
+
+impl Core for MakesDirectories {
+    fn handle(&mut self, event: Event, _: Duration) -> Vec<Effect> {
+        match event {
+            Event::Action(a) if a.command == "mkdir" => vec![Effect::CreateDirectory("jobs".into())],
+            Event::Stop(_) => vec![Effect::Push(Push::message(Envelope::int("showFPSpinner", 7)))],
+            Event::DirectoryCreated(name) => vec![Effect::Push(Push::message(Envelope::int(&name, 1)))],
+            _ => Vec::new(),
+        }
+    }
+    fn snapshot(&self) -> Snapshot {
+        self.inner.snapshot()
+    }
+}
+
+async fn next_command(pushes: &mut tokio::sync::broadcast::Receiver<Push>) -> Value {
+    tokio::time::timeout(Duration::from_secs(2), pushes.recv()).await.expect("the machine task answered").unwrap().data
+        ["command"]
+        .clone()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_stalled_directory_never_holds_up_stop() {
+    let (release, stalled) = std::sync::mpsc::channel();
+    let host = Arc::new(StalledDisk { release: Mutex::new(stalled) });
+    let core = MakesDirectories { inner: Machine::new("h", Settings::defaults()) };
+    let (handle, _task) = spawn(core, Box::new(NoPort), host);
+    let mut pushes = handle.subscribe();
+    handle.send(Event::Action(action("mkdir")));
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    handle.send(Event::Action(action("stopRun")));
+    let stopped = tokio::time::timeout(Duration::from_secs(2), pushes.recv()).await;
+    release.send(()).unwrap();
+    assert_eq!(stopped.expect("Stop waited on the disk").unwrap().data["command"], "showFPSpinner");
+    assert_eq!(next_command(&mut pushes).await, "jobs", "the directory is still reported once made");
 }

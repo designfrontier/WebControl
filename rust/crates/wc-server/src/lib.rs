@@ -1,8 +1,14 @@
 //! The `webcontrol-rs` server: `/api`, `/ws`, and the embedded React UI and images.
+// Routes refuse with the response itself; boxing every one would only hide that.
+#![allow(clippy::result_large_err)]
 
 mod api;
+pub mod archive;
 pub mod assets;
+mod boards;
 pub mod cli;
+pub mod files;
+mod forms;
 pub mod host;
 mod routes;
 pub mod serial;
@@ -13,6 +19,7 @@ use std::time::Duration;
 use std::sync::Arc;
 
 use tokio::sync::watch;
+use wc_config::Paths;
 use wc_machine::MachineHandle;
 
 pub use routes::router;
@@ -51,15 +58,17 @@ impl Platform {
 #[derive(Clone)]
 pub struct AppState {
     machine: MachineHandle,
+    paths: Paths,
     ping: PingConfig,
     platform: Platform,
     closing: Arc<watch::Sender<bool>>,
 }
 
 impl AppState {
-    pub fn new(machine: MachineHandle, ping: PingConfig) -> AppState {
+    /// `paths` is the home whose `.WebControl` holds the libraries the file routes read and write.
+    pub fn new(machine: MachineHandle, ping: PingConfig, paths: Paths) -> AppState {
         let closing = Arc::new(watch::channel(false).0);
-        AppState { machine, ping, platform: Platform::current(), closing }
+        AppState { machine, paths, ping, platform: Platform::current(), closing }
     }
 
     /// Ends every WebSocket session, so a graceful shutdown is not left waiting on open sockets.

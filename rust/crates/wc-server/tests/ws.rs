@@ -18,7 +18,7 @@ type Client = WebSocketStream<MaybeTlsStream<TcpStream>>;
 async fn serve_with(machine: MachineHandle, ping: PingConfig) -> String {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
-    let app = router(AppState::new(machine, ping));
+    let app = router(AppState::new(machine, ping, wc_config::Paths::new(std::path::Path::new("/nonexistent-home"))));
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     address.to_string()
 }
@@ -347,4 +347,23 @@ async fn another_site_cannot_open_a_socket_like_socket_io_refuses_it() {
     assert_eq!(upgrade_status(&address, Some(&format!("http://{address}"))).await, "HTTP/1.1 101");
     assert_eq!(upgrade_status(&address, Some(&format!("https://{address}"))).await, "HTTP/1.1 101");
     assert_eq!(upgrade_status(&address, None).await, "HTTP/1.1 101");
+}
+
+/// Ported from the viewer e2e: a client's update requests resend the preview and the board to every client.
+#[tokio::test]
+async fn update_requests_resend_the_preview_and_the_board_to_everyone() {
+    let address = serve().await;
+    let mut asker = open(&address, "/MaslowCNC").await;
+    let mut other = open(&address, "/MaslowCNC").await;
+    for _ in 0..3 {
+        next_frame(&mut asker).await;
+    }
+    let please = |event: &str| json!({"ns": "/MaslowCNC", "event": event, "data": {"data": "Please"}});
+    send(&mut asker, please("checkForGCodeUpdate")).await;
+    let preview = next_message(&mut other, "gcodeUpdateCompressed").await;
+    assert_eq!((preview["data"]["data"].clone(), preview["data"]["dataFormat"].clone()), (json!(""), json!("base64")));
+    send(&mut asker, please("checkForBoardUpdate")).await;
+    let (_, board) = decoded(&next_message(&mut other, "boardDataUpdate").await);
+    assert_eq!(board["boardID"], "-");
+    assert_eq!(next_message(&mut other, "boardCutDataUpdateCompressed").await["data"]["dataFormat"], "base64");
 }

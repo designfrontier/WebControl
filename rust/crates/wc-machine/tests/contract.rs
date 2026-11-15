@@ -1,15 +1,24 @@
-//! The contract test for M1's and M2's items (plan §3.2): every message the link produces validates against its
-//! closed schema, each action is refused while streaming exactly when its gate says, and every client event decodes.
+//! The contract test for M1's, M2's and M3's items (plan §3.2): every message the machine produces validates against
+//! its closed schema, each of their actions is refused while streaming exactly when its gate says, and every client
+//! event decodes.
 
 mod rig;
 
 use rig::{Rig, alerts, settings};
 use serde_json::{Value, json};
+use wc_config::Settings;
+use wc_machine::files::{Gcode, Origin, Request};
 use wc_machine::{Effect, Event};
 use wc_protocol::{ClientEvent, Frame};
 use wc_testkit::contract::Contract;
 
-const M1_MESSAGES: [&str; 13] = [
+const MESSAGES: [&str; 19] = [
+    "boardCutDataUpdateCompressed",
+    "boardDataUpdate",
+    "gcodePositionMessage",
+    "gcodeUpdateCompressed",
+    "showFPSpinner",
+    "updateDirectories",
     "activateModal",
     "alarm",
     "clearAlarm",
@@ -25,7 +34,14 @@ const M1_MESSAGES: [&str; 13] = [
     "updatePorts",
 ];
 
-const M1_ACTIONS: [&str; 24] = [
+const ACTIONS: [&str; 31] = [
+    "clearGCode",
+    "createDirectory",
+    "boardProcessGCode",
+    "boardClearBoard",
+    "moveGcodeZ",
+    "moveGcodeGoto",
+    "moveGcodeIndex",
     "move",
     "moveTo",
     "moveZ",
@@ -69,7 +85,7 @@ const M2_ACTIONS: [&str; 12] = [
 const SENDING: &str = "Cannot issue command while sending gcode.";
 
 #[test]
-fn every_m1_message_is_produced_and_fits_its_closed_schema() {
+fn every_message_so_far_is_produced_and_fits_its_closed_schema() {
     let contract = Contract::load();
     let mut rig = Rig::with(settings(&[("WebControl Settings", "computedPosition", json!(1))]));
     let mut effects = rig.send(Event::ClientConnected { sid: "s1".into() });
@@ -85,13 +101,18 @@ fn every_m1_message_is_produced_and_fits_its_closed_schema() {
     effects.extend(rig.send(Event::SettingRequest { section: "".into(), setting: "homePosition".into() }));
     effects.extend(rig.send(Event::Ports(Vec::new())));
     effects.extend(rig.act("upgradeHoleyFirmware"));
+    let gcode = Gcode::parse("G21\nG0 X1 Y1\nG1 Z-1\n", &Settings::defaults()).unwrap();
+    let load = Request::LoadGcode { gcode: Box::new(gcode), file: None, origin: Origin::Edit };
+    effects.extend(rig.send(Event::Request { id: 1, request: load }));
+    effects.extend(rig.send(Event::CheckForBoardUpdate));
+    effects.extend(rig.send(Event::DirectoryCreated("jobs".into())));
     effects.iter().for_each(|effect| {
         if let Effect::Push(push) = effect {
             contract.validate_frame(&push.frame().encode()).unwrap();
         }
     });
     let seen = contract.seen_commands();
-    let missing: Vec<&str> = M1_MESSAGES.into_iter().filter(|c| !seen.contains(*c)).collect();
+    let missing: Vec<&str> = MESSAGES.into_iter().filter(|c| !seen.contains(*c)).collect();
     assert!(missing.is_empty(), "never produced: {missing:?}");
 }
 
@@ -114,9 +135,9 @@ fn m2_produces_the_pid_results_message_within_its_closed_schema() {
 }
 
 #[test]
-fn m1_and_m2_actions_are_refused_while_streaming_exactly_as_their_gates_say() {
+fn actions_so_far_are_refused_while_streaming_exactly_as_their_gates_say() {
     let actions = Contract::shared().actions();
-    M1_ACTIONS.iter().chain(&M2_ACTIONS).for_each(|command| {
+    ACTIONS.iter().chain(&M2_ACTIONS).for_each(|command| {
         let gate = actions.get(*command).unwrap_or_else(|| panic!("{command} is not a contract action"));
         let mut rig = Rig::connected();
         rig.machine.load_gcode("G0 X1\nG0 X2\nG0 X3\n");
@@ -137,12 +158,15 @@ fn sample(event: &str) -> Value {
     }
 }
 
+const HANDLED_EVENTS: [&str; 5] =
+    ["action", "settingRequest", "updateSetting", "checkForGCodeUpdate", "checkForBoardUpdate"];
+
 #[test]
-fn every_client_event_decodes_and_the_settings_events_are_handled() {
+fn every_client_event_decodes_and_the_handled_ones_are_known() {
     Contract::shared().client_events("/MaslowCNC").iter().for_each(|event| {
         let frame = Frame { ns: "/MaslowCNC".into(), event: event.clone(), data: sample(event) };
         let decoded = ClientEvent::from_frame(&frame).unwrap_or_else(|| panic!("{event} does not decode"));
         let handled = !matches!(decoded, ClientEvent::Unhandled(_));
-        assert_eq!(handled, ["action", "settingRequest", "updateSetting"].contains(&event.as_str()), "{event}");
+        assert_eq!(handled, HANDLED_EVENTS.contains(&event.as_str()), "{event}");
     });
 }

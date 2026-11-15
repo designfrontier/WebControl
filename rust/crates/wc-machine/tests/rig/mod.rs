@@ -45,7 +45,8 @@ pub fn messages(effects: &[Effect]) -> Vec<(String, Value)> {
         .filter_map(|effect| match effect {
             Effect::Push(push) if push.ns == Namespace::MaslowCnc => {
                 Contract::shared().validate_frame(&push.frame().encode()).unwrap();
-                let data = push.data["data"].as_str().map(|t| serde_json::from_str(t).unwrap());
+                let json = push.data["dataFormat"] == "json";
+                let data = push.data["data"].as_str().filter(|_| json).map(|t| serde_json::from_str(t).unwrap());
                 Some((push.data["command"].as_str().unwrap().to_string(), data.unwrap_or(push.data["data"].clone())))
             }
             _ => None,

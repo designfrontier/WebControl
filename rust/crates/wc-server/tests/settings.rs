@@ -16,7 +16,8 @@ use wc_testkit::contract::{Contract, ResponseBody};
 
 async fn call(machine: Machine, host: Arc<dyn Host>, method: &str, path: &str, body: Option<&str>) -> (u16, Value) {
     let (machine, task) = spawn(machine, Box::new(NoPort), host);
-    let app = router(AppState::new(machine, PingConfig::default()));
+    let app =
+        router(AppState::new(machine, PingConfig::default(), Paths::new(std::path::Path::new("/nonexistent-home"))));
     let request = Request::builder().method(method).uri(path).header(header::CONTENT_TYPE, "application/json");
     let request = request.body(body.map_or_else(Body::empty, |b| Body::from(b.to_string()))).unwrap();
     let response = tower::ServiceExt::oneshot(app, request).await.unwrap();
@@ -146,7 +147,8 @@ async fn an_answer_after_the_machine_stopped_is_a_503() {
     let (machine, task) = spawn(Machine::new("h", Settings::defaults()), Box::new(NoPort), Arc::new(NoHost));
     task.abort();
     let _ = task.await;
-    let app = router(AppState::new(machine, PingConfig::default()));
+    let app =
+        router(AppState::new(machine, PingConfig::default(), Paths::new(std::path::Path::new("/nonexistent-home"))));
     let request = Request::builder().method("POST").uri("/api/system/pid-test").body(Body::from("{}")).unwrap();
     let response = tower::ServiceExt::oneshot(app, request).await.unwrap();
     assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);

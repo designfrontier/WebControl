@@ -1,6 +1,5 @@
 use std::collections::{HashMap, VecDeque};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::json;
@@ -11,7 +10,8 @@ use tokio::time::{Instant, MissedTickBehavior};
 use wc_config::Settings;
 use wc_protocol::Push;
 
-use crate::{Effect, Event, Machine, Request, Response, Snapshot};
+use crate::files::{Reply, Request};
+use crate::{Effect, Event, Machine, Response, Snapshot};
 
 const TICK: Duration = Duration::from_millis(10);
 const HEALTH: Duration = Duration::from_secs(5);
@@ -52,6 +52,8 @@ pub trait Host: Send + Sync + 'static {
     fn cpu_load(&self) -> f64;
     /// Writes `webcontrol.json`; called off the machine task, so a slow card never delays Stop.
     fn save_settings(&self, _settings: &Settings) {}
+    /// Makes a gcode library directory; false if the name leaves the library or the directory cannot be made.
+    fn create_directory(&self, name: &str) -> bool;
 }
 
 /// No controller at all: every open fails, as with nothing plugged in.
@@ -77,29 +79,43 @@ impl Host for NoHost {
     fn cpu_load(&self) -> f64 {
         0.0
     }
+    fn create_directory(&self, _: &str) -> bool {
+        false
+    }
 }
 
-type Replies = Arc<Mutex<HashMap<u64, oneshot::Sender<Response>>>>;
+/// What reaches the machine task on its command channel.
+enum Command {
+    Event(Event),
+    Request(Request, oneshot::Sender<Reply>),
+    Edit(crate::Request, oneshot::Sender<Response>),
+}
 
 /// How sessions and routes reach the machine task. Cloning it is cheap.
 #[derive(Clone)]
 pub struct MachineHandle {
-    commands: mpsc::UnboundedSender<Event>,
+    commands: mpsc::UnboundedSender<Command>,
     realtime: mpsc::UnboundedSender<Event>,
     pushes: broadcast::Sender<Push>,
     snapshot: watch::Receiver<Snapshot>,
-    next_request: Arc<AtomicU64>,
-    replies: Replies,
 }
 
 impl MachineHandle {
     /// Stops go on the realtime channel, which the machine task always reads first.
     pub fn send(&self, event: Event) {
-        let (channel, event) = match event {
-            Event::Action(action) if action.is_realtime() => (&self.realtime, Event::Stop(action)),
-            other => (&self.commands, other),
+        let _ = match event {
+            Event::Action(action) if action.is_realtime() => self.realtime.send(Event::Stop(action)).map_err(drop),
+            other => self.commands.send(Command::Event(other)).map_err(drop),
         };
-        let _ = channel.send(event);
+    }
+
+    /// Asks the machine and waits for its answer; `Failed` once the machine task has ended.
+    pub async fn request(&self, request: Request) -> Reply {
+        let (answer, reply) = oneshot::channel();
+        if self.commands.send(Command::Request(request, answer)).is_err() {
+            return Reply::Failed;
+        }
+        reply.await.unwrap_or(Reply::Failed)
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<Push> {
@@ -110,13 +126,11 @@ impl MachineHandle {
         self.snapshot.borrow().clone()
     }
 
-    /// Sends an HTTP write to the machine and waits for its answer; `None` once the machine task has ended.
-    pub async fn request(&self, request: Request) -> Option<Response> {
-        let id = self.next_request.fetch_add(1, Ordering::Relaxed);
-        let (reply, answer) = oneshot::channel();
-        self.replies.lock().expect("replies lock").insert(id, reply);
-        self.commands.send(Event::Request { id, request }).ok()?;
-        answer.await.ok()
+    /// Sends a settings write to the machine and waits for its answer; `None` once the machine task has ended.
+    pub async fn edit(&self, request: crate::Request) -> Option<Response> {
+        let (answer, response) = oneshot::channel();
+        self.commands.send(Command::Edit(request, answer)).ok()?;
+        response.await.ok()
     }
 }
 
@@ -134,8 +148,26 @@ struct Task<C: Core> {
     pushes: broadcast::Sender<Push>,
     snapshot: watch::Sender<Snapshot>,
     started: Instant,
-    replies: Replies,
     persist: watch::Sender<Option<Arc<Settings>>>,
+    requests: HashMap<u64, oneshot::Sender<Reply>>,
+    responses: HashMap<u64, oneshot::Sender<Response>>,
+    next_request: u64,
+    directories: mpsc::UnboundedSender<String>,
+}
+
+/// Makes each directory in turn off the machine task, so a stalled card never holds up a Stop.
+async fn make_directories(
+    host: Arc<dyn Host>,
+    mut names: mpsc::UnboundedReceiver<String>,
+    made: mpsc::UnboundedSender<Event>,
+) {
+    while let Some(name) = names.recv().await {
+        let host = host.clone();
+        let created = tokio::task::spawn_blocking(move || host.create_directory(&name).then_some(name)).await;
+        if let Ok(Some(name)) = created {
+            let _ = made.send(Event::DirectoryCreated(name));
+        }
+    }
 }
 
 async fn read_lines(port: Box<dyn AsyncRead + Send + Unpin>, generation: u64, reads: mpsc::UnboundedSender<Read>) {
@@ -222,12 +254,23 @@ impl<C: Core> Task<C> {
                         None
                     }
                     Effect::Respond { id, response } => {
-                        let reply = self.replies.lock().expect("replies lock").remove(&id);
-                        reply.map(|reply| reply.send(response));
+                        if let Some(answer) = self.responses.remove(&id) {
+                            let _ = answer.send(response);
+                        }
                         None
                     }
                     Effect::SaveSettings(settings) => {
                         self.persist.send_replace(Some(settings));
+                        None
+                    }
+                    Effect::CreateDirectory(name) => {
+                        let _ = self.directories.send(name);
+                        None
+                    }
+                    Effect::Reply { id, reply } => {
+                        if let Some(answer) = self.requests.remove(&id) {
+                            let _ = answer.send(reply);
+                        }
                         None
                     }
                 };
@@ -255,14 +298,14 @@ pub fn spawn<C: Core>(core: C, opener: Box<dyn PortOpener>, host: Arc<dyn Host>)
     let (commands, mut command_rx) = mpsc::unbounded_channel();
     let (realtime, mut realtime_rx) = mpsc::unbounded_channel();
     let (reads, mut read_rx) = mpsc::unbounded_channel::<Read>();
+    let (directories, directory_rx) = mpsc::unbounded_channel();
+    let (made, mut made_rx) = mpsc::unbounded_channel();
+    tokio::spawn(make_directories(host.clone(), directory_rx, made));
     let (pushes, _) = broadcast::channel(PUSH_BACKLOG);
     let (snapshot_tx, snapshot) = watch::channel(core.snapshot());
     let (persist_tx, persist_rx) = watch::channel(None);
     let writer = tokio::spawn(persist(persist_rx, host.clone()));
-    let replies = Replies::default();
-    let next_request = Arc::new(AtomicU64::new(0));
-    let handle =
-        MachineHandle { commands, realtime, pushes: pushes.clone(), snapshot, next_request, replies: replies.clone() };
+    let handle = MachineHandle { commands, realtime, pushes: pushes.clone(), snapshot };
     let mut task = Task {
         core,
         opener,
@@ -274,8 +317,11 @@ pub fn spawn<C: Core>(core: C, opener: Box<dyn PortOpener>, host: Arc<dyn Host>)
         pushes,
         snapshot: snapshot_tx,
         started: Instant::now(),
-        replies,
         persist: persist_tx,
+        requests: HashMap::new(),
+        responses: HashMap::new(),
+        next_request: 0,
+        directories,
     };
     let join = tokio::spawn(async move {
         let mut clock = tokio::time::interval(TICK);
@@ -289,8 +335,19 @@ pub fn spawn<C: Core>(core: C, opener: Box<dyn PortOpener>, host: Arc<dyn Host>)
                     true => read,
                     false => continue,
                 },
+                Some(made) = made_rx.recv() => made,
                 command = command_rx.recv() => match command {
-                    Some(event) => event,
+                    Some(Command::Event(event)) => event,
+                    Some(Command::Request(request, answer)) => {
+                        task.next_request += 1;
+                        task.requests.insert(task.next_request, answer);
+                        Event::Request { id: task.next_request, request }
+                    }
+                    Some(Command::Edit(request, answer)) => {
+                        task.next_request += 1;
+                        task.responses.insert(task.next_request, answer);
+                        Event::Edit { id: task.next_request, request }
+                    }
                     None => break,
                 },
                 _ = health.tick() => Event::Health { cpu: task.host.cpu_load() },
@@ -299,7 +356,6 @@ pub fn spawn<C: Core>(core: C, opener: Box<dyn PortOpener>, host: Arc<dyn Host>)
             task.step(event).await;
         }
         task.close();
-        task.replies.lock().expect("replies lock").clear();
         drop(task);
         let _ = writer.await;
     });
