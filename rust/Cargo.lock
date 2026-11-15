@@ -2117,6 +2117,8 @@ dependencies = [
 name = "wc-machine"
 version = "0.1.0"
 dependencies = [
+ "base64",
+ "flate2",
  "serde_json",
  "tokio",
  "tracing",

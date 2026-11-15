@@ -17,6 +17,8 @@ wc-gcode.workspace = true
 wc-protocol.workspace = true
 
 [dev-dependencies]
+base64.workspace = true
+flate2.workspace = true
 tokio = { workspace = true, features = ["test-util", "io-util"] }
 wc-sim.workspace = true
 wc-testkit.workspace = true

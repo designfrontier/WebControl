@@ -1,7 +1,11 @@
 //! The browser <-> backend wire as `contract/` describes it. Modules mirror `frontend/src/protocol/` slices.
 
+#[path = "slices/boards.rs"]
+pub mod boards;
 mod envelope;
 mod events;
+#[path = "slices/files.rs"]
+pub mod files;
 mod frame;
 #[path = "slices/main.rs"]
 pub mod main;

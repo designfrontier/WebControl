@@ -7,6 +7,7 @@ use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, DuplexStream, Lines};
 use tokio::sync::mpsc;
 use wc_config::Settings;
+use wc_machine::files::{Reply, Request};
 use wc_machine::{Core, Effect, Event, Host, Machine, NoHost, NoPort, PortOpener, Serial, Snapshot, spawn};
 use wc_protocol::main::LinkStatus;
 use wc_protocol::{Action, Envelope, Namespace, Push};
@@ -76,6 +77,13 @@ impl Host for Recorder {
     }
     fn cpu_load(&self) -> f64 {
         12.5
+    }
+    fn save_settings(&self, settings: &Settings) {
+        self.note(&format!("save {}", settings.text_or_empty("Computed Settings", "lastSelectedDirectory")));
+    }
+    fn create_directory(&self, name: &str) -> bool {
+        self.note(&format!("mkdir {name}"));
+        name != "refused"
     }
 }
 
@@ -276,5 +284,68 @@ fn the_null_host_and_port_do_nothing() {
     host.power_off();
     host.exit();
     assert_eq!(host.cpu_load(), 0.0);
+    host.save_settings(&Settings::defaults());
+    assert!(!host.create_directory("jobs"));
     assert!(NoPort.open("/dev/ttyACM0").is_err());
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn a_request_is_answered_and_its_setting_saved_through_the_host() {
+    let host = Arc::new(Recorder::default());
+    let (handle, _task) = spawn(Machine::new("h", Settings::defaults()), Box::new(NoPort), host.clone());
+    let change = ("Computed Settings".to_string(), "lastSelectedDirectory".to_string(), json!("jobs"));
+    assert_eq!(handle.request(Request::SetSettings(vec![change])).await, Reply::Done);
+    assert_eq!(handle.snapshot().settings.text_or_empty("Computed Settings", "lastSelectedDirectory"), "jobs");
+    assert_eq!(host.calls(), ["save jobs"]);
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn a_request_to_a_finished_machine_fails() {
+    let (handle, task) = spawn(Machine::new("h", Settings::defaults()), Box::new(NoPort), Arc::new(NoHost));
+    task.abort();
+    let _ = task.await;
+    assert_eq!(handle.request(Request::SendGcode("G0 X1".into())).await, Reply::Failed);
+}
+
+/// Answers nothing, so a request's reply never comes.
+struct Silent(Machine);
+
+impl Core for Silent {
+    fn handle(&mut self, _: Event, _: Duration) -> Vec<Effect> {
+        vec![Effect::Reply { id: 999, reply: Reply::Done }]
+    }
+    fn snapshot(&self) -> Snapshot {
+        self.0.snapshot()
+    }
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn a_request_the_core_never_answers_fails_when_the_task_ends() {
+    let (handle, task) = spawn(Silent(Machine::new("h", Settings::defaults())), Box::new(NoPort), Arc::new(NoHost));
+    let waiting = tokio::spawn({
+        let handle = handle.clone();
+        async move { handle.request(Request::SendGcode("G0".into())).await }
+    });
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    drop(handle);
+    task.abort();
+    assert_eq!(waiting.await.unwrap(), Reply::Failed);
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn create_directory_asks_the_host_and_lists_only_what_it_made() {
+    let host = Arc::new(Recorder::default());
+    let (handle, _task) = spawn(Machine::new("h", Settings::defaults()), Box::new(NoPort), host.clone());
+    let mut pushes = handle.subscribe();
+    let create = |name: &str| Action { command: "createDirectory".into(), arg: json!(name), arg1: json!("") };
+    handle.send(Event::Action(create("refused")));
+    handle.send(Event::Action(create("jobs")));
+    let directory = loop {
+        let push = pushes.recv().await.unwrap();
+        if push.data["command"] == "updateDirectories" {
+            break push.data["data"].clone();
+        }
+    };
+    assert_eq!(directory, json!("{\"directory\":\"jobs\"}"));
+    assert_eq!(host.calls(), ["mkdir refused", "mkdir jobs"]);
 }

@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::ops::Deref;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -7,10 +8,12 @@ use serde_json::{Map, Value, json};
 use wc_config::Settings;
 use wc_firmware::Accounting;
 use wc_gcode::Positioning;
+use wc_gcode::board::Board;
 use wc_gcode::restart::positioning_word;
 use wc_protocol::main::{ActivateModal, ConnectionStatus, HostAddress, LinkStatus, PauseButton, StatusMessage, Units};
 use wc_protocol::{Action, Envelope, Message, Push};
 
+use crate::files::{Preview, Reply, Request, bed_board};
 use crate::ui::{ErrorTracker, PositionTracker};
 
 /// Everything that can happen to the machine.
@@ -45,6 +48,15 @@ pub enum Event {
     Health {
         cpu: f64,
     },
+    CheckForGcodeUpdate,
+    CheckForBoardUpdate,
+    /// A gcode library directory now exists; the UI lists it.
+    DirectoryCreated(String),
+    /// An HTTP route's request; the shell gives each its `id` and routes the `Effect::Reply` back.
+    Request {
+        id: u64,
+        request: Request,
+    },
 }
 
 /// What the shell must do after an event, in order.
@@ -63,6 +75,14 @@ pub enum Effect {
     ClearLogs,
     PowerOff,
     Exit,
+    /// Write `webcontrol.json`, as every Python `setValue` did.
+    SaveSettings(Arc<Settings>),
+    /// `createDirectory`: make this gcode library directory, then report `Event::DirectoryCreated`.
+    CreateDirectory(String),
+    Reply {
+        id: u64,
+        reply: Reply,
+    },
 }
 
 /// An `Arc` whose equality is identity, so comparing snapshots never walks the settings.
@@ -124,6 +144,16 @@ pub struct Snapshot {
     pub gcode_index: usize,
     pub gcode_line: String,
     pub gcode_count: usize,
+    pub gcode: Shared<Vec<String>>,
+    pub gcode_file: Option<PathBuf>,
+    /// What `/sendGCode` last sent.
+    pub custom_gcode: Option<String>,
+    /// The file routes refuse to replace the gcode while this holds (their 409).
+    pub gcode_locked: bool,
+    pub preview: Shared<Preview>,
+    pub board: Shared<Board>,
+    /// The sled's X and Y from the last status report.
+    pub sled: (f64, f64),
     pub ports: Vec<String>,
     pub settings: Shared<Settings>,
 }
@@ -221,8 +251,16 @@ pub struct Machine {
     /// A Touch Z is queued or descending.
     pub(crate) probing: bool,
     pub(crate) run: RunState,
-    pub(crate) gcode: Vec<String>,
+    pub(crate) gcode: Arc<Vec<String>>,
     pub(crate) index: usize,
+    pub(crate) gcode_file: Option<PathBuf>,
+    pub(crate) z_moves: Vec<usize>,
+    pub(crate) preview: Arc<Preview>,
+    /// The loaded file's truncate setting, which the home shift keeps to.
+    pub(crate) truncate: Option<u32>,
+    pub(crate) custom_gcode: Option<String>,
+    pub(crate) workpiece: Arc<Board>,
+    pub(crate) settings_dirty: bool,
     pub(crate) ports: Vec<String>,
     pub(crate) position: PositionTracker,
     pub(crate) errors: ErrorTracker,
@@ -240,9 +278,12 @@ pub(crate) fn alert(text: &str) -> Effect {
 
 impl Machine {
     pub fn new(host_address: &str, settings: Settings) -> Machine {
+        let units = Units::from_setting(&settings.text_or_empty("Computed Settings", "units"));
         Machine {
             host_address: host_address.into(),
             fixed_port: None,
+            workpiece: Arc::new(bed_board(&settings)),
+            preview: Arc::new(Preview::none(units)),
             settings: Arc::new(settings),
             link: Link::Disconnected { retry_at: Duration::ZERO },
             controller: Controller::new(Duration::ZERO),
@@ -254,8 +295,13 @@ impl Machine {
             tool: 0,
             probing: false,
             run: RunState::Idle,
-            gcode: Vec::new(),
+            gcode: Arc::new(Vec::new()),
             index: 0,
+            gcode_file: None,
+            z_moves: vec![0],
+            truncate: None,
+            custom_gcode: None,
+            settings_dirty: false,
             ports: Vec::new(),
             position: PositionTracker::default(),
             errors: ErrorTracker::default(),
@@ -269,9 +315,9 @@ impl Machine {
         Machine { fixed_port: Some(port.into()), ..self }
     }
 
-    /// Loads a file as `/openGCode` would; M3 adds the route, transcripts and tests use it directly.
+    /// Loads lines as `/openGCode` would, without the preview; transcripts and tests use it directly.
     pub fn load_gcode(&mut self, text: &str) {
-        self.gcode = wc_gcode::load::filter(text, None).unwrap_or_default();
+        self.gcode = Arc::new(wc_gcode::load::filter(text, None).unwrap_or_default());
         self.index = 0;
     }
 
@@ -294,9 +340,19 @@ impl Machine {
             Event::PortClosed => self.link_lost("The controller's port closed.", now, &mut effects),
             Event::Ports(ports) => self.ports_found(ports, &mut effects),
             Event::Health { cpu } => self.health(cpu, &mut effects),
+            Event::CheckForGcodeUpdate => self.gcode_update_requested(&mut effects),
+            Event::CheckForBoardUpdate => self.push_board(&mut effects),
+            Event::DirectoryCreated(name) => self.directory_created(name, &mut effects),
+            Event::Request { id, request } => {
+                let reply = self.request(request, &mut effects);
+                effects.push(Effect::Reply { id, reply });
+            }
         }
         self.pump(now, &mut effects);
         self.status_if_changed(&mut effects);
+        if std::mem::take(&mut self.settings_dirty) {
+            effects.push(Effect::SaveSettings(self.settings.clone()));
+        }
         effects
     }
 
@@ -316,7 +372,7 @@ impl Machine {
     }
 
     pub(crate) fn set_setting(&mut self, section: &str, key: &str, value: Value) {
-        Arc::make_mut(&mut self.settings).set_value(section, key, value);
+        self.settings_dirty |= Arc::make_mut(&mut self.settings).set_value(section, key, value);
     }
 
     pub fn snapshot(&self) -> Snapshot {
@@ -341,6 +397,13 @@ impl Machine {
             gcode_index: self.index,
             gcode_line: self.gcode.get(self.index).cloned().unwrap_or_default(),
             gcode_count: self.gcode.len(),
+            gcode: Shared(self.gcode.clone()),
+            gcode_file: self.gcode_file.clone(),
+            custom_gcode: self.custom_gcode.clone(),
+            gcode_locked: self.gcode_locked(),
+            preview: Shared(self.preview.clone()),
+            board: Shared(self.workpiece.clone()),
+            sled: (self.position.x, self.position.y),
             ports: self.ports.clone(),
             settings: Shared(self.settings.clone()),
         }

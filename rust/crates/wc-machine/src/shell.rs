@@ -1,14 +1,16 @@
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::json;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
-use tokio::sync::{broadcast, mpsc, watch};
+use tokio::sync::{broadcast, mpsc, oneshot, watch};
 use tokio::task::JoinHandle;
 use tokio::time::{Instant, MissedTickBehavior};
+use wc_config::Settings;
 use wc_protocol::Push;
 
+use crate::files::{Reply, Request};
 use crate::{Effect, Event, Machine, Snapshot};
 
 const TICK: Duration = Duration::from_millis(10);
@@ -48,6 +50,9 @@ pub trait Host: Send + Sync + 'static {
     fn exit(&self);
     /// The busiest core's load in percent.
     fn cpu_load(&self) -> f64;
+    fn save_settings(&self, settings: &Settings);
+    /// Makes a gcode library directory; false if the name leaves the library or the directory cannot be made.
+    fn create_directory(&self, name: &str) -> bool;
 }
 
 /// No controller at all: every open fails, as with nothing plugged in.
@@ -73,12 +78,22 @@ impl Host for NoHost {
     fn cpu_load(&self) -> f64 {
         0.0
     }
+    fn save_settings(&self, _: &Settings) {}
+    fn create_directory(&self, _: &str) -> bool {
+        false
+    }
+}
+
+/// What reaches the machine task on its command channel.
+enum Command {
+    Event(Event),
+    Request(Request, oneshot::Sender<Reply>),
 }
 
 /// How sessions and routes reach the machine task. Cloning it is cheap.
 #[derive(Clone)]
 pub struct MachineHandle {
-    commands: mpsc::UnboundedSender<Event>,
+    commands: mpsc::UnboundedSender<Command>,
     realtime: mpsc::UnboundedSender<Event>,
     pushes: broadcast::Sender<Push>,
     snapshot: watch::Receiver<Snapshot>,
@@ -87,11 +102,19 @@ pub struct MachineHandle {
 impl MachineHandle {
     /// Stops go on the realtime channel, which the machine task always reads first.
     pub fn send(&self, event: Event) {
-        let (channel, event) = match event {
-            Event::Action(action) if action.is_realtime() => (&self.realtime, Event::Stop(action)),
-            other => (&self.commands, other),
+        let _ = match event {
+            Event::Action(action) if action.is_realtime() => self.realtime.send(Event::Stop(action)).map_err(drop),
+            other => self.commands.send(Command::Event(other)).map_err(drop),
         };
-        let _ = channel.send(event);
+    }
+
+    /// Asks the machine and waits for its answer; `Failed` once the machine task has ended.
+    pub async fn request(&self, request: Request) -> Reply {
+        let (answer, reply) = oneshot::channel();
+        if self.commands.send(Command::Request(request, answer)).is_err() {
+            return Reply::Failed;
+        }
+        reply.await.unwrap_or(Reply::Failed)
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<Push> {
@@ -117,6 +140,8 @@ struct Task<C: Core> {
     pushes: broadcast::Sender<Push>,
     snapshot: watch::Sender<Snapshot>,
     started: Instant,
+    requests: HashMap<u64, oneshot::Sender<Reply>>,
+    next_request: u64,
 }
 
 async fn read_lines(port: Box<dyn AsyncRead + Send + Unpin>, generation: u64, reads: mpsc::UnboundedSender<Read>) {
@@ -202,6 +227,19 @@ impl<C: Core> Task<C> {
                         self.host.exit();
                         None
                     }
+                    Effect::SaveSettings(settings) => {
+                        self.host.save_settings(&settings);
+                        None
+                    }
+                    Effect::CreateDirectory(name) => {
+                        self.host.create_directory(&name).then_some(Event::DirectoryCreated(name))
+                    }
+                    Effect::Reply { id, reply } => {
+                        if let Some(answer) = self.requests.remove(&id) {
+                            let _ = answer.send(reply);
+                        }
+                        None
+                    }
                 };
                 pending.extend(follow_up);
             }
@@ -230,6 +268,8 @@ pub fn spawn<C: Core>(core: C, opener: Box<dyn PortOpener>, host: Arc<dyn Host>)
         pushes,
         snapshot: snapshot_tx,
         started: Instant::now(),
+        requests: HashMap::new(),
+        next_request: 0,
     };
     let join = tokio::spawn(async move {
         let mut clock = tokio::time::interval(TICK);
@@ -244,7 +284,12 @@ pub fn spawn<C: Core>(core: C, opener: Box<dyn PortOpener>, host: Arc<dyn Host>)
                     false => continue,
                 },
                 command = command_rx.recv() => match command {
-                    Some(event) => event,
+                    Some(Command::Event(event)) => event,
+                    Some(Command::Request(request, answer)) => {
+                        task.next_request += 1;
+                        task.requests.insert(task.next_request, answer);
+                        Event::Request { id: task.next_request, request }
+                    }
                     None => break,
                 },
                 _ = health.tick() => Event::Health { cpu: task.host.cpu_load() },

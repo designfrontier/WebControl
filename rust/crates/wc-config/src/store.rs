@@ -131,7 +131,7 @@ impl Settings {
         text.split('\n').try_for_each(|line| {
             if let Some((_, name)) = INI_SECTIONS.iter().find(|(header, _)| *header == line) {
                 section = Some(name);
-            } else if !line.is_empty() && section? != "" {
+            } else if !line.is_empty() && !section?.is_empty() {
                 let mut parts = line.split('=').map(str::trim);
                 let (key, value) = (parts.next()?, parts.next()?);
                 self.set_typed(section?, key, value);

@@ -56,6 +56,8 @@ fn received(state: &AppState, ns: Namespace, text: &str) {
         Some(ClientEvent::SettingRequest { section, setting }) => {
             state.machine.send(Event::SettingRequest { section, setting })
         }
+        Some(ClientEvent::CheckForGcodeUpdate) => state.machine.send(Event::CheckForGcodeUpdate),
+        Some(ClientEvent::CheckForBoardUpdate) => state.machine.send(Event::CheckForBoardUpdate),
         Some(ClientEvent::Unhandled(event)) => tracing::debug!(event, "event not handled yet"),
         None => tracing::debug!(event = frame.event, "ignoring unknown event"),
     }
