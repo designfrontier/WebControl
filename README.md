@@ -171,7 +171,7 @@ This next stuff should only need to be done once in your virtual environment.
     `pip install black`
 - rebuild the list of requirements needed by WebControl (optional)
     `rm requirements.txt`
-    `pip-compile -r requirements.in --resolver=backtracking --verbose`
+    `pip-compile --allow-unsafe -r requirements.in --resolver=backtracking --verbose`
 - install the requirements
     `pip install -r requirements.txt`
 

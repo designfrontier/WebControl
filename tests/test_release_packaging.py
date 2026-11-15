@@ -318,6 +318,11 @@ def test_the_runtime_requirements_pin_setuptools_because_uv_venvs_lack_pkg_resou
         assert "setuptools==75.3.0" in handle.read().splitlines()
 
 
+def test_regenerating_the_requirements_keeps_the_setuptools_pin():
+    assert "pip-compile --allow-unsafe" in read("requirements.txt")
+    assert "pip-compile --allow-unsafe" in read("README.md")
+
+
 def read(*path):
     with open(os.path.join(REPO, *path)) as handle:
         return handle.read()
