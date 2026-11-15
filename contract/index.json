@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "generatedFrom": "frontend/src/protocol (npm run contract)",
   "socket": {
     "path": "/socket.io",
@@ -344,9 +344,15 @@
       "via": "action",
       "schema": "schemas/actions/clearLogs.json"
     },
+    "clearGCode": {
+      "summary": "Unload the gcode",
+      "allowedDuring": "noJob",
+      "via": "action",
+      "schema": "schemas/actions/clearGCode.json"
+    },
     "startRun": {
-      "summary": "Start sending the loaded gcode",
-      "allowedDuring": "idle",
+      "summary": "Start sending the loaded gcode, or resume a job the controller paused or a tool change",
+      "allowedDuring": "idleOrControllerPaused",
       "via": "action",
       "schema": "schemas/actions/startRun.json"
     },
@@ -388,7 +394,7 @@
     },
     "defineHome": {
       "summary": "Define home at a point, or at the sled when both args are empty",
-      "allowedDuring": "idle",
+      "allowedDuring": "noJob",
       "via": "action",
       "schema": "schemas/actions/defineHome.json"
     },
@@ -403,12 +409,6 @@
       "allowedDuring": "idle",
       "via": "action",
       "schema": "schemas/actions/wipeEEPROM.json"
-    },
-    "clearGCode": {
-      "summary": "Unload the gcode",
-      "allowedDuring": "noJob",
-      "via": "action",
-      "schema": "schemas/actions/clearGCode.json"
     },
     "setSprockets": {
       "summary": "Turn a sprocket by an angle",
@@ -544,13 +544,13 @@
     },
     "executeVelocityPIDTest": {
       "summary": "Start a velocity PID test",
-      "allowedDuring": "idle",
+      "allowedDuring": "noJob",
       "via": "POST /api/system/pid-test",
       "schema": "schemas/actions/executeVelocityPIDTest.json"
     },
     "executePositionPIDTest": {
       "summary": "Start a position PID test",
-      "allowedDuring": "idle",
+      "allowedDuring": "noJob",
       "via": "POST /api/system/pid-test",
       "schema": "schemas/actions/executePositionPIDTest.json"
     },
@@ -580,7 +580,7 @@
     },
     "resetHomeToCenter": {
       "summary": "Move home back to the bed centre",
-      "allowedDuring": "idle",
+      "allowedDuring": "noJob",
       "via": "action",
       "schema": "schemas/actions/resetHomeToCenter.json"
     }

@@ -114,8 +114,8 @@ def post_pid_test():
         message = pid_test_action(request.get_json(silent=True) or {})
     except ValueError as error:
         return jsonify({"error": str(error)}), 400
-    if data.uploadFlag != 0:
-        return jsonify({"error": "Stop the running gcode before starting a PID test."}), 409
+    if data.gcodeLocked():
+        return jsonify({"error": "Stop the job before starting a PID test."}), 409
     data.actions.processAction(message)
     return jsonify({"status": "sent"}), 202
 

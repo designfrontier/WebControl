@@ -28,15 +28,17 @@ generated files by hand.
 In `index.json`, `actions.<command>.allowedDuring` is the run-state gate and `via` says how the UI reaches it (`action`
 event, `opticalCalibration` event, `POST /api/system/pid-test`, or `none`). The gates, by the run state they refuse in:
 
-| Run state                                                         | `always` | `idleOrPaused` | `idle`  | `noJob` |
-| ----------------------------------------------------------------- | -------- | -------------- | ------- | ------- |
-| Streaming gcode                                                   | runs     | refused        | refused | refused |
-| Paused with Pause                                                 | runs     | runs           | refused | refused |
-| Job paused by the controller (e.g. an M0), until Stop or the end  | runs     | runs           | runs    | refused |
-| Waiting for a tool change                                         | runs     | runs           | runs    | refused |
-| No job                                                            | runs     | runs           | runs    | runs    |
+| Run state                                                         | `always` | `idleOrPaused` | `idleOrControllerPaused` | `idle`  | `noJob` |
+| ----------------------------------------------------------------- | -------- | -------------- | ------------------------ | ------- | ------- |
+| Streaming gcode                                                   | runs     | refused        | refused                  | refused | refused |
+| Paused with Pause                                                 | runs     | runs           | refused                  | refused | refused |
+| Job paused by the controller (M0/M1, `Message:`, ALARM)           | runs     | runs           | runs                     | refused | refused |
+| Waiting for a tool change outside a job                           | runs     | runs           | runs                     | runs    | refused |
+| No job                                                            | runs     | runs           | runs                     | runs    | runs    |
 
-`noJob` matches the classic gcode routes' 409: the loaded gcode cannot change while a job is in progress. HTTP `family` is `api` (JSON for this UI), `classic` (old form routes
+A controller pause holds the job like Pause does; only Play (`startRun`, the one `idleOrControllerPaused` action)
+runs, and it resumes the job. A tool change during a job is a controller pause. `noJob` matches the classic gcode
+routes' 409: the loaded gcode, home and PID tests wait until the job is stopped or finished. HTTP `family` is `api` (JSON for this UI), `classic` (old form routes
 the UI reuses, with their old shapes) or `static`.
 
 Schemas describe the wire: what is actually sent, before the UI coerces anything. Objects do not forbid extra

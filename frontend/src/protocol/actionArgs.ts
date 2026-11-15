@@ -4,10 +4,11 @@ import { actionArg, numberLike } from "./core";
 import type { ActionCommand } from "./index";
 
 /**
- * When processAction runs a command: "always"; "idleOrPaused" refuses while gcode streams; "idle" also while Pause
- * holds the job; "noJob" also while the controller paused it or a tool change waits. A refusal is an Alert.
+ * When processAction runs a command: "always"; "idleOrPaused" refuses while gcode streams;
+ * "idleOrControllerPaused" also while Pause holds the job (Play, which resumes a controller pause); "idle" also while
+ * the controller paused the job; "noJob" also while a tool change waits. A refusal is an Alert.
  */
-export type AllowedDuring = "always" | "idleOrPaused" | "idle" | "noJob";
+export type AllowedDuring = "always" | "idleOrPaused" | "idleOrControllerPaused" | "idle" | "noJob";
 
 /** How the UI reaches processAction for a command; most go through the `action` socket event. */
 export type ActionRoute = "action" | "opticalCalibration" | "POST /api/system/pid-test" | "none";
@@ -89,20 +90,23 @@ export const actionSpecs = {
   macro1: notRunning("Run macro 1"),
   macro2: notRunning("Run macro 2"),
   clearLogs: notRunning("Delete old log files"),
-  startRun: idle("Start sending the loaded gcode"),
+  clearGCode: noJob("Unload the gcode"),
+  startRun: spec(
+    "idleOrControllerPaused",
+    "Start sending the loaded gcode, or resume a job the controller paused or a tool change",
+  ),
   update: idle("Install a WebControl release and restart", { arg: z.string().describe("Release tag") }),
   cutTriangularCalibrationPattern: idle("Cut the triangular calibration pattern"),
   acceptTriangularCalibrationResults: idle("Store the last triangular calibration result"),
   cutHoleyCalibrationPattern: idle("Cut the holey calibration pattern"),
   acceptHoleyCalibrationResults: idle("Store the last holey calibration result"),
   resetChainLengths: idle("Tell the controller the chains are at their default lengths"),
-  defineHome: idle("Define home at a point, or at the sled when both args are empty", {
+  defineHome: noJob("Define home at a point, or at the sled when both args are empty", {
     arg: z.union([z.number(), z.literal("")]).describe('X in inches, or "" for the sled position'),
     arg1: z.union([z.number(), z.literal("")]).describe('Y in inches, or "" for the sled position'),
   }),
   testMotors: idle("Run each motor in both directions"),
   wipeEEPROM: idle("Erase controller EEPROM", { arg: z.enum(["All", "Settings", "Maslow"]) }),
-  clearGCode: noJob("Unload the gcode"),
   setSprockets: idle("Turn a sprocket by an angle", { arg: motor, arg1: z.number().describe("Degrees, signed") }),
   rotateSprocket: idle("Run a motor at full speed for a time", {
     arg: motor,
@@ -133,11 +137,11 @@ export const actionSpecs = {
   upgradeStockFirmware: idle("Flash the bundled stock firmware"),
   upgradeHoleyFirmware: idle("Flash the bundled holey firmware"),
   adjustChain: idle("Extend one chain after a 5 s countdown", { arg: z.enum(["left", "right"]) }),
-  executeVelocityPIDTest: idle("Start a velocity PID test", {
+  executeVelocityPIDTest: noJob("Start a velocity PID test", {
     arg: pidArgs("v", ["KpV", "KiV", "KdV"], false),
     via: "POST /api/system/pid-test",
   }),
-  executePositionPIDTest: idle("Start a position PID test", {
+  executePositionPIDTest: noJob("Start a position PID test", {
     arg: pidArgs("p", ["KpP", "KiP", "KdP"], true),
     via: "POST /api/system/pid-test",
   }),
@@ -147,5 +151,5 @@ export const actionSpecs = {
   setFakeServo: idle("Turn the controller's fake servo on or off", {
     arg: z.union([z.literal(0), z.literal(1)]),
   }),
-  resetHomeToCenter: idle("Move home back to the bed centre"),
+  resetHomeToCenter: noJob("Move home back to the bed centre"),
 } satisfies Record<ActionCommand, ActionSpec>;

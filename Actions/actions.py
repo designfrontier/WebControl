@@ -33,6 +33,11 @@ MACHINE_COMMANDS = {
     "touchZ", "moveToDefault", "returnToCenter", "macro1", "macro2",
 }
 
+HOME_AND_PID_COMMANDS = {"defineHome", "resetHomeToCenter", "executeVelocityPIDTest", "executePositionPIDTest"}
+TOOL_CHANGE_WAITS_MESSAGE = (
+    "Cannot issue command while a tool change waits. Press Resume or STOP before setting home or running a PID test."
+)
+
 
 class FirmwareUpgradeError(Exception):
     pass
@@ -147,16 +152,27 @@ class Actions(MakesmithInitFuncs):
                 if not self.clearLogs():
                     self.data.ui_queue1.put("Alert", "Alert", "Error clearing log files.")
 
-            elif self.data.uploadFlag > 1 or self.data.uploadFlag < 0 :
-                self.data.ui_queue1.put("Alert", "Alert", "Cannot issue command while paused sending gcode. You must press STOP before performing this action.")
-            # Commands not allowed while paused.. if you did these commands, something could screw up.
-
-            elif msg["data"]["command"] == "startRun":
+            elif msg["data"]["command"] == "clearGCode":
+                if self.data.gcodeLocked():
+                    self.data.ui_queue1.put("Alert", "Alert", GCODE_LOCKED_MESSAGE)
+                elif self.clearGCode():
+                    # send blank gcode to UI
+                    self.data.ui_queue1.put("Action", "gcodeUpdate", "")
+                else:
+                    self.data.ui_queue1.put("Alert", "Alert", "Error with clearing gcode")
+            # Play resumes a job the controller paused, so it passes the gate below while uploadFlag is 0.
+            elif msg["data"]["command"] == "startRun" and self.data.uploadFlag == 0:
                 if not self.startRun():
                     if len(self.data.gcode) > 0:
                         self.data.ui_queue1.put("Alert", "Alert", "Error with starting run.")
                     else:
                         self.data.ui_queue1.put("Alert", "Alert", "No GCode file loaded.")
+            # A controller pause (M0/M1, Message:, ALARM) drops uploadFlag to 0 but holds the job like a user Pause.
+            elif self.data.uploadFlag != 0 or self.data.jobInProgress:
+                self.data.ui_queue1.put("Alert", "Alert", "Cannot issue command while paused sending gcode. You must press STOP before performing this action.")
+            # Commands not allowed while paused.. if you did these commands, something could screw up.
+            elif self.data.manualZAxisAdjust and msg["data"]["command"] in HOME_AND_PID_COMMANDS:
+                self.data.ui_queue1.put("Alert", "Alert", TOOL_CHANGE_WAITS_MESSAGE)
             elif msg["data"]["command"] == "update":
                 if not self.data.releaseManager.update(msg["data"]["arg"]):
                     self.data.ui_queue1.put("Alert", "Alert", "Error with updating webcontrol.")
@@ -177,7 +193,6 @@ class Actions(MakesmithInitFuncs):
                 if not self.resetChainLengths():
                     self.data.ui_queue1.put("Alert", "Alert", "Error with resetting chain lengths.")
             elif msg["data"]["command"] == "defineHome":
-                print(self.data.uploadFlag)
                 posX= msg["data"]["arg"]
                 posY= msg["data"]["arg1"]
                 if self.defineHome(posX, posY):
@@ -192,14 +207,6 @@ class Actions(MakesmithInitFuncs):
             elif msg["data"]["command"] == "wipeEEPROM":
                 if not self.wipeEEPROM(msg["data"]["arg"]):
                     self.data.ui_queue1.put("Alert", "Alert", "Error with wiping EEPROM")
-            elif msg["data"]["command"] == "clearGCode":
-                if self.data.gcodeLocked():
-                    self.data.ui_queue1.put("Alert", "Alert", GCODE_LOCKED_MESSAGE)
-                elif self.clearGCode():
-                    # send blank gcode to UI
-                    self.data.ui_queue1.put("Action", "gcodeUpdate", "")
-                else:
-                    self.data.ui_queue1.put("Alert", "Alert", "Error with clearing gcode")
             elif msg["data"]["command"] == "setSprockets":
                 if not self.setSprockets(msg["data"]["arg"], msg["data"]["arg1"]):
                     self.data.ui_queue1.put("Alert", "Alert", "Error with setting sprocket")
@@ -516,7 +523,7 @@ class Actions(MakesmithInitFuncs):
         '''
         try:
             # Play while a tool change waits is a resume; a restart would lower the new bit to the old tool's Z.
-            if self.data.manualZAxisAdjust:
+            if self.data.manualZAxisAdjust or self.data.jobInProgress:
                 return self.resumeRun()
             if len(self.data.gcode) > 0:
                 # set current Z target to the current z height in case gcode doesn't include a z move before an xy move.
