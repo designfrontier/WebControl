@@ -708,7 +708,8 @@ class Config(MakesmithInitFuncs):
         self.data.gcode_queue.put("$$")
         self.saveSettings()
         self.data.ui_queue1.put("Alert", "Alert",
-                                "The controller lost its settings (EEPROM read fail), so WebControl restored them.")
+                                "The controller lost its settings (EEPROM read fail), so WebControl restored them. "
+                                "WebControl doesn't keep Z-axis limits, so set them again if you use them.")
 
     def reportedValue(self, text):
         '''

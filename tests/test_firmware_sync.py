@@ -190,7 +190,9 @@ def test_an_eeprom_read_fail_restores_every_setting_and_tells_the_user(data, con
     assert "$18=12.6" in sent
     assert keys[-1] == "$$"
     assert option(config, "maxZRPM")["value"] == "12.6"
-    assert len([message for message in drain(data.ui_queue1) if "lost its settings" in message]) == 1
+    alerts = [message for message in drain(data.ui_queue1) if "lost its settings" in message]
+    assert len(alerts) == 1
+    assert "set them again" in alerts[0] and "Z-axis limits" in alerts[0]
     drain(data.ui_controller_queue)
 
 
