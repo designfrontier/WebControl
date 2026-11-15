@@ -102,7 +102,9 @@ pub fn resolve_inside(root: &Path, parts: &[&str]) -> Result<PathBuf, UnsafePath
 pub fn secure_filename(name: &str) -> String {
     let ascii: String = name.nfkd().filter(char::is_ascii).collect();
     let spaced = ascii.replace('/', " ");
-    let joined = spaced.split_ascii_whitespace().collect::<Vec<_>>().join("_");
+    // Python's str.split also splits on \x0b and the \x1c-\x1f separators.
+    let python_space = |c: char| c.is_ascii_whitespace() || matches!(c, '\x0b' | '\x1c'..='\x1f');
+    let joined = spaced.split(python_space).filter(|part| !part.is_empty()).collect::<Vec<_>>().join("_");
     let kept: String = joined.chars().filter(|c| c.is_ascii_alphanumeric() || "_.-".contains(*c)).collect();
     kept.trim_matches(['.', '_']).to_string()
 }

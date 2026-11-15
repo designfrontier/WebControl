@@ -72,6 +72,7 @@ fn secure_filenames_match_werkzeug() {
         ("a/b/c.nc", "a_b_c.nc"),
         ("file name (1).nc", "file_name_1.nc"),
         ("\t tab\nnew.nc", "tab_new.nc"),
+        ("a\x0bb\x1cc\x1fd.nc", "a_b_c_d.nc"),
         ("../../../etc/passwd", "etc_passwd"),
     ];
     cases.iter().for_each(|(name, expected)| assert_eq!(secure_filename(name), *expected, "{name:?}"));
