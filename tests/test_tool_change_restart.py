@@ -41,7 +41,7 @@ def test_play_during_a_tool_change_resumes_where_it_paused(job):
     load(job, TOOL_CHANGE_FILE, AFTER_TOOL_CHANGE)
     job.uploadFlag = 0
     job.manualZAxisAdjust = True
-    job.previousUploadStatus = -1
+    job.jobInProgress = True
 
     job.actions.processAction({"data": {"command": "startRun", "arg": "", "arg1": ""}})
 

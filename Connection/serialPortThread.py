@@ -4,6 +4,7 @@ import re
 
 import serial
 
+from Connection.firmwareGcode import changesTool, toolTheFirmwareReads, withToolWordFirst
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
 
 
@@ -149,7 +150,7 @@ class SerialPortThread(MakesmithInitFuncs):
             line = self._stripComments(self.data.gcode[self.data.gcodeIndex])
             # check if command is going to be issued that pauses the controller.
             self.managePause(line)
-            self.manageToolChange(line)
+            line = self.manageToolChange(line)
             if not line.isspace(): # if all spaces, don't send.  likely a comment.
                 positioningMode = self._positioningModeOf(line)
                 line = self._shiftToHome(line)
@@ -197,35 +198,20 @@ class SerialPortThread(MakesmithInitFuncs):
             self.data.quick_queue.put("~")
 
     def manageToolChange(self, line):
-        if line.find("M6 ") != -1 or line.find("M06") != -1:
-            # if this is a different tool, the controller will respond with a 'Tool Change:' and pause.
-            # if this is a the same tool as the controller is currently tracking, it will continue on.
-            # first, determine the tool being called for...
-            toolNumber = int(self.extractGcodeValue(line, 'T', 0))
-            print(toolNumber)
-            print(self.data.currentTool)
-            # so, in the first case...
-            if toolNumber != self.data.currentTool:
-                # set uploadFlag to -1 to turn off sending more lines (after this one)
-                # -1 means it was set by an M command
-                print("found M command")
+        '''
+        Tracks the tool as the firmware does and stops streaming after an M6 the firmware will pause on.
+        :return: the line to send, with an M6 line's trailing T moved first.
+        '''
+        line = withToolWordFirst(line)
+        tool = toolTheFirmwareReads(line)
+        if tool is not None:
+            self.data.nextTool = tool
+        if changesTool(line) and self.data.nextTool != self.data.currentTool:
+            self.data.currentTool = self.data.nextTool
+            self.data.pausedUnits = self.data.units
+            if self.data.uploadFlag == 1:
                 self.data.uploadFlag = -1
-                self.data.currentTool = toolNumber
-                self.data.pausedUnits = self.data.units
-                ## new stuff
-                #self.data.quick_queue.put("~")
-                #self.data.ui_queue1.put("Action", "setAsResume", "")
-                ## end new stuff
-
-                # now, the issue is that if the controller gets reset, then the tool number will revert to 0.. so
-                # on serial port connect/reconnect, reinitialize tool number to 0
-
-            # but in the second case, just continue on..
-
-            ## new stuff
-            #self.data.quick_queue.put("~")
-            #self.data.ui_queue1.put("Action", "setAsResume", "")
-            ## end new stuff
+        return line
 
     def closeConnection(self):
         '''
@@ -294,6 +280,7 @@ class SerialPortThread(MakesmithInitFuncs):
             # The host may still hold G91 from before a lost connection; resuming relies on the two agreeing.
             self.data.gcode_queue.put("G90 ")
             self.data.currentTool = 0  # This is necessary since the controller will have reset tool to zero.
+            self.data.nextTool = 0
 
             handedToFirmwareUpgrade = False
             try:
@@ -385,7 +372,7 @@ class SerialPortThread(MakesmithInitFuncs):
                     # if there's something left..
                     if len(command) != 0:
                         command = command + " "
-                        self.manageToolChange(command)
+                        command = self.manageToolChange(command)
                         self._write(command)
                         # if units have changed, update settings and notify UI clients to stay in sync
                         if command.find("G20") != -1:

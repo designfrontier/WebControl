@@ -76,6 +76,7 @@ class Data:
     tolerance = 0.5
     gcodeShift = [0.0, 0.0]  # the amount that the gcode has been shifted
     currentTool = 0  # current tool.. upon startup, 0 is the same value as what the controller would have.
+    nextTool = 0  # the firmware's pending tool, set by T and taken by M6
     currentZTarget = 0  # current target for Z-Axis move.  Need to track so if user pauses, we can move back to that spot.
     message = ""  # used to update the client
     logger = Logger()  # the module which records the machines behavior to review later
@@ -97,6 +98,8 @@ class Data:
     # Bumped by Stop, so a line already being sent can't move the index after the stop reset it.
     runGeneration = 0
     manualZAxisAdjust = False
+    # The firmware printed "Maslow Paused" and holds every line until it gets "~".
+    firmwarePaused = False
     # this is used to determine the first time the position is received from the machine
     firstTimePosFlag = 0
     # report if the serial connection is open

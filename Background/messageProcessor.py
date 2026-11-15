@@ -1,5 +1,6 @@
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
 
+import re
 import threading
 import time
 
@@ -61,9 +62,21 @@ class MessageProcessor(MakesmithInitFuncs):
                 self.data.fakeServoStatus = True
                 self.data.console_queue.put(message)
             elif message[0:13] == "Maslow Paused":
-                # received controller-initiated pause message.  Free controller to accept moves and send
-                # message to UIProcessor to process.
+                # The firmware holds every line until "~", which only the user's Resume (or a jog) sends.
                 self.data.uploadFlag = 0
+                self.data.firmwarePaused = True
+                self.data.ui_controller_queue.put(message)
+            elif message[0:12] == "Tool Change:":
+                # This thread owns the tool-change state; the UIProcessor only shows the prompt.
+                self.data.manualZAxisAdjust = True
+                self.data.uploadFlag = 0
+                self.data.pausedzval = self.data.zval
+                self.data.pausedUnits = self.data.units
+                self.data.pausedPositioningMode = self.data.positioningMode
+                tool = re.search(r"tool\s+([0-9]+)", message)
+                if tool:
+                    # A Stop can flush an M6 the host already counted, so the firmware's word wins.
+                    self.data.currentTool = self.data.nextTool = int(tool.group(1))
                 self.data.ui_controller_queue.put(message)
             elif message[0:8] == "Message:":
                 # suppress the annoying messages about invalid chain lengths during the calibration process

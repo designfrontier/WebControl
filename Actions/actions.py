@@ -2,6 +2,7 @@ from DataStructures.data import GCODE_LOCKED_MESSAGE
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
 from File.safePaths import libraryRoot, resolveInside
 from Actions import firmware
+from Connection.firmwareGcode import changesTool, toolTheFirmwareReads, withToolWordFirst
 from File.retention import keepNewest
 
 import os
@@ -26,6 +27,12 @@ def gcodeNumbers(letter, line):
 
 KEEP_ARCHIVES = 5
 
+# Manual commands that reach the controller, which runs none of them while the firmware is paused.
+MACHINE_COMMANDS = {
+    "move", "moveTo", "moveZ", "setMaxZ", "setMinZ", "clearZ", "getZlimits", "reportSettings", "home", "defineZ0",
+    "touchZ", "moveToDefault", "returnToCenter", "macro1", "macro2",
+}
+
 
 class FirmwareUpgradeError(Exception):
     pass
@@ -43,6 +50,9 @@ class Actions(MakesmithInitFuncs):
         :return:
         '''
         try:
+            if self.data.firmwarePaused and self.data.uploadFlag != 1 and msg["data"]["command"] in MACHINE_COMMANDS:
+                # Streaming stays held, so releasing the firmware lets the jog run now instead of on Resume.
+                self.releaseFirmwarePause()
             # Commands allowed during sending gcode.  These commands won't screw something up.
             if msg["data"]["command"] == "createDirectory":
                 if not self.createDirectory(msg["data"]["arg"]):
@@ -553,6 +563,7 @@ class Actions(MakesmithInitFuncs):
             self.data.gcodeIndex = 0
             self.data.runGeneration += 1
             self.data.manualZAxisAdjust = False
+            self.data.firmwarePaused = False
             self.data.quick_queue.put("!")
             with self.data.gcode_queue.mutex:
                 self.data.gcode_queue.queue.clear()
@@ -679,14 +690,8 @@ class Actions(MakesmithInitFuncs):
             if self.data.manualZAxisAdjust:
                 # Z-axis is disabled and requires manual adjustment.
                 print("Resume run with manual z-axis adjust.")
-                # Clear the flag.
                 self.data.manualZAxisAdjust = False
-                # Reenable the uploadFlag if it was previous set.
-                if self.data.previousUploadStatus == -1:
-                    # If this was M command pause, then set to 1.
-                    self.data.uploadFlag = 1
-                else:
-                    self.data.uploadFlag = self.data.previousUploadStatus ### just moved this here from after if statement
+                self.data.uploadFlag = 1 if self.data.jobInProgress else 0
             elif self.data.uploadFlag == 1:
                 # A second Resume (double click, another client) must not lift and replunge mid-cut.
                 return True
@@ -710,15 +715,18 @@ class Actions(MakesmithInitFuncs):
                 self.sendGCodePositionUpdate(self.data.gcodeIndex, recalculate=True)
                 self.data.uploadFlag = 1
 
-            # Send cycle resume command to unpause the machine.
-            # Only needed if user initiated pause; but doesn't actually cause harm to controller.
-            self.data.quick_queue.put("~")
+            # Harmless when the firmware is not paused: it just answers ok.
+            self.releaseFirmwarePause()
             self.data.ui_queue1.put("Action", "setAsPause", "")
             self.data.gpioActions.causeAction("PauseLED", "off")
             return True
         except Exception as e:
             self.data.console_queue.put(str(e))
             return False
+
+    def releaseFirmwarePause(self):
+        self.data.firmwarePaused = False
+        self.data.quick_queue.put("~")
 
     def returnToCenter(self):
         '''
@@ -1588,6 +1596,7 @@ class Actions(MakesmithInitFuncs):
         # None until the file sets Z for the current tool; a restart must not lower the bit to a guess.
         zpos = None
         tool = None
+        nextTool = None
         spindle = None
         laser = None
         dwell = None
@@ -1596,6 +1605,10 @@ class Actions(MakesmithInitFuncs):
             filtersparsed = re.sub(r';([^\n]*)?', '\n', filtersparsed)  # replace standard ; initiated gcode comments with nothing
             if not filtersparsed.isspace():  # if all spaces, don't send.  likely a comment. #self.data.gcode[x][0] != "(":
                 #lines = self.data.gcode[x].split(" ")
+                toolLine = withToolWordFirst(filtersparsed)
+                namedTool = toolTheFirmwareReads(toolLine)
+                nextTool = nextTool if namedTool is None else namedTool
+                tool = str(nextTool) if changesTool(toolLine) and nextTool is not None else tool
                 lines = re.sub(r"^\s*N[0-9]+", "", filtersparsed).split(" ")
                 if lines:
                     finalLines = []
@@ -1660,8 +1673,6 @@ class Actions(MakesmithInitFuncs):
                             laser = "M106 " if 106 in mCodes else laser
                             laser = "M107 " if 107 in mCodes or 16 in mCodes else laser
                             zpos = None if 6 in mCodes else zpos
-                        if line[0] == 'T':
-                            tool = line[1:] #slice off the T
         return {
             "units": units, "positioning": positioning, "x": xpos, "y": ypos, "z": zpos,
             "xyFeedRate": xyAxisFeedRate, "zFeedRate": zAxisFeedRate,
