@@ -64,6 +64,13 @@ enum Direction {
     Rollback,
 }
 
+/// The firmware read off the board before the upgrade, and the version it reported.
+#[derive(Debug, Clone)]
+struct Saved {
+    image: Image,
+    version: f64,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct Upgrade {
     pub image: Option<Image>,
@@ -78,7 +85,7 @@ pub(crate) struct Upgrade {
     chains_after: Vec<f64>,
     motors: Vec<MotorTest>,
     backup: Option<String>,
-    rollback: Option<Image>,
+    rollback: Option<Saved>,
     port: String,
     attempt: u8,
     direction: Direction,
@@ -355,7 +362,7 @@ impl Machine {
             ("webcontrol.json".to_string(), self.settings.to_python_json()),
             ("preflight.txt".to_string(), facts),
         ];
-        upgrade.rollback = Some(image);
+        upgrade.rollback = Some(Saved { image, version: upgrade.firmware.unwrap_or_default() });
         upgrade.note("Flash read back; saving the backup.");
         effects.push(Effect::Firmware(FirmwareJob::Save { files }));
     }
@@ -369,7 +376,12 @@ impl Machine {
     }
 
     fn flash_rollback(&mut self, why: &str, effects: &mut Vec<Effect>) {
-        let image = self.upgrade.rollback.clone().expect("a rollback image exists before anything is flashed");
+        let image = self
+            .upgrade
+            .rollback
+            .as_ref()
+            .map(|saved| saved.image.clone())
+            .expect("a rollback image exists before anything is flashed");
         self.upgrade.direction = Direction::Rollback;
         let attempt = self.upgrade.attempt;
         self.upgrade.enter(Stage::RollingBack, &format!("{why} Restoring the saved firmware (attempt {attempt})."));
@@ -452,7 +464,9 @@ impl Machine {
         }
         let expected = match self.upgrade.direction {
             Direction::Upgrade => reports_target(version),
-            Direction::Rollback => self.upgrade.firmware.is_some_and(|before| (before - version).abs() < 1e-9),
+            Direction::Rollback => {
+                self.upgrade.rollback.as_ref().is_some_and(|saved| (saved.version - version).abs() < 1e-9)
+            }
         };
         if !self.upgrade.banner_seen {
             return self.post_flash_failed("The controller booted without a board banner.", now, effects);
@@ -568,7 +582,8 @@ impl Machine {
                 self.upgrade.enter(Stage::SelfTest, &message);
             }
             Direction::Rollback => {
-                let version = self.upgrade.firmware.map(|v| format!("{v}")).unwrap_or_default();
+                let version =
+                    self.upgrade.rollback.as_ref().map(|saved| format!("{}", saved.version)).unwrap_or_default();
                 let message = format!("Rolled back to {version}; {rewritten}");
                 self.upgrade.enter(Stage::RolledBack, &message);
                 effects.push(alert(&message));

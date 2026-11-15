@@ -627,3 +627,16 @@ fn a_controller_restart_during_the_check_or_self_test_frees_the_wizard() {
     bench.apply(Event::PortClosed);
     assert_eq!(bench.settle(&[Stage::Testing], 20_000), Stage::SelfTest, "{:?}", bench.view().log);
 }
+
+#[test]
+fn a_check_after_the_upgrade_still_rolls_back_to_the_firmware_read_off_the_board() {
+    let mut bench = Bench::owners();
+    assert_eq!(bench.upgrade(), Stage::SelfTest);
+    bench.act("check");
+    assert_eq!(bench.settle(&[Stage::Checking], 10_000), Stage::Blocked);
+    assert!(bench.view().can_rollback);
+    bench.act("rollback");
+    let stage = bench.settle(&[Stage::RollingBack, Stage::Restarting, Stage::Migrating], 120_000);
+    assert_eq!(stage, Stage::RolledBack, "{:?}", bench.view().log);
+    assert!(bench.alerts().iter().any(|a| a.starts_with("Rolled back to 51.27")));
+}
