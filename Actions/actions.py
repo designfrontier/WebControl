@@ -903,56 +903,35 @@ class Actions(MakesmithInitFuncs):
         '''
 
         try:
-            #keep track of distToMoveZ value
             self.data.config.setValue("Computed Settings", "distToMoveZ", distToMoveZ)
-            # It's possible the front page is set for one units and when you go to z-axis control, you might switch
-            # to a different unit.  Webcontrol keeps these units separate, so we need to make sure the machine is in
-            # the correct units when the z-axis move is sent
+            sign = {"raise": 1.0, "lower": -1.0}.get(direction)
+            # The Z panel keeps its own units; a G20/G21 here would switch WebControl's units and rescale home.
             unitsZ = self.data.config.getValue("Computed Settings", "unitsZ")
-            previousUnits = self.data.config.getValue("Computed Settings", "units")
-            if unitsZ == "MM":
-                self.data.gcode_queue.put("G21 ")
-            else:
-                self.data.gcode_queue.put("G20 ")
-            if direction == "raise":
+            distance = float(distToMoveZ) * self.unitScale(unitsZ, self.data.units)
+            self.data.gcode_queue.put("G20 " if self.data.units == "INCHES" else "G21 ")
+            if sign is not None:
                 self.data.gcode_queue.put("G91 ")
-                self.data.gcode_queue.put("G00 Z" + str(float(distToMoveZ)) + " ")
+                self.data.gcode_queue.put("G00 Z" + str(round(sign * distance, 4)) + " ")
                 self.data.gcode_queue.put("G90 ")
-            elif direction == "lower":
-                self.data.gcode_queue.put("G91 ")
-                self.data.gcode_queue.put("G00 Z" + str(-1.0 * float(distToMoveZ)) + " " )
-                self.data.gcode_queue.put("G90 ")
-            # now, since we might have changed the units of the machine, make sure they are set back to what it was
-            # originally.
-            #units = self.data.config.getValue("Computed Settings", "units")
-            if previousUnits != unitsZ:
-                if previousUnits == "MM":
-                    self.data.gcode_queue.put("G21 ")
-                else:
-                    self.data.gcode_queue.put("G20 ")
             return True
         except Exception as e:
             self.data.console_queue.put(str(e))
             return False
 
+    @staticmethod
+    def unitScale(fromUnits, toUnits):
+        return 1.0 if fromUnits == toUnits else 25.4 if fromUnits == "INCHES" else 1 / 25.4
 
     def touchZ(self):
         '''
-        Sends a gcode line to set z axis depth using touch plate.  I've not personally tested this.
+        Probes down with G38.2 to the plunge limit, in the machine's units, then zeroes Z.
         :return:
         '''
         try:
-            plungeDepth = self.data.config.getValue("Advanced Settings", "maxTouchProbePlungeDistance")
-            revertToInches = False
-            if self.data.units == "INCHES":
-                revertToInches = True
-                self.data.gcode_queue.put("G21")
+            plungeDepthMM = float(self.data.config.getValue("Advanced Settings", "maxTouchProbePlungeDistance"))
+            plungeDepth = ("%.4f" % (plungeDepthMM * self.unitScale("MM", self.data.units))).rstrip("0").rstrip(".")
             # The firmware probes at a fixed 60 mm/min; an F here would only become the job's modal feed.
             self.data.gcode_queue.put("G90 G38.2 Z-" + plungeDepth + " M02")
-            if revertToInches:
-                self.data.gcode_queue.put("G20")
-            # don't think this line is needed
-            # todo: remove if not needed.
             self.data.measureRequest = self.defineZ0()
             return True
         except Exception as e:
@@ -1018,25 +997,22 @@ class Actions(MakesmithInitFuncs):
                     # only send G21 to the controller if not already sending G21
                     if not fromGcode:
                         self.data.gcode_queue.put("G21 ")
-                # update the gcodeShift coordinates to match units
-                self.data.gcodeShift = [
-                  self.data.gcodeShift[0] * scaleFactor,
-                  self.data.gcodeShift[1] * scaleFactor,
-                ]
+                # Home is kept to defineHome's 4 decimals, so switching units back and forth cannot drift it.
+                self.data.gcodeShift = [round(shift * scaleFactor, 4) for shift in self.data.gcodeShift]
                 self.data.feedRate = scaleFactor*self.data.feedRate
                 # The UI client sending this has already converted the distToMove to the correct value for the units
                 self.data.config.setValue("Computed Settings", "distToMove", value)
                 # get the current homeX and homeY coordinates
                 oldHomeX = float(self.data.config.getValue("Advanced Settings", "homeX"))
                 oldHomeY = float(self.data.config.getValue("Advanced Settings", "homeY"))
-                # convert homeX and homeY to the correct units and save
-                self.data.config.setValue("Advanced Settings", "homeX", oldHomeX * scaleFactor)
-                self.data.config.setValue("Advanced Settings", "homeY", oldHomeY * scaleFactor)
+                newHomeX, newHomeY = round(oldHomeX * scaleFactor, 4), round(oldHomeY * scaleFactor, 4)
+                self.data.config.setValue("Advanced Settings", "homeX", newHomeX)
+                self.data.config.setValue("Advanced Settings", "homeY", newHomeY)
                 # notify all UI clients that units have been changed and distToMove has been changed
                 self.data.ui_queue1.put("Action", "unitsUpdate", "")
                 self.data.ui_queue1.put("Action", "distToMoveUpdate", "")
                 # update the home position..
-                position = {"xval": oldHomeX * scaleFactor, "yval": oldHomeY * scaleFactor}
+                position = {"xval": newHomeX, "yval": newHomeY}
                 self.data.ui_queue1.put("Action", "homePositionMessage", position)
                 # update the gcode position
                 self.sendGCodePositionUpdate(recalculate=True)

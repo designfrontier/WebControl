@@ -187,9 +187,11 @@ scenario(
 
 scenario(
     "move_z_in_inches_on_a_mm_machine",
-    "The Z panel in inches on a mm machine: G20 for the move, then G21 to put the controller back.",
-    {**MM, "unitsZ": "INCHES"},
-    [ui("moveZ", "raise", "0.25"), idle()],
+    "The Z panel in inches on a mm machine: each move goes out converted to mm, so neither the controller's units "
+    "nor WebControl's units and home change.",
+    {"units": "MM", "unitsZ": "INCHES", "home": {"x": 100.3, "y": -50.25}},
+    [step for _ in range(3) for step in (ui("moveZ", "raise", "0.25"), idle())]
+    + [expect(state={"units": "MM", "home": {"x": 100.3, "y": -50.25}})],
 )
 
 scenario(
@@ -202,9 +204,9 @@ scenario(
 
 scenario(
     "touch_z_inches",
-    "Touch Z on an inch machine switches to G21 for the probe (its plunge limit is in mm) and back to G20.",
-    {**INCHES},
-    [ui("touchZ"), idle()],
+    "Touch Z on an inch machine probes in inches: the plunge limit (mm) is converted, so the units never change.",
+    {"units": "INCHES", "home": {"x": 3.9488, "y": 0}},
+    [ui("touchZ"), idle(), expect(state={"units": "INCHES", "home": {"x": 3.9488, "y": 0}})],
 )
 
 # ----- streaming -----

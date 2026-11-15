@@ -329,7 +329,7 @@ def test_starting_mid_file_after_a_tool_change_queues_nothing_behind_its_m6(app,
     sent = port.sent
     assert sent[:6] == ["G21  ", "G90  ", "G0 Z5.0  ", "G0 X40.0 Y40.0  ", "T2 M6  ", "~"]
     assert [line for line in sent if line.startswith("G1 Z")] == ["G1 Z-2.0 F100.0  "]
-    assert sent.index("G00 Z5.0  ") < sent.index("G1 Z-2.0 F100.0  ")
+    assert sent.index("G00 Z127.0  ") < sent.index("G1 Z-2.0 F100.0  "), "the Z panel defaults to inches"
     assert sent[-6:] == ["G0 Z5.0  ", "G0 X40.0 Y40.0  ", "G1 Z-2.0 F100.0  ", "G1 F100.0  ", "G90  ", "X50  "]
 
 

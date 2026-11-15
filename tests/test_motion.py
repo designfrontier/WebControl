@@ -13,7 +13,8 @@ def job(data):
     config = data.config
     keys = [
         ("Advanced Settings", "homeX"), ("Advanced Settings", "homeY"), ("Computed Settings", "units"),
-        ("Computed Settings", "distToMove"), ("Computed Settings", "tolerance"),
+        ("Computed Settings", "distToMove"), ("Computed Settings", "tolerance"), ("Computed Settings", "unitsZ"),
+        ("Computed Settings", "distToMoveZ"),
     ]
     saved_config = [config.getValue(*key) for key in keys]
     attributes = [
@@ -330,14 +331,41 @@ def test_resume_while_the_job_is_already_running_moves_nothing(job):
     assert job.uploadFlag == 1
 
 
-@pytest.mark.parametrize("units, before, after", [("MM", [], []), ("INCHES", ["G21"], ["G20"])])
-def test_touch_z_probes_without_setting_the_modal_feed(job, units, before, after):
+@pytest.mark.parametrize("units, depth", [("MM", "10"), ("INCHES", "0.3937")])
+def test_touch_z_probes_in_the_machines_units_without_setting_the_modal_feed(job, units, depth):
     set_machine_units(job, units)
-    depth = job.config.getValue("Advanced Settings", "maxTouchProbePlungeDistance")
+    job.config.setValue("Advanced Settings", "maxTouchProbePlungeDistance", "10", recursionBreaker=True)
 
     job.actions.processAction({"data": {"command": "touchZ", "arg": "", "arg1": ""}})
 
-    assert drain(job.gcode_queue) == [*before, "G90 G38.2 Z-" + str(depth) + " M02", *after, "G10 Z0 "]
+    assert drain(job.gcode_queue) == ["G90 G38.2 Z-" + depth + " M02", "G10 Z0 "]
+
+
+@pytest.mark.parametrize(
+    "units, units_z, distance, move",
+    [("MM", "MM", 5, "G00 Z5.0 "), ("MM", "INCHES", 0.25, "G00 Z6.35 "), ("INCHES", "MM", 1.5, "G00 Z0.0591 ")],
+)
+def test_z_moves_go_out_in_the_machines_units(job, units, units_z, distance, move):
+    set_machine_units(job, units)
+    job.config.setValue("Computed Settings", "unitsZ", units_z, recursionBreaker=True)
+
+    job.actions.moveZ("raise", distance)
+
+    assert drain(job.gcode_queue) == ["G21 " if units == "MM" else "G20 ", "G91 ", move, "G90 "]
+
+
+def test_switching_units_back_and_forth_does_not_drift_home(job):
+    job.config.setValue("Advanced Settings", "homeX", "100.3", recursionBreaker=True)
+    job.config.setValue("Advanced Settings", "homeY", "-50.25", recursionBreaker=True)
+    job.gcodeShift = [100.3, -50.25]
+
+    for _ in range(3):
+        job.actions.updateSetting("toInches", 0, True)
+        job.actions.updateSetting("toMM", 0, True)
+    drain(job.ui_queue1)
+
+    home = [float(job.config.getValue("Advanced Settings", key)) for key in ("homeX", "homeY")]
+    assert home == job.gcodeShift == [100.2995, -50.2488]
 
 
 @pytest.mark.parametrize(
