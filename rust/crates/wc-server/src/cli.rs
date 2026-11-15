@@ -4,24 +4,34 @@ use std::future::Future;
 use std::io::Write;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::path::PathBuf;
+use std::sync::Arc;
 
+use tokio::sync::Notify;
 use wc_config::{Paths, Settings};
-use wc_machine::{Machine, spawn};
+use wc_machine::{Machine, PortOpener, spawn};
+use wc_sim::Build;
 
+use crate::host::SystemHost;
+use crate::serial::{SerialOpener, SimOpener};
 use crate::{AppState, PingConfig, router};
 
 pub const HELP: &str = "\
-Usage: webcontrol-rs [--port N] [--home DIR]
+Usage: webcontrol-rs [--port N] [--home DIR] [--simulate]
 
   --port N     listen on port N (default: webPort from webcontrol.json, else 5000; 0 picks one)
   --home DIR   use DIR/.WebControl instead of $HOME/.WebControl
+  --simulate   talk to a simulated holey 51.27 controller instead of the serial port
   --version    print the version, git commit and contract version
   --help       print this help";
+
+/// The port name `--simulate` connects to.
+pub const SIMULATED_PORT: &str = "simulator";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Options {
     pub home: PathBuf,
     pub port: Option<u16>,
+    pub simulate: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,6 +54,7 @@ pub fn version_text() -> String {
 pub fn parse(args: &[String], home: Option<PathBuf>) -> Result<Command, String> {
     let mut port = None;
     let mut home = home;
+    let mut simulate = false;
     let mut rest = args.iter().flat_map(|arg| match arg.split_once('=') {
         Some((flag, value)) if flag.starts_with("--") => vec![flag.to_string(), value.to_string()],
         _ => vec![arg.clone()],
@@ -57,11 +68,12 @@ pub fn parse(args: &[String], home: Option<PathBuf>) -> Result<Command, String> 
                 port = Some(value.parse().map_err(|_| format!("--port {value:?} is not a port number"))?);
             }
             "--home" => home = Some(rest.next().ok_or("--home needs a directory")?.into()),
+            "--simulate" => simulate = true,
             other => return Err(format!("unknown argument {other:?}\n\n{HELP}")),
         }
     }
     let home = home.ok_or("HOME is not set; pass --home")?;
-    Ok(Command::Serve(Options { home, port }))
+    Ok(Command::Serve(Options { home, port, simulate }))
 }
 
 /// The address other machines reach this one at; connecting a UDP socket sends nothing.
@@ -74,16 +86,32 @@ fn local_ip() -> IpAddr {
 }
 
 pub async fn serve(options: Options, shutdown: impl Future<Output = ()> + Send + 'static) -> std::io::Result<()> {
-    let settings = Settings::load(&Paths::new(&options.home));
+    let paths = Paths::new(&options.home);
+    let settings = Settings::load(&paths);
     tracing::info!(source = ?settings.source(), home = %options.home.display(), "settings loaded");
     let port = options.port.unwrap_or_else(|| settings.web_port());
     let listener = tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port))).await?;
     let bound = listener.local_addr()?;
-    let (machine, _task) = spawn(Machine::new(&format!("{}:{}", local_ip(), bound.port())), None);
+    let exit = Arc::new(Notify::new());
+    let host = Arc::new(SystemHost::new(&paths.dir(), exit.clone()));
+    let machine = Machine::new(&format!("{}:{}", local_ip(), bound.port()), settings);
+    let (machine, opener): (Machine, Box<dyn PortOpener>) = match options.simulate {
+        true => (machine.on_port(SIMULATED_PORT), Box::new(SimOpener::new(Build::holey_51_27()))),
+        false => (machine, Box::new(SerialOpener)),
+    };
+    let (machine, _task) = spawn(machine, opener, host);
     println!("webcontrol-rs listening on {bound}");
     std::io::stdout().flush()?;
-    let app = router(AppState::new(machine, settings, PingConfig::default()));
-    axum::serve(listener, app).with_graceful_shutdown(shutdown).await
+    let state = AppState::new(machine, PingConfig::default());
+    let closing = state.clone();
+    let stopped = async move {
+        tokio::select! {
+            _ = shutdown => {}
+            _ = exit.notified() => tracing::info!("shut down from the UI"),
+        }
+        closing.close_sessions();
+    };
+    axum::serve(listener, router(state)).with_graceful_shutdown(stopped).await
 }
 
 async fn terminated() {

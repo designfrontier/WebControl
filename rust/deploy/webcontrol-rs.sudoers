@@ -1,0 +1,2 @@
+# /etc/sudoers.d/webcontrol-rs: lets webcontrol-rs power the Pi off (TurnOffRPI), and nothing else.
+pi ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff

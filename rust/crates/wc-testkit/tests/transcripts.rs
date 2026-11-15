@@ -21,6 +21,26 @@ fn every_transcript_fits_the_schema_and_the_serde_types() {
 }
 
 #[test]
+fn rust_overrides_fit_the_schema_and_replace_shared_transcripts_by_name() {
+    let validator = schema_validator();
+    let overrides = Transcript::overrides();
+    assert!(!overrides.is_empty());
+    overrides.iter().for_each(|(path, transcript)| {
+        let text = std::fs::read_to_string(path).unwrap();
+        let raw: Value = serde_json::from_str(&text).unwrap();
+        assert!(validator.iter_errors(&raw).next().is_none(), "{}", path.display());
+        assert_eq!(path.file_stem().unwrap().to_str().unwrap(), transcript.meta.name);
+        assert!(transcript.meta.description.starts_with("Rust"), "{} says why Rust differs", transcript.meta.name);
+    });
+    let rust = Transcript::rust_corpus();
+    assert_eq!(rust.len(), Transcript::corpus().len(), "every override replaces a shared transcript");
+    let names: Vec<&str> = rust.iter().map(|(_, t)| t.meta.name.as_str()).collect();
+    assert!(names.windows(2).all(|pair| pair[0] < pair[1]), "sorted and unique");
+    let replaced = rust.iter().find(|(_, t)| t.meta.name == "connect_boot_handshake").unwrap();
+    assert!(replaced.0.to_string_lossy().contains("transcripts-rust"));
+}
+
+#[test]
 fn realtime_is_set_exactly_on_the_realtime_writes() {
     let realtime_writes = ["!\n", "~\n"];
     Transcript::corpus().iter().flat_map(|(_, t)| t.events.clone()).for_each(|event| {

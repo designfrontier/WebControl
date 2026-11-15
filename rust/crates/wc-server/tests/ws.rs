@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
@@ -7,7 +8,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
 use wc_config::Settings;
-use wc_machine::{Core, Effect, Event, Machine, MachineHandle, Snapshot, spawn};
+use wc_machine::{Core, Effect, Event, Machine, MachineHandle, NoHost, NoPort, Snapshot, spawn};
 use wc_protocol::{Envelope, Push};
 use wc_server::{AppState, PingConfig, router};
 use wc_testkit::contract::Contract;
@@ -17,13 +18,14 @@ type Client = WebSocketStream<MaybeTlsStream<TcpStream>>;
 async fn serve_with(machine: MachineHandle, ping: PingConfig) -> String {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
-    let app = router(AppState::new(machine, Settings::defaults(), ping));
+    let app = router(AppState::new(machine, ping));
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     address.to_string()
 }
 
 async fn serve() -> String {
-    let (machine, _task) = spawn(Machine::new("10.0.0.5:5000"), None);
+    let (machine, _task) =
+        spawn(Machine::new("10.0.0.5:5000", Settings::defaults()), Box::new(NoPort), Arc::new(NoHost));
     serve_with(machine, PingConfig::default()).await
 }
 
@@ -47,6 +49,16 @@ fn decoded(frame: &Value) -> (String, Value) {
     let envelope = &frame["data"];
     let data = serde_json::from_str(envelope["data"].as_str().unwrap()).unwrap();
     (envelope["command"].as_str().unwrap().to_string(), data)
+}
+
+/// The next `message` push with this command; status pushes may arrive in between.
+async fn next_message(client: &mut Client, command: &str) -> Value {
+    loop {
+        let frame = next_frame(client).await;
+        if frame["event"] == "message" && frame["data"]["command"] == command {
+            return frame;
+        }
+    }
 }
 
 async fn send(client: &mut Client, frame: Value) {
@@ -88,9 +100,22 @@ async fn actions_reach_the_machine_and_its_alert_comes_back() {
         next_frame(&mut client).await;
     }
     send(&mut client, action("home", "")).await;
-    let (command, alert) = decoded(&next_frame(&mut client).await);
-    assert_eq!(command, "activateModal");
-    assert_eq!(alert["message"], "Function not currently implemented.. Sorry.[home]");
+    let (_, alert) = decoded(&next_message(&mut client, "activateModal").await);
+    assert_eq!(alert["message"], "The controller is not connected.");
+}
+
+#[tokio::test]
+async fn a_setting_request_is_answered_to_everyone() {
+    let address = serve().await;
+    let mut asker = open(&address, "/MaslowCNC").await;
+    let mut other = open(&address, "/MaslowCNC").await;
+    for _ in 0..3 {
+        next_frame(&mut asker).await;
+    }
+    let request = json!({"section": "Maslow Settings", "setting": "bedWidth"});
+    send(&mut asker, json!({"ns": "/MaslowCNC", "event": "settingRequest", "data": {"data": request}})).await;
+    let answer = decoded(&next_message(&mut other, "requestedSetting").await).1;
+    assert_eq!(answer, json!({"setting": "bedWidth", "value": "2438.4"}));
 }
 
 #[tokio::test]
@@ -106,8 +131,8 @@ async fn frames_that_do_not_parse_or_belong_elsewhere_are_ignored() {
     send(&mut client, json!({"ns": "/MaslowCNC", "event": "settingRequest", "data": {"data": {}}})).await;
     send(&mut client, json!({"ns": "/MaslowCNC", "event": "bogus", "data": 1})).await;
     send(&mut client, action("moveZ", "")).await;
-    let (_, alert) = decoded(&next_frame(&mut client).await);
-    assert_eq!(alert["message"], "Function not currently implemented.. Sorry.[moveZ]");
+    let (_, alert) = decoded(&next_message(&mut client, "activateModal").await);
+    assert_eq!(alert["message"], "The controller is not connected.");
 }
 
 #[tokio::test]
@@ -159,26 +184,24 @@ async fn handshake(client: &mut Client) -> String {
 
 #[tokio::test]
 async fn a_per_client_push_goes_only_to_its_socket() {
-    let (machine, _task) = spawn(Echo(Machine::new("h")), None);
+    let (machine, _task) = spawn(Echo(Machine::new("h", Settings::defaults())), Box::new(NoPort), Arc::new(NoHost));
     let address = serve_with(machine, PingConfig::default()).await;
     let mut alice = open(&address, "/MaslowCNC").await;
     let alice_sid = handshake(&mut alice).await;
     let mut bob = open(&address, "/MaslowCNC").await;
     let _bob_sid = handshake(&mut bob).await;
-    for _ in 0..2 {
-        next_frame(&mut alice).await;
-    }
     send(&mut bob, action("echo", &alice_sid)).await;
     send(&mut bob, action("all", "")).await;
-    let to_alice = next_frame(&mut alice).await;
+    let to_alice = next_message(&mut alice, "showFPSpinner").await;
     assert_eq!(to_alice["data"]["data"], 1);
-    assert_eq!(next_frame(&mut alice).await["data"]["data"], 0);
-    assert_eq!(next_frame(&mut bob).await["data"]["data"], 0, "bob must not get alice's push");
+    assert_eq!(next_message(&mut alice, "showFPSpinner").await["data"]["data"], 0);
+    let to_bob = next_message(&mut bob, "showFPSpinner").await;
+    assert_eq!(to_bob["data"]["data"], 0, "bob must not get alice's push");
 }
 
 #[tokio::test]
 async fn log_pushes_reach_the_log_namespace() {
-    let (machine, _task) = spawn(Echo(Machine::new("h")), None);
+    let (machine, _task) = spawn(Echo(Machine::new("h", Settings::defaults())), Box::new(NoPort), Arc::new(NoHost));
     let address = serve_with(machine, PingConfig::default()).await;
     let mut logs = open(&address, "/MaslowCNCLogs").await;
     next_frame(&mut logs).await;
@@ -195,7 +218,7 @@ fn quick_pings() -> PingConfig {
 
 #[tokio::test]
 async fn the_server_pings_and_a_client_that_answers_stays_connected() {
-    let (machine, _task) = spawn(Machine::new("h"), None);
+    let (machine, _task) = spawn(Machine::new("h", Settings::defaults()), Box::new(NoPort), Arc::new(NoHost));
     let address = serve_with(machine, quick_pings()).await;
     let mut client = open(&address, "/MaslowCNC").await;
     handshake(&mut client).await;
@@ -218,7 +241,7 @@ async fn the_server_pings_and_a_client_that_answers_stays_connected() {
 
 #[tokio::test]
 async fn a_client_that_never_answers_pings_is_closed() {
-    let (machine, _task) = spawn(Machine::new("h"), None);
+    let (machine, _task) = spawn(Machine::new("h", Settings::defaults()), Box::new(NoPort), Arc::new(NoHost));
     let address = serve_with(machine, quick_pings()).await;
     let mut raw = TcpStream::connect(&address).await.unwrap();
     let upgrade = "GET /ws?ns=%2FMaslowCNC HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\
@@ -275,7 +298,8 @@ fn masked_text(text: &str) -> Vec<u8> {
 #[tokio::test]
 async fn stop_reaches_the_machine_while_the_client_is_not_reading_its_pushes() {
     let stopped = std::sync::Arc::new(tokio::sync::Notify::new());
-    let (machine, _task) = spawn(Flood(Machine::new("h"), stopped.clone()), None);
+    let (machine, _task) =
+        spawn(Flood(Machine::new("h", Settings::defaults()), stopped.clone()), Box::new(NoPort), Arc::new(NoHost));
     let address = serve_with(machine, PingConfig::default()).await;
     let socket = tokio::net::TcpSocket::new_v4().unwrap();
     socket.set_recv_buffer_size(4096).unwrap();

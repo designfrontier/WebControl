@@ -5,9 +5,15 @@ mod events;
 mod frame;
 #[path = "slices/main.rs"]
 pub mod main;
+#[path = "slices/settings.rs"]
+pub mod settings;
+#[path = "slices/system.rs"]
+pub mod system;
+#[path = "slices/viewer.rs"]
+pub mod viewer;
 
 pub use envelope::{DataFormat, Envelope, Message};
-pub use events::{Action, ClientEvent};
+pub use events::{Action, ClientEvent, float};
 pub use frame::{Frame, Namespace, Push};
 
 /// `contract/VERSION` at build time.

@@ -1,0 +1,12 @@
+[package]
+name = "wc-firmware"
+description = "The Maslow controller's serial protocol, sans IO: line classifier, flow control, boot and version facts, settings lines"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde_json.workspace = true
+wc-config.workspace = true

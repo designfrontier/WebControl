@@ -16,6 +16,18 @@ pub enum Source {
     Defaults,
 }
 
+/// A setting the controller also holds, as `$<firmware_key>`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FirmwareOption {
+    pub section: String,
+    pub key: String,
+    pub firmware_key: u32,
+    pub value: Value,
+    pub default: Value,
+    /// Only custom (optical, version 100+) firmware takes it.
+    pub custom: bool,
+}
+
 /// `webcontrol.json`: section name -> list of option objects, unknown fields kept as loaded.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
@@ -128,6 +140,35 @@ impl Settings {
             _ => None,
         };
         parsed.filter(|n| n.is_finite()).unwrap_or(0.0)
+    }
+
+    /// The option objects of one section, in file order.
+    pub fn section(&self, section: &str) -> Vec<&Map<String, Value>> {
+        self.sections.get(section).map(|s| options(s).collect()).unwrap_or_default()
+    }
+
+    /// Every option with a `firmwareKey`, in file order.
+    pub fn firmware_options(&self) -> impl Iterator<Item = FirmwareOption> + '_ {
+        self.sections.iter().flat_map(|(name, section)| {
+            options(section).filter_map(move |option| {
+                Some(FirmwareOption {
+                    section: name.clone(),
+                    key: option.get("key")?.as_str()?.to_string(),
+                    firmware_key: u32::try_from(option.get("firmwareKey")?.as_u64()?).ok()?,
+                    value: option.get("value").cloned().unwrap_or(Value::Null),
+                    default: option.get("default").cloned().unwrap_or(Value::Null),
+                    custom: option.get("custom") == Some(&Value::from(1)),
+                })
+            })
+        })
+    }
+
+    /// `Config.setValue` without its side effects; false if the option does not exist.
+    pub fn set_value(&mut self, section: &str, key: &str, value: Value) -> bool {
+        let found = self.sections.get_mut(section).and_then(Value::as_array_mut).and_then(|list| {
+            list.iter_mut().filter_map(Value::as_object_mut).find(|o| o.get("key").and_then(Value::as_str) == Some(key))
+        });
+        found.map(|option| option.insert("value".into(), value)).is_some()
     }
 
     pub fn web_port(&self) -> u16 {

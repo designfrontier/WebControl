@@ -16,6 +16,7 @@ futures-util = { version = "0.3", default-features = false, features = ["sink", 
 http-body-util = "0.1"
 jsonschema = { version = "0.61", default-features = false }
 levenberg-marquardt = "0.14"
+libc = "0.2"
 nalgebra = "0.33"
 regex = "1"
 rust-embed = { version = "8", features = ["debug-embed", "mime-guess"] }
@@ -24,6 +25,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "sync", "time", "signal"] }
+tokio-serial = { version = "5", default-features = false }
 tokio-tungstenite = "0.30"
 tower = { version = "0.5", features = ["util"] }
 tracing = "0.1"
@@ -31,10 +33,12 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v4"] }
 wc-calibration = { path = "crates/wc-calibration" }
 wc-config = { path = "crates/wc-config" }
+wc-firmware = { path = "crates/wc-firmware" }
 wc-gcode = { path = "crates/wc-gcode" }
 wc-kinematics = { path = "crates/wc-kinematics" }
 wc-machine = { path = "crates/wc-machine" }
 wc-protocol = { path = "crates/wc-protocol" }
+wc-sim = { path = "crates/wc-sim" }
 wc-testkit = { path = "crates/wc-testkit" }
 
 [profile.release]

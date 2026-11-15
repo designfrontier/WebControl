@@ -53,6 +53,9 @@ fn received(state: &AppState, ns: Namespace, text: &str) {
     };
     match ClientEvent::from_frame(&frame) {
         Some(ClientEvent::Action(action)) => state.machine.send(Event::Action(action)),
+        Some(ClientEvent::SettingRequest { section, setting }) => {
+            state.machine.send(Event::SettingRequest { section, setting })
+        }
         Some(ClientEvent::Unhandled(event)) => tracing::debug!(event, "event not handled yet"),
         None => tracing::debug!(event = frame.event, "ignoring unknown event"),
     }
@@ -65,6 +68,7 @@ fn is_for(push: &Push, ns: Namespace, sid: &str) -> bool {
 async fn session(socket: WebSocket, ns: Namespace, state: AppState) {
     let sid = uuid::Uuid::new_v4().simple().to_string();
     let mut pushes = state.machine.subscribe();
+    let mut closing = state.closing.subscribe();
     let (mut tx, mut rx) = socket.split();
     if tx.send(Message::text(Frame::connect(ns, &sid).encode())).await.is_err() {
         return;
@@ -101,6 +105,10 @@ async fn session(socket: WebSocket, ns: Namespace, state: AppState) {
                     Err(RecvError::Closed) => break,
                 },
                 _ = pongs.notified() => pong_deadline = None,
+                _ = async { closing.wait_for(|closing| *closing).await.map(drop) } => {
+                    let _ = tx.send(Message::Close(None)).await;
+                    break;
+                }
                 _ = pings.tick() => {
                     if tx.send(Message::Ping(Default::default())).await.is_err() {
                         break;

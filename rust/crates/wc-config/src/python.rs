@@ -31,3 +31,27 @@ pub fn python_str(value: &Value) -> String {
         other => other.to_string(),
     }
 }
+
+fn is_decimal(text: &str) -> bool {
+    let (whole, fraction) = text.split_once('.').unwrap_or((text, ""));
+    let digits = |part: &str| part.chars().all(|c| c.is_ascii_digit());
+    digits(whole) && digits(fraction) && !(whole.is_empty() && fraction.is_empty())
+}
+
+/// A number in the form the frontend and `api/settings.py` accept: no `nan`, `inf` or `1_000`.
+pub fn parse_number(text: &str) -> Option<f64> {
+    let trimmed = text.trim();
+    let unsigned = trimmed.strip_prefix(['+', '-']).unwrap_or(trimmed);
+    let (mantissa, exponent) = match unsigned.find(['e', 'E']) {
+        Some(at) => (&unsigned[..at], Some(&unsigned[at + 1..])),
+        None => (unsigned, None),
+    };
+    let exponent_ok = exponent.is_none_or(|e| {
+        let digits = e.strip_prefix(['+', '-']).unwrap_or(e);
+        !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit())
+    });
+    if !is_decimal(mantissa) || !exponent_ok {
+        return None;
+    }
+    trimmed.parse::<f64>().ok().filter(|v| v.is_finite())
+}

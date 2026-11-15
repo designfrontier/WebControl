@@ -55,8 +55,12 @@ pub struct ActivateModal {
 impl ActivateModal {
     /// A refused or failed action (wart 4).
     pub fn alert(message: &str) -> ActivateModal {
+        ActivateModal::titled_alert("Alert", message)
+    }
+
+    pub fn titled_alert(title: &str, message: &str) -> ActivateModal {
         ActivateModal {
-            title: "Alert".into(),
+            title: title.into(),
             message: message.into(),
             resume: "false".into(),
             progress: "false".into(),
@@ -64,6 +68,161 @@ impl ActivateModal {
             modal_type: "alert".into(),
         }
     }
+
+    /// A controller message; `resume` offers the Resume button.
+    pub fn notification(message: &str, resume: bool) -> ActivateModal {
+        ActivateModal {
+            title: "Notification:".into(),
+            resume: if resume { "resume" } else { "false" }.into(),
+            modal_type: "notification".into(),
+            ..ActivateModal::alert(message)
+        }
+    }
+}
+
+/// The sled position from a status report, sent when it moved.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct PositionMessage {
+    pub xval: f64,
+    pub yval: f64,
+    pub zval: f64,
+    pub vel: f64,
+    pub rqvel: f64,
+    /// Percent of the file sent, as text like `"12.3%"` (wart 6).
+    pub pcom: String,
+    pub state: String,
+    pub lpwr: f64,
+    pub rpwr: f64,
+    pub zpwr: f64,
+}
+
+impl Message for PositionMessage {
+    const COMMAND: &'static str = "positionMessage";
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ErrorValueMessage {
+    pub left_error: f64,
+    pub right_error: f64,
+    /// `-999999` when there is no forward-kinematics position (wart 6).
+    #[serde(rename = "computedX")]
+    pub computed_x: f64,
+    #[serde(rename = "computedY")]
+    pub computed_y: f64,
+    pub computed_enabled: i64,
+}
+
+impl Message for ErrorValueMessage {
+    const COMMAND: &'static str = "errorValueMessage";
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HealthMessage {
+    pub cpu_usage: f64,
+    /// `-1` when buffering is off (wart 6).
+    pub buffer_size: i64,
+    pub controller_firmware_version: f64,
+}
+
+impl Message for HealthMessage {
+    const COMMAND: &'static str = "healthMessage";
+}
+
+/// Also the `status` of `GET /api/main`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StatusMessage {
+    pub upload_flag: i32,
+    pub positioning_mode: u8,
+    pub current_tool: u32,
+    pub job_in_progress: bool,
+    #[serde(rename = "manualZAxisAdjust")]
+    pub manual_z_axis_adjust: bool,
+}
+
+impl Message for StatusMessage {
+    const COMMAND: &'static str = "statusMessage";
+}
+
+/// A controller line WebControl does not act on, for the Controller Messages pane.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(transparent)]
+pub struct ControllerMessage(pub String);
+
+impl Message for ControllerMessage {
+    const COMMAND: &'static str = "controllerMessage";
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Alarm {
+    pub message: String,
+}
+
+impl Message for Alarm {
+    const COMMAND: &'static str = "alarm";
+}
+
+/// Always `{"data": ""}`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ClearAlarm {
+    pub data: String,
+}
+
+impl ClearAlarm {
+    pub fn new() -> ClearAlarm {
+        ClearAlarm { data: String::new() }
+    }
+}
+
+impl Default for ClearAlarm {
+    fn default() -> Self {
+        ClearAlarm::new()
+    }
+}
+
+impl Message for ClearAlarm {
+    const COMMAND: &'static str = "clearAlarm";
+}
+
+/// Rust always sends numbers here (wart 5).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct HomePositionMessage {
+    pub xval: f64,
+    pub yval: f64,
+}
+
+impl Message for HomePositionMessage {
+    const COMMAND: &'static str = "homePositionMessage";
+}
+
+/// The answer to `settingRequest`, broadcast (wart 12); `value` as the settings file stores it (wart 5).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct RequestedSetting {
+    pub setting: String,
+    pub value: serde_json::Value,
+}
+
+impl Message for RequestedSetting {
+    const COMMAND: &'static str = "requestedSetting";
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GcodeLine {
+    pub line_index: usize,
+    pub line: String,
+    pub line_count: usize,
+}
+
+/// `GET /api/main`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MainScreen {
+    pub status: StatusMessage,
+    pub touch_plate: bool,
+    pub gcode: GcodeLine,
 }
 
 impl Message for ActivateModal {
