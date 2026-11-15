@@ -192,11 +192,15 @@ until a `VERSION` bump changes them.
     left as it was) instead of allocating the grid. Python has no cap.
 16. **The serial line limit counts bytes (Rust-intended).** See `serial/README.md`, Known warts 7.
 
-## Rust backend: intended differences
+## Rust-intended differences
 
-Where `webcontrol-rs` answers differently from Python on purpose (owner decisions in `spec/RUST-PLAN.md`). The
-schemas allow both; `tests/test_contract.py` checks Python only.
+Where the Rust backend deliberately does not copy Python, as the owner decided (`spec/RUST-PLAN.md`). The schemas
+allow both; `tests/test_contract.py` checks Python only.
 
+- **Every settings import recomputes.** After `/importFileWCJSON` changes anything, Rust runs `computeSettings`
+  (`kinematicsTypeComputed`, `distPerRot`, the PID gains, `chainOverSprocketComputed`, `fPWMComputed`), writes the
+  derived values that changed to the controller, then sends `$$`, as both backends already do after `/importFile`
+  and `/importRestoreWebControl`. Python's `importWebControlJSON` keeps the imported computed values as they are.
 - **Resume after an ALARM or overflow** (same as Python): the job rewinds to the oldest unacknowledged line and Play
   resumes from there, returning at safe height (`serial/transcripts/alarm_mid_cut_rewinds_and_resumes.json`). Stop
   also clears it.

@@ -1,0 +1,723 @@
+[
+  {
+    "name": "defaults",
+    "overrides": {},
+    "startup": {
+      "changes": [],
+      "lines": []
+    }
+  },
+  {
+    "name": "owner",
+    "overrides": {
+      "Maslow Settings": {
+        "motorSpacingX": "3011.16237",
+        "motorOffsetY": "433.68186",
+        "bedWidth": "2438.4",
+        "bedHeight": "1219.2",
+        "sledWeight": "97.9",
+        "sledWidth": "310",
+        "sledHeight": "139",
+        "sledCG": "79",
+        "COMport": "/dev/ttyACM0"
+      },
+      "Advanced Settings": {
+        "leftChainTolerance": "-0.06495",
+        "rightChainTolerance": "-0.02111",
+        "chainElasticity": "5.1685e-06",
+        "rotationRadius": "138.4",
+        "chainOverSprocket": "Bottom",
+        "gearTeeth": "10",
+        "chainPitch": "6.35",
+        "kinematicsType": "Triangular",
+        "homeX": "41.6763"
+      }
+    },
+    "startup": {
+      "changes": [],
+      "lines": []
+    }
+  },
+  {
+    "name": "quadrilateral_top_feed",
+    "overrides": {
+      "Advanced Settings": {
+        "kinematicsType": "Quadrilateral",
+        "chainOverSprocket": "Top"
+      }
+    },
+    "startup": {
+      "changes": [
+        [
+          "Computed Settings",
+          "chainOverSprocketComputed",
+          1
+        ],
+        [
+          "Computed Settings",
+          "kinematicsTypeComputed",
+          "1"
+        ]
+      ],
+      "lines": [
+        "$7=1",
+        "$38=1.000000"
+      ]
+    }
+  },
+  {
+    "name": "nine_tooth_sprocket",
+    "overrides": {
+      "Advanced Settings": {
+        "gearTeeth": "9",
+        "chainPitch": "6.35"
+      }
+    },
+    "startup": {
+      "changes": [
+        [
+          "Computed Settings",
+          "distPerRot",
+          "57.15"
+        ]
+      ],
+      "lines": [
+        "$13=57.15"
+      ]
+    }
+  },
+  {
+    "name": "numeric_sprocket_values",
+    "overrides": {
+      "Advanced Settings": {
+        "gearTeeth": 11,
+        "chainPitch": 6.35
+      }
+    },
+    "startup": {
+      "changes": [
+        [
+          "Computed Settings",
+          "distPerRot",
+          "69.85"
+        ]
+      ],
+      "lines": [
+        "$13=69.85"
+      ]
+    }
+  },
+  {
+    "name": "custom_gains_enabled",
+    "overrides": {
+      "Advanced Settings": {
+        "enablePosPIDValues": 1,
+        "KpPos": "1400",
+        "KiPos": "0.5",
+        "KdPos": "40",
+        "propWeight": "0.9",
+        "KpPosZ": "1200",
+        "KiPosZ": "0",
+        "KdPosZ": "30",
+        "propWeightZ": "1",
+        "KpV": "7",
+        "KiV": "0.1",
+        "KdV": "0.3",
+        "KpVZ": "6",
+        "KiVZ": "0",
+        "KdVZ": "0.25"
+      }
+    },
+    "startup": {
+      "changes": [
+        [
+          "Computed Settings",
+          "KdPosMain",
+          40.0
+        ],
+        [
+          "Computed Settings",
+          "KdPosZ",
+          30.0
+        ],
+        [
+          "Computed Settings",
+          "KdVMain",
+          0.3
+        ],
+        [
+          "Computed Settings",
+          "KdVZ",
+          0.25
+        ],
+        [
+          "Computed Settings",
+          "KiPosMain",
+          0.5
+        ],
+        [
+          "Computed Settings",
+          "KiVMain",
+          0.1
+        ],
+        [
+          "Computed Settings",
+          "KpPosMain",
+          1400.0
+        ],
+        [
+          "Computed Settings",
+          "KpPosZ",
+          1200.0
+        ],
+        [
+          "Computed Settings",
+          "KpVMain",
+          7.0
+        ],
+        [
+          "Computed Settings",
+          "KpVZ",
+          6.0
+        ],
+        [
+          "Computed Settings",
+          "propWeightMain",
+          0.9
+        ]
+      ],
+      "lines": [
+        "$21=1400.00",
+        "$22=0.500000",
+        "$23=40.0000",
+        "$24=0.900000",
+        "$29=1200.00",
+        "$31=30.0000",
+        "$25=7.00000",
+        "$26=0.100000",
+        "$27=0.300000",
+        "$33=6.00000",
+        "$35=0.250000"
+      ]
+    }
+  },
+  {
+    "name": "custom_gains_disabled",
+    "overrides": {
+      "Advanced Settings": {
+        "enablePosPIDValues": 0,
+        "KpPos": "1400",
+        "KiPos": "0.5",
+        "KdPos": "40",
+        "propWeight": "0.9",
+        "KpPosZ": "1200",
+        "KiPosZ": "0",
+        "KdPosZ": "30",
+        "propWeightZ": "1",
+        "KpV": "7",
+        "KiV": "0.1",
+        "KdV": "0.3",
+        "KpVZ": "6",
+        "KiVZ": "0",
+        "KdVZ": "0.25"
+      }
+    },
+    "startup": {
+      "changes": [],
+      "lines": []
+    }
+  },
+  {
+    "name": "gains_enabled_as_text",
+    "overrides": {
+      "Advanced Settings": {
+        "enablePosPIDValues": "1",
+        "KpPos": 1500
+      }
+    },
+    "startup": {
+      "changes": [
+        [
+          "Computed Settings",
+          "KpPosMain",
+          1500.0
+        ]
+      ],
+      "lines": [
+        "$21=1500.00"
+      ]
+    }
+  },
+  {
+    "name": "pwm_31khz",
+    "overrides": {
+      "Advanced Settings": {
+        "fPWM": "31,000Hz"
+      }
+    },
+    "startup": {
+      "changes": [
+        [
+          "Computed Settings",
+          "fPWMComputed",
+          1
+        ]
+      ],
+      "lines": [
+        "$39=1.000000"
+      ]
+    }
+  },
+  {
+    "name": "pwm_4khz",
+    "overrides": {
+      "Advanced Settings": {
+        "fPWM": "4,100Hz"
+      }
+    },
+    "startup": {
+      "changes": [
+        [
+          "Computed Settings",
+          "fPWMComputed",
+          2
+        ]
+      ],
+      "lines": [
+        "$39=2.00000"
+      ]
+    }
+  },
+  {
+    "name": "pwm_unknown_and_feed_unknown",
+    "overrides": {
+      "Advanced Settings": {
+        "fPWM": "1Hz",
+        "chainOverSprocket": "Sideways"
+      }
+    },
+    "startup": {
+      "changes": [],
+      "lines": []
+    }
+  },
+  {
+    "name": "stale_computed_values",
+    "overrides": {
+      "Computed Settings": {
+        "kinematicsTypeComputed": "1",
+        "distPerRot": "70",
+        "KpPosMain": "1300",
+        "KdVMain": 0.5,
+        "chainOverSprocketComputed": "1",
+        "fPWMComputed": 2.0
+      }
+    },
+    "startup": {
+      "changes": [
+        [
+          "Computed Settings",
+          "KdVMain",
+          0.28
+        ],
+        [
+          "Computed Settings",
+          "KpPosMain",
+          1300
+        ],
+        [
+          "Computed Settings",
+          "chainOverSprocketComputed",
+          2
+        ],
+        [
+          "Computed Settings",
+          "distPerRot",
+          "63.5"
+        ],
+        [
+          "Computed Settings",
+          "fPWMComputed",
+          3
+        ],
+        [
+          "Computed Settings",
+          "kinematicsTypeComputed",
+          "2"
+        ]
+      ],
+      "lines": [
+        "$7=2",
+        "$13=63.5",
+        "$27=0.280000",
+        "$38=2.00000",
+        "$39=3.00000"
+      ]
+    }
+  },
+  {
+    "name": "stale_computed_owner",
+    "overrides": {
+      "Maslow Settings": {
+        "motorSpacingX": "3011.16237",
+        "motorOffsetY": "433.68186",
+        "bedWidth": "2438.4",
+        "bedHeight": "1219.2",
+        "sledWeight": "97.9",
+        "sledWidth": "310",
+        "sledHeight": "139",
+        "sledCG": "79",
+        "COMport": "/dev/ttyACM0"
+      },
+      "Advanced Settings": {
+        "leftChainTolerance": "-0.06495",
+        "rightChainTolerance": "-0.02111",
+        "chainElasticity": "5.1685e-06",
+        "rotationRadius": "138.4",
+        "chainOverSprocket": "Bottom",
+        "gearTeeth": "10",
+        "chainPitch": "6.35",
+        "kinematicsType": "Triangular",
+        "homeX": "41.6763"
+      },
+      "Computed Settings": {
+        "kinematicsTypeComputed": "1",
+        "distPerRot": "70",
+        "KpPosMain": "1300",
+        "KdVMain": 0.5,
+        "chainOverSprocketComputed": "1",
+        "fPWMComputed": 2.0
+      }
+    },
+    "startup": {
+      "changes": [
+        [
+          "Computed Settings",
+          "KdVMain",
+          0.28
+        ],
+        [
+          "Computed Settings",
+          "KpPosMain",
+          1300
+        ],
+        [
+          "Computed Settings",
+          "chainOverSprocketComputed",
+          2
+        ],
+        [
+          "Computed Settings",
+          "distPerRot",
+          "63.5"
+        ],
+        [
+          "Computed Settings",
+          "fPWMComputed",
+          3
+        ],
+        [
+          "Computed Settings",
+          "kinematicsTypeComputed",
+          "2"
+        ]
+      ],
+      "lines": [
+        "$7=2",
+        "$13=63.5",
+        "$27=0.280000",
+        "$38=2.00000",
+        "$39=3.00000"
+      ]
+    }
+  },
+  {
+    "name": "groundcontrol_ini",
+    "overrides": {},
+    "startup": {
+      "changes": [],
+      "lines": []
+    },
+    "ini": "[Maslow Settings]\nCOMport = /dev/ttyACM1\nzAxis = 1\nbedWidth = 2438.4\nbedHeight = 1219.2\nmotorOffsetY = 463.0\nmotorSpacingX = 3602.6\nsledWidth = 310\nsledHeight = 139\nsledCG = 79\nnotAWebControlKey = 5\n\n[Advanced Settings]\ngearTeeth = 9\nchainPitch = 6.35\nkinematicsType = Quadrilateral\nchainOverSprocket = Top\nfPWM = 31,000Hz\nenablePosPIDValues = 1\nKpPos = 1250\nKiPos = 0\nKdPos = 30\npropWeight = 1\nKpV = 6\nKiV = 0\nKdV = 0.25\n\n[Ground Control Settings]\ncenterCanvasOnResize = 0\n\n[Background Settings]\nbackgroundFile =\n\n[Computed Settings]\nkinematicsTypeComputed = 2\ndistPerRot = 63.5\nKpPosMain = 1300\nchainOverSprocketComputed = 2\nfPWMComputed = 3\nunits = MM\n",
+    "import": {
+      "changes": [
+        [
+          "Advanced Settings",
+          "KdPos",
+          "30"
+        ],
+        [
+          "Advanced Settings",
+          "KdV",
+          "0.25"
+        ],
+        [
+          "Advanced Settings",
+          "KpPos",
+          "1250"
+        ],
+        [
+          "Advanced Settings",
+          "KpV",
+          "6"
+        ],
+        [
+          "Advanced Settings",
+          "chainOverSprocket",
+          "Top"
+        ],
+        [
+          "Advanced Settings",
+          "enablePosPIDValues",
+          1
+        ],
+        [
+          "Advanced Settings",
+          "fPWM",
+          "31,000Hz"
+        ],
+        [
+          "Advanced Settings",
+          "gearTeeth",
+          "9"
+        ],
+        [
+          "Advanced Settings",
+          "kinematicsType",
+          "Quadrilateral"
+        ],
+        [
+          "Computed Settings",
+          "KdPosMain",
+          30.0
+        ],
+        [
+          "Computed Settings",
+          "KdVMain",
+          0.25
+        ],
+        [
+          "Computed Settings",
+          "KpPosMain",
+          1250.0
+        ],
+        [
+          "Computed Settings",
+          "KpVMain",
+          6.0
+        ],
+        [
+          "Computed Settings",
+          "chainOverSprocketComputed",
+          1
+        ],
+        [
+          "Computed Settings",
+          "distPerRot",
+          "57.15"
+        ],
+        [
+          "Computed Settings",
+          "fPWMComputed",
+          1
+        ],
+        [
+          "Computed Settings",
+          "kinematicsTypeComputed",
+          "1"
+        ],
+        [
+          "Computed Settings",
+          "units",
+          "MM"
+        ],
+        [
+          "Maslow Settings",
+          "COMport",
+          "/dev/ttyACM1"
+        ],
+        [
+          "Maslow Settings",
+          "motorOffsetY",
+          "463.0"
+        ],
+        [
+          "Maslow Settings",
+          "motorSpacingX",
+          "3602.6"
+        ],
+        [
+          "Maslow Settings",
+          "zAxis",
+          1
+        ]
+      ],
+      "lines": [
+        "$7=1",
+        "$13=57.15",
+        "$21=1250.00",
+        "$23=30.0000",
+        "$25=6.00000",
+        "$27=0.250000",
+        "$38=1.000000",
+        "$39=1.000000"
+      ]
+    }
+  },
+  {
+    "name": "groundcontrol_ini_over_owner",
+    "overrides": {
+      "Maslow Settings": {
+        "motorSpacingX": "3011.16237",
+        "motorOffsetY": "433.68186",
+        "bedWidth": "2438.4",
+        "bedHeight": "1219.2",
+        "sledWeight": "97.9",
+        "sledWidth": "310",
+        "sledHeight": "139",
+        "sledCG": "79",
+        "COMport": "/dev/ttyACM0"
+      },
+      "Advanced Settings": {
+        "leftChainTolerance": "-0.06495",
+        "rightChainTolerance": "-0.02111",
+        "chainElasticity": "5.1685e-06",
+        "rotationRadius": "138.4",
+        "chainOverSprocket": "Bottom",
+        "gearTeeth": "10",
+        "chainPitch": "6.35",
+        "kinematicsType": "Triangular",
+        "homeX": "41.6763"
+      }
+    },
+    "startup": {
+      "changes": [],
+      "lines": []
+    },
+    "ini": "[Maslow Settings]\nCOMport = /dev/ttyACM1\nzAxis = 1\nbedWidth = 2438.4\nbedHeight = 1219.2\nmotorOffsetY = 463.0\nmotorSpacingX = 3602.6\nsledWidth = 310\nsledHeight = 139\nsledCG = 79\nnotAWebControlKey = 5\n\n[Advanced Settings]\ngearTeeth = 9\nchainPitch = 6.35\nkinematicsType = Quadrilateral\nchainOverSprocket = Top\nfPWM = 31,000Hz\nenablePosPIDValues = 1\nKpPos = 1250\nKiPos = 0\nKdPos = 30\npropWeight = 1\nKpV = 6\nKiV = 0\nKdV = 0.25\n\n[Ground Control Settings]\ncenterCanvasOnResize = 0\n\n[Background Settings]\nbackgroundFile =\n\n[Computed Settings]\nkinematicsTypeComputed = 2\ndistPerRot = 63.5\nKpPosMain = 1300\nchainOverSprocketComputed = 2\nfPWMComputed = 3\nunits = MM\n",
+    "import": {
+      "changes": [
+        [
+          "Advanced Settings",
+          "KdPos",
+          "30"
+        ],
+        [
+          "Advanced Settings",
+          "KdV",
+          "0.25"
+        ],
+        [
+          "Advanced Settings",
+          "KpPos",
+          "1250"
+        ],
+        [
+          "Advanced Settings",
+          "KpV",
+          "6"
+        ],
+        [
+          "Advanced Settings",
+          "chainOverSprocket",
+          "Top"
+        ],
+        [
+          "Advanced Settings",
+          "enablePosPIDValues",
+          1
+        ],
+        [
+          "Advanced Settings",
+          "fPWM",
+          "31,000Hz"
+        ],
+        [
+          "Advanced Settings",
+          "gearTeeth",
+          "9"
+        ],
+        [
+          "Advanced Settings",
+          "kinematicsType",
+          "Quadrilateral"
+        ],
+        [
+          "Computed Settings",
+          "KdPosMain",
+          30.0
+        ],
+        [
+          "Computed Settings",
+          "KdVMain",
+          0.25
+        ],
+        [
+          "Computed Settings",
+          "KpPosMain",
+          1250.0
+        ],
+        [
+          "Computed Settings",
+          "KpVMain",
+          6.0
+        ],
+        [
+          "Computed Settings",
+          "chainOverSprocketComputed",
+          1
+        ],
+        [
+          "Computed Settings",
+          "distPerRot",
+          "57.15"
+        ],
+        [
+          "Computed Settings",
+          "fPWMComputed",
+          1
+        ],
+        [
+          "Computed Settings",
+          "kinematicsTypeComputed",
+          "1"
+        ],
+        [
+          "Computed Settings",
+          "units",
+          "MM"
+        ],
+        [
+          "Maslow Settings",
+          "COMport",
+          "/dev/ttyACM1"
+        ],
+        [
+          "Maslow Settings",
+          "motorOffsetY",
+          "463.0"
+        ],
+        [
+          "Maslow Settings",
+          "motorSpacingX",
+          "3602.6"
+        ],
+        [
+          "Maslow Settings",
+          "zAxis",
+          1
+        ]
+      ],
+      "lines": [
+        "$7=1",
+        "$13=57.15",
+        "$21=1250.00",
+        "$23=30.0000",
+        "$25=6.00000",
+        "$27=0.250000",
+        "$38=1.000000",
+        "$39=1.000000"
+      ]
+    }
+  }
+]

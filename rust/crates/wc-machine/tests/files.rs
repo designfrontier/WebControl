@@ -394,6 +394,48 @@ fn imports_and_restores_replace_the_settings_and_ask_for_dollar_dollar() {
     assert_eq!(ask(&mut rig, Request::ImportWebControl(json!([]))).0, Reply::Failed);
 }
 
+fn computed(rig: &Rig, key: &str) -> Value {
+    rig.machine.snapshot().settings.value("Computed Settings", key).cloned().unwrap()
+}
+
+/// `importGCini` and `reloadWebControlJSON` run `computeSettings`, which writes the derived settings that changed.
+#[test]
+fn a_groundcontrol_import_derives_the_computed_settings_and_writes_them_before_dollar_dollar() {
+    let mut rig = Rig::connected();
+    rig.clear_written();
+    let ini =
+        "[Advanced Settings]\ngearTeeth = 9\nkinematicsType = Quadrilateral\n\n[Computed Settings]\ndistPerRot = 70\n";
+    assert_eq!(ask(&mut rig, Request::ImportIni(ini.into())).0, Reply::Done);
+    assert_eq!(computed(&rig, "distPerRot"), "57.15");
+    assert_eq!(computed(&rig, "kinematicsTypeComputed"), "1");
+    assert_eq!(rig.run_to_quiet(), ["$7=1", "$13=57.15", "$$"]);
+}
+
+#[test]
+fn a_restore_derives_the_computed_settings_from_the_restored_file() {
+    let mut rig = Rig::connected();
+    rig.clear_written();
+    let mut restored = Settings::defaults();
+    restored.set_value("Advanced Settings", "chainOverSprocket", json!("Top"));
+    assert_eq!(ask(&mut rig, Request::RestoreSettings(Box::new(restored))).0, Reply::Done);
+    assert_eq!(computed(&rig, "chainOverSprocketComputed"), 1);
+    assert_eq!(rig.run_to_quiet(), ["$38=1.000000", "$$"]);
+}
+
+/// Python's `importWebControlJSON` never recomputes; Rust does, so an imported file cannot leave them stale.
+#[test]
+fn a_webcontrol_json_import_derives_the_computed_settings_too() {
+    let mut rig = Rig::connected();
+    rig.clear_written();
+    let imported = json!({"Advanced Settings": [{"key": "fPWM", "value": "4,100Hz"}]});
+    assert_eq!(ask(&mut rig, Request::ImportWebControl(imported)).0, Reply::Done);
+    assert_eq!(computed(&rig, "fPWMComputed"), 2);
+    assert_eq!(rig.run_to_quiet(), ["$39=2.00000", "$$"]);
+    let stale = json!({"Computed Settings": [{"key": "distPerRot", "value": "63.5"}]});
+    assert_eq!(ask(&mut rig, Request::ImportWebControl(stale)).0, Reply::Done);
+    assert!(rig.run_to_quiet().is_empty(), "an import that changes nothing writes nothing");
+}
+
 #[test]
 fn an_empty_gcode_has_no_lines_and_an_empty_preview() {
     let empty = Gcode::empty(Units::Mm);

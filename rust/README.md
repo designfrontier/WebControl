@@ -6,7 +6,7 @@ WebSockets, and shares `~/.WebControl` with the Python install.
 | Crate | What |
 | --- | --- |
 | `wc-protocol` | The browser wire: envelope, WebSocket frame, messages, events, `GET /api/state` |
-| `wc-config` | `~/.WebControl` layout and `webcontrol.json`, read and written like `config/config.py` (byte-identical format, `.bak`, a one-time `.pre-rs` snapshot), `setValue`'s rules, and the gcode and board libraries |
+| `wc-config` | `~/.WebControl` layout and `webcontrol.json`, read and written like `config/config.py` (byte-identical format, `.bak`, a one-time `.pre-rs` snapshot), `setValue`'s rules, `computeSettings`, and the gcode and board libraries |
 | `wc-gcode` | Gcode load, sanitising, home shift, T rule, restart state, the 3D preview payload and boards, as Python does |
 | `wc-kinematics` | The holey firmware's triangular and quadrilateral inverse/forward, float for float with Python |
 | `wc-calibration` | Holey (scipy's trust-region least squares, ported step for step) and triangular calibration, test patterns, Accept's settings and `$` lines |
@@ -28,6 +28,9 @@ WebSockets, and shares `~/.WebControl` with the Python install.
   `wc-sim`
 - `WC_REGENERATE=1 cargo test -p wc-config --test python_roundtrip`: rewrites
   `tests/fixtures/rust_settings/rust-written.json`, which `tests/test_rust_settings_roundtrip.py` loads in Python
+- `cargo test -p wc-firmware --test compute`: the derived settings and their `$` lines against
+  `tests/fixtures/compute/cases.json`, which `.venv/bin/python tests/fixtures/compute/generate.py` rewrites from
+  Python's `computeSettings`
 - `cargo run -p wc-calibration --example calibrate -- <home> holey M1 … M12`: a calibration against a copy of
   `webcontrol.json`, printing the result and the `$` lines Accept would send
 - `cargo run --release -p wc-gcode --example gcode_timing -- <file.nc> [home_x home_y]`: times each step of opening

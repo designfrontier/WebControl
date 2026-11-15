@@ -407,10 +407,13 @@ impl Machine {
         Reply::Done
     }
 
-    /// Python asks the controller for its settings after an import or a restore, to compare them.
+    /// `computeSettings` writes the derived settings an import or a restore changed, then Python asks the controller
+    /// for its settings to compare them.
     fn settings_replaced(&mut self) -> Reply {
+        let firmware = self.firmware_version;
+        let derived = wc_firmware::settings::recompute(Arc::make_mut(&mut self.settings), firmware);
         self.settings_dirty = true;
-        self.queue(["$$".to_string()]);
+        self.queue(derived.into_iter().chain(["$$".to_string()]));
         Reply::Done
     }
 
