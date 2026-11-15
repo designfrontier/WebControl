@@ -34,7 +34,21 @@ class MessageProcessor(MakesmithInitFuncs):
                     self.data.console_queue.put("Update check failed: " + str(e))
             time.sleep(60)
 
+    def watchForBoot(self, message):
+        '''
+        On each controller boot, asks for the version and rewrites what the firmware only applies on a write.
+        '''
+        if not firmwareFacts.isBootBanner(message):
+            return
+        self.data.controllerBoard = firmwareFacts.boardBanner(message) or self.data.controllerBoard
+        now = time.time()
+        if now - self.data.lastBootBannerTime > firmwareFacts.BOOT_BANNER_WINDOW:
+            self.data.gcode_queue.put("B05 ")
+            [self.data.gcode_queue.put(line) for line in self.data.config.writeOnlyFirmwareSettings()]
+        self.data.lastBootBannerTime = now
+
     def processMessage(self, message):
+        self.watchForBoot(message)
         if "EEPROM read fail" in message:
             self.data.config.restoreControllerSettings()
         if message != "":

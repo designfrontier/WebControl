@@ -35,6 +35,8 @@ class Data:
     customFirmwareVersion = None
     holeyFirmwareVersion = None
     controllerFirmwareVersion = 0
+    controllerBoard = None
+    lastBootBannerTime = 0.0
 
     """
     Version Updater

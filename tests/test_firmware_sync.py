@@ -1,5 +1,6 @@
 """Settings sync between WebControl's config and the controller's `$` keys, checked against the firmware's behaviour."""
 import copy
+import types
 
 import pytest
 
@@ -181,3 +182,48 @@ def test_a_firmware_line_without_a_version_leaves_the_version_alone(data, proces
     processor.processMessage(line)
 
     assert data.controllerFirmwareVersion == 51.27
+
+
+BOOT = ["PCB v1.6 TLE9201  Detected\r\n", "FAKE_SERVO off\r\n", "Grbl v1.00\r\n", "ready\r\n", "ok\r\n"]
+
+
+@pytest.fixture
+def clock(monkeypatch, data):
+    import Background.messageProcessor as message_processor
+
+    fake = types.SimpleNamespace(now=5000.0)
+    monkeypatch.setattr(message_processor, "time", types.SimpleNamespace(time=lambda: fake.now))
+    monkeypatch.setattr(data, "lastBootBannerTime", 0.0)
+    monkeypatch.setattr(data, "controllerBoard", None)
+    return fake
+
+
+def test_a_boot_asks_for_the_version_and_rewrites_dist_per_rot_once(data, processor, clock):
+    [processor.processMessage(line) for line in BOOT]
+
+    assert queued(data) == ["B05 ", "$13=63.5000"]
+    assert data.controllerBoard == "PCB v1.6 TLE9201  Detected"
+    assert [line for line in drain(data.ui_controller_queue) if "PCB" in line] == [BOOT[0]]
+
+
+def test_every_later_boot_asks_again(data, processor, clock):
+    [processor.processMessage(line) for line in BOOT]
+    queued(data)
+    clock.now += 30
+
+    [processor.processMessage(line) for line in BOOT[2:]]
+
+    assert queued(data) == ["B05 ", "$13=63.5000"]
+
+
+@pytest.mark.parametrize("line", ["set prescaler to Grbl v1.00\r\n", "\x00ready\r\n", "junkPCB v1.5b TB6643 Detected\r\n"])
+def test_a_banner_glued_to_other_text_is_still_a_boot(data, processor, clock, line):
+    processor.processMessage(line)
+
+    assert queued(data)[0] == "B05 "
+
+
+def test_already_is_not_a_boot(data, processor, clock):
+    processor.processMessage("Message: the sled is already there\r\n")
+
+    assert queued(data) == []
