@@ -19,7 +19,9 @@ disk. This guide does not use them: the card has no v0.94 on it, and rolling bac
 
 - A 16 GB or larger microSD card, A1 or Class 10.
 - A USB card reader for the Mac.
-- Raspberry Pi Imager on the Mac: `brew install --cask raspberry-pi-imager`, or from raspberrypi.com/software.
+- Raspberry Pi Imager 2.0 or newer on the Mac: `brew install --cask raspberry-pi-imager`, or
+  `brew upgrade --cask raspberry-pi-imager` if you have it. Older versions cannot set the user, Wi-Fi or SSH on a
+  Trixie image, so the Pi would boot with no way to log in.
 - The Pi idle: no job running or loaded.
 
 ## 1. Back up from the current Pi to the Mac (after the cut)
@@ -47,7 +49,7 @@ Put the card in the reader and open Raspberry Pi Imager:
    environment"). If that one gives trouble, **Raspberry Pi OS (Legacy, 64-bit) Lite** (Debian Bookworm) works the
    same way. Both are tested (`tools/test-install/run.sh`). Not a 32-bit image, and not one with a desktop.
 3. **Storage:** the microSD card. Check the size, so you do not pick another disk.
-4. **OS customisation:** say yes when Imager asks to customise, and set:
+4. **Customisation:** set:
    - **Hostname:** `maslow-next`, so it cannot be confused with the old system.
    - **User:** `pi`, with a password. The username must be `pi`.
    - **Wi-Fi:** your network name, password and country, unless the Pi uses Ethernet.
@@ -68,7 +70,8 @@ Put the card in the reader and open Raspberry Pi Imager:
    ```
 
    The Pi's IP address will probably not be 192.168.86.155. Use `maslow-next.local` everywhere below. If the Mac
-   cannot find that name, look for `maslow-next` in your router's device list and use its IP address.
+   cannot find that name, look for `maslow-next` in your router's device list and use its IP address. If
+   `maslow-next` never appears but `192.168.86.155:5000` answers, it booted the SSD: see below.
 5. On the Pi, check that it booted from the card:
 
    ```sh
@@ -91,9 +94,10 @@ lsblk -o NAME,SIZE,FSTYPE,MOUNTPOINTS
 ```
 
 `mmcblk0` is the card, mounted at `/` and `/boot/firmware`. The SSD is `sda`: `sda1` is its small `vfat` boot
-partition and `sda2` its large `ext4` root. If yours differs, use the SSD's `ext4` partition below.
+partition and `sda2` its large `ext4` root. If yours differs, use the SSD's disk and `ext4` partition below.
 
 ```sh
+sudo blockdev --setro /dev/sda
 sudo mkdir -p /mnt/ssd
 sudo mount -o ro,noload /dev/sda2 /mnt/ssd
 cp -a /mnt/ssd/home/pi/.WebControl ~/
@@ -101,8 +105,8 @@ sudo umount /mnt/ssd
 ls -l ~/.WebControl/webcontrol.json
 ```
 
-`ro` mounts it read-only. `noload` stops ext4 from replaying its journal, which would write to the SSD even on a
-read-only mount.
+`blockdev --setro` makes the kernel refuse every write to the SSD until the next boot. `ro` mounts it read-only.
+`noload` stops ext4 from replaying its journal, which would write to the SSD even on a read-only mount.
 
 Or copy the backup from step 1, from the Mac:
 

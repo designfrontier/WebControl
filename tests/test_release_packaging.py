@@ -338,3 +338,22 @@ def test_the_pi_guide_copies_no_firmware_so_upgrade_firmware_has_nothing_to_flas
 
 def test_the_docker_install_test_copies_the_repo_as_the_guide_does():
     assert rsync_excludes(read("spec", "INSTALL-PI.md")) == rsync_excludes(read("tools", "test-install", "run.sh"))
+
+
+def ssd_commands(guide):
+    block = re.search(r"```sh\n(sudo blockdev[^`]*?)```", guide)
+    assert block, "the guide's SSD copy block is missing"
+    return block.group(1).strip().splitlines()
+
+
+def test_the_pi_guide_locks_the_ssd_read_only_before_mounting_it():
+    commands = ssd_commands(read("spec", "INSTALL-PI.md"))
+    mount = next(c for c in commands if c.startswith("sudo mount "))
+    assert commands.index("sudo blockdev --setro /dev/sda") < commands.index(mount)
+    assert "-o ro,noload /dev/sda2 /mnt/ssd" in mount
+
+
+def test_the_pi_guide_only_reads_from_the_mounted_ssd():
+    commands = ssd_commands(read("spec", "INSTALL-PI.md"))
+    writes = [c for c in commands if "/mnt/ssd" in c and not re.match(r"sudo (mkdir -p|mount -o ro,noload \S+|umount) /mnt/ssd$|cp -a /mnt/ssd/\S+ ~/$", c)]
+    assert writes == []
