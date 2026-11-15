@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 
 use serde_json::{Value, json};
-use wc_config::{Paths, Settings, Source, python_str};
+use wc_config::{Paths, Settings, Source, python_float_str, python_str};
 
 fn home_with(settings: Option<&str>, backup: Option<&str>) -> tempfile::TempDir {
     let home = tempfile::tempdir().unwrap();
@@ -165,6 +165,13 @@ fn python_str_prints_numbers_like_python() {
         (json!([1, "a"]), "[1,\"a\"]"),
     ];
     cases.iter().for_each(|(value, text)| assert_eq!(python_str(value), *text, "{value}"));
+}
+
+#[test]
+fn python_float_str_prints_what_python_prints_for_any_float() {
+    let cases =
+        [(f64::NAN, "nan"), (f64::INFINITY, "inf"), (f64::NEG_INFINITY, "-inf"), (470.0, "470.0"), (-0.2, "-0.2")];
+    cases.iter().for_each(|(value, text)| assert_eq!(python_float_str(*value), *text));
 }
 
 #[test]

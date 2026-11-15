@@ -1,0 +1,18 @@
+[package]
+name = "wc-calibration"
+description = "Holey and triangular calibration: the fits, the test patterns and the accept commands"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+levenberg-marquardt.workspace = true
+nalgebra.workspace = true
+serde_json.workspace = true
+wc-config.workspace = true
+wc-kinematics.workspace = true
+
+[dev-dependencies]
+serde_json = { workspace = true, features = ["float_roundtrip"] }

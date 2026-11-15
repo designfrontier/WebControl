@@ -4,7 +4,7 @@
 mod python;
 mod settings;
 
-pub use python::python_str;
+pub use python::{python_float_str, python_str};
 pub use settings::{Settings, Source};
 
 use std::path::{Path, PathBuf};

@@ -14,6 +14,8 @@ base64 = "0.22"
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 http-body-util = "0.1"
 jsonschema = { version = "0.61", default-features = false }
+levenberg-marquardt = "0.14"
+nalgebra = "0.33"
 rust-embed = { version = "8", features = ["debug-embed", "mime-guess"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -24,7 +26,9 @@ tower = { version = "0.5", features = ["util"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v4"] }
+wc-calibration = { path = "crates/wc-calibration" }
 wc-config = { path = "crates/wc-config" }
+wc-kinematics = { path = "crates/wc-kinematics" }
 wc-machine = { path = "crates/wc-machine" }
 wc-protocol = { path = "crates/wc-protocol" }
 wc-testkit = { path = "crates/wc-testkit" }
