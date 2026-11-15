@@ -1,6 +1,7 @@
 import copy
 import os
 import subprocess
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -28,7 +29,7 @@ def flash(data, tmp_path, monkeypatch):
     saved = (data.comport, data.connectionStatus, data.serialPort.serialPortRequest)
     monkeypatch.setattr(firmware, "installRoot", lambda data: str(tmp_path))
     monkeypatch.setattr(actions_module.subprocess, "run", fake_run)
-    monkeypatch.setattr(actions_module.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(actions_module, "time", SimpleNamespace(sleep=lambda seconds: None, time=time.time, strftime=time.strftime))
     monkeypatch.setattr(firmware, "PORT_CLOSE_SECONDS", 0.05)
     monkeypatch.setattr(data.serialPort, "closeConnection", lambda: setattr(data.serialPort, "serialPortRequest", "Closed"))
     data.comport = "/dev/ttyACM0"
