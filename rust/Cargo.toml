@@ -15,6 +15,7 @@ futures-util = { version = "0.3", default-features = false, features = ["sink", 
 http-body-util = "0.1"
 jsonschema = { version = "0.61", default-features = false }
 levenberg-marquardt = "0.14"
+libc = "0.2"
 nalgebra = "0.33"
 rust-embed = { version = "8", features = ["debug-embed", "mime-guess"] }
 serde = { version = "1", features = ["derive"] }

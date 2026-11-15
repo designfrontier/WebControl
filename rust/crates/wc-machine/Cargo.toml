@@ -9,10 +9,13 @@ publish.workspace = true
 
 [dependencies]
 serde_json.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["io-util"] }
 tracing.workspace = true
+wc-config.workspace = true
+wc-firmware.workspace = true
 wc-protocol.workspace = true
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["test-util"] }
+tokio = { workspace = true, features = ["test-util", "io-util"] }
+wc-sim.workspace = true
 wc-testkit.workspace = true

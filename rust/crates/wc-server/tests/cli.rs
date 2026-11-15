@@ -12,22 +12,22 @@ fn args(list: &[&str]) -> Vec<String> {
 #[test]
 fn options_default_to_the_home_directory_and_the_settings_port() {
     let home = PathBuf::from("/home/pi");
-    assert_eq!(parse(&args(&[]), Some(home.clone())), Ok(Cli::Serve(Options { home, port: None })));
+    assert_eq!(parse(&args(&[]), Some(home.clone())), Ok(Cli::Serve(Options { home, port: None, simulate: false })));
 }
 
 #[test]
 fn port_and_home_can_be_given() {
     let parsed = parse(&args(&["--port", "5055", "--home", "/tmp/h"]), None);
-    assert_eq!(parsed, Ok(Cli::Serve(Options { home: PathBuf::from("/tmp/h"), port: Some(5055) })));
+    assert_eq!(parsed, Ok(Cli::Serve(Options { home: PathBuf::from("/tmp/h"), port: Some(5055), simulate: false })));
     let equals = parse(&args(&["--port=0", "--home=/x"]), None);
-    assert_eq!(equals, Ok(Cli::Serve(Options { home: PathBuf::from("/x"), port: Some(0) })));
+    assert_eq!(equals, Ok(Cli::Serve(Options { home: PathBuf::from("/x"), port: Some(0), simulate: false })));
 }
 
 #[test]
 fn bad_arguments_are_refused() {
     assert!(parse(&args(&["--port", "lots"]), Some("/h".into())).unwrap_err().contains("--port"));
     assert!(parse(&args(&["--port"]), Some("/h".into())).unwrap_err().contains("--port"));
-    assert!(parse(&args(&["--simulate"]), Some("/h".into())).unwrap_err().contains("--simulate"));
+    assert!(parse(&args(&["--simulated"]), Some("/h".into())).unwrap_err().contains("--simulated"));
     assert!(parse(&args(&[]), None).unwrap_err().contains("HOME"));
 }
 
@@ -91,4 +91,49 @@ fn the_binary_fails_cleanly_when_its_port_is_taken() {
     let out = binary().args(["--port", &port, "--home"]).arg(home.path()).output().unwrap();
     assert_eq!(out.status.code(), Some(1));
     assert!(String::from_utf8(out.stderr).unwrap().contains("webcontrol-rs:"));
+}
+
+/// `--simulate` end to end: the UI hears the simulated controller's version, and Shut Down WebControl exits 0.
+#[tokio::test]
+async fn the_simulated_binary_connects_and_shuts_down_from_the_ui() {
+    use futures_util::{SinkExt, StreamExt};
+    use tokio_tungstenite::tungstenite::Message;
+
+    let home = tempfile::tempdir().unwrap();
+    let mut child = binary()
+        .args(["--simulate", "--port", "0", "--home"])
+        .arg(home.path())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
+    let listening = lines.find_map(|l| l.ok().filter(|l| l.contains("listening on"))).expect("a listening line");
+    let port = listening.rsplit(':').next().unwrap().trim().to_string();
+    let url = format!("ws://127.0.0.1:{port}/ws?ns=%2FMaslowCNC");
+    let (mut socket, _) = tokio_tungstenite::connect_async(url).await.unwrap();
+    let version = async {
+        while let Some(Ok(message)) = socket.next().await {
+            // The B05 reply may come before this socket connects; every healthMessage carries the version too.
+            if message.to_text().unwrap_or_default().contains("51.27") {
+                return;
+            }
+        }
+        panic!("the socket closed first");
+    };
+    tokio::time::timeout(Duration::from_secs(20), version).await.expect("the simulated controller's version");
+    let shutdown = r#"{"ns":"/MaslowCNC","event":"action","data":{"data":{"command":"shutdown","arg":"","arg1":""}}}"#;
+    socket.send(Message::text(shutdown)).await.unwrap();
+    let exited = async {
+        loop {
+            if let Some(status) = child.try_wait().unwrap() {
+                return status;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    };
+    let status = tokio::time::timeout(Duration::from_secs(10), exited).await.expect("exits with the socket still open");
+    assert!(status.success());
+    let log = std::fs::read_to_string(home.path().join(".WebControl/webcontrol-rs.log")).unwrap();
+    assert!(log.contains(": Sent: B05  \n"), "{log}");
 }
