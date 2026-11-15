@@ -212,8 +212,8 @@ PROBE_MISSED = PROBING + ["error: probe did not connect", "program stopped", "z 
 
 scenario(
     "touch_z_mm",
-    "Touch Z probes with G38.2 down to the plunge limit; once the probe line's ok shows it touched, Z is zeroed "
-    "with G10 Z0.",
+    "Touch Z probes with G38.2 down to the plunge limit. On a touch the firmware zeroes Z itself and acks, so "
+    "nothing follows the probe line.",
     {**MM},
     [firmware(rule={"pattern": r"G38\.2", "replies": PROBE_TOUCHED}), ui("touchZ"), idle(),
      expect(noAlerts=[{"title": "Touch Z"}])],
@@ -235,6 +235,42 @@ scenario(
     [ui("touchZ"), wait_tx(r"G38\.2"), firmware(forget=True), *[rx(line) for line in PROBE_MISSED], idle(),
      expect(alerts=[{"title": "Touch Z Failed", "message": "Z was not zeroed"}]),
      ui("moveZ", "raise", "5"), idle()],
+)
+
+
+PROBING_REFUSAL = {"title": "Alert", "message": "Wait for Touch Z to finish or press Stop"}
+
+
+def resume_refused_mid_probe():
+    '''
+    A paused job, then touchZ, then Resume while the probe descends.
+    '''
+    return [ui("startRun"), wait_tx("X10.5 Y10.25"), ui("pauseRun"), idle(),
+            ui("touchZ"), wait_tx(r"G38\.2"), firmware(forget=True), *[rx(line) for line in PROBING],
+            ui("resumeRun", comment="the probe is still descending: refused, so no ~ and no restart"),
+            expect(state={"uploadFlag": 2, "jobInProgress": True, "pauseButtonSetting": "Resume"},
+                   alerts=[PROBING_REFUSAL])]
+
+
+scenario(
+    "resume_during_probe_is_refused_until_the_probe_touches",
+    "Resume pressed while a touchZ probe descends during a paused job is refused with an alert, so no ~ reaches the "
+    "firmware and no restart is queued behind the probe. The probe touches and the firmware zeroes Z itself, so "
+    "nothing follows its ok; the next Resume returns to the job.",
+    {**MM, "gcode": gcode("square_mm.nc")},
+    [*resume_refused_mid_probe(), rx("z axis zeroed"), rx("ok", "the probe line's own ok"),
+     expect(noAlerts=[{"title": "Touch Z"}]), ui("resumeRun"), idle(), expect(state=FINISHED)],
+)
+
+scenario(
+    "resume_during_probe_is_refused_then_the_probe_misses",
+    "Resume pressed while a touchZ probe descends during a paused job is refused with an alert. The probe misses: "
+    "its `error: probe did not connect` raises the Touch Z Failed alert and nothing zeroes Z; the next Resume "
+    "returns to the job.",
+    {**MM, "gcode": gcode("square_mm.nc")},
+    [*resume_refused_mid_probe(), *[rx(line) for line in PROBE_MISSED[len(PROBING):]],
+     expect(alerts=[{"title": "Touch Z Failed", "message": "Z was not zeroed"}]), ui("resumeRun"), idle(),
+     expect(state=FINISHED)],
 )
 
 # ----- streaming -----

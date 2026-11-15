@@ -584,8 +584,9 @@ def test_a_stop_or_alarm_during_a_probe_forgets_it(data):
     assert thread.probeLine is None
 
 
-@pytest.mark.parametrize("answer, zeroed", [("ok", True), ("error: probe did not connect", False)])
-def test_the_ok_for_a_resume_sent_during_a_probe_is_not_the_probes_answer(serial, data, answer, zeroed):
+@pytest.mark.parametrize("answer, missed", [("ok", False), ("error: probe did not connect", True)])
+def test_a_probe_sends_no_zero_and_only_its_own_miss_alerts(serial, data, answer, missed):
+    """Both 51.27 and 51.292 zero Z themselves on a touch; a `~` sent mid-probe is acked before the probe."""
     thread = serial.thread(ack=False)
     thread.machineIsReadyForData = True
     serial.port.incoming.clear()
@@ -599,5 +600,5 @@ def test_the_ok_for_a_resume_sent_during_a_probe_is_not_the_probes_answer(serial
     thread._exchangeLines()
 
     sent = drain(data.gcode_queue) + serial.port.sent
-    assert any(line.startswith("G10 Z0") for line in sent) is zeroed
-    assert ("Touch Z Failed" in str(serial.ui_messages())) is not zeroed
+    assert not any(line.startswith("G10") for line in sent)
+    assert ("Touch Z Failed" in str(serial.ui_messages())) is missed

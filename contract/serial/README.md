@@ -170,8 +170,10 @@ the backend has been quiet for `quiet` seconds, one line per settle.
 | `home_at_safe_height_mm`, `return_to_center_inches` | Home and Return to Center, safe height in each unit |
 | `define_home_from_sled_then_home` | Define Home from the sled and from arguments (inches → mm); Home goes there |
 | `move_z_raise_lower_and_zero_mm`, `move_z_in_inches_on_a_mm_machine` | Z moves, `G10 Z0`; a Z distance in the other unit is converted, units and home never change |
-| `touch_z_mm`, `touch_z_inches` | `G38.2` probe in the machine's units (the mm plunge limit converted); `G10 Z0` only after its `ok` |
+| `touch_z_mm`, `touch_z_inches` | `G38.2` probe in the machine's units (the mm plunge limit converted); no `G10 Z0`, the firmware zeroes Z on a touch |
 | `touch_z_probe_fails_leaves_z_alone` | `error: probe did not connect` acks the probe: no `G10 Z0`, an alert |
+| `resume_during_probe_is_refused_until_the_probe_touches` | Resume mid-probe in a paused job is refused with an alert: no `~`, no restart; nothing follows the probe's `ok`; the next Resume returns to the job |
+| `resume_during_probe_is_refused_then_the_probe_misses` | the same, and the probe misses: the Touch Z Failed alert, no `G10 Z0` |
 | `stream_unbuffered_with_home_shift` | one line per ok; home shift keeps both operands' decimals |
 | `stream_buffered_short_job_fits_the_buffer` | the same job buffered: 125 bytes, all sent before the first ok |
 | `stream_buffered_with_home_shift` | 126-byte character counting, refilled by each ok |

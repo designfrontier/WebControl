@@ -49,7 +49,8 @@ def app():
 def data(app):
     """The live Data object, with queues drained and run state reset around each test."""
     data = app.data
-    saved = {"uploadFlag": data.uploadFlag, "jobInProgress": data.jobInProgress, "xval": data.xval, "yval": data.yval, "units": data.units}
+    saved = {"uploadFlag": data.uploadFlag, "jobInProgress": data.jobInProgress, "xval": data.xval, "yval": data.yval, "units": data.units,
+             "probeInFlight": data.probeInFlight}
     queues = [data.gcode_queue, data.ui_queue1, data.quick_queue]
     for queue in queues:
         drain(queue)

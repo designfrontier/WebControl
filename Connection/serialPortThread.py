@@ -107,6 +107,7 @@ class SerialPortThread(MakesmithInitFuncs):
         '''
         self._emptyAccounting()
         self.probeLine = None
+        self.data.probeInFlight = False
         self.machineIsReadyForData = False
         self.resyncAfter = time.time() + self.RESYNC_DELAY
         self.caughtUpSinceHalt = False
@@ -318,6 +319,7 @@ class SerialPortThread(MakesmithInitFuncs):
             )
 
         self.weAreBufferingLines = bool(int(self.data.config.getValue("Maslow Settings", "bufferOn")) )
+        self.data.probeInFlight = False
 
         # Opening the port resets the controller, which would break a firmware upgrade in progress.
         if self.data.serialPort.serialPortRequest == "requestToClose":
@@ -496,12 +498,14 @@ class SerialPortThread(MakesmithInitFuncs):
         if problem is not None:
             title, reason, _advice = problem
             self.data.ui_queue1.put("Alert", "Command " + title, "That command " + reason)
+            self.data.probeInFlight = self.data.probeInFlight and "G38.2" not in command
             return
         command = self.manageToolChange(command)
         if onlySelectsTool(command):
             return
         self._write(command)
         self.probeLine = self.unackedLines[0] if "G38.2" in command and self.unackedLines else None
+        self.data.probeInFlight = self.data.probeInFlight or self.probeLine is not None
         # if units have changed, update settings and notify UI clients to stay in sync
         if command.find("G20") != -1 and self.data.units != "INCHES":
             self.data.actions.updateSetting("toInches", 0, True)  # value = doesn't matter
@@ -526,12 +530,11 @@ class SerialPortThread(MakesmithInitFuncs):
 
     def _probeFinished(self, touched):
         '''
-        The firmware answers a probe that never touched with `error: probe did not connect` instead of ok.
+        A touching G38.2 zeroes Z itself (51.27 and 51.292); a miss answers `error: probe did not connect`.
         '''
         self.probeLine = None
-        if touched:
-            self.data.actions.defineZ0()
-        else:
+        self.data.probeInFlight = False
+        if not touched:
             self.data.ui_queue1.put("Alert", "Touch Z Failed",
                                     "The probe did not touch the plate, so Z was not zeroed. Check the plate and its "
                                     "clip, then try again.")
