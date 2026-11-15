@@ -118,7 +118,7 @@ class Data:
     firmwarePaused = False
     # It paused while job lines were still streaming, so some may sit behind the line it paused on.
     firmwareHoldsJobLines = False
-    # touchZ's G38.2 is queued or descending; only Stop may reach the machine until it answers.
+    # A G38.2 is queued or descending; nothing but Stop may reach the machine until it answers.
     probeInFlight = False
     # this is used to determine the first time the position is received from the machine
     firstTimePosFlag = 0

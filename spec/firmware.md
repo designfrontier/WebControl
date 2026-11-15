@@ -57,7 +57,7 @@ the raw line, re-send B05 on any boot banner (`PCB v1.`, `Grbl v1.00`, `ready`),
 - G17 is unsupported (sent by both calibration patterns). G38.2 moves at a fixed 60 mm/min, but touchZ's `F1` still
   sets the modal feed to 1 mm/min (without F it clamps the modal feed to zMaxFeed). G38.2 leaves the modal
   motion mode alone. On a touch G38.2 zeroes Z itself (`zAxis.set(0)`, H27 `GCode.cpp:922`, H292
-  `GCode.cpp:1046`), prints `z axis zeroed` and acks, so a `G10 Z0` after it is redundant and WebControl sends none;
+  `GCode.cpp:1047`), prints `z axis zeroed` and acks, so a `G10 Z0` after it is redundant and WebControl sends none;
   on a miss it prints `error: probe did not connect`, `program stopped`, `z axis not set` and an empty line, with no
   `ok`, and sets `sys.stop` (H27 `GCode.cpp:936-937`, H292 `GCode.cpp:1061-1062`). `M2` and
   `M30` only turn the spindle off. The firmware reads T only when it leads a line that also has a G or M word (`T2 M6`, `T2 G0 X1`):
