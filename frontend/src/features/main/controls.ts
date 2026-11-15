@@ -14,22 +14,27 @@ export interface ControlAvailability {
   step: boolean;
 }
 
+const NONE: ControlAvailability = { manual: false, units: false, defineHome: false, play: false, pause: false, step: false };
+
 const CONTROLS: Record<RunState, Omit<ControlAvailability, "units">> = {
   idle: { manual: true, defineHome: true, play: true, pause: false, step: true },
   running: { manual: false, defineHome: false, play: false, pause: true, step: false },
   paused: { manual: true, defineHome: false, play: false, pause: true, step: true },
-  unknown: { manual: false, defineHome: false, play: false, pause: false, step: false },
+  unknown: NONE,
 };
 
 /**
  * The old UI's disabler / gcdisabler / ndisabler classes, keyed by uploadFlag. Stop is always available.
  * `gcodeLocked` is selectGcodeLocked: home and the unit switches also wait for a tool change outside a job.
  */
-export const controlsFor = (runState: RunState, gcodeLocked = false): ControlAvailability => ({
-  ...CONTROLS[runState],
-  units: CONTROLS[runState].manual && !gcodeLocked,
-  defineHome: CONTROLS[runState].defineHome && !gcodeLocked,
-});
+export const controlsFor = (runState: RunState, gcodeLocked = false, probing = false): ControlAvailability =>
+  probing
+    ? { ...NONE, pause: CONTROLS[runState].pause }
+    : {
+        ...CONTROLS[runState],
+        units: CONTROLS[runState].manual && !gcodeLocked,
+        defineHome: CONTROLS[runState].defineHome && !gcodeLocked,
+      };
 
 const MM_PER_INCH = 25.4;
 

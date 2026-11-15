@@ -23,6 +23,12 @@ describe("controlsFor", () => {
     expect(controlsFor("paused", true)).toMatchObject({ manual: true, units: false, defineHome: false });
     expect(controlsFor("idle", true)).toMatchObject({ manual: true, units: false, defineHome: false });
   });
+
+  it("leaves only Pause during a probe", () => {
+    const none = { manual: false, units: false, defineHome: false, play: false, pause: false, step: false };
+    expect(controlsFor("idle", false, true)).toEqual(none);
+    expect(controlsFor("paused", false, true)).toEqual({ ...none, pause: true });
+  });
 });
 
 describe("parseDistance", () => {

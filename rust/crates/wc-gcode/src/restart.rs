@@ -158,7 +158,10 @@ impl StateParser {
             let y = word(line, 'Y')?;
             state.y = if relative { state.y + y } else { y + self.home.1 };
         }
-        if line.contains('Z') {
+        if has(38.2) {
+            // A touching probe zeroes Z; a miss holds the job at the probe line.
+            state.z = Some(0.0);
+        } else if line.contains('Z') {
             let z = word(line, 'Z')?;
             state.z = if relative { state.z.map(|current| current + z) } else { Some(z) };
         }
@@ -314,6 +317,15 @@ mod tests {
         ];
         cases.iter().for_each(|&(line, plunge, feed)| {
             assert_eq!(restart(&["G90", "G1 Z-1", line, "G1 X1"], 3)[4..], [plunge, feed, "G90 "], "{line}");
+        });
+    }
+
+    #[test]
+    fn a_probe_leaves_z_at_zero_not_at_its_depth() {
+        let cases: [&[&str]; 2] = [&["G90", "G0 Z5", "G38.2 Z-10 F100", "G0 X1"], &["G91", "G38.2 Z-10", "G0 X1"]];
+        cases.iter().for_each(|lines| {
+            let queued = restart(lines, lines.len() - 1);
+            assert!(queued.iter().any(|line| line.starts_with("G1 Z0.0 ")), "{queued:?}");
         });
     }
 

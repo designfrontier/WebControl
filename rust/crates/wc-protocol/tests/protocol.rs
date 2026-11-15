@@ -22,6 +22,7 @@ fn startup_state() -> StartupState {
         pause_button_setting: PauseButton::Pause,
         job_in_progress: false,
         manual_z_axis_adjust: false,
+        probing: false,
         host_address: "10.0.0.5:5000".into(),
         controller_firmware_version: 0.0,
         controller_board: None,
@@ -213,6 +214,7 @@ fn link_messages_fit_their_schemas() {
         current_tool: 0,
         job_in_progress: false,
         manual_z_axis_adjust: false,
+        probing: true,
     };
     check(Envelope::json(&status));
     check(Envelope::json(&ControllerMessage("Firmware Version 51.27".into())));

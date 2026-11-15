@@ -73,6 +73,8 @@ pub struct Sim {
     pub move_ms: u64,
     /// Whether a G38.2 probe touches the plate.
     pub probe_touches: bool,
+    /// `$` setting zAxisAttached: without it G38.2 acks without probing.
+    pub z_axis_attached: bool,
     /// Whether it prints a status report every 200 ms.
     pub reports_status: bool,
     /// What B10 measures for the left and right chains.
@@ -166,6 +168,7 @@ impl Sim {
             overflows: 0,
             move_ms: 0,
             probe_touches: true,
+            z_axis_attached: true,
             reports_status: true,
             chains: (1650.0, 1651.0),
             stuck_motor: None,
@@ -186,6 +189,7 @@ impl Sim {
             settings: std::mem::take(&mut self.settings),
             move_ms: self.move_ms,
             probe_touches: self.probe_touches,
+            z_axis_attached: self.z_axis_attached,
             reports_status: self.reports_status,
             chains: self.chains,
             stuck_motor: self.stuck_motor,
@@ -396,6 +400,10 @@ impl Sim {
     }
 
     fn probe(&mut self, out: &mut Vec<String>) -> Option<u64> {
+        if !self.z_axis_attached {
+            out.push("G38.2 gcode only valid with z-axis attached".into());
+            return Some(0);
+        }
         out.extend(["probing for z axis zero", "max depth -10.00 mm.", "feedrate 39.94 mm per min."].map(String::from));
         if self.probe_touches {
             self.position[2] = 0.0;
@@ -403,6 +411,8 @@ impl Sim {
             return Some(0);
         }
         out.extend(["error: probe did not connect", "program stopped", "z axis not set", ""].map(String::from));
+        // `sys.stop`: the firmware drops what it held, as for `!`.
+        self.stop();
         None
     }
 

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useEffectEvent, useMemo, useReducer, useRef, us
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { useClient, useFetch, useMachine, useServerMessage } from "../../app/context";
 import { useTheme } from "../../app/themePreference";
-import { selectGcodeLocked, selectRunState } from "../../state/machine";
+import { selectGcodeLocked, selectProbing, selectRunState } from "../../state/machine";
 import { getViewerSnapshot } from "./api";
 import { CameraOverlay } from "./CameraOverlay";
 import { createViewerEngine } from "./engine";
@@ -53,6 +53,7 @@ export const Viewer = ({ currentLine = "" }: { currentLine?: string }) => {
   const positionError = useMachine((state) => state.positionError);
   const runState = useMachine(selectRunState);
   const homeLocked = useMachine(selectGcodeLocked);
+  const probing = useMachine(selectProbing);
 
   const [data, dispatch] = useReducer(viewerReducer, initialViewerData);
   const [view3D, setView3D] = useState(false);
@@ -294,6 +295,7 @@ export const Viewer = ({ currentLine = "" }: { currentLine?: string }) => {
           onBed={isOnBed(data.machine, target)}
           runState={runState}
           homeLocked={homeLocked}
+          probing={probing}
           onAction={runAction}
           onClose={() => setTarget(null)}
         />

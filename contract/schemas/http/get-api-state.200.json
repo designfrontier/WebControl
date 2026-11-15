@@ -53,6 +53,10 @@
       "default": false,
       "type": "boolean"
     },
+    "probing": {
+      "default": false,
+      "type": "boolean"
+    },
     "hostAddress": {
       "type": "string"
     },

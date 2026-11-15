@@ -132,6 +132,24 @@ fn a_probe_touches_or_misses() {
 }
 
 #[test]
+fn a_missed_probe_drops_the_lines_behind_it() {
+    let mut sim = sim();
+    sim.probe_touches = false;
+    let missed = send(&mut sim, "G38.2 Z-10\nG0 X5\n");
+    assert!(!missed.contains(&"ok".to_string()), "{missed:?}");
+    assert_eq!(sim.position()[0], 0.0);
+}
+
+#[test]
+fn a_probe_without_a_z_axis_acks_without_zeroing() {
+    let mut sim = sim();
+    sim.z_axis_attached = false;
+    sim.receive(b"G0 Z5\n", 0);
+    assert_eq!(send(&mut sim, "G38.2 Z-10\n"), ["G38.2 gcode only valid with z-axis attached", "ok"]);
+    assert_eq!(sim.position()[2], 5.0);
+}
+
+#[test]
 fn an_over_long_line_overflows_and_runs_its_tail() {
     let mut sim = sim();
     let line = format!("G0 X{}\n", "1".repeat(RING_BYTES));

@@ -1,0 +1,27 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "touch_z_without_zeroing_alerts",
+    "description": "Rust only: an `ok` for a probe with no `z axis zeroed` before it (no Z axis attached, or the target is the current Z; holey GCode.cpp G38) means Z was not zeroed, so the user is told. Python says nothing.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "610e5bf"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    }
+  },
+  "events": [
+    {"type": "ui", "action": {"command": "touchZ", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G90 G38.2 Z-10 \n"},
+    {"type": "expect", "state": {"probing": true}},
+    {"type": "rx", "line": "G38.2 gcode only valid with z-axis attached"},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "alerts": [{"title": "Touch Z Failed", "message": "Probe finished but Z was not zeroed"}], "state": {"probing": false}}
+  ]
+}

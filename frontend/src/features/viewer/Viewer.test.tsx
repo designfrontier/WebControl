@@ -375,6 +375,16 @@ describe("Viewer screen actions", () => {
     expect(screen.getByRole("button", { name: "Move here" })).toBeEnabled();
   });
 
+  it("disables every move while a probe runs", async () => {
+    const { socket } = await loaded();
+    socket.serverMessage("statusMessage", { uploadFlag: 0, positioningMode: 0, currentTool: 1, probing: true });
+    fireEvent.contextMenu(canvas());
+    expect(screen.getByText("Unavailable while the probe runs.")).toBeInTheDocument();
+    ["Move here", "Define home here", "Return to center"].forEach((name) =>
+      expect(screen.getByRole("button", { name })).toBeDisabled(),
+    );
+  });
+
   it("opens in the top layer and gives focus back on close", async () => {
     const { user } = await loaded();
     const threeD = screen.getByRole("button", { name: "3D" });

@@ -170,6 +170,8 @@ pub struct Snapshot {
     pub upload_flag: i32,
     pub job_in_progress: bool,
     pub manual_z_axis_adjust: bool,
+    /// A G38.2 is queued or descending; only Stop and actions that move nothing run.
+    pub probing: bool,
     pub pause_button: PauseButton,
     pub controller_firmware_version: f64,
     pub controller_board: Option<String>,
@@ -203,6 +205,7 @@ impl Snapshot {
             current_tool: self.current_tool,
             job_in_progress: self.job_in_progress,
             manual_z_axis_adjust: self.manual_z_axis_adjust,
+            probing: self.probing,
         }
     }
 
@@ -218,6 +221,7 @@ impl Snapshot {
             "gcodeIndex": self.gcode_index,
             "units": self.units(),
             "manualZAxisAdjust": self.manual_z_axis_adjust,
+            "probing": self.probing,
             "pauseButtonSetting": self.pause_button,
             "currentTool": self.current_tool,
             "positioningMode": positioning_word(self.positioning).trim(),
@@ -231,6 +235,16 @@ impl Snapshot {
         });
         fields.as_object().cloned().unwrap_or_default()
     }
+}
+
+/// A G38.2 the controller has not answered yet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Probe {
+    pub id: u64,
+    /// The job's line, for a probe streamed from the file.
+    pub index: Option<usize>,
+    /// The firmware printed `z axis zeroed`, which only a touch does.
+    pub zeroed: bool,
 }
 
 /// The controller as the link knows it; reset whenever the port opens or the board boots.
@@ -249,7 +263,7 @@ pub(crate) struct Controller {
     pub caught_up: bool,
     pub queue: VecDeque<Queued>,
     /// The G38.2 line awaiting its `ok` or `error:`.
-    pub probe: Option<u64>,
+    pub probe: Option<Probe>,
     pub eeprom_reset: bool,
     /// A `Delay` holds writes until then.
     pub hold_until: Option<Duration>,
@@ -293,7 +307,7 @@ pub struct Machine {
     pub(crate) board: Option<String>,
     pub(crate) fake_servo: bool,
     pub(crate) positioning: Positioning,
-    /// A Touch Z is queued or descending.
+    /// A G38.2 (Touch Z, typed or from the file) is queued or descending.
     pub(crate) probing: bool,
     pub(crate) job: Job,
     /// Gcode loads being built off the machine task; Play waits for them.
@@ -477,6 +491,7 @@ impl Machine {
             upload_flag: self.job.flow.upload_flag(),
             job_in_progress: self.job.flow.in_job(),
             manual_z_axis_adjust: self.job.manual_z.is_some(),
+            probing: self.probing,
             pause_button: self.job.pause_button(),
             controller_firmware_version: self.firmware_version,
             controller_board: self.board.clone(),
