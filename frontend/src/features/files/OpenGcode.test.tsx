@@ -60,6 +60,7 @@ describe("Open gcode", () => {
     await user.click(await screen.findByRole("button", { name: "Open" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Could not open leg.nc.");
     await expectPath("/files/open");
+    expect(screen.queryByText(/building its preview/)).not.toBeInTheDocument();
     expect(socket.emittedEvents("checkForGCodeUpdate")).toEqual([]);
     expect(screen.getByRole("button", { name: "Open" })).toBeEnabled();
   });
@@ -77,6 +78,7 @@ describe("Open gcode", () => {
     const { user } = renderApp("/files/open", { fetch });
     await user.click(await screen.findByRole("button", { name: "Open" }));
     expect(screen.getByRole("button", { name: "Opening…" })).toBeDisabled();
+    expect(screen.getByText(/building its preview/)).toHaveAttribute("role", "status");
   });
 
   it("cancels back to the files screen", async () => {

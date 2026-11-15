@@ -6,7 +6,7 @@ import { CloseButton } from "../../app/CloseButton";
 import { useCloseModal } from "../../app/modalHistory";
 import { editGcode, getGcodeText } from "./api";
 import { useResource, useSubmit } from "./hooks";
-import { FormError, GcodeEditor, Loaded, SubPage } from "./ui";
+import { FormError, GcodeEditor, GcodeLoadingNote, Loaded, SubPage } from "./ui";
 
 const EditForm = ({ initial }: { initial: string }) => {
   const fetchImpl = useFetch();
@@ -33,6 +33,7 @@ const EditForm = ({ initial }: { initial: string }) => {
       />
       <FormError message={error} />
       {locked && <p className="muted">A job is running or paused. Stop the job first to apply changes.</p>}
+      {busy && <GcodeLoadingNote />}
       <div className="actions">
         <button
           type="submit"

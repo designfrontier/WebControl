@@ -121,6 +121,19 @@ describe("Viewer loading", () => {
     expect(screen.getByText("No gcode loaded")).toBeInTheDocument();
   });
 
+  it("shows the spinner from the load-started signal until the payload follows, even an empty one", async () => {
+    const { socket } = await loaded();
+    expect(screen.queryByText("Loading preview…")).not.toBeInTheDocument();
+
+    socket.serverRaw({ command: "showFPSpinner", data: 0, dataFormat: "int" });
+    expect(screen.getByText("Loading preview…")).toHaveAttribute("role", "status");
+    socket.serverMessage("healthMessage", { cpuUsage: 12, bufferSize: -1, controllerFirmwareVersion: 1.26 });
+    expect(screen.getByText("Loading preview…")).toBeInTheDocument();
+
+    socket.serverRaw({ command: "gcodeUpdateCompressed", data: "", dataFormat: "base64" });
+    expect(screen.queryByText("Loading preview…")).not.toBeInTheDocument();
+  });
+
   it("updates the board from boardDataUpdate and cut data pushes", async () => {
     const { socket } = await loaded();
     socket.serverMessage("boardDataUpdate", { ...board, boardID: "Door", material: "Oak" });

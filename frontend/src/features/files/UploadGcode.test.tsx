@@ -53,6 +53,7 @@ describe("Upload gcode", () => {
     await user.upload(await screen.findByLabelText("Gcode files"), nc("a.nc"));
     await user.click(screen.getByRole("button", { name: "Upload and open" }));
     expect(screen.getByRole("button", { name: "Uploading…" })).toBeDisabled();
+    expect(screen.getByText(/building its preview/)).toHaveAttribute("role", "status");
   });
 
   it("creates a directory and selects it", async () => {

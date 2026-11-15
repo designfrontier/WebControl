@@ -4,7 +4,7 @@ import { getGcodeLibrary, openGcode } from "./api";
 import { useResource } from "./hooks";
 import { OpenFromLibrary } from "./LibraryForms";
 import { selectGcodeLocked } from "../../state/machine";
-import { GCODE_LOCKED_NOTE, Loaded, SubPage } from "./ui";
+import { GCODE_LOCKED_NOTE, GcodeLoadingNote, Loaded, SubPage } from "./ui";
 
 export const OpenGcode = () => {
   const fetchImpl = useFetch();
@@ -21,6 +21,7 @@ export const OpenGcode = () => {
             library={library}
             legend="Gcode files"
             lockedReason={locked ? GCODE_LOCKED_NOTE : undefined}
+            busyNote={<GcodeLoadingNote />}
             open={async (file) => {
               await openGcode(fetchImpl, file);
               client.emit("checkForGCodeUpdate", { data: "Please" });

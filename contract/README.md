@@ -173,6 +173,10 @@ until a `VERSION` bump changes them.
 12. **Broadcast answers.** `settingRequest` answers with a `requestedSetting` broadcast, and `checkForGCodeUpdate` /
     `checkForBoardUpdate` resend the gcode or board to every client, not just the asker. Every `action` event, refused
     or not, is followed by the same board resend (`boardDataUpdate`, `showFPSpinner`, `boardCutDataUpdateCompressed`).
-13. **Action args.** Commands without arguments still receive `arg` and `arg1` (the UI sends `""`). `moveTo` needs a
+13. **Gcode load signal.** `/openGCode`, `/uploadGCode` and `/editGCode` broadcast `showFPSpinner` with `0` as the
+    load starts, then answer the HTTP request once the preview is built. A failed load broadcasts the current
+    `gcodeUpdateCompressed`, so every spinner ends; a successful one relies on the client's `checkForGCodeUpdate`
+    (`/editGCode` resends it itself). A load waits for one already running, and `startRun` is refused meanwhile.
+14. **Action args.** Commands without arguments still receive `arg` and `arg1` (the UI sends `""`). `moveTo` needs a
     JSON number `arg` (a string fails the bed-bounds check); `move`/`moveZ` parse `arg1` with `float()`, so numeric
     text works too; `defineHome` with both args `""` uses the sled position.

@@ -166,3 +166,10 @@ export const NewDirectoryForm = ({ create, onCreated }: NewDirectoryProps) => {
 };
 
 export const GCODE_LOCKED_NOTE = "A job is running or paused. Stop the job first to load other gcode.";
+
+/** The server answers a gcode load only once the preview is built, which takes a while for a large file. */
+export const GcodeLoadingNote = () => (
+  <p className="muted" role="status">
+    Reading the gcode and building its preview. A large file can take a while.
+  </p>
+);

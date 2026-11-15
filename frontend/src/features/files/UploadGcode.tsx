@@ -8,7 +8,15 @@ import { createGcodeDirectory, getGcodeLibrary, uploadGcode } from "./api";
 import { useResource, useSubmit } from "./hooks";
 import { initialDirectory } from "./library";
 import { selectGcodeLocked } from "../../state/machine";
-import { DirectorySelect, FormError, GCODE_LOCKED_NOTE, Loaded, NewDirectoryForm, SubPage } from "./ui";
+import {
+  DirectorySelect,
+  FormError,
+  GCODE_LOCKED_NOTE,
+  GcodeLoadingNote,
+  Loaded,
+  NewDirectoryForm,
+  SubPage,
+} from "./ui";
 
 const UploadForm = ({ library }: { library: GcodeLibrary }) => {
   const fetchImpl = useFetch();
@@ -57,6 +65,7 @@ const UploadForm = ({ library }: { library: GcodeLibrary }) => {
         </div>
         <FormError message={error} />
         {locked && <p className="muted">{GCODE_LOCKED_NOTE}</p>}
+        {busy && <GcodeLoadingNote />}
         <div className="actions">
           <button type="submit" className="primary" disabled={busy || locked}>
             {busy ? "Uploading…" : "Upload and open"}

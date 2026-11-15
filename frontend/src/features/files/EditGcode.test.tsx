@@ -1,7 +1,7 @@
 import { screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { fakeFetch } from "../../test/fakeFetch";
-import { expectPath, recorder } from "../../test/filesBoards";
+import { expectPath, pending, recorder } from "../../test/filesBoards";
 import { renderApp } from "../../test/render";
 
 const page = () => within(screen.getByRole("dialog", { name: /G-Code/ }));
@@ -30,6 +30,17 @@ describe("View or edit gcode", () => {
 
     expect(edit.forms()).toEqual([{ gcode: "G21\nG0 X1 Y1\nG1 Z-1\nG0 X0" }]);
     await expectPath("/");
+  });
+
+  it("shows it is busy until the server has built the preview", async () => {
+    const fetch = fakeFetch({ "/api/files/gcode/text": { text: "G0 X1" }, "POST /editGCode": pending });
+    const { user } = renderApp("/files/edit", { fetch });
+    await user.type(await screen.findByLabelText("Loaded gcode"), "\nM2");
+    await user.click(screen.getByRole("button", { name: "Apply changes" }));
+
+    expect(screen.getByRole("button", { name: "Applying…" })).toBeDisabled();
+    expect(screen.getByText(/building its preview/)).toHaveAttribute("role", "status");
+    await expectPath("/files/edit");
   });
 
   it("explains a failure and keeps the edits", async () => {
