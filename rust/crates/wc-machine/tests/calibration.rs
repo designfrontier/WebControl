@@ -312,6 +312,8 @@ fn accept_waits_for_touch_z_to_finish() {
     assert_eq!(text(&rig, "Maslow Settings", "motorOffsetY"), "463");
     assert_eq!(rig.run_to_quiet(), ["G90 G38.2 Z-10"], "the probe answers and nothing follows it");
     assert_eq!(accept_on(&mut rig, Kind::Triangular).status, 200);
+    rig.run_to_quiet();
+    rig.rx("<Idle,MPos:0.00,0.00,-3.00,WPos:0.000,0.000,0.000>");
     assert_eq!(rig.run_to_quiet().last().map(String::as_str), Some("G0 X0 Y0"));
 }
 

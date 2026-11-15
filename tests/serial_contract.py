@@ -236,8 +236,11 @@ def transcripts():
 
 # Transcripts that pin a Rust-intended deviation (contract/serial/README.md); Python is not their reference.
 RUST_ONLY = frozenset({
+    "real_katie_body_top_pause_stop",
     "real_katie_neck_back_pause_jog_resume",
+    "real_mancala_finishing_large_job",
     "real_mancala_outside_tool_change",
+    "real_mancala_roughing_tool_change",
     "real_maypole_tool_change_play",
     "resume_above_safe_height_never_lowers_before_travel",
     "resume_on_51_292_sets_the_spindle_speed_after_m3",

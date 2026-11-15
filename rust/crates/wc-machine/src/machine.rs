@@ -280,6 +280,8 @@ pub(crate) struct Controller {
     pub hold_until: Option<Duration>,
     /// `bufferOn` as the port opened: job lines go out while they fit, not one per `ok`.
     pub buffering: bool,
+    /// A raise waiting for a status report to tell the bit's height is refused then.
+    pub raise_deadline: Option<Duration>,
 }
 
 impl Controller {
@@ -299,6 +301,7 @@ impl Controller {
             eeprom_reset: false,
             hold_until: None,
             buffering: false,
+            raise_deadline: None,
         }
     }
 }

@@ -421,7 +421,9 @@ impl Machine {
                     false
                 }
                 Queued::Raise(raise) => {
-                    self.expand_raise(&raise);
+                    if self.expand_raise(raise, now, effects) {
+                        return;
+                    }
                     false
                 }
             };
@@ -498,6 +500,7 @@ impl Machine {
             matches!(queued, Queued::Line { boot: true, .. } | Queued::SettingsPush | Queued::Mark(_))
         });
         self.controller.hold_until = None;
+        self.controller.raise_deadline = None;
     }
 
     pub(crate) fn ports_found(&mut self, ports: Vec<String>, effects: &mut Vec<Effect>) {

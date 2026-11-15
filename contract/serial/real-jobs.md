@@ -22,13 +22,13 @@ Writes only one side made, as classified:
 
 - `real_katie_body_top_pause_stop` backend only, Resume or Play after a tool change returns to the file's XY at safe height or higher: `~⏎`
 - `real_katie_body_top_pause_stop` v0.94 only, Resume or Play after a tool change returns to the file's XY at safe height or higher: `G0 Z5.0 F12.8 ⏎G0 X6.2 Y34.0 F800.0 ⏎T1 M6  ⏎G4  ⏎G0 Z0  ⏎`
-- `real_katie_body_top_pause_stop` backend only, Resume or Play after a tool change returns to the file's XY at safe height or higher: `G0 Z5.0  ⏎G0 X6.2 Y34.0  ⏎`
+- `real_katie_body_top_pause_stop` backend only, Resume or Play after a tool change returns to the file's XY at safe height or higher: `G0 Z15.05  ⏎G0 X6.2 Y34.0  ⏎`
 - `real_katie_neck_back_pause_jog_resume` backend only, Resume or Play after a tool change returns to the file's XY at safe height or higher: `G21  ⏎G90  ⏎G0 Z10.04  ⏎G0 X6.2 Y34.0  ⏎G90  ⏎`
 - `real_katie_neck_back_pause_jog_resume` backend only, Resume after a Pause returns at safe height or higher, restores the spindle and plunges with G1 at the file's plunge feed, then restores the file's F: `G21  ⏎`
 - `real_katie_neck_back_pause_jog_resume` v0.94 only, Resume after a Pause returns at safe height or higher, restores the spindle and plunges with G1 at the file's plunge feed, then restores the file's F: `G0 Z30.0  ⏎`
 - `real_katie_neck_back_pause_jog_resume` backend only, Resume after a Pause returns at safe height or higher, restores the spindle and plunges with G1 at the file's plunge feed, then restores the file's F: `G0 Z10.0  ⏎G0 X227.526 Y63.836  ⏎M3  ⏎G1 Z30.0 F1000.0  ⏎G1 F1000.0  ⏎G90  ⏎`
 - `real_mancala_finishing_large_job` v0.94 only, Resume or Play after a tool change returns to the file's XY at safe height or higher: `G0 Z5.0 F12.8 ⏎G0 X41.6763 Y60.1447 F800.0 ⏎T3 M6  ⏎G4  ⏎G0 Z0  ⏎`
-- `real_mancala_finishing_large_job` backend only, Resume or Play after a tool change returns to the file's XY at safe height or higher: `G0 Z5.0  ⏎G0 X41.6763 Y60.1447  ⏎`
+- `real_mancala_finishing_large_job` backend only, Resume or Play after a tool change returns to the file's XY at safe height or higher: `G0 Z10.04  ⏎G0 X41.6763 Y60.1447  ⏎`
 - `real_mancala_outside_tool_change` backend only, Resume or Play after a tool change returns to the file's XY at safe height or higher: `G21  ⏎G90  ⏎G0 Z10.04  ⏎G0 X42.9463 Y60.2564  ⏎G90  ⏎`
 - `real_mancala_roughing_tool_change` backend only, Resume or Play after a tool change returns to the file's XY at safe height or higher: `G21  ⏎G90  ⏎G0 Z5.0  ⏎G0 X41.6763 Y60.1447  ⏎G90  ⏎`
 - `real_maypole_tool_change_play` backend only, Resume or Play after a tool change returns to the file's XY at safe height or higher: `~⏎`
@@ -39,7 +39,7 @@ Writes only one side made, as classified:
 
 - Every Fusion file here has its `T<n> M6` before any XY move, so Resume after the tool change returns to the file's XY there, which is X0 Y0 shifted by home: a rapid to the home point before the file's own first rapid.
 - Resume after a Pause restores the spindle with a bare `M3` (the file said `M3 S5000`). On 51.27 with `$17=0` both do nothing (`setSpindlePower`, H27 `Spindle.cpp`). The one bare `M3` in the logs (v0.94's, 20251221-000533 t=36) was never echoed or acked: the controller sent nothing for 16 s, then rebooted.
-- Resume never lowers the bit before the XY move (owner decision, 2026-11-15): after the Pause it travels at the bit's 10 mm above a Z zero just redefined, and after each tool change at the reported 10.03 mm rounded up a step, not at the 5 mm safe height; v0.94 went straight to the paused Z.
+- Resume never lowers the bit before the XY move (owner decision, 2026-11-15): after the Pause it travels at the bit's 10 mm above a Z zero just redefined, and after each tool change at the height the controller reports (the report after the `~` when the height is unknown) rounded up a step, 10.03 mm as Z10.04 and 15.04 mm as Z15.05, not at the 5 mm safe height; v0.94 went straight to the paused Z.
 
 ## UNEXPLAINED differences
 

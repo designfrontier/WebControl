@@ -3,8 +3,12 @@
 
 mod rig;
 
-use rig::{Rig, settings};
+use rig::{Rig, alerts, settings, written};
 use serde_json::json;
+use wc_protocol::main::PauseButton;
+
+/// `wc_machine`'s wait for a status report when the bit's height is unknown.
+const HEIGHT_WAIT_MS: u64 = 3000;
 
 const JOB: [&str; 7] = ["G21", "G90", "G0 Z5", "G0 X10 Y10", "G1 Z-1 F100", "G1 X20", "G1 X30"];
 
@@ -165,18 +169,126 @@ fn a_jog_from_an_unknown_height_adds_to_the_reported_one_rounded_up() {
     assert_eq!(rig.run_to_quiet(), ["G90", "G00 Z7.01", "G00 X0.0 Y0.0"]);
 }
 
-#[test]
-fn with_no_height_known_the_bit_rises_to_safe_height() {
+fn booted_without_a_report() -> Rig {
     let mut rig = Rig::with(settings(&[]));
     rig.open();
     ["PCB v1.1 Detected", "Grbl v1.00", "ready", "ok"].iter().for_each(|line| {
         rig.rx(line);
     });
     rig.run_to_quiet();
+    rig
+}
+
+const REPORT_AT_10: &str = "<Idle,MPos:0.00,0.00,10.00,WPos:0.000,0.000,0.000>";
+
+#[test]
+fn with_no_height_known_the_raise_waits_for_a_fresh_report() {
+    let mut rig = booted_without_a_report();
     rig.act_with("moveZ", json!("raise"), json!("10"));
     rig.act("returnToCenter");
     let sent = rig.run_to_quiet();
-    assert_eq!(sent[4..], ["G90", "G00 Z5.0", "G00 X0.0 Y0.0"], "{sent:?}");
+    assert_eq!(sent[4..], ["G90"], "{sent:?}");
+    assert!(written(&rig.advance(2000)).is_empty(), "no guess at the safe height");
+    rig.rx(REPORT_AT_10);
+    assert_eq!(rig.run_to_quiet(), ["G00 Z10.01", "G00 X0.0 Y0.0"]);
+}
+
+#[test]
+fn with_no_report_in_time_the_move_is_refused() {
+    let mut rig = booted_without_a_report();
+    rig.act("returnToCenter");
+    rig.run_to_quiet();
+    let refused = rig.advance(HEIGHT_WAIT_MS + 50);
+    assert!(written(&refused).is_empty());
+    assert!(alerts(&refused).iter().any(|alert| alert.contains("could not tell how high the bit is")), "{refused:?}");
+    rig.rx(REPORT_AT_10);
+    assert!(rig.run_to_quiet().is_empty(), "the refused travel never goes out");
+}
+
+#[test]
+fn stop_drops_a_waiting_raise_at_once() {
+    let mut rig = booted_without_a_report();
+    rig.act("returnToCenter");
+    rig.run_to_quiet();
+    let stop = rig.act("stopRun");
+    assert_eq!(written(&stop), ["!"]);
+    rig.clear_written();
+    rig.advance(300);
+    rig.rx(REPORT_AT_10);
+    let after = rig.run_to_quiet();
+    assert!(after.is_empty(), "{after:?}");
+    assert!(alerts(&rig.advance(HEIGHT_WAIT_MS + 50)).is_empty(), "no refusal for a raise Stop dropped");
+}
+
+#[test]
+fn after_a_stop_mid_rise_the_raise_uses_the_report_that_ends_the_resync() {
+    let mut rig = Rig::connected();
+    rig.act_with("moveZ", json!("raise"), json!("20"));
+    rig.advance(100);
+    rig.act("stopRun");
+    rig.act("home");
+    rig.clear_written();
+    rig.advance(300);
+    rig.rx("<Idle,MPos:0.00,0.00,7.43,WPos:0.000,0.000,0.000>");
+    assert_eq!(rig.run_to_quiet(), ["G90", "G00 Z7.44", "G00 X0.0 Y0.0", "G00 Z0"]);
+}
+
+#[test]
+fn play_pressed_during_an_alarms_resync_waits_for_its_report() {
+    let mut rig = Rig::connected();
+    rig.machine.load_gcode(&file(&JOB));
+    rig.act("startRun");
+    (0..4).for_each(|_| {
+        rig.advance(60);
+        rig.rx("ok");
+    });
+    rig.rx("ALARM: The sled is not keeping up with its expected position and has halted.");
+    rig.clear_written();
+    rig.act("startRun");
+    assert!(written(&rig.advance(300)).is_empty());
+    rig.rx("<Idle,MPos:10.00,10.00,6.50,WPos:0.000,0.000,0.000>");
+    assert_eq!(before_travel(&rig.run_to_quiet()), ["G0 Z6.51"]);
+}
+
+#[test]
+fn resume_after_a_reconnect_waits_for_a_report_and_is_refused_without_one() {
+    let mut rig = Rig::connected();
+    rig.machine.load_gcode(&file(&JOB));
+    rig.act("startRun");
+    (0..5).for_each(|_| {
+        rig.advance(60);
+        rig.rx("ok");
+    });
+    rig.advance(5100);
+    rig.open();
+    ["PCB v1.6 TLE9201  Detected", "Grbl v1.00", "ready", "ok"].iter().for_each(|line| {
+        rig.rx(line);
+    });
+    rig.run_to_quiet();
+    rig.clear_written();
+    rig.act("resumeRun");
+    assert_eq!(rig.run_to_quiet(), ["~"]);
+    let refused = rig.advance(HEIGHT_WAIT_MS + 50);
+    assert_eq!(alerts(&refused).len(), 1, "{refused:?}");
+    let snapshot = rig.machine.snapshot();
+    assert_eq!((snapshot.upload_flag, snapshot.pause_button), (2, PauseButton::Resume));
+    rig.rx("<Idle,MPos:10.00,10.00,12.00,WPos:0.000,0.000,0.000>");
+    assert!(rig.run_to_quiet().is_empty(), "nothing moves until Resume again");
+    rig.act("resumeRun");
+    let sent = rig.run_to_quiet();
+    assert_eq!(before_travel(&sent), ["G0 Z12.01"], "{sent:?}");
+}
+
+#[test]
+fn a_refused_play_mid_file_leaves_the_job_stopped_at_its_line() {
+    let mut rig = booted_without_a_report();
+    rig.machine.load_gcode(&file(&JOB));
+    rig.act_with("moveGcodeGoto", json!("5"), json!(""));
+    rig.act("startRun");
+    rig.run_to_quiet();
+    assert_eq!(alerts(&rig.advance(HEIGHT_WAIT_MS + 50)).len(), 1);
+    let snapshot = rig.machine.snapshot();
+    assert_eq!((snapshot.upload_flag, snapshot.job_in_progress, snapshot.gcode_index), (0, false, 5));
 }
 
 #[test]

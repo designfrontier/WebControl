@@ -1,12 +1,24 @@
 //! Owner decision (2026-11-15): before any XY travel that starts a resume, a restart or a manual return, Z goes to the
 //! higher of the safe height and the bit's own height, so nothing before the travel lowers the bit.
 
+use std::time::Duration;
+
 use wc_config::python_float_str;
 use wc_gcode::commanded_z::CommandedZ;
 use wc_gcode::restart::{GcodeState, Options, round_up, sequence};
-use wc_protocol::main::Units;
+use wc_protocol::main::{ActivateModal, PauseButton, Units};
 
-use crate::machine::{Machine, Queued};
+use crate::gpio::Led;
+use crate::job::{Flow, pause_button};
+use crate::machine::{Effect, Machine, Queued, broadcast};
+
+/// How long a raise waits for a status report when the bit's height is unknown: many reports (one per 200 ms or
+/// less), and less than the link timeout.
+pub const HEIGHT_WAIT: Duration = Duration::from_secs(3);
+const HEIGHT_UNKNOWN_TITLE: &str = "Bit Height Unknown";
+const HEIGHT_UNKNOWN: &str = "The sled did not move: WebControl could not tell how high the bit is, because the \
+                              controller sent no status report for 3 seconds. Check the controller's connection, then \
+                              try again.";
 
 /// Where the bit is: the Z WebControl commanded, or else the last status report's, one display step higher.
 #[derive(Debug, Clone, PartialEq)]
@@ -98,9 +110,41 @@ impl Machine {
         self.controller.queue.push_back(Queued::Raise(raise));
     }
 
-    /// The raise's lines go to the front of the queue, to be written in its place.
-    pub(crate) fn expand_raise(&mut self, raise: &Raise) {
-        let lines = raise.lines(self.bit.mm());
-        lines.into_iter().rev().for_each(|text| self.controller.queue.push_front(Queued::Line { text, boot: false }));
+    /// The raise's lines go to the front of the queue in its place; with the bit's height unknown it stays there
+    /// until a status report tells it, and is refused after `HEIGHT_WAIT`. True while it waits.
+    pub(crate) fn expand_raise(&mut self, raise: Raise, now: Duration, effects: &mut Vec<Effect>) -> bool {
+        if let Some(bit_mm) = self.bit.mm() {
+            self.controller.raise_deadline = None;
+            let lines = raise.lines(Some(bit_mm));
+            lines
+                .into_iter()
+                .rev()
+                .for_each(|text| self.controller.queue.push_front(Queued::Line { text, boot: false }));
+            return false;
+        }
+        let deadline = *self.controller.raise_deadline.get_or_insert(now + HEIGHT_WAIT);
+        if now < deadline {
+            self.controller.queue.push_front(Queued::Raise(raise));
+            return true;
+        }
+        self.refuse_raise(&raise, effects);
+        false
+    }
+
+    /// Nothing queued after the raise runs; a job waits to be started or resumed again.
+    fn refuse_raise(&mut self, raise: &Raise, effects: &mut Vec<Effect>) {
+        tracing::warn!("no status report told the bit's height; the move was refused");
+        self.drop_user_commands();
+        effects.push(broadcast(&ActivateModal::titled_alert(HEIGHT_UNKNOWN_TITLE, HEIGHT_UNKNOWN)));
+        let Raise::Restart(restart) = raise else { return };
+        if restart.1.change_tool {
+            self.job.flow = Flow::Idle;
+            self.leds.light(Led::Stop);
+            return;
+        }
+        self.job.flow = Flow::Paused;
+        self.job.paused_units = Some(self.units());
+        effects.push(pause_button(PauseButton::Resume));
+        self.leds.light(Led::Pause);
     }
 }

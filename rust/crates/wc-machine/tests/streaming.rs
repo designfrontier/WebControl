@@ -121,8 +121,10 @@ fn a_lost_link_mid_cut_pauses_and_resume_after_the_reconnect_restarts_at_the_los
     assert!(rig.machine.snapshot().job_in_progress, "the reboot a reconnect causes keeps a paused job");
     rig.clear_written();
     rig.act("resumeRun");
+    assert_eq!(rig.run_to_quiet(), ["~"], "the reconnect left the bit's height unknown");
+    rig.rx("<Idle,MPos:1.00,0.00,2.00,WPos:0.000,0.000,0.000>");
     let sent = rig.run_to_quiet();
-    assert_eq!(sent[..5], ["~", "G21", "G90", "G0 Z5.0", "G0 X1.0 Y0.0"]);
+    assert_eq!(sent[..4], ["G21", "G90", "G0 Z5.0", "G0 X1.0 Y0.0"]);
     assert!(sent.contains(&"G1 Z-1".to_string()), "the lost line goes out again: {sent:?}");
 }
 

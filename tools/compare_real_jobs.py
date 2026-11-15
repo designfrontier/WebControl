@@ -50,8 +50,9 @@ NOTES = [
     "both do nothing (`setSpindlePower`, H27 `Spindle.cpp`). The one bare `M3` in the logs (v0.94's, "
     "20251221-000533 t=36) was never echoed or acked: the controller sent nothing for 16 s, then rebooted.",
     "- Resume never lowers the bit before the XY move (owner decision, 2026-11-15): after the Pause it travels at the "
-    "bit's 10 mm above a Z zero just redefined, and after each tool change at the reported 10.03 mm rounded up a step, "
-    "not at the 5 mm safe height; v0.94 went straight to the paused Z.",
+    "bit's 10 mm above a Z zero just redefined, and after each tool change at the height the controller reports "
+    "(the report after the `~` when the height is unknown) rounded up a step, 10.03 mm as Z10.04 and 15.04 mm as "
+    "Z15.05, not at the 5 mm safe height; v0.94 went straight to the paused Z.",
 ]
 
 

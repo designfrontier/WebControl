@@ -7,13 +7,18 @@
       "variant": "holey",
       "version": "51.27"
     },
-    "webcontrolCommit": "81ff3d4"
+    "webcontrolCommit": "5247e3e"
   },
   "setup": {
     "units": "MM",
     "home": {
       "x": 100.5,
       "y": -50.25
+    },
+    "sled": {
+      "x": 0,
+      "y": 0,
+      "z": 0
     },
     "bootBanner": [
       "PCB v1.1 Detected",
