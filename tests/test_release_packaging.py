@@ -1,4 +1,6 @@
 import os
+import shutil
+import subprocess
 
 import pytest
 
@@ -6,6 +8,7 @@ from conftest import REPO
 from pyinstaller_datas import MISSING_DIST, bundle_datas
 
 SPECS = ["main.spec", "main-onedir.spec"]
+SCRIPTS = ["tools/build_release.sh", "buildLinux1.sh"]
 
 
 @pytest.fixture
@@ -55,3 +58,13 @@ def test_specs_use_the_shared_datas_and_no_machine_paths(spec):
     assert "bundle_datas(SPECPATH)" in text
     assert "C:\\\\" not in text and "Users" not in text
 
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+@pytest.mark.parametrize("script", SCRIPTS)
+def test_release_scripts_parse(script):
+    assert subprocess.run(["bash", "-n", os.path.join(REPO, script)]).returncode == 0
+
+
+def test_buildLinux1_delegates_to_the_release_script():
+    with open(os.path.join(REPO, "buildLinux1.sh")) as handle:
+        assert "tools/build_release.sh" in handle.read()

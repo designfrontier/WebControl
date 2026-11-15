@@ -89,7 +89,7 @@ def test_the_build_script_and_the_upgrade_share_one_layout():
     assert sorted(variants) == sorted(firmware.FIRMWARE_FOLDERS.values())
 
 
-@pytest.mark.parametrize("path", ["buildLinux1.sh", "Dockerfile", ".travis.yml"])
+@pytest.mark.parametrize("path", ["tools/build_release.sh", "Dockerfile", ".travis.yml"])
 def test_other_builds_call_the_one_build_script(path):
     with open(os.path.join(REPO, path)) as handle:
         assert "buildFirmware.sh" in handle.read()
