@@ -365,8 +365,12 @@ impl<C: Core> Task<C> {
             }
             Effect::SaveSettings(settings) => drop(self.persist.send_replace(Some(settings))),
             Effect::Firmware(job) => {
-                let host = self.host.clone();
-                off_task(&self.jobs, move || Event::FirmwareDone(host.firmware(job)));
+                let (host, jobs) = (self.host.clone(), self.jobs.clone());
+                tokio::spawn(async move {
+                    let result = tokio::task::spawn_blocking(move || host.firmware(job)).await;
+                    let result = result.unwrap_or_else(|e| JobResult::Saved(Err(e.to_string())));
+                    let _ = jobs.send(Event::FirmwareDone(result));
+                });
             }
             Effect::CreateDirectory(name) => drop(self.directories.send(name)),
             Effect::Reply { id, reply } => {
