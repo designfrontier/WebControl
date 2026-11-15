@@ -348,6 +348,20 @@ describe("Viewer screen actions", () => {
     expect(screen.getByRole("button", { name: "Return to center" })).toBeEnabled();
   });
 
+  it("disables Define home while a tool change waits outside a job, which the server refuses", async () => {
+    const { socket } = await loaded();
+    socket.serverMessage("statusMessage", {
+      uploadFlag: 0,
+      positioningMode: 0,
+      currentTool: 1,
+      jobInProgress: false,
+      manualZAxisAdjust: true,
+    });
+    fireEvent.contextMenu(canvas());
+    expect(screen.getByRole("button", { name: "Define home here" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Move here" })).toBeEnabled();
+  });
+
   it("opens in the top layer and gives focus back on close", async () => {
     const { user } = await loaded();
     const threeD = screen.getByRole("button", { name: "3D" });

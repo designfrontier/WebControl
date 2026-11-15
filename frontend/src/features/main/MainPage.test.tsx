@@ -437,6 +437,20 @@ describe("MainPage job state", () => {
     expect(job()).toHaveTextContent("Waiting for tool change");
   });
 
+  it("keeps Set Home off but Play on while a tool change waits outside a job", async () => {
+    const { socket } = await renderMain();
+    socket.serverMessage("statusMessage", {
+      uploadFlag: 0,
+      positioningMode: 0,
+      currentTool: 1,
+      jobInProgress: false,
+      manualZAxisAdjust: true,
+    });
+    expect(button("Set Home Here")).toBeDisabled();
+    expect(button("Play")).toBeEnabled();
+    expect(button("Up")).toBeEnabled();
+  });
+
   it("shows a dash before the run status is known", () => {
     renderApp("/", { fetch: fakeFetch({ "/api/main": () => new Promise<Response>(() => {}) }) });
     expect(job()).toHaveTextContent("—");

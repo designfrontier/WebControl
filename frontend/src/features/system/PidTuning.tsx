@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useClient, useFetch, useMachine, useServerMessage } from "../../app/context";
 import type { Motor, PidKind, PidSettings, PidTestRequest } from "../../protocol";
-import { selectRunState } from "../../state/machine";
+import { selectGcodeLocked, selectRunState } from "../../state/machine";
 import { getPidSettings, startPidTest } from "./api";
 import { LineChart } from "./LineChart";
 import { parsePidMessage } from "./pidData";
@@ -193,6 +193,8 @@ export const PidTuning = () => {
   const runState = useMachine(selectRunState);
   const [charts, setCharts] = useState<Partial<Record<PidKind, PidChart>>>({});
   const disabled = runState === "running" || runState === "paused";
+  // The server also refuses PID tests while a tool change waits outside a job.
+  const testsDisabled = useMachine(selectGcodeLocked) || disabled;
 
   useServerMessage("updatePIDData", (message) => {
     const chart = parsePidMessage(message);
@@ -218,7 +220,13 @@ export const PidTuning = () => {
           <MotorAdjustment fourMotor={settings.data.fourMotor} disabled={disabled} />
           <div className="pid-tests">
             {(["velocity", "position"] as const).map((kind) => (
-              <PidTestForm key={kind} kind={kind} settings={settings.data} chart={charts[kind]} disabled={disabled} />
+              <PidTestForm
+                key={kind}
+                kind={kind}
+                settings={settings.data}
+                chart={charts[kind]}
+                disabled={testsDisabled}
+              />
             ))}
           </div>
         </>

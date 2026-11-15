@@ -19,8 +19,14 @@ const CONTROLS: Record<RunState, ControlAvailability> = {
   unknown: { manual: false, defineHome: false, play: false, pause: false, step: false },
 };
 
-/** The old UI's disabler / gcdisabler / ndisabler classes, keyed by uploadFlag. Stop is always available. */
-export const controlsFor = (runState: RunState): ControlAvailability => CONTROLS[runState];
+/**
+ * The old UI's disabler / gcdisabler / ndisabler classes, keyed by uploadFlag. Stop is always available.
+ * `homeLocked` is selectGcodeLocked: home also waits for a tool change outside a job to be resumed.
+ */
+export const controlsFor = (runState: RunState, homeLocked = false): ControlAvailability => ({
+  ...CONTROLS[runState],
+  defineHome: CONTROLS[runState].defineHome && !homeLocked,
+});
 
 const MM_PER_INCH = 25.4;
 

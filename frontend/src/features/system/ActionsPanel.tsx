@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { useClient, useMachine } from "../../app/context";
 import { ConfirmDialog } from "../../app/Dialog";
 import type { SystemInfo } from "../../protocol";
-import { selectRunState } from "../../state/machine";
+import { selectGcodeLocked, selectRunState } from "../../state/machine";
 import { actionGroups, isAllowed } from "./actionsCatalog";
 import type { ActionItem } from "./actionsCatalog";
 import { downloadUrl } from "./api";
@@ -42,6 +42,7 @@ const DownloadLink = ({ route, children }: { route: "downloadDiagnostics" | "bac
 export const ActionsPanel = ({ info }: { info: SystemInfo | null }) => {
   const client = useClient();
   const runState = useMachine(selectRunState);
+  const gcodeLocked = useMachine(selectGcodeLocked);
   const [open, setOpen] = useState<Open>(null);
   const [notice, setNotice] = useState("");
 
@@ -75,7 +76,7 @@ export const ActionsPanel = ({ info }: { info: SystemInfo | null }) => {
                   key={item.id}
                   type="button"
                   className={item.danger ? "button-danger" : undefined}
-                  disabled={!isAllowed(item.allowed, runState)}
+                  disabled={!isAllowed(item.allowed, runState, gcodeLocked)}
                   onClick={() => press(item)}
                 >
                   {item.label(info)}

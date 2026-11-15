@@ -1,8 +1,11 @@
 import type { ActionCommand, SystemInfo } from "../../protocol";
 import type { RunState } from "../../state/machine";
 
-/** processAction checks run state in this order: some commands always run, some also while paused, the rest only idle. */
-export type AllowedDuring = "always" | "paused" | "idle";
+/**
+ * processAction checks run state in this order: some commands always run, some also while paused, the rest only idle;
+ * "noJob" ones also wait for a tool change outside a job to be resumed.
+ */
+export type AllowedDuring = "always" | "paused" | "idle" | "noJob";
 
 export interface Confirm {
   title: string;
@@ -130,7 +133,7 @@ export const actionGroups: ActionGroup[] = [
         id: "resetHomeToCenter",
         label: fixed("Reset home to center"),
         command: "resetHomeToCenter",
-        allowed: "idle",
+        allowed: "noJob",
         confirm: {
           title: "Reset home to center?",
           body: "Home moves to 0, 0 and the loaded gcode shifts with it.",
@@ -155,8 +158,7 @@ export const actionGroups: ActionGroup[] = [
   },
 ];
 
-export const isAllowed = (allowed: AllowedDuring, runState: RunState) =>
+export const isAllowed = (allowed: AllowedDuring, runState: RunState, gcodeLocked = false) =>
   allowed === "always" ||
-  runState === "idle" ||
-  runState === "unknown" ||
+  ((runState === "idle" || runState === "unknown") && !(allowed === "noJob" && gcodeLocked)) ||
   (allowed === "paused" && runState === "paused");

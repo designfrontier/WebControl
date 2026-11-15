@@ -12,12 +12,14 @@ interface Props {
   units: Units | null;
   onBed: boolean;
   runState: RunState;
+  /** selectGcodeLocked: the server refuses defineHome until the job is stopped or a tool change resumed. */
+  homeLocked: boolean;
   onAction(action: ScreenAction, point: Point): void;
   onClose(): void;
 }
 
 /** The right-click / long-press menu on the viewer (old templates/screenAction.html), owned by the client. */
-export const ScreenActionDialog = ({ point, units, onBed, runState, onAction, onClose }: Props) => {
+export const ScreenActionDialog = ({ point, units, onBed, runState, homeLocked, onAction, onClose }: Props) => {
   const running = runState === "running";
   const paused = runState === "paused";
   const format = (inches: number) => fromInches(inches, units).toFixed(units === "MM" ? 1 : 2);
@@ -33,7 +35,11 @@ export const ScreenActionDialog = ({ point, units, onBed, runState, onAction, on
           <button type="button" disabled={running || !onBed} onClick={() => onAction("moveTo", point)}>
             Move here
           </button>
-          <button type="button" disabled={running || paused} onClick={() => onAction("defineHome", point)}>
+          <button
+            type="button"
+            disabled={running || paused || homeLocked}
+            onClick={() => onAction("defineHome", point)}
+          >
             Define home here
           </button>
           <button type="button" disabled={running} onClick={() => onAction("returnToCenter", point)}>
