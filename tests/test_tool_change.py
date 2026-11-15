@@ -417,3 +417,14 @@ def test_the_t_added_to_an_m6_can_push_it_over_the_controllers_limit(tools, seri
 
     assert sent == ["T2  "]
     assert (tools.uploadFlag, tools.currentTool) == (2, 0)
+
+
+def test_a_controller_boot_forgets_its_pause_and_tool(app, tools, monkeypatch):
+    tools.firmwarePaused = tools.firmwareHoldsJobLines = True
+    tools.currentTool = tools.nextTool = 3
+    monkeypatch.setattr(tools, "bootInProgress", False)
+    monkeypatch.setattr(tools, "lastBootBannerTime", tools.lastBootBannerTime)
+
+    controller_says(app, tools, ["Grbl v1.00\r\n"])
+
+    assert (tools.firmwarePaused, tools.firmwareHoldsJobLines, tools.currentTool, tools.nextTool) == (False, False, 0, 0)

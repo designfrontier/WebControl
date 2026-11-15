@@ -51,6 +51,10 @@ class MessageProcessor(MakesmithInitFuncs):
         now = time.time()
         if not self.data.bootInProgress or now - self.data.lastBootBannerTime > firmwareFacts.BOOT_BANNER_WINDOW:
             self.data.firmwareRewriteNoticeSeen = False
+            # A booted controller is not paused and starts with tool 0.
+            self.data.firmwarePaused = self.data.firmwareHoldsJobLines = False
+            self.data.currentTool = self.data.nextTool = 0
+            self.data.toolBeforeChange = None
             self.data.gcode_queue.put("B05 ")
             [self.data.gcode_queue.put(line) for line in self.data.config.writeOnlyFirmwareSettings()]
         self.data.bootInProgress = not firmwareFacts.endsBoot(message)
