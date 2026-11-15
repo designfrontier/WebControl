@@ -134,6 +134,17 @@ scenario(
             settings=[{"section": "Advanced Settings", "key": "maxZRPM", "value": "12.6"}])],
 )
 
+scenario(
+    "connect_without_a_reset_handshakes_after_3_s",
+    "A board that does not reset when the port opens prints no banner and no boot ok, only its status reports. "
+    "After 3 s without either WebControl sends the handshake anyway, with the B05 and $13 a banner would have queued.",
+    {**MM, "start": "boot"},
+    [status(), tick(1.0, "no banner, no ok"), status(), tick(1.0), status(),
+     tick(1.0, "3 s after the port opened the handshake goes out"), idle(),
+     expect(state={"firmwareBuild": "51.27"},
+            emitted=[{"command": "controllerMessage", "data": "Firmware Version 51.27"}])],
+)
+
 # ----- manual moves -----
 
 scenario(

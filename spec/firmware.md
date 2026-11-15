@@ -136,7 +136,7 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
 | A9 | Low–Med | The version only reaches the console; all 51.29x builds report 51.29. |
 | A10 | Low | An unclosed `(` reaches the firmware and hangs 51.27; `!`, `~` and backtick inside a line act as realtime commands. |
 | A11 | Low | `$45` and fractional `$10`/`$11`/`$15` are rewritten on every connect; NaN parses as 1. |
-| A12 | Low | Nothing is sent if the board doesn't reset on port open (WebControl waits for the boot `ok`). |
+| A12 | Fixed | Nothing was sent if the board didn't reset on port open; now, with no banner or `ok` 3 s after the port opens, the handshake goes out anyway. |
 | A13 | Fixed | M0/M1 timing depended on the early `~`; M0 at end of line wasn't detected. |
 | A14 | Low | `$86`, `$144` rejected; `$43` unused on holey; G17 ignored. |
 | A15 | Info | `bufferSize = 126` is right; PWR:/F: parsing is dead code; PE lines are mis-parsed until B05 is parsed. |

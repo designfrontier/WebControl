@@ -4,6 +4,7 @@ import re
 
 import serial
 
+from Connection.firmwareFacts import isBootBanner
 from Connection.firmwareGcode import onlySelectsTool, pausesFirmware, toolChangeLine
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
 
@@ -24,6 +25,8 @@ class SerialPortThread(MakesmithInitFuncs):
     # could be smaller (0.02) however larger number doesn't seem to impact performance
     MINTimePerLine = 0.05
     RESYNC_DELAY = 0.25
+    # Longer than a reset takes to print its banner, shorter than the 5 s link timeout.
+    BOOT_WAIT = 3.0
 
     serialInstance = None
 
@@ -35,6 +38,7 @@ class SerialPortThread(MakesmithInitFuncs):
         self.resyncAfter = None
         self.caughtUpSinceHalt = False
         self.probeInFlight = False
+        self.bootDeadline = None
 
     def _write(self, message, isQuickCommand=False, gcodeIndex=None):
         '''
@@ -344,6 +348,7 @@ class SerialPortThread(MakesmithInitFuncs):
             self.serialInstance.open()
 
             self.lastMessageTime = time.time()
+            self.bootDeadline = time.time() + self.BOOT_WAIT
             self.data.connectionStatus = 1
             self._startRecording()
             # The port open resets the board, and its boot banner queues B05 and the write-only settings.
@@ -426,6 +431,7 @@ class SerialPortThread(MakesmithInitFuncs):
         except:
             pass
 
+        self._watchForBoot(lineFromMachine)
         if self.resyncAfter is not None:
             if lineFromMachine.startswith("<") and self.caughtUpSinceHalt:
                 self.resyncAfter = None
@@ -502,6 +508,21 @@ class SerialPortThread(MakesmithInitFuncs):
         if command.find("G21") != -1 and self.data.units != "MM":
             self.data.actions.updateSetting("toMM", 0, True)  # value = doesn't matter
         self.data.actions.sendGCodePositionUpdate(self.data.gcodeIndex, recalculate=True)
+
+    def _watchForBoot(self, lineFromMachine):
+        '''
+        A board that doesn't reset when the port opens never sends the boot ok the handshake waits for.
+        '''
+        if self.bootDeadline is None:
+            return
+        if lineFromMachine == "ok\r\n" or isBootBanner(lineFromMachine):
+            self.bootDeadline = None
+        elif time.time() >= self.bootDeadline:
+            self.bootDeadline = None
+            self.data.console_queue.put("No boot message from the controller; connecting anyway")
+            self.data.gcode_queue.put("B05 ")
+            [self.data.gcode_queue.put(line) for line in self.data.config.writeOnlyFirmwareSettings()]
+            self.machineIsReadyForData = True
 
     def _probeFinished(self, touched):
         '''
