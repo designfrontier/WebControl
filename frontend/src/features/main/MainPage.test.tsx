@@ -442,3 +442,17 @@ describe("MainPage job state", () => {
     expect(job()).toHaveTextContent("—");
   });
 });
+
+describe("MainPage camera", () => {
+  it("toggles the camera and follows the server's updateCamera broadcasts", async () => {
+    const { socket, user } = await renderMain();
+    const camera = button("Camera");
+    expect(camera).toHaveAttribute("aria-pressed", "false");
+    await user.click(camera);
+    expect(socket.actions()).toContainEqual(["toggleCamera", "", ""]);
+    socket.serverMessage("cameraMessage", { command: "updateCamera", data: "on" });
+    expect(camera).toHaveAttribute("aria-pressed", "true");
+    socket.serverMessage("cameraMessage", { command: "updateCamera", data: "off" });
+    expect(camera).toHaveAttribute("aria-pressed", "false");
+  });
+});

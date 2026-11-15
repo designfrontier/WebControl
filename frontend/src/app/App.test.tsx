@@ -1,6 +1,8 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fakeFetch, startupState } from "../test/fakeFetch";
+import { ThemeProvider } from "./theme";
+import { useTheme } from "./themePreference";
 import { currentPath, renderApp } from "../test/render";
 
 const nav = () => screen.getByRole("navigation", { name: "Primary" });
@@ -11,7 +13,10 @@ const pick = async (user: ReturnType<typeof renderApp>["user"], menuName: string
   await user.click(screen.getByRole("menuitem", { name: item }));
 };
 
-afterEach(() => localStorage.clear());
+afterEach(() => {
+  localStorage.clear();
+  document.documentElement.removeAttribute("data-theme");
+});
 
 describe("App shell", () => {
   it("renders the control screen with the viewer at the index route", () => {
@@ -249,6 +254,26 @@ describe("theme", () => {
     await user.click(screen.getByRole("button", { name: "Theme: Dark" }));
     expect(theme()).toBeNull();
     expect(localStorage.getItem("webcontrol.theme")).toBeNull();
+  });
+
+  it("resolves System to the OS colour scheme and follows its changes", () => {
+    const listeners: (() => void)[] = [];
+    const query = {
+      matches: true,
+      addEventListener: (_: string, listener: () => void) => listeners.push(listener),
+      removeEventListener: vi.fn(),
+    };
+    vi.stubGlobal("matchMedia", () => query);
+    const Probe = () => <p>{useTheme().theme}</p>;
+    render(
+      <ThemeProvider>
+        <Probe />
+      </ThemeProvider>,
+    );
+    expect(screen.getByText("dark")).toBeInTheDocument();
+    query.matches = false;
+    act(() => listeners.forEach((listener) => listener()));
+    expect(screen.getByText("light")).toBeInTheDocument();
   });
 
   it("follows the system preference and survives storage that throws", async () => {
