@@ -1,0 +1,20 @@
+[package]
+name = "wc-gcode"
+description = "G-code as WebControl loads, shifts, restarts and previews it, and the board cut grid"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+base64.workspace = true
+flate2.workspace = true
+regex.workspace = true
+rust_decimal.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+wc-protocol.workspace = true
+
+[dev-dependencies]
+wc-testkit.workspace = true

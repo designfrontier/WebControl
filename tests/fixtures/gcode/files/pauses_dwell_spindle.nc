@@ -1,0 +1,24 @@
+(program pauses, dwells, spindle, laser and other M and G words)
+G21
+G90
+G40
+G41 D1
+G43 H1
+M3 S10000
+G4 P2
+G0 Z5
+G0 X10 Y10
+G1 Z-1 F100
+G1 X20 F600 M0
+M01
+G04 P1.5
+M4
+M05
+M106
+G1 X30
+M107
+M30
+M300
+M1
+M3 S1000 M8
+G0 Z5

@@ -1,0 +1,20 @@
+(inch file with arcs, a helix and the spindle)
+G20
+G90
+G17
+M3 S12000
+G0 Z0.25
+G0 X1.0 Y1.0
+G1 Z-0.0625 F10
+G1 X3.0 Y1.0 F40
+G2 X4.0 Y2.0 I0 J1.0
+G1 X4.0 Y3.0
+G3 X3.0 Y4.0 I-1.0 J0
+G1 X1.0 Y4.0
+G2 X1.0 Y4.0 I0.5 J-0.5 Z-0.125
+G03 X0.0 Y3.0 I-1.0 J0.0
+G02 X1.0 Y1.0 I1.5 J-0.5
+G0 Z0.25
+M5
+G0 X0 Y0
+M30

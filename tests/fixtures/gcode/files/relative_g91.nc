@@ -1,0 +1,21 @@
+(absolute moves, then relative passes, then G91.1 arc centres)
+G21
+G90
+G0 Z5
+G0 X20 Y20
+G91
+G1 Z-7 F80
+G1 X10 F500
+G1 Y10
+G1 X-10
+G1 Y-10
+G0 Z7
+G90
+G0 X50 Y50
+G91.1
+G1 Z-1 F80
+G1 X60 F500
+G91 G0 Z6
+G0 X5 Y5
+G90
+G0 X0 Y0
