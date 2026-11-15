@@ -11,10 +11,12 @@ interface OpenProps {
   library: Library;
   legend: string;
   open: (file: LibraryFile) => Promise<void>;
+  /** Why opening is refused right now, such as a job holding the gcode. */
+  lockedReason?: string;
 }
 
 /** Choose a file from a library (gcode or boards) and open it. */
-export const OpenFromLibrary = ({ library, legend, open }: OpenProps) => {
+export const OpenFromLibrary = ({ library, legend, open, lockedReason }: OpenProps) => {
   const [directory, setDirectory] = useState(() => initialDirectory(library));
   const [selected, setSelected] = useState(() => initialFile(library, initialDirectory(library)));
   const { busy, error, setError, run } = useSubmit();
@@ -39,8 +41,9 @@ export const OpenFromLibrary = ({ library, legend, open }: OpenProps) => {
         legend={legend}
       />
       <FormError message={error} />
+      {lockedReason && <p className="muted">{lockedReason}</p>}
       <div className="actions">
-        <button type="submit" className="primary" disabled={busy}>
+        <button type="submit" className="primary" disabled={busy || lockedReason !== undefined}>
           {busy ? "Opening…" : "Open"}
         </button>
         <CloseButton>Cancel</CloseButton>

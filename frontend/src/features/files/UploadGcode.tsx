@@ -1,13 +1,14 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { useClient, useFetch } from "../../app/context";
+import { useClient, useFetch, useMachine } from "../../app/context";
 import { CloseButton } from "../../app/CloseButton";
 import { useCloseModal } from "../../app/modalHistory";
 import type { CreatedDirectory, GcodeLibrary } from "../../protocol";
 import { createGcodeDirectory, getGcodeLibrary, uploadGcode } from "./api";
 import { useResource, useSubmit } from "./hooks";
 import { initialDirectory } from "./library";
-import { DirectorySelect, FormError, Loaded, NewDirectoryForm, SubPage } from "./ui";
+import { selectGcodeLocked } from "../../state/machine";
+import { DirectorySelect, FormError, GCODE_LOCKED_NOTE, Loaded, NewDirectoryForm, SubPage } from "./ui";
 
 const UploadForm = ({ library }: { library: GcodeLibrary }) => {
   const fetchImpl = useFetch();
@@ -17,6 +18,7 @@ const UploadForm = ({ library }: { library: GcodeLibrary }) => {
   const [directory, setDirectory] = useState(() => initialDirectory(library));
   const [files, setFiles] = useState<File[]>([]);
   const { busy, error, setError, run } = useSubmit();
+  const locked = useMachine(selectGcodeLocked);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -54,8 +56,9 @@ const UploadForm = ({ library }: { library: GcodeLibrary }) => {
           </span>
         </div>
         <FormError message={error} />
+        {locked && <p className="muted">{GCODE_LOCKED_NOTE}</p>}
         <div className="actions">
-          <button type="submit" className="primary" disabled={busy}>
+          <button type="submit" className="primary" disabled={busy || locked}>
             {busy ? "Uploading…" : "Upload and open"}
           </button>
           <CloseButton>Cancel</CloseButton>

@@ -1,15 +1,17 @@
-import { useClient, useFetch } from "../../app/context";
+import { useClient, useFetch, useMachine } from "../../app/context";
 import { useCloseModal } from "../../app/modalHistory";
 import { getGcodeLibrary, openGcode } from "./api";
 import { useResource } from "./hooks";
 import { OpenFromLibrary } from "./LibraryForms";
-import { Loaded, SubPage } from "./ui";
+import { selectGcodeLocked } from "../../state/machine";
+import { GCODE_LOCKED_NOTE, Loaded, SubPage } from "./ui";
 
 export const OpenGcode = () => {
   const fetchImpl = useFetch();
   const client = useClient();
   const close = useCloseModal();
   const { resource } = useResource(getGcodeLibrary);
+  const locked = useMachine(selectGcodeLocked);
 
   return (
     <SubPage>
@@ -18,6 +20,7 @@ export const OpenGcode = () => {
           <OpenFromLibrary
             library={library}
             legend="Gcode files"
+            lockedReason={locked ? GCODE_LOCKED_NOTE : undefined}
             open={async (file) => {
               await openGcode(fetchImpl, file);
               client.emit("checkForGCodeUpdate", { data: "Please" });

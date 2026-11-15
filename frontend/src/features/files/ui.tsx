@@ -164,3 +164,5 @@ export const NewDirectoryForm = ({ create, onCreated }: NewDirectoryProps) => {
     </form>
   );
 };
+
+export const GCODE_LOCKED_NOTE = "A job is running or paused. Stop the job first to load other gcode.";
