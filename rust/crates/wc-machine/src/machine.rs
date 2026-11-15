@@ -50,6 +50,10 @@ pub enum Event {
     ClientConnected {
         sid: String,
     },
+    /// A client fell behind its pushes and missed some; it hears the current state again.
+    ClientResync {
+        sid: String,
+    },
     ControllerLine(String),
     /// The clock, every 10 ms, when no controller line is waiting.
     Tick,
@@ -416,6 +420,7 @@ impl Machine {
                 effects.push(broadcast(&HostAddress { host_address: self.host_address.clone() }));
                 effects.push(broadcast(&self.connection_status()));
             }
+            Event::ClientResync { sid } => self.resync(&sid, &mut effects),
             Event::Action(action) | Event::Stop(action) => self.action(&action, now, &mut effects),
             Event::SettingRequest { section, setting } => self.setting_request(&section, &setting, &mut effects),
             Event::UpdateSetting { setting, value } => self.update_setting(&setting, &value, &mut effects),

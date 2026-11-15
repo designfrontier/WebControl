@@ -195,6 +195,13 @@
         "canRollback": {
           "type": "boolean"
         },
+        "rollbackFirmware": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "log": {
           "type": "array",
           "items": {

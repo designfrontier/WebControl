@@ -20,6 +20,7 @@ const upgrade = (over: Partial<FirmwareUpgrade> = {}): FirmwareUpgrade => ({
   motors: [],
   backup: null,
   canRollback: false,
+  rollbackFirmware: null,
   log: [],
   ...over,
 });
@@ -84,7 +85,14 @@ describe("FirmwareUpgradeDialog", () => {
   });
 
   it("runs the self-test with the chains slack and offers the rollback", async () => {
-    const selfTest = upgrade({ ...ready, stage: "selfTest", canRollback: true, backup: "/home/pi/b/1" });
+    const selfTest = upgrade({
+      ...ready,
+      stage: "selfTest",
+      firmware: "51.29",
+      canRollback: true,
+      rollbackFirmware: "51.27",
+      backup: "/home/pi/b/1",
+    });
     const { user, socket } = renderDialog(selfTest);
     expect(screen.getByText("/home/pi/b/1")).toBeInTheDocument();
     await user.click(screen.getByRole("checkbox", { name: /chains are slack/ }));
@@ -166,6 +174,11 @@ describe("upgradeSteps", () => {
     expect(stageView(upgrade({ stage: "failed", canRollback: true })).buttons[0].label).toBe(
       "Roll back to the saved firmware",
     );
+  });
+
+  it("names the version read off the board before the upgrade, not the one running now", () => {
+    const after = upgrade({ stage: "blocked", firmware: "51.29", canRollback: true, rollbackFirmware: "51.27" });
+    expect(stageView(after).buttons.map((b) => b.label)).toContain("Roll back to 51.27");
   });
 
   it("words motor results and chains", () => {

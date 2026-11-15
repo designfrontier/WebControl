@@ -57,6 +57,8 @@ export const firmwareUpgradeSchema = z.object({
   /** Where the $$ dump, settings, chain lengths and flash read-back were saved. */
   backup: z.string().nullable(),
   canRollback: z.boolean(),
+  /** The version read off the board before the upgrade, which a rollback restores. */
+  rollbackFirmware: z.string().nullable().default(null),
   log: z.array(z.string()),
 });
 export type FirmwareUpgrade = z.infer<typeof firmwareUpgradeSchema>;

@@ -50,7 +50,7 @@ Put the card in the reader and open Raspberry Pi Imager:
    same way. Both are tested (`tools/test-install/run.sh`). Not a 32-bit image, and not one with a desktop.
 3. **Storage:** the microSD card. Check the size, so you do not pick another disk.
 4. **Customisation:** set:
-   - **Hostname:** `maslow-next`, so it cannot be confused with the old system.
+   - **Hostname:** `maslow`. The step 5 check tells the card from the SSD, which may answer to the same name.
    - **User:** `pi`, with a password. The username must be `pi`.
    - **Wi-Fi:** your network name, password and country, unless the Pi uses Ethernet.
    - **Locale:** your time zone and keyboard layout.
@@ -66,12 +66,12 @@ Put the card in the reader and open Raspberry Pi Imager:
 4. On the Mac:
 
    ```sh
-   ssh pi@maslow-next.local
+   ssh pi@maslow.local
    ```
 
-   The Pi's IP address will probably not be 192.168.86.155. Use `maslow-next.local` everywhere below. If the Mac
-   cannot find that name, look for `maslow-next` in your router's device list and use its IP address. If
-   `maslow-next` never appears but `192.168.86.155:5000` answers, it booted the SSD: see below.
+   The Pi's IP address will probably not be 192.168.86.155. Use `maslow.local` everywhere below. If the Mac
+   cannot find that name, look for `maslow` in your router's device list and use its IP address. If only
+   `192.168.86.155:5000` answers, it probably booted the SSD: step 5 tells you.
 5. On the Pi, check that it booted from the card:
 
    ```sh
@@ -111,7 +111,7 @@ ls -l ~/.WebControl/webcontrol.json
 Or copy the backup from step 1, from the Mac:
 
 ```sh
-scp -r ~/webcontrol-backup/.WebControl pi@maslow-next.local:
+scp -r ~/webcontrol-backup/.WebControl pi@maslow.local:
 ```
 
 ## 5. Copy the code from the Mac
@@ -125,7 +125,7 @@ git switch master
 rsync -az --delete \
   --exclude .git --exclude .venv --exclude node_modules --exclude build --exclude releases --exclude .claude \
   --exclude /firmware --exclude /dist \
-  ./ pi@maslow-next.local:webcontrol-source/
+  ./ pi@maslow.local:webcontrol-source/
 ```
 
 The script needs `frontend/dist` and stops without it. `/firmware` is left out on purpose (step 9).
@@ -152,11 +152,11 @@ It ends with `WebControl is up after …s: http://<ip>:5000/next/`.
 
 ## 7. Verify
 
-1. Open `http://maslow-next.local:5000/next/`. The status bar shows `Server: connected` and
+1. Open `http://maslow.local:5000/next/`. The status bar shows `Server: connected` and
    `Controller: /dev/ttyACM0`.
 2. The firmware chip shows the controller's holey firmware version (for example `Holey 51.28`), not
    `Firmware: unknown`, and the firmware line appears in Controller Messages.
-3. Open the classic UI at `http://maslow-next.local:5000/`. It loads and shows the controller connected.
+3. Open the classic UI at `http://maslow.local:5000/`. It loads and shows the controller connected.
 4. Settings → Maslow Settings: Distance Between Motors and the other values are yours, not the defaults.
 5. **Dry jog.** Raise the bit clear of the work, or take it out. Jog 10 mm, and check that the sled moves the right
    way by the right amount. Then jog 200 mm and press **Stop** while it moves. It must stop at once.

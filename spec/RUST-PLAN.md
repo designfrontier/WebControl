@@ -26,6 +26,23 @@ These override anything below that disagrees:
 - **Coverage: 95% lines for every crate** (not the 90/80 below), enforced in CI.
 - **Rust becomes the boot default** after M4 passes a real cut plus two weeks of normal use.
 
+## Owner decisions (2026-11-15)
+
+These also override anything below; `contract/README.md` ("Rust-intended differences") and
+`contract/serial/README.md` record the wire-level ones.
+
+- **Resume after an ALARM or overflow is kept.** Streaming halts and the job rewinds to the oldest unacknowledged
+  line; after the status-report resync, Play resumes from there (`alarm_mid_cut_rewinds_and_resumes`). Stop also
+  clears it.
+- **Rust's safety differences are intended:** a link lost mid-job pauses the job and rewinds it; machine commands
+  are refused with "The controller is not connected." when no controller is connected; settings lines already
+  queued for the controller survive Stop.
+- **Minor:** a 409 keeps the default reason phrase (the message is in the body); a cross-origin WebSocket upgrade
+  is refused (403); a board is capped at 2^24 one-inch cells; the 126 line limit counts bytes, not characters;
+  calibration Accept refuses non-finite values; the live computed X/Y uses float32, as the firmware does;
+  `deploy.sh build` without Docker warns and builds without the 51.292 image rather than failing; stored settings
+  keep their JSON types.
+
 ## 0. Recommendations up front
 
 1. **Serve only the React UI.** Drop the classic UI (Jinja `templates/`, `static/scripts`, `WebPageProcessor/`,
@@ -325,7 +342,7 @@ A language-neutral format, under `tests/transcripts/<name>.json`:
 | Tool change | `T2`/`M6` on separate lines; `M6 T2`; `T2 M6`; same-tool M6; tool change outside a job; jog during a tool change | `test_tool_change` |
 | M0/M1 | M0 alone and at the end of a line; `~` only on Resume; a jog releases the pause only when no job lines are buffered | `test_program_pause`, `test_controller_pause` |
 | Stop | Stop mid-line: `!` first, stale acks ignored, resync on status; index rewind | `test_serial_streaming` |
-| Alarms | ALARM and `Buffer overflow!` halt and rewind; Stop required; connection loss pauses | `test_message_processor`, `test_serial_streaming` |
+| Alarms | ALARM and `Buffer overflow!` halt and rewind to the oldest unacknowledged line; Play resumes there after the status-report resync, or Stop clears it; connection loss pauses and rewinds | `test_message_processor`, `test_serial_streaming` |
 | Refusals | over-long line (127 refused, 126 sent), home shift pushing a line over; unclosed `(`; realtime characters stripped | `test_serial_streaming` |
 | Buffered mode | never overfills; same bytes as unbuffered | `test_serial_streaming` |
 
@@ -474,7 +491,7 @@ M5 routes and M6a can follow M1/M2 while M4 is under way.
 
 1. **Streaming behaviour drifts in ways the tests miss** (a missed pause, a lost `!`, a line sent twice), and a real
    router moves. *Mitigation:* sans-IO core, the transcript corpus recorded from Python, simulator invariants (126
-   bytes, nothing after ALARM until Stop), an air-cut checklist before any real cut, and Python as a one-command
+   bytes, nothing after ALARM until the resync and then Play or Stop), an air-cut checklist before any real cut, and Python as a one-command
    fallback.
 2. **The firmware upgrade misdrives or bricks the controller** (board-strap hazards C1, the TLE9201 encoder swap,
    a lost USB link mid-flash). *Mitigation:* pre-flight blocks unknown and hazardous banners; avrdude read-back

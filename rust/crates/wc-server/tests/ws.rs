@@ -165,6 +165,9 @@ async fn the_log_namespace_gets_its_handshake_the_logging_state_and_no_ui_messag
     assert!(quiet.is_err(), "the log socket got {quiet:?}");
 }
 
+/// More pushes in one go than a session's backlog holds, so a session not yet writing falls behind.
+const FLOOD: i64 = 4096;
+
 /// Answers `echo <sid>` with a push meant only for that sid, and `all` with a broadcast.
 struct Echo(Machine);
 
@@ -180,6 +183,12 @@ impl Core for Echo {
             }
             Event::Action(a) if a.command == "log" => {
                 vec![Effect::Push(Push::log(json!({"log": "state", "state": true})))]
+            }
+            Event::Action(a) if a.command == "flood" => {
+                (0..FLOOD).map(|i| Effect::Push(Push::message(Envelope::int("showFPSpinner", i)))).collect()
+            }
+            Event::Action(a) if a.command == "floodLogs" => {
+                (0..FLOOD).map(|_| Effect::Push(Push::log(json!({"log": "state", "state": true})))).collect()
             }
             other => self.0.handle(other, now),
         }
@@ -226,6 +235,38 @@ async fn log_pushes_reach_the_log_namespace() {
     send(&mut ui, action("log", "")).await;
     let frame = next_frame(&mut logs).await;
     assert_eq!(frame, json!({"ns": "/MaslowCNCLogs", "event": "message", "data": {"log": "state", "state": true}}));
+}
+
+#[tokio::test]
+async fn a_ui_client_that_falls_behind_hears_the_current_state_again() {
+    let (machine, _task) = spawn(Echo(Machine::new("h", Settings::defaults())), Box::new(NoPort), Arc::new(NoHost));
+    let address = serve_with(machine, PingConfig::default()).await;
+    let mut ui = open(&address, "/MaslowCNC").await;
+    handshake(&mut ui).await;
+    send(&mut ui, action("flood", "")).await;
+    let host = next_message(&mut ui, "hostAddress").await;
+    assert_eq!(decoded(&host).1, json!({"hostAddress": "h"}));
+    next_message(&mut ui, "connectionStatus").await;
+    next_message(&mut ui, "statusMessage").await;
+}
+
+#[tokio::test]
+async fn a_log_client_that_falls_behind_hears_the_logging_state_again() {
+    let (machine, _task) = spawn(Echo(Machine::new("h", Settings::defaults())), Box::new(NoPort), Arc::new(NoHost));
+    let address = serve_with(machine, PingConfig::default()).await;
+    let mut logs = open(&address, "/MaslowCNCLogs").await;
+    next_frame(&mut logs).await;
+    next_frame(&mut logs).await;
+    let mut ui = open(&address, "/MaslowCNC").await;
+    handshake(&mut ui).await;
+    send(&mut ui, action("floodLogs", "")).await;
+    let resent = loop {
+        let frame = next_frame(&mut logs).await;
+        if frame["data"]["state"] == false {
+            break frame;
+        }
+    };
+    assert_eq!(resent["data"], json!({"log": "state", "state": false}));
 }
 
 fn quick_pings() -> PingConfig {

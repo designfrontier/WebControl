@@ -41,12 +41,12 @@ WebSockets, and shares `~/.WebControl` with the Python install.
   then embeds it in any build (CI's cross-build and `deploy.sh build` do). Without it the upgrade wizard refuses
 - `cargo test -p wc-machine --test upgrade`: the upgrade rehearsal against `wc-sim` with a fake avrdude (success,
   sync failure and retry, wrong banner and rollback, EEPROM reset and migration)
-- `E2E_BACKEND=rust npm run test:e2e` in `frontend/`: every Playwright spec against the binary (the optical and
-  no-controller Z-axis cases are skipped)
+- `E2E_BACKEND=rust npm run test:e2e` in `frontend/`: every Playwright spec against the binary (the optical
+  calibration case is skipped)
 
 ## The Pi
 
-`./deploy.sh build|install|push|rollback [host]` (default `pi@maslow-next.local`) cross-builds with
+`./deploy.sh build|install|push|rollback [host]` (default `pi@maslow.local`) cross-builds with
 `cargo zigbuild --release --target aarch64-unknown-linux-gnu.2.36` (zig from `pip install ziglang`) and installs to
 `/opt/webcontrol-rs`. On the Pi, `wc-switch rust|python|status` picks the backend that runs and boots; the two units
 conflict, so only one holds the port. `install-pi.sh` also adds `/etc/sudoers.d/webcontrol-rs`, which lets the
