@@ -7,7 +7,7 @@ use axum::routing::{get, post};
 use serde_json::json;
 
 use crate::forms::UPLOAD_LIMIT;
-use crate::{AppState, api, archive, assets, boards, files, ws};
+use crate::{AppState, api, archive, assets, boards, files, help, ws};
 
 fn redirect(status: StatusCode, to: &'static str) -> Response {
     (status, [(header::LOCATION, to)]).into_response()
@@ -36,6 +36,8 @@ pub fn router(state: AppState) -> Router {
         .route("/api/machine/quick-configure", get(api::quick_configure).post(api::save_quick_configure))
         .route("/api/system/info", get(api::system))
         .route("/api/system/pid", get(api::pid))
+        .route("/api/system/help", get(help::page))
+        .route("/api/system/help/assets/{*path}", get(|Path(path): Path<String>| async move { help::asset(&path) }))
         .route("/api/system/pid-test", post(api::pid_test))
         .route("/api/files/gcode", get(files::library))
         .route("/api/files/gcode/directories", post(files::new_directory))

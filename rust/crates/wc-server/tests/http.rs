@@ -380,3 +380,72 @@ fn the_platform_is_the_pi_only_on_linux_arm() {
     assert_eq!(platform.can_turn_off, cfg!(target_os = "linux"));
     assert_eq!(platform.name == "RPI", cfg!(all(target_os = "linux", target_arch = "aarch64")));
 }
+
+#[tokio::test]
+async fn help_serves_the_index_page_by_default_without_its_front_matter() {
+    let reply = get("/api/system/help").await;
+    reply.checked("GET", "/api/system/help");
+    assert_eq!(reply.status, StatusCode::OK);
+    let page = reply.json();
+    assert_eq!((page["path"].as_str(), page["title"].as_str()), (Some("index.md"), Some("Home")));
+    assert!(page["markdown"].as_str().unwrap().starts_with("# WebControl\n"), "{page}");
+}
+
+/// tests/fixtures/help/python-pages.json holds Python's title and a SHA-256 of its markdown for every docs/ page.
+#[tokio::test]
+async fn every_help_page_matches_what_python_serves() {
+    use sha2::Digest;
+    let fixture = wc_testkit::repo_root().join("tests/fixtures/help/python-pages.json");
+    let expected: Value = serde_json::from_str(&std::fs::read_to_string(fixture).unwrap()).unwrap();
+    for (path, want) in expected.as_object().unwrap() {
+        let uri = format!("/api/system/help?path={}", path.replace('&', "%26"));
+        let reply = get(&uri).await;
+        reply.checked("GET", "/api/system/help");
+        let page = reply.json();
+        let digest = format!("{:x}", sha2::Sha256::digest(page["markdown"].as_str().unwrap().as_bytes()));
+        assert_eq!((page["path"].as_str().unwrap(), &page["title"]), (path.as_str(), &want["title"]));
+        assert_eq!(digest, want["sha256"].as_str().unwrap(), "{path}");
+    }
+}
+
+#[tokio::test]
+async fn help_refuses_pages_outside_docs_and_files_that_are_not_markdown() {
+    for path in ["../README.md", "%2e%2e/README.md", "/etc/passwd", "_config.yml", "nope.md", "assets", "a%00.md"] {
+        let reply = get(&format!("/api/system/help?path={path}")).await;
+        reply.checked("GET", "/api/system/help");
+        assert_eq!(reply.status, StatusCode::NOT_FOUND, "{path}");
+        assert_eq!(reply.json(), json!({"error": "no such help page"}), "{path}");
+    }
+    let dotted = get("/api/system/help?path=./GettingStarted/../index.md").await;
+    assert_eq!(dotted.status, StatusCode::NOT_FOUND, "Python refuses any .. segment");
+}
+
+#[tokio::test]
+async fn help_images_are_served_from_docs_assets() {
+    let path = "/api/system/help/assets/Screenshot.png";
+    let reply = get(path).await;
+    reply.checked("GET", path);
+    assert_eq!(reply.status, StatusCode::OK);
+    assert_eq!(reply.content_type, "image/png");
+    assert!(reply.body.starts_with(b"\x89PNG"));
+    let nested = get("/api/system/help/assets/boards/boardCut.png").await;
+    assert_eq!((nested.status, nested.content_type.as_str()), (StatusCode::OK, "image/png"));
+    for missing in ["/api/system/help/assets/nope.png", "/api/system/help/assets/../index.md"] {
+        let reply = get(missing).await;
+        assert_eq!(reply.status, StatusCode::NOT_FOUND, "{missing}");
+        assert!(reply.content_type.starts_with("text/html"), "{missing}");
+    }
+}
+
+#[test]
+fn front_matter_and_jekyll_markup_are_stripped_as_python_does() {
+    use wc_server::help::{clean_markdown, front_matter};
+    let page = "\n---\nlayout: default\ntitle: 'Quoted'\n---\n\nBody\n---\nmore\n\n";
+    assert_eq!(front_matter(page), (Some("Quoted".into()), "Body\n---\nmore".into()));
+    assert_eq!(front_matter("no front matter\n"), (None, "no front matter".into()));
+    assert_eq!(front_matter("---\ntitle: x\nunclosed"), (None, "---\ntitle: x\nunclosed".into()));
+    assert_eq!(front_matter("---\nnav_order: 1\n---\nx"), (None, "x".into()));
+    let jekyll = "[a]({{ site.baseurl }}{% link Actions/x.md %}) New{: .label .label-blue }Â</br>\
+        <span class=\"k\">kept</span> <img src=\"../assets/y.png\" alt=\"Y\" width=\"5\">";
+    assert_eq!(clean_markdown(jekyll), "[a](Actions/x.md) New  kept ![Y](../assets/y.png)");
+}
