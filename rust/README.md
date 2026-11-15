@@ -11,9 +11,9 @@ WebSockets, and shares `~/.WebControl` with the Python install.
 | `wc-kinematics` | The holey firmware's triangular and quadrilateral inverse/forward, float for float with Python |
 | `wc-calibration` | Holey (`levenberg-marquardt`) and triangular calibration, test patterns, Accept's settings and `$` lines |
 | `wc-firmware` | The controller's serial protocol, sans IO: line classifier, flow control, boot facts, `$` lines, the boot push and the lines a settings edit sends |
-| `wc-machine` | The sans-IO core (`Machine::handle(event, now) -> effects`) and the tokio shell; Stop has its own channel |
-| `wc-sim` | A simulated controller (ring buffer, `ok` timing, `!`/`~`, pauses, `$$`, boot banners, status reports) |
-| `wc-server` | The `webcontrol-rs` binary: axum routes (incl. the files, boards and archive routes), `/ws` sessions, the serial port, embedded UI and images |
+| `wc-machine` | The sans-IO core (`Machine::handle(event, now) -> effects`): link, settings, files and the job (Play, Pause, Resume, restart, tool changes, M0, alarms), the run-state gates, GPIO buttons and LEDs; and the tokio shell, where Stop has its own channel |
+| `wc-sim` | A simulated controller (ring buffer, `ok` timing, `!`/`~`, M0, tool change and `$16=0` manual-Z pauses, `$$`, boot banners, status reports, alarms) |
+| `wc-server` | The `webcontrol-rs` binary: axum routes (incl. the files, boards and archive routes), `/ws` sessions, the serial port, the Pi's GPIO header (rppal, Linux only), embedded UI and images |
 | `wc-testkit` | Test support: the `contract/` schema harness and the `contract/serial/` transcript runner |
 
 ## Commands (in `rust/`)
@@ -22,8 +22,11 @@ WebSockets, and shares `~/.WebControl` with the Python install.
 - `scripts/coverage.sh`: tests under `cargo llvm-cov`, failing below 95% lines for any crate
 - `cargo run -p wc-server -- --home "$(mktemp -d)" --port 5055 [--simulate]`: never point `--home` at the real
   `~/.WebControl` while testing; `--simulate` talks to `wc-sim` instead of the serial port
-- `cargo test -p wc-machine --test transcripts`: replays `contract/serial/` (with `transcripts-rust/` in place of the
-  Python ones it overrides); the `PASSING` list names those the backend must already pass
+- `cargo test -p wc-machine --test transcripts`: replays every transcript in `contract/serial/` (with
+  `transcripts-rust/` in place of the Python ones it overrides); `ELSEWHERE` names the ones another milestone's routes
+  answer
+- `cargo test -p wc-machine --test gates`: every contract action in every run state, each state reached through
+  `wc-sim`
 - `WC_REGENERATE=1 cargo test -p wc-config --test python_roundtrip`: rewrites
   `tests/fixtures/rust_settings/rust-written.json`, which `tests/test_rust_settings_roundtrip.py` loads in Python
 - `cargo run -p wc-calibration --example calibrate -- <home> holey M1 … M12`: a calibration against a copy of
