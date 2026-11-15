@@ -240,3 +240,19 @@ def test_a_queued_file_load_keeps_its_own_name(data, loader, monkeypatch, tmp_pa
     assert [load.value for load in loads] == [True, True]
     assert data.gcode[0] == "G0 X2 "
     assert loader.filename == str(second)
+
+
+def test_an_edit_dropped_because_a_job_started_answers_failed(client, data, loader, monkeypatch):
+    data.gcode = ["G0 X9 "]
+    build = GCodeFile._buildPreview
+
+    def startJobMidBuild(self):
+        data.uploadFlag = 1
+        build(self)
+
+    monkeypatch.setattr(GCodeFile, "_buildPreview", startJobMidBuild)
+
+    response = client.post("/editGCode", data={"gcode": "G0 X1"}, content_type="multipart/form-data")
+
+    assert (response.status_code, response.get_json()) == (500, "failed")
+    assert data.gcode == ["G0 X9 "]

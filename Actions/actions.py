@@ -1979,7 +1979,8 @@ class Actions(MakesmithInitFuncs):
                 homeY
             ]
 
-            self.data.gcodeFile.loadUpdateFile(gcode)
+            if not self.data.gcodeFile.loadUpdateFile(gcode):
+                return False
             self.data.ui_queue1.put("Action", "gcodeUpdate", "")
             return True
         except Exception as e:
