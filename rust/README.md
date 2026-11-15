@@ -41,6 +41,9 @@ WebSockets, and shares `~/.WebControl` with the Python install.
 - `bash deploy/test.sh`: `wc-switch`, `deploy.sh` and `install-pi.sh` against stubs
 - `bash deploy/update-test.sh`: `webcontrol-update` against `scripts/release.sh`'s tarballs, a `file://` GitHub API
   and `/api/state`, and stub `sudo`, `systemctl` and binaries (update, backup, checksum, busy, rollback, `--status`)
+- `WC_FIRMWARE_HEX=<hex> bash deploy/update-docker-test.sh 0.9.0=<binary> 0.9.1=<binary> 0.9.2=<binary>`:
+  `webcontrol-update` for real in arm64 Debian trixie with systemd and a password for `sudo`, against three aarch64
+  builds (each made with that `WC_VERSION`) packaged by `scripts/release.sh`
 - `bash scripts/release-test.sh`: `scripts/release.sh`'s packaging (contents, checksums, version, firmware pin)
   against stubs
 - `bash firmware/docker-build.sh <dir>`: builds the holey 51.292 hex from the Orob-Maslow/Firmware v51.292 tag in
