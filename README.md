@@ -40,8 +40,8 @@ See the [dedicated repository](https://github.com/WebControlCNC/webcontrol-pi).
 ### Raspberry Pi from source, with the new UI
 
 `tools/install_from_source.sh` installs this repository as the `webcontrol.service` systemd service, with the new UI
-at `/next/` built off the Pi. [spec/INSTALL-PI.md](spec/INSTALL-PI.md) walks through it, including upgrading from a
-v0.94 release and rolling back. `tools/build_release.sh` builds a PyInstaller release on the machine it runs on.
+at `/next/` built off the Pi. [spec/INSTALL-PI.md](spec/INSTALL-PI.md) walks through it on a fresh
+64-bit Raspberry Pi OS microSD card, leaving a v0.94 install on the Pi's other disk for rollback. `tools/build_release.sh` builds a PyInstaller release on the machine it runs on.
 
 ### Raspberry Pi
 _Replace the version number with the latest release..._
@@ -171,7 +171,7 @@ This next stuff should only need to be done once in your virtual environment.
     `pip install black`
 - rebuild the list of requirements needed by WebControl (optional)
     `rm requirements.txt`
-    `pip-compile -r requirements.in --resolver=backtracking --verbose`
+    `pip-compile --allow-unsafe -r requirements.in --resolver=backtracking --verbose`
 - install the requirements
     `pip install -r requirements.txt`
 

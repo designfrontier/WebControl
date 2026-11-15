@@ -19,3 +19,5 @@ gevent
 
 # six
 Werkzeug
+# gevent and gpiozero import pkg_resources, and uv venvs ship without setuptools.
+setuptools

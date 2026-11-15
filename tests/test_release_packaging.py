@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import subprocess
 
@@ -8,7 +9,7 @@ from conftest import REPO
 from pyinstaller_datas import MISSING_DIST, bundle_datas
 
 SPECS = ["main.spec", "main-onedir.spec"]
-SCRIPTS = ["tools/build_release.sh", "tools/install_from_source.sh", "buildLinux1.sh"]
+SCRIPTS = ["tools/build_release.sh", "tools/install_from_source.sh", "tools/test-install/run.sh", "buildLinux1.sh"]
 
 
 @pytest.fixture
@@ -271,8 +272,96 @@ def test_rollback_needs_the_saved_v094_unit(tmp_path):
     assert not (tmp_path / "sudo.log").exists()
 
 
+def uv_prelude(tmp_path, python_minor):
+    """Bash that hides any real uv and fakes python3 as 3.<python_minor> and the uv installer."""
+    (tmp_path / "home").mkdir(exist_ok=True)
+    py39 = "return 0" if python_minor == 9 else "return 1"
+    return (
+        f'export HOME="{tmp_path}/home" PATH=/usr/bin:/bin; '
+        f'python3() {{ [ "$1" = -V ] && echo "Python 3.{python_minor}" || {py39}; }}; python3.9() {{ {py39}; }}; '
+        'curl() { echo "curl $*" >>"$repo/curl.log"; }; '
+        'sh() { mkdir -p "$HOME/.local/bin" && printf "#!/bin/sh\\n" >"$HOME/.local/bin/uv" '
+        '&& chmod +x "$HOME/.local/bin/uv"; }; '
+    )
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+@pytest.mark.parametrize("python_minor", [11, 13])
+def test_bookworm_and_trixie_get_uv_for_python_3_9(tmp_path, python_minor):
+    out = source_install_script(tmp_path, uv_prelude(tmp_path, python_minor) + "ensure_uv; find_uv", machine="aarch64")
+    assert (tmp_path / "curl.log").read_text().split() == ["curl", "-LsSf", "https://astral.sh/uv/install.sh"]
+    assert out.strip().endswith(f"{tmp_path}/home/.local/bin/uv")
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+def test_a_failed_uv_install_stops_before_apt_with_the_manual_command(tmp_path):
+    prelude = uv_prelude(tmp_path, 13) + "sh() { :; }; "
+    result = run_install_script(tmp_path, prelude + "ensure_uv; echo reached-apt", machine="aarch64")
+    assert result.returncode != 0 and "reached-apt" not in result.stdout
+    assert "uv did not install" in result.stderr and "https://astral.sh/uv/install.sh | sh" in result.stderr
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+def test_bullseye_uses_its_own_python_3_9_without_uv(tmp_path):
+    source_install_script(tmp_path, uv_prelude(tmp_path, 9) + "ensure_uv", machine="aarch64")
+    assert not (tmp_path / "curl.log").exists()
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+def test_64_bit_pi_os_gets_a_compiler_for_psutil_but_no_system_python_headers_with_uv(tmp_path):
+    source_install_script(tmp_path, "find_uv() { echo uv; }; apt_packages", machine="aarch64", userland="arm64")
+    packages = installed_packages(tmp_path)
+    assert {"gcc", "libc6-dev"} <= set(packages)
+    assert "python3-dev" not in packages and "python3-venv" not in packages
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+def test_64_bit_bullseye_without_uv_gets_venv_and_headers_for_its_python(tmp_path):
+    source_install_script(tmp_path, "find_uv() { :; }; apt_packages", machine="aarch64", userland="arm64")
+    assert {"python3-venv", "python3-dev", "gcc", "libc6-dev"} <= set(installed_packages(tmp_path))
+
+
+def test_the_runtime_requirements_pin_setuptools_because_uv_venvs_lack_pkg_resources():
+    with open(os.path.join(REPO, "requirements.txt")) as handle:
+        assert "setuptools==75.3.0" in handle.read().splitlines()
+
+
+def test_regenerating_the_requirements_keeps_the_setuptools_pin():
+    assert "pip-compile --allow-unsafe" in read("requirements.txt")
+    assert "pip-compile --allow-unsafe" in read("README.md")
+
+
+def read(*path):
+    with open(os.path.join(REPO, *path)) as handle:
+        return handle.read()
+
+
+def rsync_excludes(text):
+    return set(re.findall(r"--exclude ([^\s)]+)", text))
+
+
 def test_the_pi_guide_copies_no_firmware_so_upgrade_firmware_has_nothing_to_flash():
-    with open(os.path.join(REPO, "spec", "INSTALL-PI.md")) as handle:
-        guide = handle.read()
-    rsync = guide[guide.index("rsync -az"):guide.index("pi@192.168.86.155:webcontrol-source/")]
-    assert "--exclude /firmware" in rsync
+    assert "/firmware" in rsync_excludes(read("spec", "INSTALL-PI.md"))
+
+
+def test_the_docker_install_test_copies_the_repo_as_the_guide_does():
+    assert rsync_excludes(read("spec", "INSTALL-PI.md")) == rsync_excludes(read("tools", "test-install", "run.sh"))
+
+
+def ssd_commands(guide):
+    block = re.search(r"```sh\n(sudo blockdev[^`]*?)```", guide)
+    assert block, "the guide's SSD copy block is missing"
+    return block.group(1).strip().splitlines()
+
+
+def test_the_pi_guide_locks_the_ssd_read_only_before_mounting_it():
+    commands = ssd_commands(read("spec", "INSTALL-PI.md"))
+    mount = next(c for c in commands if c.startswith("sudo mount "))
+    assert commands.index("sudo blockdev --setro /dev/sda") < commands.index(mount)
+    assert "-o ro,noload /dev/sda2 /mnt/ssd" in mount
+
+
+def test_the_pi_guide_only_reads_from_the_mounted_ssd():
+    commands = ssd_commands(read("spec", "INSTALL-PI.md"))
+    writes = [c for c in commands if "/mnt/ssd" in c and not re.match(r"sudo (mkdir -p|mount -o ro,noload \S+|umount) /mnt/ssd$|cp -a /mnt/ssd/\S+ ~/$", c)]
+    assert writes == []

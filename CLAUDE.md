@@ -61,7 +61,7 @@
 - `tools/build_release.sh` — frontend + firmware + PyInstaller onedir into
   `releases/webcontrol-<version>-<platform>-singledirectory.tar.gz`; must run on the target architecture
 - `tools/install_from_source.sh` — Raspberry Pi source install as `webcontrol.service`; `spec/INSTALL-PI.md` is the
-  upgrade guide from v0.94
+  guide for a 64-bit Pi OS microSD card beside v0.94; `tools/test-install/run.sh` tests it in arm64 Docker with systemd
 - `next_ui.py` — serves `frontend/dist` at `/next` with SPA fallback
 - `tests/e2e_backend.py` — runs `main.py` on a throwaway `HOME` and port for Playwright
 
