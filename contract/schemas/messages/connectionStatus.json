@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "connectionStatus",
+  "type": "object",
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": [
+        "connected",
+        "disconnected"
+      ]
+    },
+    "port": {
+      "type": "string"
+    },
+    "fakeServoStatus": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "status",
+    "port"
+  ]
+}

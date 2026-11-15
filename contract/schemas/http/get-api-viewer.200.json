@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get-api-viewer.200",
+  "type": "object",
+  "properties": {
+    "machine": {
+      "type": "object",
+      "properties": {
+        "bedWidth": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "bedHeight": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "motorOffsetY": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "motorSpacingX": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "bedWidth",
+        "bedHeight",
+        "motorOffsetY",
+        "motorSpacingX"
+      ]
+    },
+    "gcode": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "board": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "width": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*[-+]?(\\d+\\.?\\d*|\\.\\d+)([eE][-+]?\\d+)?\\s*$"
+                }
+              ]
+            },
+            "height": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*[-+]?(\\d+\\.?\\d*|\\.\\d+)([eE][-+]?\\d+)?\\s*$"
+                }
+              ]
+            },
+            "thickness": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*[-+]?(\\d+\\.?\\d*|\\.\\d+)([eE][-+]?\\d+)?\\s*$"
+                }
+              ]
+            },
+            "centerX": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*[-+]?(\\d+\\.?\\d*|\\.\\d+)([eE][-+]?\\d+)?\\s*$"
+                }
+              ]
+            },
+            "centerY": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*[-+]?(\\d+\\.?\\d*|\\.\\d+)([eE][-+]?\\d+)?\\s*$"
+                }
+              ]
+            },
+            "boardID": {
+              "type": "string"
+            },
+            "material": {
+              "type": "string"
+            },
+            "fileName": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "width",
+            "height",
+            "thickness",
+            "centerX",
+            "centerY",
+            "boardID",
+            "material",
+            "fileName"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "cutData": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "machine",
+    "gcode",
+    "board",
+    "cutData"
+  ]
+}

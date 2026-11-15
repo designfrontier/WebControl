@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "adjustCenter",
+  "type": "object",
+  "properties": {
+    "data": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "const": "adjustCenter"
+        },
+        "arg": {
+          "type": "number",
+          "description": "mm, signed"
+        },
+        "arg1": {
+          "description": "Ignored by the backend; the UI sends \"\".",
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "command",
+        "arg",
+        "arg1"
+      ]
+    }
+  },
+  "required": [
+    "data"
+  ]
+}

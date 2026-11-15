@@ -7,7 +7,10 @@ export const NAMESPACE = "/MaslowCNC";
 export const envelopeSchema = z.object({
   command: z.string(),
   data: z.unknown(),
-  dataFormat: z.string().optional(),
+  dataFormat: z
+    .string()
+    .optional()
+    .meta({ examples: ["json", "int", "base64"] }),
 });
 export type Envelope = z.infer<typeof envelopeSchema>;
 
@@ -35,3 +38,12 @@ export const actionEventSchema = z.object({
 
 /** The old UI sends this literal for its "please resend" events. */
 export const pleaseSchema = z.object({ data: z.literal("Please") });
+
+/** A number, or text Python's float() accepts, which several handlers parse themselves. */
+export const numberLike = z.union([z.number(), z.string().regex(/^\s*[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?\s*$/)]);
+
+/** The `{ error }` body most /api endpoints answer a 4xx/5xx with. */
+export const errorBodySchema = z.object({ error: z.string() });
+
+/** A multipart file field; in the JSON Schema it is a string with format "binary". */
+export const binaryField = z.string().meta({ format: "binary" });

@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "executePositionPIDTest",
+  "type": "object",
+  "properties": {
+    "data": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "const": "executePositionPIDTest"
+        },
+        "arg": {
+          "type": "object",
+          "properties": {
+            "pMotor": {
+              "type": "string"
+            },
+            "pStart": {
+              "type": "string"
+            },
+            "pStop": {
+              "type": "string"
+            },
+            "pSteps": {
+              "type": "string"
+            },
+            "pTime": {
+              "type": "string"
+            },
+            "pVersion": {
+              "type": "string"
+            },
+            "KpP": {
+              "type": "string"
+            },
+            "KiP": {
+              "type": "string"
+            },
+            "KdP": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "pMotor",
+            "pStart",
+            "pStop",
+            "pSteps",
+            "pTime",
+            "pVersion",
+            "KpP",
+            "KiP",
+            "KdP"
+          ]
+        },
+        "arg1": {
+          "description": "Ignored by the backend; the UI sends \"\".",
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "command",
+        "arg",
+        "arg1"
+      ]
+    }
+  },
+  "required": [
+    "data"
+  ]
+}

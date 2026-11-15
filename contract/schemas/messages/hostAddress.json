@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "hostAddress",
+  "type": "object",
+  "properties": {
+    "hostAddress": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "hostAddress"
+  ]
+}

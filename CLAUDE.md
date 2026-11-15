@@ -11,6 +11,8 @@
 - `api/` — JSON blueprint mounted at `/api` for the new frontend; every `api/<feature>.py` exposing `blueprint` auto-registers
 - `Background/` — long-running worker loops: controller message routing, UI socket push (`UIProcessor`), log streaming, webcam capture, console/WebMCP queue
 - `Boards/` — board (workpiece) model and manager tracking dimensions and cut-area grid
+- `contract/` — frozen frontend ↔ backend spec as JSON Schema, generated from `frontend/src/protocol/` (see its
+  `README.md`: layout, versioning, plain-WebSocket wire format, known warts)
 - `config/` — `Config` class: loads/saves `~/.WebControl/webcontrol.json`, computes derived settings, syncs settings with firmware
 - `Connection/` — serial link to the Arduino (`serialPortThread` buffering/flow control) and `NonVisibleWidgets`, which wires all backend services onto `Data`
 - `DataStructures/` — `Data` global state object, inter-thread queues, logger, and `MakesmithInitFuncs` base that injects `data`
@@ -70,9 +72,16 @@ events, per-client emits.
 - `frontend/src/protocol/` — zod schemas for the socket and API contract, one file per feature (`main`, `viewer`,
   `settings`, `files`, `boards`, `machine`, `calibration`, `system`), each exporting `<x>Messages` (server -> client
   `message` commands), `<x>Actions` (processAction command names) and `<x>Events` (client -> server events);
-  `core.ts` holds the envelope; `index.ts` only merges them
-- `frontend/src/socket/` — `createClient(socket)`: validates messages, drops ones whose `client` field names another
-  socket, `sendAction(command, arg?, arg1?)`, `requestSetting`, `updateSetting`, typed `emit`
+  `core.ts` holds the envelope; `index.ts` only merges them; `actionArgs.ts` types each action's `arg`/`arg1` and
+  run-state gate; `http.ts` catalogs every HTTP endpoint the UI calls with its request and response schemas
+- `frontend/src/contract/` — `buildContract()` turns the protocol into `contract/`; its tests fail when `contract/`
+  is stale or a UI request is missing from `http.ts`. Regenerate with `npm run contract`
+- `frontend/src/transport/` — the `Transport` interface the app talks to; `connectTransport` in `index.ts` picks
+  socket.io (`socketio.ts`, the only file that may import `socket.io-client`) or, later, plain WebSockets
+  (`websocket.ts`, a stub)
+- `frontend/src/socket/` — `createClient(transport)`: validates messages, drops ones whose `client` field names
+  another socket, `sendAction(command, arg?, arg1?)`, `requestSetting`, `updateSetting`, typed `emit`;
+  `connect.ts` opens the `/MaslowCNC` and log connections
 - `frontend/src/api/` — `getJson`/`sendJson(fetch, path, schema)` against `/api`
 - `frontend/src/features/files/api.ts` — `postForm(fetch, path, fields)` posts FormData to classic `main.py` form
   routes (`/openGCode`, `/trimBoard`, ...); each such route also needs an entry in the `vite.config.ts` dev proxy
@@ -100,7 +109,7 @@ events, per-client emits.
 - Frontend (in `frontend/`, Node 24+): `npm ci`, `npm run dev` (Vite at http://localhost:5173/next/, proxying `/api`,
   `/socket.io`, `/static` to `WEBCONTROL_BACKEND`, default http://localhost:5000), `npm run lint`,
   `npm run typecheck`, `npm test` (Vitest + v8 coverage, 95% floor), `npm run build` (to `frontend/dist`, served by
-  Flask at `/next`), `npm run format`
+  Flask at `/next`), `npm run format`, `npm run contract` (after any `src/protocol` change)
 - E2E: `npm run test:e2e` in `frontend/` builds the app and starts `tests/e2e_backend.py` on port 5055 (override with
   `E2E_BACKEND_PORT`; Python from `E2E_PYTHON`, default `../.venv/bin/python`). First time:
   `npx playwright install chromium`. It never touches the real `~/.WebControl`
@@ -119,7 +128,8 @@ and additive.
 New endpoints go in `api/<x>.py` (a module-level `blueprint`, auto-mounted under `/api`). Emit to just the requester
 with `api.client_emit.emit_to_client(command, data)`; outside a socket handler, pass `sid=`. A new socket event needs a
 `@socketio.on(..., namespace="/MaslowCNC")` handler in `main.py` or `api/`; the protocol contract test fails if an
-event has none.
+event has none. A new endpoint the UI calls also needs an entry in `protocol/http.ts`, then `npm run contract`;
+`tests/test_contract.py` checks Flask against `contract/`.
 
 ### Conventions
 

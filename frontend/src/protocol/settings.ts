@@ -51,9 +51,8 @@ export const settingsSectionSchema = z.object({
 export type SettingsSection = z.output<typeof settingsSectionSchema>;
 
 /** PUT /api/settings/<id> body: only changed settings; the rest keep their saved values. */
-export interface SettingsUpdate {
-  values: Record<string, string | boolean>;
-}
+export const settingsUpdateSchema = z.object({ values: z.record(z.string(), z.union([z.string(), z.boolean()])) });
+export type SettingsUpdate = z.infer<typeof settingsUpdateSchema>;
 
 /** PUT /api/settings/<id> 400 body: why each rejected setting failed, keyed by setting key. */
 export const settingsRejectionSchema = z.object({ errors: z.record(z.string(), z.string()) });

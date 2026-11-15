@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "post-savegcode.request",
+  "type": "object",
+  "properties": {
+    "selectedDirectory": {
+      "type": "string"
+    },
+    "fileName": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "selectedDirectory",
+    "fileName"
+  ]
+}

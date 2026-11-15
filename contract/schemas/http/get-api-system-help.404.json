@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get-api-system-help.404",
+  "type": "object",
+  "properties": {
+    "error": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "error"
+  ]
+}

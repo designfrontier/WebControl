@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "post-api-system-pid-test.request",
+  "type": "object",
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": [
+        "velocity",
+        "position"
+      ]
+    },
+    "motor": {
+      "type": "string",
+      "enum": [
+        "L",
+        "R",
+        "M",
+        "N"
+      ]
+    },
+    "start": {
+      "type": "string"
+    },
+    "stop": {
+      "type": "string"
+    },
+    "steps": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "time": {
+      "description": "Required when kind is \"position\".",
+      "type": "string"
+    },
+    "kp": {
+      "type": "string"
+    },
+    "ki": {
+      "type": "string"
+    },
+    "kd": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "kind",
+    "motor",
+    "start",
+    "stop",
+    "steps",
+    "version",
+    "kp",
+    "ki",
+    "kd"
+  ]
+}

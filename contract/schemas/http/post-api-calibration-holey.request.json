@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "post-api-calibration-holey.request",
+  "type": "object",
+  "properties": {
+    "measurements": {
+      "minItems": 12,
+      "maxItems": 12,
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "string",
+            "pattern": "^\\s*[-+]?(\\d+\\.?\\d*|\\.\\d+)([eE][-+]?\\d+)?\\s*$"
+          }
+        ]
+      }
+    }
+  },
+  "required": [
+    "measurements"
+  ]
+}

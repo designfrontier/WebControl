@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "post-editboard.request",
+  "type": "object",
+  "properties": {
+    "boardID": {
+      "type": "string"
+    },
+    "material": {
+      "type": "string"
+    },
+    "width": {
+      "type": "string"
+    },
+    "height": {
+      "type": "string"
+    },
+    "thickness": {
+      "type": "string"
+    },
+    "centerX": {
+      "type": "string"
+    },
+    "centerY": {
+      "type": "string"
+    },
+    "units": {
+      "type": "string",
+      "enum": [
+        "mm",
+        "inches"
+      ]
+    }
+  },
+  "required": [
+    "boardID",
+    "material",
+    "width",
+    "height",
+    "thickness",
+    "centerX",
+    "centerY",
+    "units"
+  ]
+}

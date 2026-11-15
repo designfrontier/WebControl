@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "post-uploadgcode.request",
+  "type": "object",
+  "properties": {
+    "selectedDirectory": {
+      "type": "string"
+    },
+    "file[]": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "binary"
+      }
+    }
+  },
+  "required": [
+    "selectedDirectory",
+    "file[]"
+  ]
+}

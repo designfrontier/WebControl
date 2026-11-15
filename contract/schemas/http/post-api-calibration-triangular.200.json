@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "post-api-calibration-triangular.200",
+  "type": "object",
+  "properties": {
+    "motorYoffset": {
+      "type": "number"
+    },
+    "rotationRadius": {
+      "type": "number"
+    },
+    "chainSagCorrection": {
+      "type": "number"
+    },
+    "calibrationError": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "motorYoffset",
+    "rotationRadius",
+    "chainSagCorrection",
+    "calibrationError"
+  ]
+}

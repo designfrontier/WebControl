@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "settingRequest",
+  "type": "object",
+  "properties": {
+    "data": {
+      "type": "object",
+      "properties": {
+        "section": {
+          "type": "string"
+        },
+        "setting": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "section",
+        "setting"
+      ]
+    }
+  },
+  "required": [
+    "data"
+  ]
+}
