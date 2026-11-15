@@ -44,10 +44,11 @@ class MessageProcessor(MakesmithInitFuncs):
             return
         self.data.controllerBoard = firmwareFacts.boardBanner(message) or self.data.controllerBoard
         now = time.time()
-        if now - self.data.lastBootBannerTime > firmwareFacts.BOOT_BANNER_WINDOW:
+        if not self.data.bootInProgress or now - self.data.lastBootBannerTime > firmwareFacts.BOOT_BANNER_WINDOW:
             self.data.firmwareRewriteNoticeSeen = False
             self.data.gcode_queue.put("B05 ")
             [self.data.gcode_queue.put(line) for line in self.data.config.writeOnlyFirmwareSettings()]
+        self.data.bootInProgress = not firmwareFacts.endsBoot(message)
         self.data.lastBootBannerTime = now
 
     def processMessage(self, message):

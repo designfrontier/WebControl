@@ -6,7 +6,8 @@ FIRMWARE_VERSION = re.compile(r"^Firmware Version\s+([\d.]+)")
 BOARD_BANNER = "PCB v1."
 # 51.29x prints its prescaler message with no newline, so a banner can arrive glued to other text.
 BOOT_BANNER = re.compile(r"PCB v1\.|Grbl v1\.00|\bready\b")
-# One boot prints three banner lines; a later banner within this many seconds is the same boot.
+BOOT_END = re.compile(r"\bready\b")
+# Fallback for a boot whose "ready" line was lost: a banner this long after the last one is a new boot.
 BOOT_BANNER_WINDOW = 10
 
 
@@ -44,6 +45,10 @@ def supportsZaxisLimits(data):
 
 def isBootBanner(line):
     return BOOT_BANNER.search(line) is not None
+
+
+def endsBoot(line):
+    return BOOT_END.search(line) is not None
 
 
 def boardBanner(line):

@@ -1,5 +1,6 @@
 """Settings sync between WebControl's config and the controller's `$` keys, checked against the firmware's behaviour."""
 import copy
+import time
 import types
 
 import pytest
@@ -30,11 +31,25 @@ def queued(data):
     return drain(data.gcode_queue)
 
 
-def test_connecting_writes_dist_per_rot_even_when_the_controller_already_has_it(data, serial, config):
+def booting_on_connect(processor, lines):
+    """An on_poll hook: the port open resets the board, so its banner arrives before the boot `ok`."""
+    state = {"booted": False}
+
+    def hook(port):
+        if not state["booted"]:
+            state["booted"] = True
+            port.incoming.extendleft(reversed(lines))
+        [processor.processMessage(line) for line in drain(processor.data.message_queue)]
+
+    return hook
+
+
+def test_connecting_writes_dist_per_rot_once_even_when_the_controller_already_has_it(data, serial, processor, clock):
+    config = data.config
     config.receivedSetting("$13=63.50000000\r\n")
     assert not [line for line in queued(data) if line.startswith("$13=")]
 
-    port = serial.run()
+    port = serial.run(on_poll=booting_on_connect(processor, BOOT[:-1]))
 
     assert [line for line in port.sent if line.startswith("$13=")] == ["$13=63.5000 "]
 
@@ -152,8 +167,8 @@ def test_an_eeprom_read_fail_restores_every_setting_and_tells_the_user(data, con
 
     sent = queued(data)
     keys = [line.split("=")[0] for line in sent]
-    assert {"$13", "$18", "$9", "$28", "$36", "$0", "$2", "$45", "$46"} <= set(keys)
-    assert not {"$85", "$86", "$144", "$87"} & set(keys)
+    assert {"$12", "$18", "$9", "$28", "$36", "$0", "$2", "$45", "$46"} <= set(keys)
+    assert not {"$13", "$85", "$86", "$144", "$87"} & set(keys)
     assert "$18=12.6" in sent
     assert keys[-1] == "$$"
     assert option(config, "maxZRPM")["value"] == "12.6"
@@ -193,9 +208,11 @@ def clock(monkeypatch, data):
     import Background.messageProcessor as message_processor
 
     fake = types.SimpleNamespace(now=5000.0)
-    monkeypatch.setattr(message_processor, "time", types.SimpleNamespace(time=lambda: fake.now))
+    # main.py's own MessageProcessor thread shares this module, so it still needs a real sleep.
+    monkeypatch.setattr(message_processor, "time", types.SimpleNamespace(time=lambda: fake.now, sleep=time.sleep))
     monkeypatch.setattr(data, "lastBootBannerTime", 0.0)
     monkeypatch.setattr(data, "controllerBoard", None)
+    monkeypatch.setattr(data, "bootInProgress", False, raising=False)
     return fake
 
 
@@ -215,6 +232,24 @@ def test_every_later_boot_asks_again(data, processor, clock):
     [processor.processMessage(line) for line in BOOT[2:]]
 
     assert queued(data) == ["B05 ", "$13=63.5000"]
+
+
+def test_a_reboot_soon_after_the_last_boot_still_rewrites_dist_per_rot(data, processor, clock):
+    [processor.processMessage(line) for line in BOOT]
+    queued(data)
+    clock.now += 2
+
+    [processor.processMessage(line) for line in BOOT]
+
+    assert queued(data) == ["B05 ", "$13=63.5000"]
+
+
+def test_a_boot_that_lost_its_settings_writes_dist_per_rot_once(data, processor, clock):
+    failing = BOOT[:2] + ["error: EEPROM read fail. Using default settings.\r\n"] + BOOT[2:]
+
+    [processor.processMessage(line) for line in failing]
+
+    assert [line for line in queued(data) if line.startswith("$13=")] == ["$13=63.5000"]
 
 
 @pytest.mark.parametrize("line", ["set prescaler to Grbl v1.00\r\n", "\x00ready\r\n", "junkPCB v1.5b TB6643 Detected\r\n"])

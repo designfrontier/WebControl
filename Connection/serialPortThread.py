@@ -350,7 +350,6 @@ class SerialPortThread(MakesmithInitFuncs):
             self.data.connectionStatus = 1
             self._getFirmwareVersion()
             self._setupMachineUnits()
-            [self.data.gcode_queue.put(line) for line in self.data.config.writeOnlyFirmwareSettings()]
             self._requestSettingsUpdate()
             # The host may still hold G91 from before a lost connection; resuming relies on the two agreeing.
             self.data.gcode_queue.put("G90 ")

@@ -26,6 +26,8 @@ PRINTED_RESOLUTION = 1e-8
 # The error array goes out as $O lines, and the firmware rejects $86 and $144.
 UNSENDABLE_FIRMWARE_KEYS = (85, 86, 144)
 OPTICAL_FIRMWARE_KEYS = tuple(range(87, 99))
+# Settings.cpp sets the kinematics sprocket radius R from $13 on a write only; it boots with R = 10.1.
+WRITE_ONLY_FIRMWARE_KEYS = (13,)
 
 
 class Config(MakesmithInitFuncs):
@@ -664,8 +666,8 @@ class Config(MakesmithInitFuncs):
         '''
         Lines for the settings the firmware applies only when written, never when it loads them at boot.
         '''
-        # Settings.cpp sets the kinematics sprocket radius R from $13 on a write only; it boots with R = 10.1.
-        return [self.firmwareKeyString(13, float(self.firmwareKeyOption(13)["value"]))]
+        return [self.firmwareKeyString(key, float(self.firmwareKeyOption(key)["value"]))
+                for key in WRITE_ONLY_FIRMWARE_KEYS]
 
     def receivedSetting(self, message):
         """
@@ -698,7 +700,9 @@ class Config(MakesmithInitFuncs):
         options = [option for section in self.settings.values() for option in section
                    if option.get("firmwareKey") is not None]
         [option.update(value=str(option["default"])) for option in options if option["value"] == ""]
-        skipped = UNSENDABLE_FIRMWARE_KEYS + (OPTICAL_FIRMWARE_KEYS if self.data.controllerFirmwareVersion < 100 else ())
+        # The boot that reported the failure already queued the write-only keys.
+        skipped = (UNSENDABLE_FIRMWARE_KEYS + WRITE_ONLY_FIRMWARE_KEYS
+                   + (OPTICAL_FIRMWARE_KEYS if self.data.controllerFirmwareVersion < 100 else ()))
         keys = sorted({option["firmwareKey"] for option in options} - set(skipped))
         [self.syncFirmwareKey(key, None, useStored=True) for key in keys]
         self.data.gcode_queue.put("$$")

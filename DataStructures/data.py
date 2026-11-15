@@ -38,6 +38,7 @@ class Data:
     controllerBoard = None
     firmwareRewriteNoticeSeen = False
     lastBootBannerTime = 0.0
+    bootInProgress = False
 
     """
     Version Updater
