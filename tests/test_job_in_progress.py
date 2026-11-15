@@ -12,7 +12,8 @@ LOCKED = "Cannot load gcode while a job is running or paused. Stop the job first
 JOB = [f"G1 X{n} " for n in range(20)]
 SAVED = [
     "jobInProgress", "manualZAxisAdjust", "previousUploadStatus", "pausedGcodeIndex", "pausedzval",
-    "pausedUnits", "pausedPositioningMode",
+    "pausedUnits", "pausedPositioningMode", "firmwarePaused", "firmwareHoldsJobLines", "toolChangeWaits", "nextTool",
+    "currentTool",
 ]
 
 
