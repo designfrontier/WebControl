@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { useParams } from "react-router";
-import { useFetch } from "../../app/context";
+import { useFetch, useMachine } from "../../app/context";
+import { selectGcodeLocked } from "../../state/machine";
 import { CloseButton } from "../../app/CloseButton";
 import { importFile, importKinds } from "./api";
 import type { ImportKind } from "./api";
@@ -17,6 +18,7 @@ const ImportForm = ({ kind }: { kind: ImportKind }) => {
   const [file, setFile] = useState<File | null>(null);
   const [done, setDone] = useState(false);
   const { busy, error, setError, run } = useSubmit();
+  const locked = useMachine(selectGcodeLocked);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -44,12 +46,13 @@ const ImportForm = ({ kind }: { kind: ImportKind }) => {
             }}
           />
         </div>
+        {locked && <p className="muted">A job is running or paused. Stop the job first to change the settings.</p>}
         <FormError message={error} />
         <p role="status" className="muted">
           {done ? `${file?.name} was imported.` : ""}
         </p>
         <div className="actions">
-          <button type="submit" className="primary" disabled={busy}>
+          <button type="submit" className="primary" disabled={busy || locked}>
             {busy ? "Working…" : kind === "restore" ? "Restore" : "Import"}
           </button>
           <CloseButton>{done ? "Done" : "Cancel"}</CloseButton>

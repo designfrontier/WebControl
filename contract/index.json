@@ -663,6 +663,11 @@
         "404": {
           "contentType": "text/html",
           "description": "Flask's default HTML 404 page"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "Rust backend only: a job is running or paused, or a tool change waits",
+          "schema": "schemas/http/put-api-settings-sectionid.409.json"
         }
       }
     },
@@ -823,6 +828,11 @@
           "contentType": "application/json",
           "description": "Invalid field",
           "schema": "schemas/http/post-api-machine-quick-configure.400.json"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "Rust backend only: a job is running or paused, or a tool change waits",
+          "schema": "schemas/http/post-api-machine-quick-configure.409.json"
         }
       }
     },
@@ -1222,6 +1232,11 @@
           "contentType": "text/html",
           "description": "Werkzeug's HTML 400 page when a form field is missing"
         },
+        "409": {
+          "contentType": "application/json",
+          "description": "Rust backend only: a job is running or paused, or a tool change waits",
+          "schema": "schemas/http/post-sendgcode.409.json"
+        },
         "500": {
           "contentType": "application/json",
           "description": "\"failed\"",
@@ -1247,6 +1262,11 @@
         "400": {
           "contentType": "text/html",
           "description": "Werkzeug's HTML 400 page when a form field is missing"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "Rust backend only: a job is running or paused, or a tool change waits",
+          "schema": "schemas/http/post-importfile.409.json"
         },
         "500": {
           "contentType": "application/json",
@@ -1274,6 +1294,11 @@
           "contentType": "text/html",
           "description": "Werkzeug's HTML 400 page when a form field is missing"
         },
+        "409": {
+          "contentType": "application/json",
+          "description": "Rust backend only: a job is running or paused, or a tool change waits",
+          "schema": "schemas/http/post-importfilewcjson.409.json"
+        },
         "500": {
           "contentType": "application/json",
           "description": "{\"status\": 500}",
@@ -1299,6 +1324,11 @@
         "400": {
           "contentType": "text/html",
           "description": "Werkzeug's HTML 400 page when a form field is missing"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "Rust backend only: a job is running or paused, or a tool change waits",
+          "schema": "schemas/http/post-importrestorewebcontrol.409.json"
         },
         "500": {
           "contentType": "application/json",

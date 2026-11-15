@@ -87,10 +87,14 @@ const pathOutside = json(
   '{"status": 400, "error": "Path is outside the library"}; a missing form field gives Werkzeug\'s HTML 400 instead',
 );
 const gcodeLocked = json(classicErrorSchema, "A job is running or paused; the HTTP reason phrase repeats the error");
+const JOB_LOCKED = "Rust backend only: a job is running or paused, or a tool change waits";
+const jobLocked = json(classicErrorSchema, JOB_LOCKED);
 
 interface ClassicOptions {
   /** Refused with 409 while a job runs or a tool change waits. */
   locked?: boolean;
+  /** Refused with 409 like `locked`, by the Rust backend only. */
+  jobLocked?: boolean;
   /** Takes library paths, so answers 400 with a JSON body for one outside the library. */
   paths?: boolean;
 }
@@ -99,7 +103,7 @@ const classic = (
   path: string,
   summary: string,
   body: z.ZodType,
-  { locked = false, paths = false }: ClassicOptions,
+  { locked = false, jobLocked: rustLocked = false, paths = false }: ClassicOptions,
   ok: HttpBody,
   failed: HttpBody,
 ): HttpEndpoint => ({
@@ -111,7 +115,7 @@ const classic = (
     [
       [200, ok],
       [400, paths ? pathOutside : missingField],
-      [409, locked ? gcodeLocked : undefined],
+      [409, locked ? gcodeLocked : rustLocked ? jobLocked : undefined],
       [500, failed],
     ].filter(([, body]) => body),
   ),
@@ -162,6 +166,7 @@ export const httpEndpoints: HttpEndpoint[] = [
       200: json(settingsSectionSchema, "The section as saved"),
       400: json(z.union([settingsRejectionSchema, errorBodySchema]), "Per-setting errors, or a malformed body"),
       404: htmlNotFound,
+      409: error(JOB_LOCKED),
     },
   }),
   get("/api/files/gcode", "The gcode library", gcodeLibrarySchema),
@@ -191,7 +196,11 @@ export const httpEndpoints: HttpEndpoint[] = [
     path: "/api/machine/quick-configure",
     summary: "Save the quick-configure answers",
     body: json(quickConfigureSchema),
-    responses: { 200: json(quickConfigureSchema, "The answers as saved"), 400: error("Invalid field") },
+    responses: {
+      200: json(quickConfigureSchema, "The answers as saved"),
+      400: error("Invalid field"),
+      409: error(JOB_LOCKED),
+    },
   }),
   get("/api/calibration/triangular", "Current triangular calibration parameters", triangularParametersSchema),
   api({
@@ -278,10 +287,10 @@ export const httpEndpoints: HttpEndpoint[] = [
   }),
   statusRoute("/saveGCode", "Save the loaded gcode into the library", saveGcodeFormSchema, { paths: true }),
   resultRoute("/editGCode", "Replace the loaded gcode in memory", gcodeFormSchema, { locked: true }),
-  resultRoute("/sendGCode", "Send gcode lines to the controller now", gcodeFormSchema),
-  statusRoute("/importFile", "Import settings from groundcontrol.ini", importFormSchema),
-  statusRoute("/importFileWCJSON", "Import settings from a webcontrol.json", importFormSchema),
-  statusRoute("/importRestoreWebControl", "Restore a WebControl backup zip", importFormSchema),
+  resultRoute("/sendGCode", "Send gcode lines to the controller now", gcodeFormSchema, { jobLocked: true }),
+  statusRoute("/importFile", "Import settings from groundcontrol.ini", importFormSchema, { jobLocked: true }),
+  statusRoute("/importFileWCJSON", "Import settings from a webcontrol.json", importFormSchema, { jobLocked: true }),
+  statusRoute("/importRestoreWebControl", "Restore a WebControl backup zip", importFormSchema, { jobLocked: true }),
   statusRoute("/openBoard", "Load a board from the library", openBoardFormSchema, { paths: true }),
   statusRoute("/saveBoard", "Save the current board into the library", saveBoardFormSchema, { paths: true }),
   resultRoute("/editBoard", "Change the current board's details", editBoardFormSchema),

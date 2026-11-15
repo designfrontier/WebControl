@@ -1,6 +1,6 @@
 import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { fakeFetch, jsonResponse } from "../../test/fakeFetch";
+import { fakeFetch, jsonResponse, startupState } from "../../test/fakeFetch";
 import { renderApp } from "../../test/render";
 import { quickConfigureValues } from "./fixtures";
 
@@ -78,8 +78,28 @@ describe("QuickConfigurePage", () => {
     const { user } = renderQuick(() => jsonResponse({ error: "chainOverSprocket must be Top or Bottom" }, 400));
     await user.click(await screen.findByRole("button", { name: "Save configuration" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Could not save: POST /api/machine/quick-configure failed with 400",
+      "Could not save: chainOverSprocket must be Top or Bottom",
     );
+  });
+
+  it("shows the server's reason when a save is refused during a job", async () => {
+    const { user } = renderQuick(() =>
+      jsonResponse({ error: "Cannot change settings while a job is running or paused. Stop the job first." }, 409),
+    );
+    await user.click(await screen.findByRole("button", { name: "Save configuration" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not save: Cannot change settings while a job is running or paused. Stop the job first.",
+    );
+  });
+
+  it("keeps Save disabled during a job, saying why", async () => {
+    const fetch = fakeFetch({
+      "GET /api/state": startupState({ jobInProgress: true }),
+      "GET /api/machine/quick-configure": quickConfigureValues(),
+    });
+    renderApp(ROUTE, { fetch });
+    expect(await screen.findByText(/Stop the job first to change the settings/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save configuration" })).toBeDisabled();
   });
 
   it("shows saving while the request is in flight", async () => {

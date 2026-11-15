@@ -12,15 +12,14 @@ use wc_protocol::system::PidTest;
 
 use crate::calibration::{Calculated, Kind};
 use crate::commands::round4;
+use crate::files::SETTINGS_LOCKED;
 use crate::forms;
-use crate::job::Flow;
 use crate::machine::{Effect, Link, Machine, alert, broadcast};
 
 const COMPUTED: &str = "Computed Settings";
 const ADVANCED: &str = "Advanced Settings";
 const MASLOW: &str = "Maslow Settings";
 const MM_PER_INCH: f64 = 25.4;
-const SENDING: &str = "Cannot change units while sending gcode.";
 
 /// An HTTP write the machine answers.
 #[derive(Debug, Clone, PartialEq)]
@@ -68,6 +67,10 @@ impl Machine {
     }
 
     pub(crate) fn edit(&mut self, request: Request, now: Duration, effects: &mut Vec<Effect>) -> Response {
+        let settings_write = matches!(request, Request::UpdateSettings { .. } | Request::QuickConfigure(_));
+        if settings_write && self.gcode_locked() {
+            return Response::error(409, SETTINGS_LOCKED);
+        }
         match request {
             Request::UpdateSettings { section, body } => self.update_section(&section, &body, now, effects),
             Request::QuickConfigure(body) => self.quick_configure(&body),
@@ -107,13 +110,10 @@ impl Machine {
         Response::ok(200, &self.section_now(id))
     }
 
-    /// The port setting changed while connected: close, and the next tick opens the new one.
+    /// The port setting changed while connected, never mid-job: close, and the next tick opens the new one.
     fn reopen_port(&mut self, now: Duration, effects: &mut Vec<Effect>) {
         if self.fixed_port.is_some() || !matches!(self.link, Link::Connected { .. }) {
             return;
-        }
-        if self.job.flow.upload_flag() > 0 {
-            self.pause_for_lost_link(effects);
         }
         self.probing = false;
         self.link = Link::Disconnected { retry_at: now };
@@ -155,11 +155,11 @@ impl Machine {
         Response { status: 202, body: json!({"status": "sent"}) }
     }
 
-    /// `Actions.updateSetting`: the front page's unit switches; anything else is ignored, as in Python.
+    /// `Actions.updateSetting`: the front page's unit switches, refused during a job; anything else is ignored.
     pub(crate) fn update_setting(&mut self, setting: &str, value: &Value, effects: &mut Vec<Effect>) {
         let units = matches!(setting, "toInches" | "toMM" | "toInchesZ" | "toMMZ");
-        if units && self.job.flow == Flow::Streaming {
-            return effects.push(alert(SENDING));
+        if units && self.gcode_locked() {
+            return effects.push(alert(SETTINGS_LOCKED));
         }
         let done = match setting {
             "toInches" | "toMM" => self.switch_units(setting == "toInches", value, true, effects),

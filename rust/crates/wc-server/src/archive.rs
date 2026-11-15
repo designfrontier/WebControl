@@ -11,7 +11,7 @@ use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use wc_config::Settings;
 use wc_config::library::{keep_newest, secure_filename};
-use wc_machine::files::{Problem, Reply, Request as Ask};
+use wc_machine::files::{Problem, Reply, Request as Ask, SETTINGS_LOCKED};
 use wc_protocol::files::ClassicResult;
 use zip::write::SimpleFileOptions;
 
@@ -175,17 +175,29 @@ async fn saved_upload(request: Request, dir: PathBuf) -> Result<PathBuf, Respons
     })
 }
 
+/// Checked before anything is saved or unpacked; the machine checks again when the settings arrive.
+fn settings_locked(state: &AppState) -> Option<Response> {
+    state.machine.snapshot().gcode_locked.then(|| forms::refused(409, SETTINGS_LOCKED))
+}
+
+fn settings_reply(reply: Reply) -> Response {
+    match reply {
+        Reply::Refused(error) => forms::refused(409, &error),
+        reply => forms::status(if reply == Reply::Done { 200 } else { 500 }),
+    }
+}
+
 pub(crate) async fn restore_upload(State(state): State<AppState>, request: Request) -> Response {
+    if let Some(refusal) = settings_locked(&state) {
+        return refusal;
+    }
     let archive = match saved_upload(request, state.paths.home()).await {
         Ok(archive) => archive,
         Err(refusal) => return refusal,
     };
     let dir = state.paths.dir();
     match blocking(move || restore(&archive, &dir)).await {
-        Some(Ok(settings)) => {
-            state.machine.request(Ask::RestoreSettings(Box::new(settings))).await;
-            forms::status(200)
-        }
+        Some(Ok(settings)) => settings_reply(state.machine.request(Ask::RestoreSettings(Box::new(settings))).await),
         Some(Err(error)) => {
             tracing::warn!(error, "restore refused");
             forms::status(500)
@@ -195,6 +207,9 @@ pub(crate) async fn restore_upload(State(state): State<AppState>, request: Reque
 }
 
 async fn import(state: AppState, request: Request, ask: fn(String) -> Option<Ask>) -> Response {
+    if let Some(refusal) = settings_locked(&state) {
+        return refusal;
+    }
     let file = match saved_upload(request, state.paths.imports_dir()).await {
         Ok(file) => file,
         Err(refusal) => return refusal,
@@ -207,7 +222,7 @@ async fn import(state: AppState, request: Request, ask: fn(String) -> Option<Ask
             Reply::Failed
         }
     };
-    forms::status(if reply == Reply::Done { 200 } else { 500 })
+    settings_reply(reply)
 }
 
 pub(crate) async fn import_ini(State(state): State<AppState>, request: Request) -> Response {

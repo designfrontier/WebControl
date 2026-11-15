@@ -336,12 +336,12 @@ fn the_z_panel_keeps_its_own_units() {
 }
 
 #[test]
-fn units_cannot_change_while_sending_and_unknown_names_are_ignored() {
+fn units_cannot_change_during_a_job_and_unknown_names_are_ignored() {
     let mut rig = Rig::connected();
     rig.machine.load_gcode("G0 X1\nG0 X2\n");
     rig.act("startRun");
     let refused = rig.send(Event::UpdateSetting { setting: "toMMZ".into(), value: json!("1") });
-    assert_eq!(alerts(&refused), ["Cannot change units while sending gcode."]);
+    assert_eq!(alerts(&refused), [wc_machine::files::SETTINGS_LOCKED], "decision 2, where Python said 'units'");
     let mut idle = Rig::connected();
     assert!(alerts(&idle.send(Event::UpdateSetting { setting: "other".into(), value: json!("1") })).is_empty());
 }

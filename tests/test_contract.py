@@ -190,6 +190,28 @@ REFUSALS = [
 ]
 
 
+# Owner decision 2 (contract/README.md, "Job lock"): the Rust backend refuses these while a job holds the gcode.
+# Python is being retired and never sends them, so only the Rust tests exercise them.
+RUST_ONLY_RESPONSES = {
+    ("PUT", "/api/settings/{sectionId}", "409"),
+    ("POST", "/api/machine/quick-configure", "409"),
+    ("POST", "/sendGCode", "409"),
+    ("POST", "/importFile", "409"),
+    ("POST", "/importFileWCJSON", "409"),
+    ("POST", "/importRestoreWebControl", "409"),
+}
+
+
+def test_rust_only_responses_are_exactly_the_documented_deviations():
+    marked = {
+        (e["method"], e["path"], status)
+        for e in INDEX["http"]
+        for status, spec in e["responses"].items()
+        if spec.get("description", "").startswith("Rust backend only")
+    }
+    assert marked == RUST_ONLY_RESPONSES
+
+
 @pytest.mark.parametrize("method, path, contract_path, body, status", REFUSALS)
 def test_api_refusals_match_their_schemas(client, data, method, path, contract_path, body, status):
     data.triangularCalibration.hasResult = False
