@@ -234,7 +234,7 @@ TOOL_CHANGE_JOB = [
     "G1 Z-2 F100 ", "X50 ",
 ]
 AFTER_THE_M6 = ["G0 X40 Y40  ", "G1 Z-2 F100  ", "X50  "]
-RETURN_AT_SAFE_HEIGHT = ["G21  ", "G90  ", "G0 Z5.0  ", "G0 X20.0 Y10.0  ", "F600.0  ", "G90  "]
+RETURN_AT_SAFE_HEIGHT = ["G21  ", "G90  ", "G0 Z5.0  ", "G0 X20.0 Y10.0  ", "G0 F600.0  ", "G90  "]
 
 
 def run_tool_change_job(app, data, serial, during_the_pause):  # noqa: F811

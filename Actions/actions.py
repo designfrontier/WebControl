@@ -1609,6 +1609,7 @@ class Actions(MakesmithInitFuncs):
         zpos = None
         tool = None
         nextTool = None
+        motion = None
         spindle = None
         laser = None
         dwell = None
@@ -1636,6 +1637,7 @@ class Actions(MakesmithInitFuncs):
                         # A line of bare axis words (X10 Y5) continues the modal move.
                         if line[0] in "GXYZF":
                             gCodes = gcodeNumbers("G", line)
+                            motion = next((code for code in (0, 1, 2, 3) if code in gCodes), motion)
                             if 90 in gCodes:
                                 positioning = "G90 "
                             if 91 in gCodes:
@@ -1685,14 +1687,15 @@ class Actions(MakesmithInitFuncs):
                             zpos = None if 6 in mCodes else zpos
         return {
             "units": units, "positioning": positioning, "x": xpos, "y": ypos, "z": zpos,
-            "feedRate": feedRate, "zFeedRate": zAxisFeedRate,
+            "feedRate": feedRate, "zFeedRate": zAxisFeedRate, "motion": motion,
             "tool": tool, "spindle": spindle, "laser": laser, "dwell": dwell,
         }
 
     def queueRestartSequence(self, state, zTarget=None, changeTool=True):
         '''
         Raises the bit to safe height, moves to the state's XY, restores tool, spindle, laser and dwell, lowers the bit
-        to zTarget (the state's Z by default) at the plunge feed, then restores the file's modal feed and positioning.
+        to zTarget (the state's Z by default) at the plunge feed, then restores the file's modal G0/G1, feed and
+        positioning.
         '''
         zAxisSafeHeight = float(self.data.config.getValue("Maslow Settings", "zAxisSafeHeight"))
         if state["units"] == "G20 ":
@@ -1713,7 +1716,9 @@ class Actions(MakesmithInitFuncs):
         zpos = state["z"] if zTarget is None else zTarget
         if zpos is not None:
             self.data.gcode_queue.put("G1 Z" + str(round(zpos, 4)) + " F" + str(round(state["zFeedRate"], 4)) + " ")
-        self.data.gcode_queue.put("F" + str(round(state["feedRate"], 4)) + " ")
+        # Bare axis words in the file continue its G0 or G1, not the restart's last move; an arc needs its own words.
+        motion = f"G{state['motion']} " if state["motion"] in (0, 1) else ""
+        self.data.gcode_queue.put(motion + "F" + str(round(state["feedRate"], 4)) + " ")
         self.data.gcode_queue.put(state["positioning"])
 
     def findPositionAt(self, index):
