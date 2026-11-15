@@ -166,13 +166,14 @@ class SerialPortThread(MakesmithInitFuncs):
         if "(" in line:
             # 51.27 loops forever on a comment.
             return ("Unclosed Comment", "has an unclosed comment, which hangs the controller.",
-                    "Edit the file and resume or stop.")
+                    "Resume stops here again: stop the job, fix the file and load it again.")
         written = len(line) + 1
         if written > self.bufferSize:
             # The firmware's ring overflows and it then runs the line's unread tail as a command.
             return ("Too Long", "is " + str(written) + " characters; the controller accepts at most "
                     + str(self.bufferSize) + ".",
-                    "Edit the file (e.g. enable Truncate Floating Point Numbers) and resume or stop.")
+                    "Resume stops here again: stop the job, fix the file (e.g. enable Truncate Floating Point "
+                    "Numbers) and load it again.")
         return None
 
     def _streamProblem(self, line):

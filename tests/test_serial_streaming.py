@@ -281,8 +281,9 @@ def test_a_line_too_long_for_the_controller_pauses_the_run_instead_of_going_out(
 
     assert port.sent == ["G1 X0  "]
     assert (data.uploadFlag, data.jobInProgress, data.gcodeIndex) == (2, True, 1)
-    assert ("Line Too Long", "Line 2 is 131 characters; the controller accepts at most 126. Edit the file "
-            "(e.g. enable Truncate Floating Point Numbers) and resume or stop.") in alerts(serial)
+    assert ("Line Too Long", "Line 2 is 131 characters; the controller accepts at most 126. Resume stops here "
+            "again: stop the job, fix the file (e.g. enable Truncate Floating Point Numbers) and load it again.") \
+        in alerts(serial)
 
 
 @pytest.mark.parametrize("buffer", [False, True])
@@ -359,8 +360,27 @@ def test_a_line_with_an_unclosed_comment_pauses_the_run(data, serial, buffer):
 
     assert port.sent == ["G1 X0  "]
     assert (data.uploadFlag, data.gcodeIndex) == (2, 1)
-    assert ("Line Unclosed Comment", "Line 2 has an unclosed comment, which hangs the controller. "
-            "Edit the file and resume or stop.") in alerts(serial)
+    assert ("Line Unclosed Comment", "Line 2 has an unclosed comment, which hangs the controller. Resume stops "
+            "here again: stop the job, fix the file and load it again.") in alerts(serial)
+
+
+def test_resuming_after_a_refused_line_stops_at_that_line_again(data, serial):
+    def resume_once_paused(port):
+        if data.uploadFlag == 2 and not alerts_seen:
+            alerts_seen.append(True)
+            data.actions.resumeRun()
+            drain(data.gcode_queue)
+
+    alerts_seen = []
+    data.gcode = ["G1 X0 ", "G1 X1 (rough pass", "G1 X2 "]
+    data.uploadFlag = 1
+    data.jobInProgress = True
+    port = serial.run(on_poll=every_poll(
+        once_after(serial.clock, 0, lambda port: drain(data.gcode_queue)), resume_once_paused,
+    ))
+
+    assert "G1 X2  " not in port.sent
+    assert (data.uploadFlag, data.gcodeIndex) == (2, 1)
 
 
 def test_a_queued_command_with_an_unclosed_comment_is_refused(data, serial):
