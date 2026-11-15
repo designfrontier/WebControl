@@ -193,4 +193,14 @@ describe("ServerDialogs", () => {
     sendAlert(socket, "Error updating setting");
     expect(screen.getByRole("alertdialog", { name: "Alert" })).toBeInTheDocument();
   });
+
+  it("keeps Stop in the top dialog, where the inert page behind cannot be clicked", async () => {
+    const { socket, user } = renderApp("/settings");
+    socket.clearEmitted();
+    sendNotification(socket, "Change to the 1/4 inch bit", { resume: "true" });
+    const top = topLayer().at(-1)!;
+    expect(top).toHaveAttribute("data-kind", "notification");
+    await user.click(within(top).getByRole("button", { name: "Stop machine" }));
+    expect(socket.actions()).toEqual([["stopRun", "", ""]]);
+  });
 });

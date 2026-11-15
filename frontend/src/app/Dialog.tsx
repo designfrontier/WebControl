@@ -2,6 +2,7 @@ import { useEffectEvent, useId, useLayoutEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { hideDialog, showDialog } from "./dialogLayer";
 import type { DialogLayer } from "./dialogLayer";
+import { StopButton } from "./StopButton";
 
 export interface DialogProps {
   title: string;
@@ -9,7 +10,7 @@ export interface DialogProps {
   children: ReactNode;
   /** Footer buttons. */
   actions?: ReactNode;
-  /** Extra header controls, shown before Close. */
+  /** Extra header controls, shown before Stop and Close. */
   header?: ReactNode;
   /** Server dialogs always stack above user dialogs. */
   layer?: DialogLayer;
@@ -24,7 +25,8 @@ export interface DialogProps {
 
 /**
  * The one modal: a native <dialog> opened with showModal(), so the page behind is inert and focus stays inside.
- * Escape and Close call `onClose`; the parent decides whether it unmounts.
+ * Escape and Close call `onClose`; the parent decides whether it unmounts. Every dialog carries Stop, as the page
+ * behind it is inert.
  */
 export const Dialog = ({
   title,
@@ -84,6 +86,7 @@ export const Dialog = ({
         <header className="dialog-header">
           <h2 id={titleId}>{title}</h2>
           {header}
+          <StopButton label="Stop machine" />
           {closeButton && (
             <button type="button" className="dialog-close" onClick={onClose}>
               Close

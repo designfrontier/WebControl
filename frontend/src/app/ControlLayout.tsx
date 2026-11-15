@@ -4,7 +4,6 @@ import { Dialog } from "./Dialog";
 import { ModalContext, useModalClose } from "./modalHistory";
 import { legacyRedirects, modalRoutes } from "./modals";
 import type { ModalRoute } from "./modals";
-import { StopButton } from "./StopButton";
 import { TopBar } from "./TopBar";
 
 const ModalFrame = ({ route, close }: { route: ModalRoute; close: () => void }) => {
@@ -12,7 +11,7 @@ const ModalFrame = ({ route, close }: { route: ModalRoute; close: () => void }) 
   const title = typeof route.title === "function" ? route.title(params) : route.title;
   return (
     <ModalContext value={close}>
-      <Dialog title={title} onClose={close} size={route.size} header={<StopButton label="Stop machine" />}>
+      <Dialog title={title} onClose={close} size={route.size}>
         <route.Component />
       </Dialog>
     </ModalContext>

@@ -151,6 +151,14 @@ describe("App shell", () => {
     expect(socket.actions()).toEqual([["stopRun", "", ""]]);
   });
 
+  it("puts Stop on a confirmation stacked over the control screen", async () => {
+    const { user, socket } = renderApp("/");
+    await pick(user, "G-Code", "Clear GCode");
+    const confirm = screen.getByRole("dialog", { name: "Clear the loaded gcode?" });
+    await user.click(within(confirm).getByRole("button", { name: "Stop machine" }));
+    expect(socket.actions()).toEqual([["stopRun", "", ""]]);
+  });
+
   it("returns home from the brand link", async () => {
     const { user } = renderApp("/calibration");
     await user.click(screen.getByRole("link", { name: "← Back to Control" }));
