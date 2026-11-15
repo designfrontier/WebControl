@@ -90,16 +90,17 @@ fn local_ip() -> IpAddr {
 
 pub async fn serve(options: Options, shutdown: impl Future<Output = ()> + Send + 'static) -> std::io::Result<()> {
     let paths = Paths::new(&options.home);
-    let settings = Settings::open(&paths).unwrap_or_else(|error| {
+    let (settings, saving) = Settings::open(&paths).map(|settings| (settings, true)).unwrap_or_else(|error| {
         tracing::error!(%error, "could not prepare ~/.WebControl; settings will not be saved");
-        Settings::load(&paths)
+        (Settings::load(&paths), false)
     });
     tracing::info!(source = ?settings.source(), home = %options.home.display(), "settings loaded");
     let port = options.port.unwrap_or_else(|| settings.web_port());
     let listener = tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port))).await?;
     let bound = listener.local_addr()?;
     let exit = Arc::new(Notify::new());
-    let host = Arc::new(SystemHost::new(&paths.dir(), exit.clone()).saving_to(paths.clone()));
+    let host = SystemHost::new(&paths.dir(), exit.clone());
+    let host = Arc::new(if saving { host.saving_to(paths.clone()) } else { host });
     let machine = Machine::new(&format!("{}:{}", local_ip(), bound.port()), settings);
     let (machine, opener): (Machine, Box<dyn PortOpener>) = match options.simulate {
         true => (machine.on_port(SIMULATED_PORT), Box::new(SimOpener::new(Build::holey_51_27()))),
