@@ -48,11 +48,15 @@ pub enum ClientEvent {
         setting: String,
         value: Value,
     },
+    /// Resend the gcode preview, and the units, to every client (wart 12).
+    CheckForGcodeUpdate,
+    /// Resend the board to every client.
+    CheckForBoardUpdate,
     /// A contract event this backend does not decode yet.
     Unhandled(String),
 }
 
-const LATER_EVENTS: [&str; 3] = ["checkForGCodeUpdate", "checkForBoardUpdate", "opticalCalibration"];
+const LATER_EVENTS: [&str; 1] = ["opticalCalibration"];
 
 impl ClientEvent {
     /// `None` for an unknown event or a malformed payload; the transport ignores those.
@@ -74,6 +78,8 @@ impl ClientEvent {
                 let value = data.get("value").filter(|v| v.is_string() || v.is_number())?.clone();
                 Some(ClientEvent::UpdateSetting { setting: data.get("setting")?.as_str()?.to_string(), value })
             }
+            "checkForGCodeUpdate" => Some(ClientEvent::CheckForGcodeUpdate),
+            "checkForBoardUpdate" => Some(ClientEvent::CheckForBoardUpdate),
             event if LATER_EVENTS.contains(&event) => Some(ClientEvent::Unhandled(event.into())),
             _ => None,
         }

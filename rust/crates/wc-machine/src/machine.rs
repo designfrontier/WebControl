@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::ops::Deref;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -8,12 +9,14 @@ use wc_config::Settings;
 use wc_firmware::Accounting;
 use wc_firmware::image::Image;
 use wc_gcode::Positioning;
+use wc_gcode::board::Board;
 use wc_gcode::restart::positioning_word;
 use wc_protocol::main::{ActivateModal, ConnectionStatus, HostAddress, LinkStatus, PauseButton, StatusMessage, Units};
 use wc_protocol::system::FirmwareUpgrade;
 use wc_protocol::{Action, Envelope, Message, Push};
 
-use crate::edits::{Request, Response};
+use crate::edits::{Request as Edit, Response};
+use crate::files::{Preview, Reply, Request, bed_board};
 use crate::pid::Pid;
 use crate::setup::Measure;
 use crate::ui::{ErrorTracker, PositionTracker};
@@ -35,10 +38,10 @@ pub enum Event {
         setting: String,
         value: Value,
     },
-    /// An HTTP write that needs an answer; the shell pairs the `Respond` effect with the request by `id`.
-    Request {
+    /// A settings write that needs an answer; the shell pairs the `Respond` effect with the edit by `id`.
+    Edit {
         id: u64,
-        request: Request,
+        request: Edit,
     },
     ClientConnected {
         sid: String,
@@ -63,6 +66,15 @@ pub enum Event {
     },
     /// A [`FirmwareJob`] the shell ran.
     FirmwareDone(JobResult),
+    CheckForGcodeUpdate,
+    CheckForBoardUpdate,
+    /// A gcode library directory now exists; the UI lists it.
+    DirectoryCreated(String),
+    /// An HTTP route's request; the shell gives each its `id` and routes the `Effect::Reply` back.
+    Request {
+        id: u64,
+        request: Request,
+    },
 }
 
 /// What the shell must do after an event, in order.
@@ -89,6 +101,12 @@ pub enum Effect {
     SaveSettings(Arc<Settings>),
     /// Run off the machine task; the port is closed first.
     Firmware(FirmwareJob),
+    /// `createDirectory`: make this gcode library directory, then report `Event::DirectoryCreated`.
+    CreateDirectory(String),
+    Reply {
+        id: u64,
+        reply: Reply,
+    },
 }
 
 /// An `Arc` whose equality is identity, so comparing snapshots never walks the settings.
@@ -160,6 +178,16 @@ pub struct Snapshot {
     pub gcode_index: usize,
     pub gcode_line: String,
     pub gcode_count: usize,
+    pub gcode: Shared<Vec<String>>,
+    pub gcode_file: Option<PathBuf>,
+    /// What `/sendGCode` last sent.
+    pub custom_gcode: Option<String>,
+    /// The file routes refuse to replace the gcode while this holds (their 409).
+    pub gcode_locked: bool,
+    pub preview: Shared<Preview>,
+    pub board: Shared<Board>,
+    /// The sled's X and Y from the last status report.
+    pub sled: (f64, f64),
     pub ports: Vec<String>,
     pub settings: Shared<Settings>,
     pub firmware_upgrade: FirmwareUpgrade,
@@ -263,8 +291,16 @@ pub struct Machine {
     /// A Touch Z is queued or descending.
     pub(crate) probing: bool,
     pub(crate) run: RunState,
-    pub(crate) gcode: Vec<String>,
+    pub(crate) gcode: Arc<Vec<String>>,
     pub(crate) index: usize,
+    pub(crate) gcode_file: Option<PathBuf>,
+    pub(crate) z_moves: Vec<usize>,
+    pub(crate) preview: Arc<Preview>,
+    /// The loaded file's truncate setting, which the home shift keeps to.
+    pub(crate) truncate: Option<u32>,
+    pub(crate) custom_gcode: Option<String>,
+    pub(crate) workpiece: Arc<Board>,
+    pub(crate) settings_dirty: bool,
     pub(crate) ports: Vec<String>,
     pub(crate) position: PositionTracker,
     pub(crate) errors: ErrorTracker,
@@ -286,10 +322,14 @@ pub(crate) fn alert(text: &str) -> Effect {
 
 impl Machine {
     pub fn new(host_address: &str, settings: Settings) -> Machine {
+        let units = Units::from_setting(&settings.text_or_empty("Computed Settings", "units"));
+        let workpiece = Arc::new(bed_board(&settings));
         let settings = Arc::new(settings);
         Machine {
             host_address: host_address.into(),
             fixed_port: None,
+            workpiece,
+            preview: Arc::new(Preview::none(units)),
             saved: settings.clone(),
             settings,
             link: Link::Disconnected { retry_at: Duration::ZERO },
@@ -302,8 +342,13 @@ impl Machine {
             tool: 0,
             probing: false,
             run: RunState::Idle,
-            gcode: Vec::new(),
+            gcode: Arc::new(Vec::new()),
             index: 0,
+            gcode_file: None,
+            z_moves: vec![0],
+            truncate: None,
+            custom_gcode: None,
+            settings_dirty: false,
             ports: Vec::new(),
             position: PositionTracker::default(),
             errors: ErrorTracker::default(),
@@ -326,9 +371,9 @@ impl Machine {
         Machine { fixed_port: Some(port.into()), ..self }
     }
 
-    /// Loads a file as `/openGCode` would; M3 adds the route, transcripts and tests use it directly.
+    /// Loads lines as `/openGCode` would, without the preview; transcripts and tests use it directly.
     pub fn load_gcode(&mut self, text: &str) {
-        self.gcode = wc_gcode::load::filter(text, None).unwrap_or_default();
+        self.gcode = Arc::new(wc_gcode::load::filter(text, None).unwrap_or_default());
         self.index = 0;
     }
 
@@ -342,8 +387,8 @@ impl Machine {
             Event::Action(action) | Event::Stop(action) => self.action(&action, now, &mut effects),
             Event::SettingRequest { section, setting } => self.setting_request(&section, &setting, &mut effects),
             Event::UpdateSetting { setting, value } => self.update_setting(&setting, &value, &mut effects),
-            Event::Request { id, request } => {
-                let response = self.request(request, now, &mut effects);
+            Event::Edit { id, request } => {
+                let response = self.edit(request, now, &mut effects);
                 effects.push(Effect::Respond { id, response });
             }
             Event::ControllerLine(line) => self.controller_line(&line, now, &mut effects),
@@ -357,13 +402,21 @@ impl Machine {
             Event::Ports(ports) => self.ports_found(ports, &mut effects),
             Event::Health { cpu } => self.health(cpu, &mut effects),
             Event::FirmwareDone(result) => self.firmware_done(result, now, &mut effects),
+            Event::CheckForGcodeUpdate => self.gcode_update_requested(&mut effects),
+            Event::CheckForBoardUpdate => self.push_board(&mut effects),
+            Event::DirectoryCreated(name) => self.directory_created(name, &mut effects),
+            Event::Request { id, request } => {
+                let reply = self.request(request, &mut effects);
+                effects.push(Effect::Reply { id, reply });
+            }
         }
         self.pump(now, &mut effects);
         self.status_if_changed(&mut effects);
-        if !Arc::ptr_eq(&self.settings, &self.saved) {
-            self.saved = self.settings.clone();
-            effects.push(Effect::SaveSettings(self.saved.clone()));
+        let changed = !Arc::ptr_eq(&self.settings, &self.saved) && *self.settings != *self.saved;
+        if std::mem::take(&mut self.settings_dirty) || changed {
+            effects.push(Effect::SaveSettings(self.settings.clone()));
         }
+        self.saved = self.settings.clone();
         effects
     }
 
@@ -383,7 +436,7 @@ impl Machine {
     }
 
     pub(crate) fn set_setting(&mut self, section: &str, key: &str, value: Value) {
-        Arc::make_mut(&mut self.settings).set_value(section, key, value);
+        self.settings_dirty |= Arc::make_mut(&mut self.settings).set_value(section, key, value);
     }
 
     pub fn snapshot(&self) -> Snapshot {
@@ -408,6 +461,13 @@ impl Machine {
             gcode_index: self.index,
             gcode_line: self.gcode.get(self.index).cloned().unwrap_or_default(),
             gcode_count: self.gcode.len(),
+            gcode: Shared(self.gcode.clone()),
+            gcode_file: self.gcode_file.clone(),
+            custom_gcode: self.custom_gcode.clone(),
+            gcode_locked: self.gcode_locked(),
+            preview: Shared(self.preview.clone()),
+            board: Shared(self.workpiece.clone()),
+            sled: (self.position.x, self.position.y),
             ports: self.ports.clone(),
             settings: Shared(self.settings.clone()),
             firmware_upgrade: self.upgrade.view(),

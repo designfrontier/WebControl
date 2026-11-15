@@ -75,9 +75,15 @@ fn inches(settings: &Settings, key: &str) -> Option<f64> {
     format!("{:.4}", mm / MM_PER_INCH).parse().ok()
 }
 
-/// `api/viewer.py`; the gcode and board payloads come with files and boards in M3.
+fn base64(bytes: Option<&[u8]>) -> Option<String> {
+    use base64::Engine;
+    bytes.filter(|b| !b.is_empty()).map(|b| base64::engine::general_purpose::STANDARD.encode(b))
+}
+
+/// `api/viewer.py`: everything the 3D view draws, in inches, for the client that asks.
 pub(crate) async fn viewer(State(state): State<AppState>) -> Json<ViewerSnapshot> {
-    let settings = &state.machine.snapshot().settings;
+    let snapshot = state.machine.snapshot();
+    let settings = &snapshot.settings;
     Json(ViewerSnapshot {
         machine: MachineFrame {
             bed_width: inches(settings, "bedWidth"),
@@ -85,9 +91,9 @@ pub(crate) async fn viewer(State(state): State<AppState>) -> Json<ViewerSnapshot
             motor_offset_y: inches(settings, "motorOffsetY"),
             motor_spacing_x: inches(settings, "motorSpacingX"),
         },
-        gcode: None,
-        board: None,
-        cut_data: None,
+        gcode: base64(snapshot.preview.compressed.as_deref()),
+        board: Some(snapshot.board.info()),
+        cut_data: base64(snapshot.board.cut_payload().as_deref()),
     })
 }
 
@@ -110,7 +116,7 @@ fn json_body(body: &Bytes) -> Value {
 }
 
 async fn answer(state: &AppState, request: Request) -> Response {
-    match state.machine.request(request).await {
+    match state.machine.edit(request).await {
         Some(Answer { status, body }) => {
             (StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR), Json(body)).into_response()
         }

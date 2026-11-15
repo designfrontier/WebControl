@@ -6,14 +6,14 @@ WebSockets, and shares `~/.WebControl` with the Python install.
 | Crate | What |
 | --- | --- |
 | `wc-protocol` | The browser wire: envelope, WebSocket frame, messages, events, `GET /api/state` |
-| `wc-config` | `~/.WebControl` layout and `webcontrol.json`, read and written like `config/config.py` (byte-identical format, `.bak`, a one-time `.pre-rs` snapshot), and `setValue`'s rules |
+| `wc-config` | `~/.WebControl` layout and `webcontrol.json`, read and written like `config/config.py` (byte-identical format, `.bak`, a one-time `.pre-rs` snapshot), `setValue`'s rules, and the gcode and board libraries |
 | `wc-gcode` | Gcode load, sanitising, home shift, T rule, restart state, the 3D preview payload and boards, as Python does |
 | `wc-kinematics` | The holey firmware's triangular and quadrilateral inverse/forward, float for float with Python |
 | `wc-calibration` | Holey (`levenberg-marquardt`) and triangular calibration, test patterns, Accept's settings and `$` lines |
 | `wc-firmware` | The controller's serial protocol, sans IO: line classifier, flow control, boot facts, `$` lines, the boot push and the lines a settings edit sends; the 51.292 upgrade's board and version gates, avrdude lines, flash images (the pinned one embedded, the rollback one cut from a read-back) and settings migration |
 | `wc-machine` | The sans-IO core (`Machine::handle(event, now) -> effects`) and the tokio shell; Stop has its own channel |
 | `wc-sim` | A simulated controller (ring buffer, `ok` timing, `!`/`~`, pauses, `$$`, boot banners, status reports, B04, B10, a flash to another EEPROM layout) |
-| `wc-server` | The `webcontrol-rs` binary: axum routes, `/ws` sessions, the serial port, embedded UI and images |
+| `wc-server` | The `webcontrol-rs` binary: axum routes (incl. the files, boards and archive routes), `/ws` sessions, the serial port, embedded UI and images |
 | `wc-testkit` | Test support: the `contract/` schema harness and the `contract/serial/` transcript runner |
 
 ## Commands (in `rust/`)
@@ -36,7 +36,8 @@ WebSockets, and shares `~/.WebControl` with the Python install.
   then embeds it in any build (CI's cross-build and `deploy.sh build` do). Without it the upgrade wizard refuses
 - `cargo test -p wc-machine --test upgrade`: the upgrade rehearsal against `wc-sim` with a fake avrdude (success,
   sync failure and retry, wrong banner and rollback, EEPROM reset and migration)
-- `E2E_BACKEND=rust npm run test:e2e` in `frontend/`: the Playwright smoke against the binary
+- `E2E_BACKEND=rust npm run test:e2e` in `frontend/`: the Playwright specs the binary passes so far (the Rust
+  smoke, `files-boards`, `viewer`; `rustSpecs` in `playwright.config.ts`)
 
 ## The Pi
 

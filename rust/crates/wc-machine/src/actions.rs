@@ -107,8 +107,25 @@ impl Machine {
                 self.z_limits(|| [format!("$63={CLEARED_Z_LIMIT_MM}"), format!("$64={}", -CLEARED_Z_LIMIT_MM)].into())
             }
             "getZlimits" => self.z_limits(|| vec!["B20".into()]),
-            "defineHome" => self.define_home(&action.arg, &action.arg1, effects),
-            "resetHomeToCenter" => self.define_home(&Value::from(0), &Value::from(0), effects),
+            "defineHome" => self.define_home(&action.arg, &action.arg1, effects).or_else(|| {
+                self.push_units(effects);
+                self.push_gcode(effects);
+                None
+            }),
+            "resetHomeToCenter" => self.define_home(&Value::from(0), &Value::from(0), effects).or_else(|| {
+                self.push_gcode(effects);
+                None
+            }),
+            "clearGCode" => self.clear_gcode(effects),
+            "createDirectory" => {
+                effects.push(Effect::CreateDirectory(action.arg_text()));
+                None
+            }
+            "boardProcessGCode" | "boardClearBoard" => {
+                self.board_action(command, effects);
+                None
+            }
+            "moveGcodeZ" | "moveGcodeGoto" | "moveGcodeIndex" => self.move_gcode(command, &action.arg, effects),
             "updatePorts" => {
                 effects.push(Effect::ListPorts);
                 None
@@ -260,9 +277,13 @@ impl Machine {
         self.set_setting("Advanced Settings", "homeX", Value::from(python_float_str(home_x)));
         self.set_setting("Advanced Settings", "homeY", Value::from(python_float_str(home_y)));
         effects.push(broadcast(&HomePositionMessage { xval: home_x, yval: home_y }));
+        None
+    }
+
+    /// `unitsUpdate`: a gcode file can change the units, so the UI hears them again.
+    pub(crate) fn push_units(&self, effects: &mut Vec<Effect>) {
         let units = self.settings.value("Computed Settings", "units").cloned().unwrap_or(Value::Null);
         effects.push(broadcast(&RequestedSetting { setting: "units".into(), value: units }));
-        None
     }
 
     /// Play from the start of the file; starting mid-file needs M4's restart sequence.

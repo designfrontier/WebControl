@@ -158,6 +158,9 @@ fn define_home_takes_the_sled_or_inches() {
     assert_eq!(alerts(&rig.act_with("defineHome", json!("x"), json!(1))), ["Error with defining home."]);
     let reset = rig.act("resetHomeToCenter");
     assert_eq!(pushed(&reset, "homePositionMessage"), [json!({"xval": 0.0, "yval": 0.0})]);
+    assert!(pushed(&reset, "requestedSetting").is_empty(), "Python sends units only after Define Home");
+    assert_eq!(pushed(&reset, "gcodeUpdateCompressed"), [json!("")]);
+    assert!(reset.iter().any(|effect| matches!(effect, Effect::SaveSettings(_))), "home is saved");
 }
 
 #[test]

@@ -1,12 +1,13 @@
 use axum::Json;
 use axum::Router;
-use axum::extract::Path;
+use axum::extract::{DefaultBodyLimit, Path};
 use axum::http::{StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use serde_json::json;
 
-use crate::{AppState, api, assets, ws};
+use crate::forms::UPLOAD_LIMIT;
+use crate::{AppState, api, archive, assets, boards, files, ws};
 
 fn redirect(status: StatusCode, to: &'static str) -> Response {
     (status, [(header::LOCATION, to)]).into_response()
@@ -36,7 +37,30 @@ pub fn router(state: AppState) -> Router {
         .route("/api/system/info", get(api::system))
         .route("/api/system/pid", get(api::pid))
         .route("/api/system/pid-test", post(api::pid_test))
+        .route("/api/files/gcode", get(files::library))
+        .route("/api/files/gcode/directories", post(files::new_directory))
+        .route("/api/files/gcode/loaded", get(files::loaded_gcode))
+        .route("/api/files/gcode/text", get(files::text))
+        .route("/api/files/gcode/custom", get(files::custom))
+        .route("/api/boards/files", get(boards::library))
+        .route("/api/boards/directories", post(boards::new_directory))
+        .route("/api/boards/current", get(boards::current_board))
+        .route("/openGCode", post(files::open))
+        .route("/uploadGCode", post(files::upload))
+        .route("/saveGCode", post(files::save))
+        .route("/editGCode", post(files::edit))
+        .route("/sendGCode", post(files::send))
+        .route("/importFile", post(archive::import_ini))
+        .route("/importFileWCJSON", post(archive::import_webcontrol))
+        .route("/importRestoreWebControl", post(archive::restore_upload))
+        .route("/openBoard", post(boards::open))
+        .route("/saveBoard", post(boards::save))
+        .route("/editBoard", post(boards::edit))
+        .route("/trimBoard", post(boards::trim))
+        .route("/downloadDiagnostics", get(archive::download_diagnostics))
+        .route("/backupWebControl", get(archive::download_backup))
         .route("/ws", get(ws::upgrade))
         .fallback(fallback)
+        .layer(DefaultBodyLimit::max(UPLOAD_LIMIT))
         .with_state(state)
 }

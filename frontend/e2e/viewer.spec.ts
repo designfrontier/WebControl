@@ -1,8 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { APIRequestContext, Locator } from "@playwright/test";
-import { io } from "socket.io-client";
-import type { Socket } from "socket.io-client";
-import { resetMachine } from "./helpers";
+import { connectBackend, resetMachine } from "./helpers";
 
 const square = (size: number) =>
   [
@@ -41,13 +39,6 @@ const uploadGcode = async (request: APIRequestContext, name: string, gcode: stri
   await expect.poll(() => currentGcode(request), { timeout: 15_000 }).not.toBe(before);
 };
 
-const connectSocket = (baseURL: string) =>
-  new Promise<Socket>((resolve, reject) => {
-    const socket = io(`${baseURL}/MaslowCNC`, { transports: ["polling"] });
-    socket.on("connect", () => resolve(socket));
-    socket.on("connect_error", reject);
-  });
-
 const openScreenActions = async (canvas: Locator, isMobile: boolean) => {
   const box = (await canvas.boundingBox())!;
   const position = { x: box.width * 0.75, y: box.height / 2 };
@@ -75,9 +66,9 @@ test("draws uploaded gcode, follows socket broadcasts and defines home from the 
   await expect(viewer).toHaveAttribute("data-cut-segments", /^[1-9]\d*$/);
   const squareCuts = await viewer.getAttribute("data-cut-segments");
 
-  // The binary gcodeUpdateCompressed broadcast is what the classic UI receives too.
+  // The gcodeUpdateCompressed broadcast is what the classic UI receives too (binary on socket.io, base64 on Rust).
   await uploadGcode(request, "zigzag.nc", zigzag(7));
-  const socket = await connectSocket(baseURL!);
+  const socket = await connectBackend(baseURL!);
   try {
     socket.emit("checkForGCodeUpdate", { data: "Please" });
     await expect(viewer).not.toHaveAttribute("data-cut-segments", squareCuts!);

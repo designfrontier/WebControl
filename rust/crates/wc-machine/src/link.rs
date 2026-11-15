@@ -440,7 +440,7 @@ impl Machine {
         let skipped = line.trim().is_empty() || only_selects_tool(&line);
         if !skipped {
             let home = |key: &str| self.settings.number("Advanced Settings", key);
-            let shift = HomeShift::from_home(home("homeX"), home("homeY"), None);
+            let shift = HomeShift::from_home(home("homeX"), home("homeY"), self.truncate);
             let shifted = shift_to_home(&line, self.positioning, &shift);
             if let Some(problem) = problem_with(&shifted) {
                 return self.refuse_line(problem.title(), &problem.reason(), effects);

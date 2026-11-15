@@ -4,6 +4,7 @@
 mod actions;
 pub mod commands;
 mod edits;
+pub mod files;
 pub mod forms;
 mod link;
 mod machine;

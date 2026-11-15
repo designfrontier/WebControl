@@ -1,11 +1,13 @@
-//! `~/.WebControl` as the Python backend lays it out, and `webcontrol.json` read and written the way
-//! `config/config.py` does, so either backend can run on the same files.
+//! `~/.WebControl` as the Python backend lays it out, `webcontrol.json` read and written the way `config/config.py`
+//! does, so either backend can run on the same files, and the gcode and board libraries in it.
 
 mod edit;
 mod file;
 mod json;
+pub mod library;
 mod python;
 mod settings;
+mod store;
 
 pub use edit::{Stored, python_eq, python_float};
 pub use json::python_json;
@@ -23,6 +25,10 @@ pub struct Paths {
 impl Paths {
     pub fn new(home: &Path) -> Paths {
         Paths { home: home.to_path_buf() }
+    }
+
+    pub fn home(&self) -> PathBuf {
+        self.home.clone()
     }
 
     pub fn dir(&self) -> PathBuf {
