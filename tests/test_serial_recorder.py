@@ -1,6 +1,10 @@
 """The opt-in serial recorder: what it writes, that it never blocks or breaks the serial thread, and its setting."""
 import datetime
 import json
+import subprocess
+import sys
+import textwrap
+from pathlib import Path
 
 import jsonschema
 import pytest
@@ -11,6 +15,7 @@ from helpers import drain
 
 RECORDING_SCHEMA = serial_contract.load(serial_contract.CONTRACT / "recording.schema.json")
 WALL = datetime.datetime(2026, 11, 14, 9, 30, 0)
+ROOT = Path(__file__).resolve().parent.parent
 
 
 class Tick:
@@ -41,7 +46,7 @@ def test_nothing_is_written_while_disabled(tmp_path):
     made.flush()
 
     assert not (tmp_path / "rec").exists()
-    assert made.writer is None
+    assert made.writerRunning is False
 
 
 def test_records_are_written_in_order_with_session_times_and_causes(tmp_path):
@@ -63,34 +68,70 @@ def test_records_are_written_in_order_with_session_times_and_causes(tmp_path):
     [jsonschema.validate(record, RECORDING_SCHEMA) for record in records]
 
 
-def test_a_full_queue_drops_records_and_counts_them(tmp_path, monkeypatch):
-    made = recorder(tmp_path, queueLimit=2)
+def test_a_full_queue_drops_records_and_notes_where(tmp_path, monkeypatch):
+    made = recorder(tmp_path, queueLimit=3)
     monkeypatch.setattr(made, "_ensureWriter", lambda: None)
 
+    made.startSession("/dev/ttyACM0", "MM", {"x": 0, "y": 0}, {}, "1.27")
     [made.tx(f"G0 X{n} \n") for n in range(5)]
     assert made.dropped == 3
-    [made.write(made.queue.get_nowait()) for _ in range(2)]
-    made.file.flush()
+    made.queue.popleft()
+    made.tx("G0 X9 \n")
+    made._drain()
 
     records = read(tmp_path / "rec")
-    assert [record["type"] for record in records] == ["dropped", "tx", "tx"]
-    assert records[0]["count"] == 3
+    assert [record["type"] for record in records] == ["tx", "tx", "dropped", "tx"]
+    assert records[2]["count"] == 3 and records[2]["t"] == records[3]["t"]
+    assert records[3]["data"] == "G0 X9 \n"
+    jsonschema.validate(records[2], RECORDING_SCHEMA)
+
+
+def test_records_before_the_first_session_are_not_kept(tmp_path):
+    made = recorder(tmp_path)
+
+    made.gcodeLoaded("/tmp/a.nc", 12)
+    made.action("move", "right", "10")
+    made.startSession("/dev/ttyACM0", "MM", {"x": 0, "y": 0}, {}, "1.27", gcode="/tmp/a.nc")
+    made.flush()
+
+    records = read(tmp_path / "rec")
+    assert [record["type"] for record in records] == ["session"]
+    assert records[0]["gcode"] == "/tmp/a.nc"
     jsonschema.validate(records[0], RECORDING_SCHEMA)
 
 
-def test_a_failing_disk_never_reaches_the_caller(tmp_path):
+def test_a_failing_disk_never_reaches_the_caller_and_is_reported_once(tmp_path, capsys):
     blocker = tmp_path / "rec"
     blocker.write_text("a file where the directory should be")
     made = SerialRecorder(blocker, clock=Tick(), wallClock=lambda: WALL)
     made.setEnabled(True)
 
+    made.startSession("/dev/ttyACM0", "MM", {"x": 0, "y": 0}, {}, "1.27")
+    [made.tx("G21 \n") for _ in range(50)]
+    made.flush()
+
+    assert not made.queue
+    assert capsys.readouterr().out.count("serial recording stopped") == 1
+
+
+def test_recording_resumes_at_the_next_session_after_a_failure(tmp_path):
+    made = recorder(tmp_path)
+    made.startSession("/dev/ttyACM0", "MM", {"x": 0, "y": 0}, {}, "1.27")
+    made.flush()
+    made.file.close()
+    made.tx("lost \n")
+    made.flush()
+
+    made.startSession("/dev/ttyACM0", "MM", {"x": 0, "y": 0}, {}, "1.27")
     made.tx("G21 \n")
     made.flush()
 
-    assert made.queue.unfinished_tasks == 0
+    second = (tmp_path / "rec" / "20261114-093000-1.jsonl").read_text().splitlines()
+    assert [json.loads(line).get("data") for line in second] == [None, "G21 \n"]
+    assert "lost" not in (tmp_path / "rec" / "20261114-093000.jsonl").read_text()
 
 
-def test_files_rotate_by_size_and_only_the_newest_are_kept(tmp_path):
+def test_files_rotate_by_size_and_keep_the_session_header(tmp_path):
     made = recorder(tmp_path, maxFileBytes=200, maxFiles=3)
 
     made.startSession("/dev/ttyACM0", "MM", {"x": 0, "y": 0}, {}, "1.27")
@@ -99,8 +140,40 @@ def test_files_rotate_by_size_and_only_the_newest_are_kept(tmp_path):
 
     names = sorted(path.name for path in (tmp_path / "rec").iterdir())
     assert len(names) == 3
+    assert "20261114-093000.jsonl" in names
     assert all(name.startswith("20261114-093000.") for name in names)
     assert all((tmp_path / "rec" / name).stat().st_size < 400 for name in names)
+    assert json.loads((tmp_path / "rec" / "20261114-093000.jsonl").read_text().splitlines()[0])["type"] == "session"
+
+
+def test_a_slow_disk_does_not_stall_the_gevent_hub(tmp_path):
+    script = textwrap.dedent('''
+        from gevent import monkey
+        monkey.patch_all()
+        import sys, time, gevent
+        sys.path.insert(0, %r)
+        from DataStructures import serialRecorder
+        made = serialRecorder.SerialRecorder(%r)
+        made.setEnabled(True)
+        realWrite = made._writeLine
+        def slowWrite(record):
+            monkey.get_original("time", "sleep")(0.3)
+            realWrite(record)
+        made._writeLine = slowWrite
+        made.startSession("p", "MM", {"x": 0, "y": 0}, {}, "1.27")
+        gaps, last = [], time.monotonic()
+        for n in range(60):
+            made.tx("G0 X%%d \\n" %% n)
+            gevent.sleep(0.01)
+            now = time.monotonic()
+            gaps.append(now - last)
+            last = now
+        print(max(gaps))
+    ''') % (str(ROOT), str(tmp_path / "rec"))
+    result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=60)
+
+    assert result.returncode == 0, result.stderr
+    assert float(result.stdout.split()[-1]) < 0.15
 
 
 def test_a_second_session_in_the_same_second_gets_its_own_file(tmp_path):

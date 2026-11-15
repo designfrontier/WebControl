@@ -21,7 +21,8 @@
         },
         "settings": { "type": "object", "description": "Settings by section, key to value." },
         "webcontrol": { "type": "string", "description": "WebControl version, or \"0.94-log\" for an imported log." },
-        "source": { "type": "string", "description": "For an imported log: the file and line the session starts at." }
+        "source": { "type": "string", "description": "For an imported log: the file and line the session starts at." },
+        "gcode": { "type": "string", "description": "The G-code file loaded when the session started, if any." }
       },
       "required": ["type", "started"]
     },

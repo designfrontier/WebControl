@@ -125,7 +125,8 @@ class SerialPortThread(MakesmithInitFuncs):
                         for section in ("Maslow Settings", "Advanced Settings")}
             home = {"x": float(config.getValue("Advanced Settings", "homeX")),
                     "y": float(config.getValue("Advanced Settings", "homeY"))}
-            self.data.serialRecorder.startSession(self.data.comport, self.data.units, home, settings, self.data.version)
+            self.data.serialRecorder.startSession(self.data.comport, self.data.units, home, settings, self.data.version,
+                                                  gcode=getattr(self.data.gcodeFile, "filename", None))
         except Exception as e:
             self.data.console_queue.put("Could not start the serial recording: " + str(e))
 

@@ -1,20 +1,26 @@
 """
 Opt-in capture of every serial line, for turning real jobs into contract/serial transcripts.
 
-Records go through a bounded queue to a writer thread, so the serial thread never waits on the disk; when the queue is
-full a record is dropped and counted. Format: contract/serial/recording.schema.json.
+Records go through a bounded queue to a writer on a real OS thread, so the serial loop never waits on the disk; when
+the queue is full a record is dropped and counted. Format: contract/serial/recording.schema.json.
 """
+import collections
 import datetime
 import json
 import os
-import queue
-import threading
 import time
 from pathlib import Path
+
+from gevent import monkey
+
+# gevent's patched threads are greenlets on the serial loop's hub, where a blocking write would stall streaming.
+startNativeThread = monkey.get_original("_thread", "start_new_thread")
+nativeSleep = monkey.get_original("time", "sleep")
 
 QUEUE_LIMIT = 20000
 MAX_FILE_BYTES = 5 * 1024 * 1024
 MAX_FILES = 40
+WRITER_IDLE_SECONDS = 0.05
 
 
 def defaultDirectory():
@@ -27,32 +33,36 @@ class SerialRecorder:
         self.directory = Path(directory) if directory is not None else defaultDirectory()
         self.clock = clock
         self.wallClock = wallClock
+        self.queueLimit = queueLimit
         self.maxFileBytes = maxFileBytes
         self.maxFiles = maxFiles
-        self.queue = queue.Queue(queueLimit)
+        self.queue = collections.deque()
         self.enabled = False
         self.dropped = 0
+        self.droppedSinceLastPut = 0
         self.sessionStart = None
         self.seq = 0
         self.cause = None
-        self.writer = None
-        self.writerLock = threading.Lock()
+        self.writerRunning = False
+        self.writerBusy = False
+        self.failed = False
         self.file = None
+        self.fileBytes = 0
         self.sessionName = None
         self.part = 0
-        self.droppedWritten = 0
 
     def setEnabled(self, enabled):
         self.enabled = bool(enabled)
 
-    def startSession(self, port, units, home, settings, webcontrol):
+    def startSession(self, port, units, home, settings, webcontrol, gcode=None):
         if not self.enabled:
             return
         self.sessionStart = self.clock()
         self.seq = 0
         self.cause = None
         self._put({"type": "session", "started": self.wallClock().isoformat(timespec="seconds"), "port": port,
-                   "units": units, "home": home, "settings": settings, "webcontrol": webcontrol}, at=self.sessionStart)
+                   "units": units, "home": home, "settings": settings, "webcontrol": webcontrol,
+                   **({"gcode": gcode} if gcode else {})}, at=self.sessionStart)
 
     def tx(self, data):
         if self.enabled:
@@ -63,7 +73,7 @@ class SerialRecorder:
             self._put({"type": "rx", "data": data})
 
     def action(self, command, arg, arg1):
-        if not self.enabled:
+        if not self.enabled or self.sessionStart is None:
             return
         self.seq += 1
         self.cause = self.seq
@@ -75,55 +85,77 @@ class SerialRecorder:
 
     def _put(self, record, at=None):
         try:
-            now = self.clock() if at is None else at
             if self.sessionStart is None:
-                self.sessionStart = now
+                return
+            now = self.clock() if at is None else at
             record["t"] = round(now - self.sessionStart, 6)
-            self.queue.put_nowait(record)
+            if len(self.queue) >= self.queueLimit:
+                self.dropped += 1
+                self.droppedSinceLastPut += 1
+                return
+            if self.droppedSinceLastPut:
+                self.queue.append({"type": "dropped", "count": self.droppedSinceLastPut, "t": record["t"]})
+                self.droppedSinceLastPut = 0
+            self.queue.append(record)
             self._ensureWriter()
-        except queue.Full:
-            self.dropped += 1
         except Exception:  # recording must never break the caller
             pass
 
     def _ensureWriter(self):
-        if self.writer is not None:
+        if self.writerRunning:
             return
-        with self.writerLock:
-            if self.writer is None:
-                self.writer = threading.Thread(target=self._writeForever, daemon=True)
-                self.writer.start()
+        self.writerRunning = True
+        try:
+            startNativeThread(self._writeForever, ())
+        except Exception:
+            self.writerRunning = False
 
     def _writeForever(self):
-        while True:
-            record = self.queue.get()
-            try:
-                self.write(record)
-                if self.queue.empty() and self.file is not None:
-                    self.file.flush()
-            except Exception as error:
-                print("serial recording failed: " + str(error))
-            finally:
-                self.queue.task_done()
+        try:
+            while True:
+                self._drain()
+                nativeSleep(WRITER_IDLE_SECONDS)
+        finally:
+            self.writerRunning = False
+
+    def _drain(self):
+        self.writerBusy = True
+        try:
+            while self.queue:
+                self.writeSafely(self.queue.popleft())
+            if self.file is not None and not self.failed:
+                self.writeSafely(None)
+        finally:
+            self.writerBusy = False
+
+    def writeSafely(self, record):
+        '''
+        Writes one record, or flushes for None; after an error everything is discarded until the next session.
+        '''
+        if self.failed and (record is None or record["type"] != "session"):
+            return
+        try:
+            self.file.flush() if record is None else self.write(record)
+            self.failed = False
+        except Exception as error:
+            self.failed = True
+            self._closeQuietly()
+            print("serial recording stopped until the next connect: " + str(error))
 
     def write(self, record):
-        '''
-        Writes one record (and a note of any records dropped before it); runs on the writer thread.
-        '''
         if record["type"] == "session" or self.file is None:
-            self._openSession(record)
-        if self.dropped > self.droppedWritten:
-            self._writeLine({"type": "dropped", "count": self.dropped - self.droppedWritten, "t": record["t"]})
-            self.droppedWritten = self.dropped
+            self._openSession()
         self._writeLine(record)
 
     def _writeLine(self, record):
-        if self.file.tell() >= self.maxFileBytes:
+        if self.fileBytes >= self.maxFileBytes:
             self.part += 1
             self._open()
-        self.file.write(json.dumps(record, ensure_ascii=False) + "\n")
+        line = (json.dumps(record, ensure_ascii=False) + "\n").encode("utf-8")
+        self.file.write(line)
+        self.fileBytes += len(line)
 
-    def _openSession(self, record):
+    def _openSession(self):
         stamp = self.wallClock().strftime("%Y%m%d-%H%M%S")
         taken = {path.name.split(".")[0] for path in self.directory.glob("*.jsonl")} if self.directory.exists() else set()
         self.sessionName = next(name for name in (stamp + suffix for suffix in [""] + ["-" + str(n) for n in range(1, 1000)])
@@ -132,23 +164,32 @@ class SerialRecorder:
         self._open()
 
     def _open(self):
-        if self.file is not None:
-            self.file.close()
+        self._closeQuietly()
         self.directory.mkdir(parents=True, exist_ok=True)
         name = self.sessionName + ("" if self.part == 0 else "." + str(self.part)) + ".jsonl"
-        self.file = open(self.directory / name, "a", encoding="utf-8")
+        self.file = open(self.directory / name, "ab")
+        self.fileBytes = self.file.tell()
         self._prune()
 
+    def _closeQuietly(self):
+        file, self.file = self.file, None
+        try:
+            file is not None and file.close()
+        except Exception:
+            pass
+
     def _prune(self):
-        files = sorted(self.directory.glob("*.jsonl"), key=lambda path: (path.stat().st_mtime, path.name))
-        [os.remove(path) for path in files[:max(0, len(files) - self.maxFiles)]]
+        sessionHeader = self.sessionName + ".jsonl"
+        files = sorted((path for path in self.directory.glob("*.jsonl") if path.name != sessionHeader),
+                       key=lambda path: (path.stat().st_mtime, path.name))
+        [os.remove(path) for path in files[:max(0, len(files) - (self.maxFiles - 1))]]
 
     def flush(self, timeout=5.0):
         '''
         Waits until the writer has written everything queued so far; for tests and shutdown.
         '''
         deadline = time.time() + timeout
-        while self.queue.unfinished_tasks and time.time() < deadline:
+        while (self.queue or self.writerBusy) and time.time() < deadline:
             time.sleep(0.01)
-        if self.file is not None:
-            self.file.flush()
+        if self.file is not None and not self.failed:
+            self.writeSafely(None)
