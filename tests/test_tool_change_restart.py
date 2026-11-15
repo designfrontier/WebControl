@@ -29,7 +29,8 @@ def test_a_restart_after_a_tool_change_stays_at_safe_height(job):
     assert lowered_to(drain(job.gcode_queue)) == []
 
 
-def test_a_restart_once_the_new_tool_has_a_z_lowers_to_it(job):
+def test_a_restart_once_the_new_tool_has_a_z_lowers_to_it(job, monkeypatch):
+    monkeypatch.setattr(job, "currentTool", 2)
     load(job, TOOL_CHANGE_FILE, len(TOOL_CHANGE_FILE) - 1)
 
     job.actions.processGCode()

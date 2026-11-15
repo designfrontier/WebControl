@@ -208,10 +208,11 @@ def test_a_restart_after_a_t_behind_a_g_word_changes_to_that_tool(tools):
 
 def firmware_that_pauses_on_m6(app, data, on_pause):
     """Acks each line, except that an M6 holds its ok until "~", the way pause() blocks the line."""
-    state = {"seen": 0, "held": False}
+    state = {"seen": 0, "held": False, "started": False}
 
     def poll(port):
-        if state["seen"] == 0:
+        if not state["started"]:
+            state["started"] = True
             drain(data.gcode_queue)
         written = port.sent[state["seen"]:]
         state["seen"] = len(port.sent)
@@ -221,7 +222,6 @@ def firmware_that_pauses_on_m6(app, data, on_pause):
                 state["held"] = False
             elif "M6" in line:
                 state["held"] = True
-                port.incoming.extend(TOOL_CHANGE)
                 [data.messageProcessor.processMessage(message) for message in TOOL_CHANGE]
                 on_pause()
             else:
@@ -303,3 +303,30 @@ def test_resume_releases_the_held_job_lines_and_lets_jogs_release_the_next_pause
     tools.actions.processAction({"data": {"command": "move", "arg": "right", "arg1": "10"}})
 
     assert drain(tools.quick_queue) == ["~"]
+
+
+def test_starting_mid_file_after_a_tool_change_queues_nothing_behind_its_m6(app, tools, serial):  # noqa: F811
+    tools.gcode = list(TOOL_CHANGE_JOB)
+    tools.gcodeIndex = len(TOOL_CHANGE_JOB) - 1
+    tools.units = "MM"
+
+    def jog_then_resume():
+        tools.actions.processAction({"data": {"command": "moveZ", "arg": "raise", "arg1": "5"}})
+        action(tools, "resumeRun")
+
+    pauses = firmware_that_pauses_on_m6(app, tools, jog_then_resume)
+    started = []
+
+    def start_mid_file(port):
+        pauses(port)
+        if not started:
+            started.append(True)
+            action(tools, "startRun")
+
+    port = serial.run(on_poll=start_mid_file)
+
+    sent = port.sent
+    assert sent[:6] == ["G21  ", "G90  ", "G0 Z5.0  ", "G0 X40.0 Y40.0  ", "T2 M6  ", "~"]
+    assert [line for line in sent if line.startswith("G1 Z")] == ["G1 Z-2.0 F100.0  "]
+    assert sent.index("G00 Z5.0  ") < sent.index("G1 Z-2.0 F100.0  ")
+    assert sent[-6:] == ["G0 Z5.0  ", "G0 X40.0 Y40.0  ", "G1 Z-2.0 F100.0  ", "G1 F100.0  ", "G90  ", "X50  "]

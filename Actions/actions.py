@@ -543,11 +543,12 @@ class Actions(MakesmithInitFuncs):
                 # the gcode.
                 if self.data.gcodeIndex > 0:
                     # get machine into proper state by sending appropriate commands
-                    self.processGCode()
+                    changingTool = self.processGCode()
                     # update the gcode position on the UI client.. Have to recalculate it from the gcode because
                     # starting at some place other than 0
                     self.sendGCodePositionUpdate(recalculate=True)
-                    self.data.uploadFlag = 1
+                    # The firmware pauses on the restart's M6; Resume after the change returns and streams.
+                    self.data.uploadFlag = -1 if changingTool else 1
                 else:
                     self.data.uploadFlag = 1
                 self.data.jobInProgress = True
@@ -1598,8 +1599,9 @@ class Actions(MakesmithInitFuncs):
         '''
         Queues the gcode that puts the sled, bit and controller where the file expects them at the current gcode
         index, so a run can start there.
+        :return: True if it stopped at a tool change, where the firmware will pause.
         '''
-        self.queueRestartSequence(self.gcodeStateAt(self.data.gcodeIndex))
+        return self.queueRestartSequence(self.gcodeStateAt(self.data.gcodeIndex))
 
     def gcodeStateAt(self, index):
         '''
@@ -1707,7 +1709,7 @@ class Actions(MakesmithInitFuncs):
         '''
         Raises the bit to safe height, moves to the state's XY, restores tool, spindle, laser and dwell, lowers the bit
         to zTarget (the state's Z by default) at the plunge feed, then restores the file's modal G0/G1, feed and
-        positioning.
+        positioning. It stops after an M6 that changes tool and returns True.
         '''
         zAxisSafeHeight = float(self.data.config.getValue("Maslow Settings", "zAxisSafeHeight"))
         if state["units"] == "G20 ":
@@ -1719,6 +1721,9 @@ class Actions(MakesmithInitFuncs):
         self.data.gcode_queue.put("G0 X" + str(round(state["x"], 4)) + " Y" + str(round(state["y"], 4)) + " ")
         if changeTool and state["tool"] is not None:
             self.data.gcode_queue.put("T" + state["tool"] + " M6 ")
+            # Anything queued behind a pausing M6 would run, plunge included, as soon as a jog releases the firmware.
+            if int(state["tool"]) != self.data.currentTool:
+                return True
         if state["spindle"] is not None:
             self.data.gcode_queue.put(state["spindle"])
         if state["laser"] is not None:
@@ -1732,6 +1737,7 @@ class Actions(MakesmithInitFuncs):
         motion = f"G{state['motion']} " if state["motion"] in (0, 1) else ""
         self.data.gcode_queue.put(motion + "F" + str(round(state["feedRate"], 4)) + " ")
         self.data.gcode_queue.put(state["positioning"])
+        return False
 
     def findPositionAt(self, index):
         '''
