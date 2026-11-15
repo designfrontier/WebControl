@@ -97,9 +97,10 @@ after that).
 
 ## Plain WebSocket transport (for the Rust backend)
 
-The same events and payloads, without socket.io. The frontend switches by changing `connectTransport` in
-`frontend/src/transport/index.ts` to the WebSocket implementation (`frontend/src/transport/websocket.ts`, a stub
-today).
+The same events and payloads, without socket.io. Before opening any connection the frontend reads `GET /api/state`
+and uses this transport (`frontend/src/transport/websocket.ts`) when `backend` is `"rust"`, socket.io otherwise
+(`frontend/src/transport/select.ts`). After three failed connects in a row it reads `/api/state` again and reloads
+the page if the backend changed.
 
 - **Endpoint**: `ws://<host>/ws?ns=<url-encoded namespace>` (`wss:` under https), one WebSocket per namespace. The UI
   opens `/MaslowCNC` and, while the log viewer is open, a second one for `/MaslowCNCLogs`.

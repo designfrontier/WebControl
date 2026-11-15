@@ -83,9 +83,10 @@ events, per-client emits.
   run-state gate; `http.ts` catalogs every HTTP endpoint the UI calls with its request and response schemas
 - `frontend/src/contract/` — `buildContract()` turns the protocol into `contract/`; its tests fail when `contract/`
   is stale or a UI request is missing from `http.ts`. Regenerate with `npm run contract`
-- `frontend/src/transport/` — the `Transport` interface the app talks to; `connectTransport` in `index.ts` picks
-  socket.io (`socketio.ts`, the only file that may import `socket.io-client`) or, later, plain WebSockets
-  (`websocket.ts`, a stub)
+- `frontend/src/transport/` — the `Transport` interface the app talks to; `select.ts`'s `selectTransport(fetch)`
+  reads `backend` from `GET /api/state` and makes `connectTransport` use plain WebSockets (`websocket.ts`) for Rust or
+  socket.io (`socketio.ts`, the only file that may import `socket.io-client`) otherwise; `watchBackend` reloads the
+  page when the backend changes under it
 - `frontend/src/socket/` — `createClient(transport)`: validates messages, drops ones whose `client` field names
   another socket, `sendAction(command, arg?, arg1?)`, `requestSetting`, `updateSetting`, typed `emit`;
   `connect.ts` opens the `/MaslowCNC` and log connections
