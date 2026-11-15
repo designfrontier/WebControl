@@ -453,3 +453,24 @@ fn a_moved_index_shows_where_the_job_will_restart() {
     let position: Vec<Value> = pushed(&effects, "gcodePositionMessage");
     assert_eq!(position[0]["xval"], 3.0);
 }
+
+/// Wart 14: Play waits for a gcode load being built, or the old file would cut in its place.
+#[test]
+fn play_is_refused_while_a_load_builds_and_a_failed_load_ends_every_spinner() {
+    let mut rig = Rig::connected();
+    rig.machine.load_gcode(&file(&JOB));
+    let started = rig.send(Event::Request { id: 1, request: Request::LoadStarting });
+    assert_eq!(pushed(&started, "showFPSpinner"), [json!(0)]);
+    let refused = rig.send(Event::Button(wc_machine::gpio::Button::Play));
+    assert_eq!(alerts(&refused), ["Gcode is still loading. Start the job when the preview appears."]);
+    let unreadable = Request::Problem(wc_machine::files::Problem::GcodeUnreadable);
+    let failed = rig.send(Event::Request { id: 2, request: unreadable });
+    assert!(rig::commands(&failed).contains(&"gcodeUpdateCompressed".to_string()));
+    assert!(alerts(&rig.act("startRun")).is_empty());
+    let mut loaded = Rig::connected();
+    loaded.send(Event::Request { id: 1, request: Request::LoadStarting });
+    let gcode = Box::new(Gcode::parse("G0 X9\n", &settings(&[])).unwrap());
+    loaded.send(Event::Request { id: 2, request: Request::LoadGcode { gcode, file: None, origin: Origin::Open } });
+    assert!(alerts(&loaded.act("startRun")).is_empty());
+    assert_eq!(flags(&loaded).0, 1);
+}

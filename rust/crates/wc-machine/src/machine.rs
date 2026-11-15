@@ -280,6 +280,8 @@ pub struct Machine {
     /// A Touch Z is queued or descending.
     pub(crate) probing: bool,
     pub(crate) job: Job,
+    /// Gcode loads being built off the machine task; Play waits for them.
+    pub(crate) loads: usize,
     pub(crate) leds: Leds,
     /// The LEDs as last handed to the shell.
     pub(crate) leds_shown: Leds,
@@ -332,6 +334,7 @@ impl Machine {
             positioning: Positioning::Absolute,
             probing: false,
             job: Job::default(),
+            loads: 0,
             leds: Leds::default(),
             leds_shown: Leds::default(),
             gcode: Arc::new(Vec::new()),

@@ -18,6 +18,7 @@ const Z_LIMITS_UNSUPPORTED: &str = "Z-axis limits need holey firmware 51.292 or 
 const JOB_LINES_HELD: &str = "The controller paused with lines of the job still in its buffer, which would run before \
                               this move. Press Resume or STOP first.";
 const ADJUST_Z_FIRST: &str = "The controller is waiting for Z to be adjusted by hand. Adjust it, then press Resume.";
+const GCODE_LOADING: &str = "Gcode is still loading. Start the job when the preview appears.";
 const CLEARED_Z_LIMIT_MM: i32 = 9999;
 const SAFE_WHILE_PROBING: [&str; 7] =
     ["stopRun", "stopZ", "pauseRun", "createDirectory", "toggleCamera", "statusRequest", "queryCamera"];
@@ -62,6 +63,9 @@ impl Machine {
         }
         if let Some(refusal) = gates::refusal(command, self.job.flow, self.job.manual_z.is_some()) {
             return effects.push(alert(refusal));
+        }
+        if command == "startRun" && self.loads > 0 {
+            return effects.push(alert(GCODE_LOADING));
         }
         if machine_command && !matches!(self.link, Link::Connected { .. }) {
             return effects.push(alert(NOT_CONNECTED));

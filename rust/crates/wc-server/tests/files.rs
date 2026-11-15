@@ -257,6 +257,21 @@ async fn the_gcode_cannot_be_replaced_during_a_job() {
     assert_eq!(server.post_form("/sendGCode", &[Part::Field("gcode", "G0 X1")]).await.status, StatusCode::OK);
 }
 
+/// Ported from test_gcode_load_guard and test_job_in_progress: a paused job, or a tool change outside one, locks too.
+#[tokio::test]
+async fn the_gcode_stays_locked_while_a_job_is_paused_or_a_tool_change_waits() {
+    let mut paused = streaming();
+    paused.handle(Event::Action(Action::new("pauseRun", json!(""), json!(""))), Duration::ZERO);
+    let mut tool_change = machine_with(Settings::defaults());
+    tool_change.handle(Event::PortOpened { port: "/dev/ttyACM0".into() }, Duration::ZERO);
+    tool_change.handle(Event::ControllerLine("Tool Change: Please insert tool 2".into()), Duration::ZERO);
+    for machine in [paused, tool_change] {
+        let server = Server::with(machine);
+        let reply = server.post_form("/editGCode", &[Part::Field("gcode", "G0 X9")]).await;
+        assert_eq!(reply.status, StatusCode::CONFLICT);
+    }
+}
+
 #[tokio::test]
 async fn sent_gcode_is_remembered_and_refused_while_probing() {
     let server = Server::new();

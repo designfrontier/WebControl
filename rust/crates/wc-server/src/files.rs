@@ -125,7 +125,13 @@ async fn read(path: PathBuf) -> std::io::Result<String> {
 }
 
 /// `loadUpdateFile` from disk: the file read and parsed off the machine task, then handed over.
+/// Wart 14: the machine hears a load has begun, so Play waits for it and the spinners start.
+async fn load_starting(machine: &MachineHandle) {
+    machine.request(Ask::LoadStarting).await;
+}
+
 async fn load_file(machine: &MachineHandle, file: PathBuf, text: Option<String>, origin: Origin) -> Reply {
+    load_starting(machine).await;
     let text = match text {
         Some(text) => Ok(text),
         None => read(file.clone()).await,
@@ -269,12 +275,15 @@ pub(crate) async fn edit(State(state): State<AppState>, request: Request) -> Res
             let gcode = Box::new(Gcode::empty(snapshot.units()));
             machine.request(Ask::LoadGcode { gcode, file: None, origin: Origin::Edit }).await
         }
-        (false, _) => match parse(text, snapshot.settings).await {
-            Some(gcode) => {
-                machine.request(Ask::LoadGcode { gcode: Box::new(gcode), file: None, origin: Origin::Edit }).await
+        (false, _) => {
+            load_starting(machine).await;
+            match parse(text, snapshot.settings).await {
+                Some(gcode) => {
+                    machine.request(Ask::LoadGcode { gcode: Box::new(gcode), file: None, origin: Origin::Edit }).await
+                }
+                None => machine.request(Ask::Problem(Problem::GcodeUnreadable)).await,
             }
-            None => machine.request(Ask::Problem(Problem::GcodeUnreadable)).await,
-        },
+        }
     };
     match reply {
         Reply::Refused(error) => forms::refused(409, &error),

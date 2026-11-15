@@ -140,6 +140,8 @@ pub struct TrimForm {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Request {
     SetSettings(Vec<(String, String, Value)>),
+    /// A file route started building a load, which ends in `LoadGcode` or `Problem(GcodeUnreadable)`.
+    LoadStarting,
     LoadGcode {
         gcode: Box<Gcode>,
         file: Option<PathBuf>,
@@ -246,6 +248,7 @@ impl Machine {
     }
 
     fn load(&mut self, gcode: Gcode, file: Option<PathBuf>, origin: Origin, effects: &mut Vec<Effect>) -> Reply {
+        self.loads = self.loads.saturating_sub(1);
         if self.gcode_locked() {
             return Reply::Refused(GCODE_LOCKED.into());
         }
@@ -418,7 +421,17 @@ impl Machine {
                 Reply::Done
             }
             Request::LoadGcode { gcode, file, origin } => self.load(*gcode, file, origin, effects),
+            Request::LoadStarting => {
+                self.loads += 1;
+                effects.push(Effect::Push(Push::message(Envelope::int("showFPSpinner", 0))));
+                Reply::Done
+            }
             Request::Problem(problem) => {
+                if problem == Problem::GcodeUnreadable {
+                    // A failed load resends the current preview, so every client's spinner ends.
+                    self.loads = self.loads.saturating_sub(1);
+                    self.push_gcode(effects);
+                }
                 self.problem(problem, effects);
                 Reply::Done
             }
