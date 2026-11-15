@@ -10,10 +10,7 @@ use wc_machine::{Effect, Event};
 #[test]
 fn unknown_and_later_commands_raise_pythons_alert() {
     let mut rig = Rig::new();
-    assert_eq!(
-        alerts(&rig.act("upgradeHoleyFirmware")),
-        ["Function not currently implemented.. Sorry.[upgradeHoleyFirmware]"]
-    );
+    assert_eq!(alerts(&rig.act("noSuchCommand")), ["Function not currently implemented.. Sorry.[noSuchCommand]"]);
 }
 
 #[test]

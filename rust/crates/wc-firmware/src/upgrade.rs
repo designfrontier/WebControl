@@ -188,9 +188,13 @@ pub fn read_motor_test(results: &mut Vec<MotorTest>, line: &str) -> bool {
     }
 }
 
-/// C7: L, R and Z each pass both directions.
+/// C7: the motors of L, R and Z that did not pass both directions.
+pub fn failed_motors(results: &[MotorTest]) -> Vec<&'static str> {
+    let passed =
+        |motor: &str| results.iter().any(|t| t.motor == motor && t.passed.len() == 2 && t.passed.iter().all(|p| *p));
+    ["L", "R", "Z"].into_iter().filter(|motor| !passed(motor)).collect()
+}
+
 pub fn motor_test_passed(results: &[MotorTest]) -> bool {
-    ["L", "R", "Z"]
-        .iter()
-        .all(|motor| results.iter().any(|t| t.motor == *motor && t.passed.len() == 2 && t.passed.iter().all(|p| *p)))
+    failed_motors(results).is_empty()
 }

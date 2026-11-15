@@ -20,15 +20,27 @@ pub struct Build {
     /// 51.292 prints a notice after every `$n=` write.
     pub rewrite_notice: bool,
     pub banner: String,
+    /// The EEPROM layout; a flash to another one boots with `EEPROM read fail` and factory settings.
+    pub settings_version: u8,
 }
 
 impl Build {
     pub fn holey_51_27() -> Build {
-        Build { version: "51.27".into(), rewrite_notice: false, banner: "PCB v1.6 TLE9201  Detected".into() }
+        Build {
+            version: "51.27".into(),
+            rewrite_notice: false,
+            banner: "PCB v1.6 TLE9201  Detected".into(),
+            settings_version: 6,
+        }
     }
 
     pub fn holey_51_292() -> Build {
-        Build { version: "51.29".into(), rewrite_notice: true, ..Build::holey_51_27() }
+        Build { version: "51.29".into(), rewrite_notice: true, settings_version: 7, ..Build::holey_51_27() }
+    }
+
+    /// The same firmware on another board, which prints its own banner.
+    pub fn on_board(self, banner: &str) -> Build {
+        Build { banner: banner.into(), ..self }
     }
 }
 
@@ -63,6 +75,10 @@ pub struct Sim {
     pub probe_touches: bool,
     /// Whether it prints a status report every 200 ms.
     pub reports_status: bool,
+    /// What B10 measures for the left and right chains.
+    pub chains: (f64, f64),
+    /// A motor whose encoder B04 finds not moving.
+    pub stuck_motor: Option<char>,
 }
 
 /// The 51.27 defaults a fresh EEPROM boots with.
@@ -151,6 +167,8 @@ impl Sim {
             move_ms: 0,
             probe_touches: true,
             reports_status: true,
+            chains: (1650.0, 1651.0),
+            stuck_motor: None,
         }
     }
 
@@ -169,6 +187,8 @@ impl Sim {
             move_ms: self.move_ms,
             probe_touches: self.probe_touches,
             reports_status: self.reports_status,
+            chains: self.chains,
+            stuck_motor: self.stuck_motor,
             next_status: now + STATUS_INTERVAL_MS,
             ..fresh
         };
@@ -304,6 +324,15 @@ impl Sim {
             out.push(format!("Firmware Version {}", self.build.version));
             return Some(0);
         }
+        if text.starts_with("B10") {
+            let chain = if text.contains('L') { self.chains.0 } else { self.chains.1 };
+            out.push(format!("[Measure: {chain:.2}]"));
+            return Some(0);
+        }
+        if text.starts_with("B04") {
+            out.extend(self.motor_test());
+            return Some(0);
+        }
         if text.starts_with('B') {
             return Some(0);
         }
@@ -368,6 +397,29 @@ impl Sim {
         }
         out.extend(["error: probe did not connect", "program stopped", "z axis not set", ""].map(String::from));
         None
+    }
+
+    /// `Axis::test` for L, R and Z: each status report is printed with no newline, so it glues onto the next line.
+    fn motor_test(&self) -> Vec<String> {
+        const REPORT: &str = "<Idle,MPos:0,0,0,WPos:0.000,0.000,0.000>";
+        let mut glue = "";
+        let mut lines: Vec<String> = ['L', 'R', 'Z']
+            .iter()
+            .flat_map(|&motor| {
+                let verdict = if self.stuck_motor == Some(motor) { "Fail" } else { "Pass" };
+                let first = format!("{glue}Testing {motor} motor:");
+                glue = REPORT;
+                [first, format!("{REPORT}Direction 1 - {verdict}"), format!("{REPORT}Direction 2 - {verdict}")]
+            })
+            .collect();
+        lines.push(format!("{REPORT}Tests complete."));
+        lines
+    }
+
+    /// Loads another build, as avrdude does; the EEPROM is untouched, so a new layout reads as a failure at boot.
+    pub fn flash(&mut self, build: Build) {
+        self.eeprom_reset = self.eeprom_reset || build.settings_version != self.build.settings_version;
+        self.build = build;
     }
 
     /// The firmware stops itself on an alarm and never acks the lines it held.

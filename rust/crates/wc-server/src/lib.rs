@@ -3,6 +3,7 @@
 mod api;
 pub mod assets;
 pub mod cli;
+pub mod firmware;
 pub mod host;
 mod routes;
 pub mod serial;

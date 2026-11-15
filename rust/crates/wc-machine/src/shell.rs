@@ -11,7 +11,7 @@ use tokio::time::{Instant, MissedTickBehavior};
 use wc_config::Settings;
 use wc_protocol::Push;
 
-use crate::{Effect, Event, Machine, Request, Response, Snapshot};
+use crate::{Effect, Event, FirmwareJob, JobResult, Machine, Request, Response, Snapshot};
 
 const TICK: Duration = Duration::from_millis(10);
 const HEALTH: Duration = Duration::from_secs(5);
@@ -52,6 +52,20 @@ pub trait Host: Send + Sync + 'static {
     fn cpu_load(&self) -> f64;
     /// Writes `webcontrol.json`; called off the machine task, so a slow card never delays Stop.
     fn save_settings(&self, _settings: &Settings) {}
+    /// Runs avrdude or saves a firmware backup, off the machine task.
+    fn firmware(&self, job: FirmwareJob) -> JobResult {
+        unsupported(job)
+    }
+}
+
+/// What a host that cannot flash answers.
+pub fn unsupported(job: FirmwareJob) -> JobResult {
+    let why = "this host cannot run avrdude".to_string();
+    match job {
+        FirmwareJob::ReadFlash { .. } => JobResult::Read(Err(why)),
+        FirmwareJob::Save { .. } => JobResult::Saved(Err(why)),
+        FirmwareJob::WriteFlash { .. } => JobResult::Written { success: false, output: why },
+    }
 }
 
 /// No controller at all: every open fails, as with nothing plugged in.
@@ -136,6 +150,7 @@ struct Task<C: Core> {
     started: Instant,
     replies: Replies,
     persist: watch::Sender<Option<Arc<Settings>>>,
+    jobs: mpsc::UnboundedSender<Event>,
 }
 
 async fn read_lines(port: Box<dyn AsyncRead + Send + Unpin>, generation: u64, reads: mpsc::UnboundedSender<Read>) {
@@ -230,6 +245,15 @@ impl<C: Core> Task<C> {
                         self.persist.send_replace(Some(settings));
                         None
                     }
+                    Effect::Firmware(job) => {
+                        let (host, jobs) = (self.host.clone(), self.jobs.clone());
+                        tokio::spawn(async move {
+                            let result = tokio::task::spawn_blocking(move || host.firmware(job)).await;
+                            let result = result.unwrap_or_else(|e| JobResult::Saved(Err(e.to_string())));
+                            let _ = jobs.send(Event::FirmwareDone(result));
+                        });
+                        None
+                    }
                 };
                 pending.extend(follow_up);
             }
@@ -255,6 +279,7 @@ pub fn spawn<C: Core>(core: C, opener: Box<dyn PortOpener>, host: Arc<dyn Host>)
     let (commands, mut command_rx) = mpsc::unbounded_channel();
     let (realtime, mut realtime_rx) = mpsc::unbounded_channel();
     let (reads, mut read_rx) = mpsc::unbounded_channel::<Read>();
+    let (jobs, mut job_rx) = mpsc::unbounded_channel();
     let (pushes, _) = broadcast::channel(PUSH_BACKLOG);
     let (snapshot_tx, snapshot) = watch::channel(core.snapshot());
     let (persist_tx, persist_rx) = watch::channel(None);
@@ -276,6 +301,7 @@ pub fn spawn<C: Core>(core: C, opener: Box<dyn PortOpener>, host: Arc<dyn Host>)
         started: Instant::now(),
         replies,
         persist: persist_tx,
+        jobs,
     };
     let join = tokio::spawn(async move {
         let mut clock = tokio::time::interval(TICK);
@@ -289,6 +315,7 @@ pub fn spawn<C: Core>(core: C, opener: Box<dyn PortOpener>, host: Arc<dyn Host>)
                     true => read,
                     false => continue,
                 },
+                Some(done) = job_rx.recv() => done,
                 command = command_rx.recv() => match command {
                     Some(event) => event,
                     None => break,

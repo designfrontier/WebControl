@@ -329,6 +329,10 @@ async fn api_system_info_reports_the_controller_and_platform() {
         (json!(null), json!(false))
     );
     assert_eq!(info["update"], json!({"available": false, "version": null}));
+    assert_eq!(
+        (info["firmwareUpgrade"]["target"].clone(), info["firmwareUpgrade"]["stage"].clone()),
+        (json!("51.292"), json!("idle"))
+    );
     let upgraded = request_machine(on_51_292(Settings::defaults()), "GET", "/api/system/info").await.json();
     assert_eq!(upgraded["controllerFirmwareVersion"], 51.29);
     assert_eq!(

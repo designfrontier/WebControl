@@ -138,6 +138,8 @@ fn b04s_report_is_read_per_motor_and_direction() {
     assert!(report.iter().all(|line| read_motor_test(&mut results, line)));
     assert!(!read_motor_test(&mut results, "ok"));
     assert!(!motor_test_passed(&results));
+    assert_eq!(failed_motors(&results), ["Z"]);
+    assert_eq!(failed_motors(&[]), ["L", "R", "Z"]);
     results[2].passed[1] = true;
     assert!(motor_test_passed(&results));
     assert!(!read_motor_test(&mut Vec::new(), "Direction 1 - Pass"), "a verdict before any motor is not B04's");

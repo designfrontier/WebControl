@@ -8,6 +8,7 @@ use wc_firmware::boot::{
     BOOT_BANNER_WINDOW_MS, EEPROM_READ_FAIL, EEPROM_REWRITE_NOTICE, board_banner, ends_boot, is_boot_banner,
 };
 use wc_firmware::settings::{Sync, boot_push, sync_reported};
+use wc_firmware::upgrade::migration_push;
 use wc_firmware::{Reply, classify, split_glued};
 use wc_gcode::firmware_gcode::{changes_tool, only_selects_tool, pauses_firmware};
 use wc_gcode::sanitise::{problem_with, sanitise};
@@ -68,6 +69,7 @@ impl Machine {
     }
 
     pub(crate) fn tick(&mut self, now: Duration, effects: &mut Vec<Effect>) {
+        self.upgrade_tick(now, effects);
         if let Link::Disconnected { retry_at } = self.link
             && now >= retry_at
         {
@@ -142,6 +144,7 @@ impl Machine {
         }
         self.controller.boot_in_progress = !ends_boot(line);
         self.controller.last_banner = Some(now);
+        self.upgrade_banner(line, now, effects);
     }
 
     pub(crate) fn controller_line(&mut self, text: &str, now: Duration, effects: &mut Vec<Effect>) {
@@ -203,7 +206,8 @@ impl Machine {
             Reply::Status(status) => self.status_report(status, now, effects),
             Reply::Misread(text) => tracing::debug!(text, "misread controller report"),
             Reply::PositionError(error) => self.position_error(error, effects),
-            Reply::Setting { key, value } => self.reported_setting(key, value),
+            Reply::Setting { key, value } => self.reported_setting(line, key, value),
+            Reply::Measured(mm) if self.upgrade.collects_chains() => self.upgrade_measured(mm),
             Reply::Measured(mm) => self.measured(mm, now, effects),
             Reply::FakeServo(on) => self.fake_servo = on,
             Reply::MaslowPaused => effects.push(broadcast(&RequestedSetting {
@@ -231,8 +235,12 @@ impl Machine {
                 effects.push(broadcast(&ClearAlarm::new()));
                 effects.push(controller_message(line));
                 self.firmware_version = version.unwrap_or(self.firmware_version);
+                if let Some(version) = version {
+                    self.upgrade_version(version, now, effects);
+                }
             }
             Reply::Error(_) | Reply::Other(_) => {
+                self.upgrade_report(line);
                 if !self.pid_line(line, now, effects) && !line.is_empty() {
                     effects.push(controller_message(line));
                 }
@@ -254,8 +262,10 @@ impl Machine {
         }
     }
 
-    fn reported_setting(&mut self, key: u32, value: f64) {
-        match sync_reported(&self.settings, self.firmware_version, key, value) {
+    fn reported_setting(&mut self, line: &str, key: u32, value: f64) {
+        let sync = sync_reported(&self.settings, self.firmware_version, key, value);
+        self.upgrade_setting(line, if let Sync::Rewrite(text) = &sync { Some(text) } else { None });
+        match sync {
             Sync::Adopt { section, key, value } => self.set_setting(&section, &key, value),
             Sync::Rewrite(line) => self.controller.queue.push_back(Queued::Line { text: line, boot: false }),
             Sync::Agrees => {}
@@ -337,6 +347,10 @@ impl Machine {
                     self.controller.hold_until = Some(now + wait);
                     false
                 }
+                Queued::Mark(mark) => {
+                    self.mark(mark, effects);
+                    false
+                }
             };
             if written {
                 return;
@@ -349,13 +363,18 @@ impl Machine {
 
     fn expand_settings_push(&mut self, effects: &mut Vec<Effect>) {
         let eeprom_reset = std::mem::take(&mut self.controller.eeprom_reset);
-        let push = boot_push(&self.settings, self.firmware_version, eeprom_reset);
+        let migration = self.upgrade.migrating();
+        let build = wc_firmware::boot::firmware_build(self.firmware_version, self.rewrite_notice);
+        let push = match migration {
+            Some(migration) => migration_push(&self.settings, self.firmware_version, build.as_deref(), migration),
+            None => boot_push(&self.settings, self.firmware_version, eeprom_reset),
+        };
         push.adopted.into_iter().for_each(|(section, key, value)| self.set_setting(&section, &key, value));
         push.lines
             .into_iter()
             .rev()
             .for_each(|text| self.controller.queue.push_front(Queued::Line { text, boot: true }));
-        if eeprom_reset {
+        if eeprom_reset && migration.is_none() {
             effects.push(alert(EEPROM_RESTORED));
         }
     }
@@ -395,7 +414,9 @@ impl Machine {
 
     /// Stop drops what the user queued and any wait; the boot's handshake and settings push still go out.
     pub(crate) fn drop_user_commands(&mut self) {
-        self.controller.queue.retain(|queued| matches!(queued, Queued::Line { boot: true, .. } | Queued::SettingsPush));
+        self.controller.queue.retain(|queued| {
+            matches!(queued, Queued::Line { boot: true, .. } | Queued::SettingsPush | Queued::Mark(_))
+        });
         self.controller.hold_until = None;
     }
 
