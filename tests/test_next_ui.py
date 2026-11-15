@@ -1,9 +1,10 @@
 import os
+import sys
 
 import pytest
 from flask import Flask
 
-from next_ui import DEFAULT_DIST, NOT_BUILT, init_next_ui
+from next_ui import DEFAULT_DIST, NOT_BUILT, default_dist, init_next_ui
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -77,5 +78,16 @@ def test_relative_dist_dir_survives_a_later_change_of_working_directory(dist, tm
     client = client_for(dist.name)
     monkeypatch.chdir(tmp_path_factory.mktemp("elsewhere"))
     response = client.get("/next/")
+    assert response.status_code == 200
+    assert b"<div id=root>" in response.data
+
+
+def test_a_pyinstaller_bundle_serves_the_dist_it_carries(dist, tmp_path_factory, monkeypatch):
+    bundle = tmp_path_factory.mktemp("_MEIabc123")
+    (bundle / "frontend").mkdir()
+    dist.rename(bundle / "frontend" / "dist")
+    monkeypatch.setattr(sys, "_MEIPASS", str(bundle), raising=False)
+    assert default_dist() == os.path.join(str(bundle), "frontend", "dist")
+    response = client_for(default_dist()).get("/next/settings")
     assert response.status_code == 200
     assert b"<div id=root>" in response.data
