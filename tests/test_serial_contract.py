@@ -129,3 +129,57 @@ def test_substring_matching_reaches_into_nested_fields():
     assert serial_contract.matches({"data": {"title": "Too"}}, {"data": {"title": "Line Too Long", "x": 1}})
     assert not serial_contract.matches({"data": {"title": "Short"}}, {"data": {"title": "Line Too Long"}})
     assert not serial_contract.matches({"data": {"n": 1}}, {"data": {"n": "1"}})
+
+
+def test_a_line_split_across_writes_is_one_tx(app, monkeypatch):
+    write = serial_contract.FakePort.write
+    monkeypatch.setattr(serial_contract.FakePort, "write",
+                        lambda port, payload: [write(port, part) for part in (payload[:2], payload[2:])])
+
+    replay(app, JOG)
+
+
+def test_two_lines_in_one_write_are_two_txs():
+    port = serial_contract.FakePort(lambda port: None, serial_contract.Clock())
+
+    port.write(b"G91  \nG00 X10.0  \nG9")
+
+    assert port.written == ["G91  \n", "G00 X10.0  \n"] and port.partial == "G9"
+
+
+def test_a_write_left_without_its_newline_fails(app, monkeypatch):
+    write = serial_contract.FakePort.write
+    monkeypatch.setattr(serial_contract.FakePort, "write",
+                        lambda port, payload: write(port, payload.replace(b"G90  \n", b"G90  ")))
+
+    with pytest.raises(ContractFailure, match="never wrote|without a newline"):
+        replay(app, JOG)
+
+
+def test_a_write_later_than_the_tx_timeout_fails(app, monkeypatch):
+    write = serial_contract.FakePort.write
+
+    def late(port, payload):
+        port.clock.sleep(2.5 if payload.startswith(b"G00") else 0)
+        write(port, payload)
+
+    monkeypatch.setattr(serial_contract.FakePort, "write", late)
+
+    with pytest.raises(ContractFailure, match="after the 2.0 s tx timeout"):
+        replay(app, JOG)
+
+
+def test_values_compare_as_serde_json_would():
+    assert serial_contract.same(254, 254.0)
+    assert not serial_contract.same(True, 1)
+    assert not serial_contract.same(0, False)
+    assert not serial_contract.matches({"data": {"on": 1}}, {"data": {"on": True}})
+
+
+def test_an_expect_that_checks_nothing_is_not_a_valid_transcript():
+    with pytest.raises(jsonschema.ValidationError):
+        jog(lambda events: events.append({"type": "expect", "comment": "nothing"}))
+    with pytest.raises(jsonschema.ValidationError):
+        jog(lambda events: events.append({"type": "expect", "alerts": [{}]}))
+    with pytest.raises(jsonschema.ValidationError):
+        jog(lambda events: events.append({"type": "tx", "bytes": "G0 X1\nG0 X2\n"}))

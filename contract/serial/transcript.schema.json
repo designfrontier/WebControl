@@ -175,11 +175,11 @@
       "type": "object",
       "required": ["type", "bytes"],
       "additionalProperties": false,
-      "description": "The next write the backend must have made, byte for byte, including trailing spaces and \\n.",
+      "description": "The next line the backend must have written, byte for byte, including trailing spaces and \\n.",
       "properties": {
         "type": { "const": "tx" },
         "comment": { "$ref": "#/$defs/comment" },
-        "bytes": { "type": "string", "minLength": 1 },
+        "bytes": { "type": "string", "pattern": "^[ -~]*\\n$", "description": "Printable ASCII ending in one \\n: one line of the byte stream, however the backend split its writes." },
         "realtime": {
           "type": "boolean",
           "default": false,
@@ -209,6 +209,7 @@
     "alert": {
       "type": "object",
       "additionalProperties": false,
+      "minProperties": 1,
       "description": "Shorthand for an activateModal with modalType alert; strings match as substrings.",
       "properties": { "title": { "type": "string" }, "message": { "type": "string" } }
     },
@@ -216,7 +217,10 @@
       "type": "object",
       "required": ["type"],
       "additionalProperties": false,
-      "minProperties": 2,
+      "anyOf": [
+        { "required": ["state"] }, { "required": ["settings"] }, { "required": ["emitted"] },
+        { "required": ["notEmitted"] }, { "required": ["alerts"] }, { "required": ["noAlerts"] }
+      ],
       "properties": {
         "type": { "const": "expect" },
         "comment": { "$ref": "#/$defs/comment" },
@@ -235,7 +239,7 @@
             "firmwareBuild": { "type": ["string", "null"] },
             "controllerFirmwareVersion": { "type": "number" },
             "controllerBoard": { "type": ["string", "null"] },
-            "home": { "type": "object", "properties": { "x": { "type": "number" }, "y": { "type": "number" } } }
+            "home": { "type": "object", "required": ["x", "y"], "additionalProperties": false, "properties": { "x": { "type": "number" }, "y": { "type": "number" } } }
           }
         },
         "settings": {
@@ -244,7 +248,7 @@
             "type": "object",
             "required": ["section", "key", "value"],
             "additionalProperties": false,
-            "properties": { "section": { "type": "string" }, "key": { "type": "string" }, "value": { "type": ["string", "number", "boolean"] } }
+            "properties": { "section": { "type": "string" }, "key": { "type": "string" }, "value": { "type": "string", "description": "Compared as text with the stored value as Python str() prints it." } }
           }
         },
         "emitted": { "type": "array", "items": { "$ref": "#/$defs/emitted" } },

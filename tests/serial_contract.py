@@ -61,10 +61,17 @@ class OwnedQueue(queue.Queue):
 
 
 class FakePort:
-    def __init__(self, on_poll):
+    """
+    The byte stream the backend writes, cut into lines after each newline however the writes were split.
+    """
+
+    def __init__(self, on_poll, clock):
         self.on_poll = on_poll
+        self.clock = clock
         self.incoming = deque()
         self.written = []
+        self.written_at = []
+        self.partial = ""
         self.is_open = True
         self.parity = None
 
@@ -87,7 +94,10 @@ class FakePort:
     def write(self, payload):
         if not self.is_open:
             raise OSError("Attempting to use a port that is not open")
-        self.written.append(payload.decode())
+        self.partial += payload.decode("utf-8", "backslashreplace")
+        *lines, self.partial = self.partial.split("\n")
+        self.written.extend(line + "\n" for line in lines)
+        self.written_at.extend(self.clock.now for _ in lines)
 
 
 class Firmware:
@@ -103,10 +113,10 @@ class Firmware:
         self.seen = 0
         self.rules = [(re.compile(r"^B05\b"), ["Firmware Version " + version], False)]
         if build is not None and build.startswith("51.29") and build != "51.29x":
-            self.rules.append((re.compile(r"^\$\d+="), [EEPROM_REWRITE_NOTICE], False))
+            self.rules.append((re.compile(r"^\$\d+="), setting_write_replies, False))
 
     def add_rule(self, pattern, replies, hold=False):
-        self.rules.insert(0, (re.compile(pattern), list(replies), hold))
+        self.rules.insert(0, (re.compile(pattern), replies if callable(replies) else list(replies), hold))
 
     def hold_unanswered(self, line):
         self.pending.append(line.rstrip("\n"))
@@ -143,13 +153,23 @@ class Firmware:
             line = self.pending[0]
             replies, hold = next(((replies, hold) for pattern, replies, hold in self.rules
                                   if pattern.search(line.strip())), ([], False))
-            out.extend(replies)
+            out.extend(replies(line.strip()) if callable(replies) else replies)
             if hold:
                 self.held = True
                 break
             self.pending.popleft()
             out.append("ok")
         return out
+
+
+def setting_write_replies(line):
+    '''
+    What 51.292 prints for `$n=v` before its ok (System.cpp and Settings.cpp at v51.292); floats print with 2 decimals.
+    '''
+    key, value = re.match(r"^\$(\d+)=(\S+)", line).groups()
+    echo = "%.2f" % float(value)
+    limit = {"63": ["", "new zaxis upper limit=" + echo], "64": ["", "new zaxis lower limit=" + echo]}
+    return ["the value received: " + echo, *limit.get(key, []), EEPROM_REWRITE_NOTICE]
 
 
 def load(path):
@@ -189,6 +209,21 @@ def matches(expected, actual):
                                                 for key, value in expected.items())
     if isinstance(expected, str) and isinstance(actual, str):
         return expected in actual
+    return same(expected, actual)
+
+
+def same(expected, actual):
+    '''
+    JSON equality as serde_json would see it: numbers as f64, booleans never equal to numbers.
+    '''
+    if isinstance(expected, bool) or isinstance(actual, bool):
+        return type(expected) is type(actual) and expected == actual
+    if isinstance(expected, (int, float)) and isinstance(actual, (int, float)):
+        return float(expected) == float(actual)
+    if isinstance(expected, dict) and isinstance(actual, dict):
+        return expected.keys() == actual.keys() and all(same(value, actual[key]) for key, value in expected.items())
+    if isinstance(expected, list) and isinstance(actual, list):
+        return len(expected) == len(actual) and all(map(same, expected, actual))
     return expected == actual
 
 
@@ -340,7 +375,7 @@ class Engine:
         from Connection.serialPortThread import SerialPortThread
 
         self.source = iter(self._with_prelude(events))
-        self.port = FakePort(self.poll)
+        self.port = FakePort(self.poll, self.clock)
         thread = SerialPortThread()
         thread.data = self.data
         thread.getmessage()
@@ -479,6 +514,9 @@ class Engine:
             if actual != event["bytes"]:
                 raise ContractFailure(self._where() + "expected tx " + json.dumps(event["bytes"]) + " but the backend wrote "
                                       + json.dumps(actual))
+            if self.tx_deadline is not None and self.port.written_at[self.cursor] > self.tx_deadline + 1e-9:
+                raise ContractFailure(self._where() + "the backend wrote " + json.dumps(actual) + " after the "
+                                      + str(event.get("timeout", self.timing["txTimeout"])) + " s tx timeout")
             self.cursor += 1
             self.current = None
             return True
@@ -498,6 +536,8 @@ class Engine:
             self._ui_pass()
             self.emit_mark = len(self.emitted)
         elif kind == "_end":
+            if self.port.partial and self.mode == "replay":
+                raise ContractFailure("the backend left " + json.dumps(self.port.partial) + " written without a newline")
             self._finish()
         elif kind == "rx":
             self.port.incoming.append(event["line"] + "\r\n")
@@ -532,7 +572,7 @@ class Engine:
         problems = []
         for key, value in event.get("state", {}).items():
             actual = observed_state(self.data, key)
-            if actual != value:
+            if not same(value, actual):
                 problems.append(key + " is " + json.dumps(actual) + ", expected " + json.dumps(value))
         for item in event.get("settings", []):
             actual = str(self._option(item["section"], item["key"])["value"])
