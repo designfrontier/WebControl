@@ -1,0 +1,12 @@
+(20 mm square, one pass)
+G21
+G90
+G0 Z5
+G0 X10.5 Y10.25
+G1 Z-1.5 F127
+G1 X30.5 F600
+G1 Y30.25
+G1 X10.5
+G1 Y10.25
+G0 Z5
+M5

@@ -1,0 +1,33 @@
+(every T and M6 form the firmware and the restart read differently)
+G21
+G90
+G0 Z5
+G0 X10 Y10
+G1 Z-1 F100
+G1 X20 F600
+G0 Z5
+T2
+M6
+G0 X15 Y15
+G1 Z-2 F100
+G1 X25
+G0 Z5
+M6 T3
+G0 X30 Y30
+G1 Z-1.5
+G0 Z5
+T4 M6
+G1 X40 Y35 F500
+N100 T5 M6
+G0 X45 Y40 T6
+M06
+T 7 M6
+T2.0
+M6
+T6 M6
+B14 L1 S0 F1 I1 T2 V1
+M60
+G0 Z5 T1
+G1 X50 Y50 Z-2 F200
+G0 Z5
+M30
