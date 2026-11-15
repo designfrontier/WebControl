@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# Switches which WebControl backend runs (and boots): wc-switch rust|python|status [--force]
+set -euo pipefail
+
+URL="${WC_URL:-http://localhost:5000}"
+WAIT="${WC_WAIT:-20}"
+read -r -a SYSTEMCTL <<< "${WC_SYSTEMCTL:-sudo systemctl}"
+
+usage() {
+  echo "usage: wc-switch rust|python|status [--force]" >&2
+  exit 2
+}
+
+state() { curl -fsS --max-time 2 "$URL/api/state" 2>/dev/null || true; }
+
+# Python builds that predate the backend field are Python.
+backend_of() {
+  local body="$1"
+  [ -n "$body" ] || return 0
+  if [[ "$body" =~ \"backend\":\ *\"([a-z]+)\" ]]; then echo "${BASH_REMATCH[1]}"; else echo python; fi
+}
+
+unit_for() { [ "$1" = rust ] && echo webcontrol-rs || echo webcontrol; }
+
+status() {
+  local name
+  for name in webcontrol webcontrol-rs; do
+    printf '%-14s %s, %s\n' "$name" "$("${SYSTEMCTL[@]}" is-active "$name" 2>/dev/null || true)" \
+      "$("${SYSTEMCTL[@]}" is-enabled "$name" 2>/dev/null || true)"
+  done
+  local answering
+  answering="$(backend_of "$(state)")"
+  echo "answering on $URL: ${answering:-nothing}"
+}
+
+target="${1:-}"
+force=0
+[ "${2:-}" = "--force" ] && force=1
+case "$target" in
+  status) status; exit 0 ;;
+  rust | python) ;;
+  *) usage ;;
+esac
+other="$([ "$target" = rust ] && echo python || echo rust)"
+
+body="$(state)"
+if [[ "$body" =~ \"jobInProgress\":\ *true ]] && [ "$force" = 0 ]; then
+  echo "A job is running or paused; stop it first, or pass --force." >&2
+  exit 1
+fi
+
+"${SYSTEMCTL[@]}" disable --now "$(unit_for "$other")"
+"${SYSTEMCTL[@]}" enable --now "$(unit_for "$target")"
+
+for _ in $(seq "$WAIT"); do
+  if [ "$(backend_of "$(state)")" = "$target" ]; then
+    echo "WebControl is now the $target backend at $URL (and starts on boot)."
+    exit 0
+  fi
+  sleep 1
+done
+echo "$(unit_for "$target") was started, but $URL did not answer as $target within ${WAIT}s." >&2
+echo "Look at: journalctl -u $(unit_for "$target") -n 50" >&2
+exit 1
