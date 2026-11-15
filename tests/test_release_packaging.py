@@ -223,3 +223,49 @@ def test_activate_restarts_the_new_service_onto_updated_code(tmp_path):
     log = activate_log(tmp_path, active=["webcontrol"])
     assert "sudo systemctl restart webcontrol" in log
     assert not any("webcontrol-v094" in line for line in log)
+
+
+def settings_prelude(tmp_path):
+    (tmp_path / "home").mkdir(exist_ok=True)
+    return f'settings="{tmp_path}/home/webcontrol.json"; settings_v094="$settings.v094"; wait_for_server() {{ :; }}; '
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+def test_activating_from_v094_saves_its_settings_for_rollback(tmp_path):
+    unit = v094_unit_file(tmp_path, f"User={subprocess.check_output(['id', '-un'], text=True).strip()}")
+    body = settings_prelude(tmp_path) + fake_systemd(tmp_path, unit, active=["webcontrol"]) + "write_unit; activate"
+    (tmp_path / "home" / "webcontrol.json").write_text('{"v094": true}')
+    source_install_script(tmp_path, body)
+    assert (tmp_path / "home" / "webcontrol.json.v094").read_text() == '{"v094": true}'
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+def test_restarting_the_new_service_keeps_the_v094_settings_it_saved(tmp_path):
+    body = settings_prelude(tmp_path) + fake_systemd(tmp_path, "", active=["webcontrol"]) + "write_unit; activate"
+    (tmp_path / "home" / "webcontrol.json").write_text('{"next": true}')
+    (tmp_path / "home" / "webcontrol.json.v094").write_text('{"v094": true}')
+    (tmp_path / "webcontrol-v094.service").write_text("[Service]\n")
+    source_install_script(tmp_path, body)
+    assert (tmp_path / "home" / "webcontrol.json.v094").read_text() == '{"v094": true}'
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+def test_rollback_starts_v094_on_the_settings_it_last_saved(tmp_path):
+    body = settings_prelude(tmp_path) + fake_systemd(tmp_path, "", active=["webcontrol"]) + "rollback"
+    (tmp_path / "home" / "webcontrol.json").write_text('{"next": true, "maxZRPM": ""}')
+    (tmp_path / "home" / "webcontrol.json.v094").write_text('{"v094": true}')
+    (tmp_path / "webcontrol-v094.service").write_text("[Service]\n")
+    source_install_script(tmp_path, body)
+    assert (tmp_path / "home" / "webcontrol.json").read_text() == '{"v094": true}'
+    assert (tmp_path / "home" / "webcontrol.json.next").read_text() == '{"next": true, "maxZRPM": ""}'
+    assert (tmp_path / "sudo.log").read_text().splitlines() == [
+        "sudo systemctl disable --now webcontrol",
+        "sudo systemctl enable --now webcontrol-v094",
+    ]
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+def test_rollback_needs_the_saved_v094_unit(tmp_path):
+    result = run_install_script(tmp_path, settings_prelude(tmp_path) + fake_systemd(tmp_path, "") + "rollback")
+    assert result.returncode != 0
+    assert not (tmp_path / "sudo.log").exists()

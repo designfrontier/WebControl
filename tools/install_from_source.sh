@@ -5,12 +5,13 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: tools/install_from_source.sh [--activate]
+Usage: tools/install_from_source.sh [--activate | --rollback]
 
   (no option)  Create .venv (Python 3.9), install the requirements, check frontend/dist and install
                webcontrol.service. Never stops or restarts a WebControl that is already running.
   --activate   Stop the old WebControl service (v0.94), keeping it as webcontrol-v094.service for
                rollback, then enable and (re)start this one. Run it only with the machine idle.
+  --rollback   Stop this service, put back the settings v0.94 last saved, and start webcontrol-v094.
 EOF
 }
 
@@ -21,6 +22,8 @@ unit=/etc/systemd/system/webcontrol.service
 old_unit=/etc/systemd/system/webcontrol-v094.service
 marker="# Installed by WebControl tools/install_from_source.sh"
 port=5000
+settings="$HOME/.WebControl/webcontrol.json"
+settings_v094="$settings.v094"
 piwheels=https://www.piwheels.org/simple
 os_release=/etc/os-release
 
@@ -214,7 +217,7 @@ print_switch_help() {
 The old WebControl keeps running. When the machine is idle, switch with:
     tools/install_from_source.sh --activate
 EOF
-  [ ! -f "$old_unit" ] || echo "Roll back with: sudo systemctl disable --now webcontrol && sudo systemctl enable --now webcontrol-v094"
+  [ ! -f "$old_unit" ] || echo "Roll back with: tools/install_from_source.sh --rollback"
 }
 
 install_unit() {
@@ -247,10 +250,10 @@ install_unit() {
 }
 
 wait_for_server() {
-  say "Waiting for http://localhost:$port/"
-  local attempt
+  local path="${1:-/next/}" attempt
+  say "Waiting for http://localhost:$port$path"
   for attempt in $(seq 1 120); do
-    if curl -fsS -o /dev/null "http://localhost:$port/next/"; then
+    if curl -fsS -o /dev/null "http://localhost:$port$path"; then
       echo "WebControl is up after ${attempt}s: http://$(hostname -I | awk '{print $1}'):$port/ and /next/"
       return 0
     fi
@@ -259,10 +262,22 @@ wait_for_server() {
   die "WebControl did not answer within 120s. Check: journalctl -u webcontrol -n 100"
 }
 
+# v0.94 reads every entry in webcontrol.json, so keys a newer backend adds could reach its firmware sync.
+save_v094_settings() {
+  [ -f "$settings" ] || return 0
+  cp -p "$settings" "$settings_v094"
+  echo "Saved v0.94's settings as $settings_v094 for --rollback"
+}
+
 activate() {
   [ -f "$staged" ] || die "run tools/install_from_source.sh first (no staged unit at $staged)"
-  local v094
+  local v094 from_v094=0
   v094="$(v094_unit)"
+  [ -z "$v094" ] || from_v094=1
+  ! systemctl is-active --quiet webcontrol-v094 || from_v094=1
+  if [ "$from_v094" = 1 ] || { [ -f "$old_unit" ] && [ ! -f "$settings_v094" ]; }; then
+    save_v094_settings
+  fi
   if [ -n "$v094" ]; then
     [ -f "$old_unit" ] || sudo cp "$v094" "$old_unit"
     say "Stopping and disabling the v0.94 webcontrol.service"
@@ -283,11 +298,26 @@ activate() {
   wait_for_server
 }
 
+rollback() {
+  [ -f "$old_unit" ] || die "there is no $old_unit to roll back to"
+  say "Stopping the new webcontrol.service"
+  sudo systemctl disable --now webcontrol
+  if [ -f "$settings_v094" ]; then
+    [ ! -f "$settings" ] || cp -p "$settings" "$settings.next"
+    cp -p "$settings_v094" "$settings"
+    echo "Put back v0.94's settings; the new build's last settings are in $settings.next"
+  fi
+  say "Starting webcontrol-v094.service"
+  sudo systemctl enable --now webcontrol-v094
+  wait_for_server /
+}
+
 main() {
   local mode=install
   case "${1:-}" in
     "") ;;
     --activate) mode=activate ;;
+    --rollback) mode=rollback ;;
     -h | --help) usage; exit 0 ;;
     *) usage >&2; exit 2 ;;
   esac
@@ -295,8 +325,8 @@ main() {
   [ "$(uname -s)" = Linux ] || die "this installs a systemd service on Raspberry Pi OS; on macOS use the README's dev setup"
   cd "$repo"
   check_same_user
-  if [ "$mode" = activate ]; then
-    activate
+  if [ "$mode" != install ]; then
+    "$mode"
     return
   fi
   check_dist

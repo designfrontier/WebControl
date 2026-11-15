@@ -8,13 +8,14 @@ The new build runs from source in `~/webcontrol-source` with its own Python 3.9 
 
 - **Time:** 20–45 minutes the first time, mostly `pip` on the Pi (step 3). v0.94 keeps running during that.
 - **Downtime:** about 1 minute, during the switch (step 4).
-- **Rollback:** under 2 minutes (step 6).
+- **Rollback:** under 2 minutes, one command (step 6).
 
 What carries over and what changes:
 
 - **Settings carry over unchanged.** This build reads `~/.WebControl/webcontrol.json` as it is: the setting keys are
   the same as v0.94's. It also keeps a `webcontrol.json.bak` next to it, which v0.94 ignores. G-code and boards in
-  `~/.WebControl` are used as they are.
+  `~/.WebControl` are used as they are. Switching saves v0.94's copy as `webcontrol.json.v094`, and rolling back puts
+  it back.
 - **The classic UI is still at `/`.** The new UI is at `/next/`. Both talk to the same server, so you can use either
   one.
 - **Re-run holey calibration once.** The solver's library version differs from v0.94's, so the calibration numbers
@@ -101,10 +102,12 @@ cd ~/webcontrol-source && tools/install_from_source.sh --activate
 ```
 
 This stops and disables v0.94's `webcontrol.service` (and `webcontrol-v094.service`, if it is running), installs the
-new unit under the same name, enables and starts it, and waits until `/next/` answers. To do the same by hand:
+new unit under the same name, enables and starts it, and waits until `/next/` answers. Before that it copies
+`~/.WebControl/webcontrol.json` to `webcontrol.json.v094`, the settings step 6 puts back. To do the same by hand:
 
 ```sh
 sudo systemctl disable --now webcontrol
+cp -p ~/.WebControl/webcontrol.json ~/.WebControl/webcontrol.json.v094
 sudo cp ~/webcontrol-source/build/webcontrol.service /etc/systemd/system/webcontrol.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now webcontrol
@@ -130,20 +133,38 @@ If something is wrong, see the log with `journalctl -u webcontrol -n 100 --no-pa
 ## 6. Roll back to v0.94 (under 2 minutes)
 
 ```sh
-sudo systemctl disable --now webcontrol && sudo systemctl enable --now webcontrol-v094
+cd ~/webcontrol-source && tools/install_from_source.sh --rollback
 ```
 
-v0.94 is back at `http://192.168.86.155:5000/` and stays there after a reboot. It reads the same settings file.
-To restore the exact pre-upgrade settings as well:
+This stops and disables the new `webcontrol.service`, puts back the settings v0.94 last saved
+(`webcontrol.json.v094`), enables and starts `webcontrol-v094.service`, and waits until `/` answers. v0.94 is back at
+`http://192.168.86.155:5000/` and stays there after a reboot. On its first connect it writes its own settings back
+to the controller.
+
+Settings changed in the new build, such as a re-run holey calibration, are kept in
+`~/.WebControl/webcontrol.json.next`. They are not handed to v0.94, because v0.94 reads every entry in
+`webcontrol.json` and syncs any entry with a firmware key to the controller, and a newer backend can add entries whose
+values v0.94 cannot parse.
+
+The same by hand, if the script cannot run:
+
+```sh
+sudo systemctl disable --now webcontrol
+cp -p ~/.WebControl/webcontrol.json ~/.WebControl/webcontrol.json.next
+cp -p ~/.WebControl/webcontrol.json.v094 ~/.WebControl/webcontrol.json
+sudo systemctl enable --now webcontrol-v094
+```
+
+To put back all of `~/.WebControl` from step 1 instead (G-code and boards too), with the date from step 1:
 
 ```sh
 sudo systemctl stop webcontrol-v094
-tar xzf ~/webcontrol-backup-<date>.tar.gz -C ~ .WebControl
+tar xzf ~/webcontrol-backup-YYYY-MM-DD.tar.gz -C ~ .WebControl
 sudo systemctl start webcontrol-v094
 ```
 
-To return to the new build later, run `tools/install_from_source.sh --activate` again. It disables
-`webcontrol-v094.service` and starts the new one.
+To return to the new build later, run `tools/install_from_source.sh --activate` again. It saves v0.94's settings
+again, disables `webcontrol-v094.service` and starts the new one on the settings v0.94 left.
 
 ## Updating the new build later
 
