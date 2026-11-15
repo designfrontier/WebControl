@@ -12,7 +12,7 @@ use wc_protocol::Push;
 
 use crate::files::{Reply, Request};
 use crate::gpio::{Button, Leds};
-use crate::{Effect, Event, Machine, Response, Snapshot};
+use crate::{Effect, Event, FirmwareJob, JobResult, Machine, Response, Snapshot};
 
 const TICK: Duration = Duration::from_millis(10);
 const HEALTH: Duration = Duration::from_secs(5);
@@ -57,6 +57,20 @@ pub trait Host: Send + Sync + 'static {
     fn create_directory(&self, name: &str) -> bool;
     /// Lights the GPIO status LEDs.
     fn leds(&self, _leds: Leds) {}
+    /// Runs avrdude or saves a firmware backup, off the machine task.
+    fn firmware(&self, job: FirmwareJob) -> JobResult {
+        unsupported(job)
+    }
+}
+
+/// What a host that cannot flash answers.
+pub fn unsupported(job: FirmwareJob) -> JobResult {
+    let why = "this host cannot run avrdude".to_string();
+    match job {
+        FirmwareJob::ReadFlash { .. } => JobResult::Read(Err(why)),
+        FirmwareJob::Save { .. } => JobResult::Saved(Err(why)),
+        FirmwareJob::WriteFlash { .. } => JobResult::Written { success: false, output: why },
+    }
 }
 
 /// No controller at all: every open fails, as with nothing plugged in.
@@ -153,6 +167,7 @@ struct Task<C: Core> {
     snapshot: watch::Sender<Snapshot>,
     started: Instant,
     persist: watch::Sender<Option<Arc<Settings>>>,
+    jobs: mpsc::UnboundedSender<Event>,
     requests: HashMap<u64, oneshot::Sender<Reply>>,
     responses: HashMap<u64, oneshot::Sender<Response>>,
     next_request: u64,
@@ -267,6 +282,15 @@ impl<C: Core> Task<C> {
                         self.persist.send_replace(Some(settings));
                         None
                     }
+                    Effect::Firmware(job) => {
+                        let (host, jobs) = (self.host.clone(), self.jobs.clone());
+                        tokio::spawn(async move {
+                            let result = tokio::task::spawn_blocking(move || host.firmware(job)).await;
+                            let result = result.unwrap_or_else(|e| JobResult::Saved(Err(e.to_string())));
+                            let _ = jobs.send(Event::FirmwareDone(result));
+                        });
+                        None
+                    }
                     Effect::CreateDirectory(name) => {
                         let _ = self.directories.send(name);
                         None
@@ -306,6 +330,7 @@ pub fn spawn<C: Core>(core: C, opener: Box<dyn PortOpener>, host: Arc<dyn Host>)
     let (commands, mut command_rx) = mpsc::unbounded_channel();
     let (realtime, mut realtime_rx) = mpsc::unbounded_channel();
     let (reads, mut read_rx) = mpsc::unbounded_channel::<Read>();
+    let (jobs, mut job_rx) = mpsc::unbounded_channel();
     let (directories, directory_rx) = mpsc::unbounded_channel();
     let (made, mut made_rx) = mpsc::unbounded_channel();
     tokio::spawn(make_directories(host.clone(), directory_rx, made));
@@ -326,6 +351,7 @@ pub fn spawn<C: Core>(core: C, opener: Box<dyn PortOpener>, host: Arc<dyn Host>)
         snapshot: snapshot_tx,
         started: Instant::now(),
         persist: persist_tx,
+        jobs,
         requests: HashMap::new(),
         responses: HashMap::new(),
         next_request: 0,
@@ -343,6 +369,7 @@ pub fn spawn<C: Core>(core: C, opener: Box<dyn PortOpener>, host: Arc<dyn Host>)
                     true => read,
                     false => continue,
                 },
+                Some(done) = job_rx.recv() => done,
                 Some(made) = made_rx.recv() => made,
                 command = command_rx.recv() => match command {
                     Some(Command::Event(event)) => event,

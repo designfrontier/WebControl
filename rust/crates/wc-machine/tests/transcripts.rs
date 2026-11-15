@@ -5,14 +5,12 @@ use std::time::Duration;
 
 use serde_json::{Map, Value};
 use wc_config::{Settings, python_str};
+use wc_machine::calibration::{Kind, calculate};
 use wc_machine::{Effect, Event, Machine, Request};
 use wc_protocol::{Action, Namespace};
 use wc_testkit::contract::Contract;
 use wc_testkit::runner::{SerialBackend, replay};
 use wc_testkit::transcript::{Transcript, UiAction};
-
-/// Transcripts another milestone's routes answer, with the milestone; every other one must pass here.
-const ELSEWHERE: &[(&str, &str)] = &[("holey_calibration_accept_writes_settings", "M5b: the calibration routes")];
 
 struct MachineBackend {
     machine: Machine,
@@ -31,6 +29,10 @@ impl MachineBackend {
     fn new() -> MachineBackend {
         let machine = Machine::new("127.0.0.1:5000", Settings::defaults());
         MachineBackend { machine, now: Duration::ZERO, unread: Vec::new(), written: Vec::new(), messages: Vec::new() }
+    }
+
+    fn settings(&self) -> Settings {
+        (*self.machine.snapshot().settings).clone()
     }
 
     fn apply(&mut self, event: Event) {
@@ -96,6 +98,13 @@ impl SerialBackend for MachineBackend {
             }
             ("POST", "/api/machine/quick-configure") => Request::QuickConfigure(body),
             ("POST", "/api/system/pid-test") => Request::PidTest(body),
+            ("POST", _) if path.starts_with("/api/calibration/") => match &path["/api/calibration/".len()..] {
+                "triangular" => Request::Calibrated(calculate(Kind::Triangular, &self.settings(), &body)),
+                "holey" => Request::Calibrated(calculate(Kind::Holey, &self.settings(), &body)),
+                "triangular/accept" => Request::AcceptCalibration(Kind::Triangular),
+                "holey/accept" => Request::AcceptCalibration(Kind::Holey),
+                _ => return 404,
+            },
             _ => return 404,
         };
         let effects = self.machine.handle(Event::Edit { id: 1, request }, self.now);
@@ -138,18 +147,10 @@ fn corpus() -> Vec<Transcript> {
 }
 
 #[test]
-fn the_list_of_transcripts_answered_elsewhere_names_real_ones() {
-    let names: Vec<String> = corpus().into_iter().map(|t| t.meta.name).collect();
-    ELSEWHERE.iter().for_each(|(name, _)| assert!(names.iter().any(|n| n == name), "{name} is not a transcript"));
-}
-
-#[test]
 fn every_transcript_passes() {
-    let failures: Vec<String> = corpus()
-        .iter()
-        .filter(|t| !ELSEWHERE.iter().any(|(name, _)| *name == t.meta.name))
-        .filter_map(|t| replay(&mut MachineBackend::new(), t).err())
-        .collect();
+    let corpus = corpus();
+    assert!(corpus.len() >= 39, "the whole corpus: {}", corpus.len());
+    let failures: Vec<String> = corpus.iter().filter_map(|t| replay(&mut MachineBackend::new(), t).err()).collect();
     assert!(failures.is_empty(), "{} failing:\n{}", failures.len(), failures.join("\n"));
 }
 
@@ -205,4 +206,7 @@ fn http_writes_the_machine_does_not_answer_are_404() {
     let quick = serde_json::json!({});
     assert_eq!(backend.http("POST", "/api/machine/quick-configure", Some(&quick), None), 400);
     assert_eq!(backend.http("POST", "/api/system/pid-test", None, None), 400);
+    assert_eq!(backend.http("POST", "/api/calibration/optical", None, None), 404);
+    assert_eq!(backend.http("POST", "/api/calibration/triangular", None, None), 400);
+    assert_eq!(backend.http("POST", "/api/calibration/triangular/accept", None, None), 409);
 }

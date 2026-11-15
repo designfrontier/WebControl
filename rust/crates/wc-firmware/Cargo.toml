@@ -9,7 +9,11 @@ publish.workspace = true
 
 [dependencies]
 serde_json.workspace = true
+sha2.workspace = true
 wc-config.workspace = true
+
+[build-dependencies]
+sha2.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

@@ -2,17 +2,23 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { useClient, useMachine } from "../../app/context";
 import { ConfirmDialog } from "../../app/Dialog";
-import type { SystemInfo } from "../../protocol";
+import type { FirmwareUpgrade, SystemInfo } from "../../protocol";
 import { selectGcodeLocked, selectRunState } from "../../state/machine";
 import { actionGroups, isAllowed } from "./actionsCatalog";
 import type { ActionItem } from "./actionsCatalog";
 import { downloadUrl } from "./api";
 import { FakeServoDialog } from "./FakeServoDialog";
+import { FirmwareUpgradeDialog } from "./FirmwareUpgradeDialog";
 import { RestoreDialog } from "./RestoreDialog";
 import { SETUP_LINKS } from "./setupLinks";
 import type { SetupLink } from "./setupLinks";
 
-type Open = { kind: "confirm"; item: ActionItem } | { kind: "restore" } | { kind: "fakeServo" } | null;
+type Open =
+  | { kind: "confirm"; item: ActionItem }
+  | { kind: "restore" }
+  | { kind: "fakeServo" }
+  | { kind: "upgrade"; upgrade: FirmwareUpgrade }
+  | null;
 
 const SetupEntry = ({ link, info }: { link: SetupLink; info: SystemInfo | null }) => {
   const reason = link.blockedBy?.(info);
@@ -62,7 +68,13 @@ export const ActionsPanel = ({ info }: { info: SystemInfo | null }) => {
     setOpen(null);
   };
 
-  const press = (item: ActionItem) => (item.confirm ? setOpen({ kind: "confirm", item }) : send(item));
+  const guided = info?.firmwareUpgrade;
+  const press = (item: ActionItem) =>
+    guided && item.command === "upgradeHoleyFirmware"
+      ? setOpen({ kind: "upgrade", upgrade: guided })
+      : item.confirm
+        ? setOpen({ kind: "confirm", item })
+        : send(item);
   const busy = runState === "running" || runState === "paused";
 
   return (
@@ -127,6 +139,7 @@ export const ActionsPanel = ({ info }: { info: SystemInfo | null }) => {
           <p>{open.item.confirm.body}</p>
         </ConfirmDialog>
       )}
+      {open?.kind === "upgrade" && <FirmwareUpgradeDialog initial={open.upgrade} onClose={() => setOpen(null)} />}
       {open?.kind === "restore" && (
         <RestoreDialog
           onClose={() => setOpen(null)}

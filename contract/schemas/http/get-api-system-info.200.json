@@ -74,6 +74,148 @@
         "available",
         "version"
       ]
+    },
+    "firmwareUpgrade": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "type": "string"
+        },
+        "imageSha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stage": {
+          "type": "string",
+          "enum": [
+            "idle",
+            "checking",
+            "ready",
+            "blocked",
+            "backingUp",
+            "flashing",
+            "restarting",
+            "migrating",
+            "selfTest",
+            "testing",
+            "done",
+            "failed",
+            "rollingBack",
+            "rolledBack"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "board": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "firmware": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "chains": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "left": {
+                  "type": "number"
+                },
+                "right": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "left",
+                "right"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "chainsAfter": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "left": {
+                  "type": "number"
+                },
+                "right": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "left",
+                "right"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "motors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "motor": {
+                "type": "string"
+              },
+              "passed": {
+                "type": "array",
+                "items": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "required": [
+              "motor",
+              "passed"
+            ]
+          }
+        },
+        "backup": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "canRollback": {
+          "type": "boolean"
+        },
+        "log": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "target",
+        "imageSha256",
+        "stage",
+        "message",
+        "board",
+        "firmware",
+        "chains",
+        "chainsAfter",
+        "motors",
+        "backup",
+        "canRollback",
+        "log"
+      ]
     }
   },
   "required": [

@@ -9,10 +9,10 @@ WebSockets, and shares `~/.WebControl` with the Python install.
 | `wc-config` | `~/.WebControl` layout and `webcontrol.json`, read and written like `config/config.py` (byte-identical format, `.bak`, a one-time `.pre-rs` snapshot), `setValue`'s rules, and the gcode and board libraries |
 | `wc-gcode` | Gcode load, sanitising, home shift, T rule, restart state, the 3D preview payload and boards, as Python does |
 | `wc-kinematics` | The holey firmware's triangular and quadrilateral inverse/forward, float for float with Python |
-| `wc-calibration` | Holey (`levenberg-marquardt`) and triangular calibration, test patterns, Accept's settings and `$` lines |
-| `wc-firmware` | The controller's serial protocol, sans IO: line classifier, flow control, boot facts, `$` lines, the boot push and the lines a settings edit sends |
+| `wc-calibration` | Holey (scipy's trust-region least squares, ported step for step) and triangular calibration, test patterns, Accept's settings and `$` lines |
+| `wc-firmware` | The controller's serial protocol, sans IO: line classifier, flow control, boot facts, `$` lines, the boot push and the lines a settings edit sends; the 51.292 upgrade's board and version gates, avrdude lines, flash images (the pinned one embedded, the rollback one cut from a read-back) and settings migration |
 | `wc-machine` | The sans-IO core (`Machine::handle(event, now) -> effects`): link, settings, files and the job (Play, Pause, Resume, restart, tool changes, M0, alarms), the run-state gates, GPIO buttons and LEDs; and the tokio shell, where Stop has its own channel |
-| `wc-sim` | A simulated controller (ring buffer, `ok` timing, `!`/`~`, M0, tool change and `$16=0` manual-Z pauses, `$$`, boot banners, status reports, alarms) |
+| `wc-sim` | A simulated controller (ring buffer, `ok` timing, `!`/`~`, M0, tool change and `$16=0` manual-Z pauses, `$$`, boot banners, status reports, alarms, B04, B10, a flash to another EEPROM layout) |
 | `wc-server` | The `webcontrol-rs` binary: axum routes (incl. the files, boards and archive routes), `/ws` sessions, the serial port, the Pi's GPIO header (rppal, Linux only), embedded UI and images |
 | `wc-testkit` | Test support: the `contract/` schema harness and the `contract/serial/` transcript runner |
 
@@ -23,8 +23,7 @@ WebSockets, and shares `~/.WebControl` with the Python install.
 - `cargo run -p wc-server -- --home "$(mktemp -d)" --port 5055 [--simulate]`: never point `--home` at the real
   `~/.WebControl` while testing; `--simulate` talks to `wc-sim` instead of the serial port
 - `cargo test -p wc-machine --test transcripts`: replays every transcript in `contract/serial/` (with
-  `transcripts-rust/` in place of the Python ones it overrides); `ELSEWHERE` names the ones another milestone's routes
-  answer
+  `transcripts-rust/` in place of the Python ones it overrides)
 - `cargo test -p wc-machine --test gates`: every contract action in every run state, each state reached through
   `wc-sim`
 - `WC_REGENERATE=1 cargo test -p wc-config --test python_roundtrip`: rewrites
@@ -34,6 +33,11 @@ WebSockets, and shares `~/.WebControl` with the Python install.
 - `cargo run --release -p wc-gcode --example gcode_timing -- <file.nc> [home_x home_y]`: times each step of opening
   a gcode file, for the M3 time budget
 - `bash deploy/test.sh`: `wc-switch`, `deploy.sh` and `install-pi.sh` against stubs
+- `bash firmware/docker-build.sh <dir>`: builds the holey 51.292 hex from the Orob-Maslow/Firmware v51.292 tag in
+  arm64 Docker and fails unless it matches `firmware/holey-51.292.sha256`; `WC_FIRMWARE_HEX=<dir>/holey-51.292.hex`
+  then embeds it in any build (CI's cross-build and `deploy.sh build` do). Without it the upgrade wizard refuses
+- `cargo test -p wc-machine --test upgrade`: the upgrade rehearsal against `wc-sim` with a fake avrdude (success,
+  sync failure and retry, wrong banner and rollback, EEPROM reset and migration)
 - `E2E_BACKEND=rust npm run test:e2e` in `frontend/`: the Playwright specs the binary passes so far (the Rust
   smoke, `files-boards`, `viewer`; `rustSpecs` in `playwright.config.ts`)
 
@@ -45,4 +49,6 @@ WebSockets, and shares `~/.WebControl` with the Python install.
 conflict, so only one holds the port. `install-pi.sh` also adds `/etc/sudoers.d/webcontrol-rs`, which lets the
 service run `systemctl poweroff` (the UI's Turn Off Raspberry Pi) and nothing else. The serial log is
 `~/.WebControl/webcontrol-rs.log` (rotated at 5 MB). Each milestone's hardware checklist is in
-`spec/rust-checklists/`.
+`spec/rust-checklists/`. The firmware upgrade (Actions → Upgrade holey firmware to 51.292…) runs `avrdude`, which
+`install-pi.sh` installs, and keeps each backup in `~/.WebControl/firmware-backups/<time>/`; `M6.md` rehearses an
+upgrade and a rollback before the real one.

@@ -13,8 +13,23 @@ binary="${WC_BINARY:-$rust/target/$target/release/webcontrol-rs}"
 command="${1:-}"
 host="${2:-pi@maslow-next.local}"
 
+# The 51.292 image the upgrade flashes, built from its tag in Docker unless WC_FIRMWARE_HEX names one.
+firmware() {
+  [ -n "${WC_FIRMWARE_HEX:-}" ] && return 0
+  local out="$rust/target/firmware"
+  if [ ! -f "$out/holey-51.292.hex" ]; then
+    if ! command -v docker > /dev/null; then
+      echo "no docker: building without the 51.292 image, so the upgrade wizard will refuse" >&2
+      return 0
+    fi
+    bash "$rust/firmware/docker-build.sh" "$out"
+  fi
+  export WC_FIRMWARE_HEX="$out/holey-51.292.hex"
+}
+
 build() {
   [ "${WC_SKIP_BUILD:-0}" = 1 ] && return 0
+  firmware
   (cd "$repo/frontend" && npm ci && npm run build)
   if ! command -v zig > /dev/null && ! python3 -c "import ziglang" 2> /dev/null; then
     echo "cargo zigbuild needs zig: pip install ziglang (or put zig on PATH)" >&2

@@ -10,6 +10,7 @@ use wc_protocol::machine::{QuickConfigureForm, SettingsUpdate};
 use wc_protocol::main::{HomePositionMessage, RequestedSetting};
 use wc_protocol::system::PidTest;
 
+use crate::calibration::{Calculated, Kind};
 use crate::commands::round4;
 use crate::forms;
 use crate::job::Flow;
@@ -30,6 +31,10 @@ pub enum Request {
     QuickConfigure(Value),
     /// `POST /api/system/pid-test`.
     PidTest(Value),
+    /// `POST /api/calibration/{kind}`, calculated by `calibration::calculate`.
+    Calibrated(Calculated),
+    /// `POST /api/calibration/{kind}/accept`.
+    AcceptCalibration(Kind),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -43,7 +48,7 @@ impl Response {
         Response { status, body: serde_json::to_value(body).expect("protocol types always serialise") }
     }
 
-    fn error(status: u16, message: &str) -> Response {
+    pub(crate) fn error(status: u16, message: &str) -> Response {
         Response { status, body: json!({ "error": message }) }
     }
 }
@@ -67,6 +72,8 @@ impl Machine {
             Request::UpdateSettings { section, body } => self.update_section(&section, &body, now, effects),
             Request::QuickConfigure(body) => self.quick_configure(&body),
             Request::PidTest(body) => self.pid_test(&body, now, effects),
+            Request::Calibrated(calculated) => self.calibrated(calculated),
+            Request::AcceptCalibration(kind) => self.accept_calibration(kind),
         }
     }
 

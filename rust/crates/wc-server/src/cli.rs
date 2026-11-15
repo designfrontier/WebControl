@@ -8,10 +8,12 @@ use std::sync::Arc;
 
 use tokio::sync::Notify;
 use wc_config::{Paths, Settings};
+use wc_firmware::image::Image;
 use wc_machine::gpio::{Gpio, Plan};
 use wc_machine::{Event, Machine, MachineHandle, PortOpener, spawn};
 use wc_sim::Build;
 
+use crate::firmware::{SimFlasher, simulated_target};
 use crate::host::SystemHost;
 use crate::serial::{SerialOpener, SimOpener};
 use crate::{AppState, PingConfig, router};
@@ -21,7 +23,7 @@ Usage: webcontrol-rs [--port N] [--home DIR] [--simulate]
 
   --port N     listen on port N (default: webPort from webcontrol.json, else 5000; 0 picks one)
   --home DIR   use DIR/.WebControl instead of $HOME/.WebControl
-  --simulate   talk to a simulated holey 51.27 controller instead of the serial port
+  --simulate   talk to a simulated holey 51.27 controller on PCB v1.1 instead of the serial port
   --version    print the version, git commit and contract version
   --help       print this help";
 
@@ -30,6 +32,8 @@ const SAVE_ON_EXIT: std::time::Duration = std::time::Duration::from_secs(5);
 
 /// The port name `--simulate` connects to.
 pub const SIMULATED_PORT: &str = "simulator";
+/// The owner's board, which the upgrade wizard can be rehearsed on.
+pub const SIMULATED_BOARD: &str = "PCB v1.1 Detected";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Options {
@@ -101,12 +105,18 @@ pub async fn serve(options: Options, shutdown: impl Future<Output = ()> + Send +
     let bound = listener.local_addr()?;
     let exit = Arc::new(Notify::new());
     let host = SystemHost::new(&paths.dir(), exit.clone());
-    let host = Arc::new(if saving { host.saving_to(paths.clone()) } else { host });
+    let host = if saving { host.saving_to(paths.clone()) } else { host };
     let machine = Machine::new(&format!("{}:{}", local_ip(), bound.port()), settings);
-    let (machine, opener): (Machine, Box<dyn PortOpener>) = match options.simulate {
-        true => (machine.on_port(SIMULATED_PORT), Box::new(SimOpener::new(Build::holey_51_27()))),
-        false => (machine, Box::new(SerialOpener)),
+    let (machine, opener, host): (Machine, Box<dyn PortOpener>, SystemHost) = match options.simulate {
+        true => {
+            let opener = SimOpener::new(Build::holey_51_27().on_board(SIMULATED_BOARD));
+            let host = host.with_flasher(Box::new(SimFlasher { sim: opener.sim() }));
+            let machine = machine.on_port(SIMULATED_PORT).with_firmware(Image::embedded().or(Some(simulated_target())));
+            (machine, Box::new(opener), host)
+        }
+        false => (machine, Box::new(SerialOpener), host),
     };
+    let host = Arc::new(host);
     let (machine, task) = spawn(machine, opener, host.clone());
     host.attach_gpio(Some(start_gpio(&machine)));
     println!("webcontrol-rs listening on {bound}");

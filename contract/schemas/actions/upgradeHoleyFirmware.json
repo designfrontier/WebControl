@@ -11,7 +11,7 @@
           "const": "upgradeHoleyFirmware"
         },
         "arg": {
-          "description": "Ignored by the backend; the UI sends \"\".",
+          "description": "Python flashes the bundled hex and ignores it (the UI sends \"\"). webcontrol-rs runs the guided 51.292 upgrade one step per action: \"check\", \"upgrade\", \"selfTest\", \"rollback\" or \"reset\"; \"\" only alerts.",
           "type": [
             "string",
             "number"

@@ -180,3 +180,33 @@ async fn the_port_boots_then_answers() {
     assert!(std::str::from_utf8(&buffer[..n]).unwrap().starts_with("<Idle,MPos:"));
     drop(port);
 }
+
+#[test]
+fn a_flash_to_another_eeprom_layout_boots_with_factory_settings() {
+    let mut sim = Sim::new(Build::holey_51_27().on_board("PCB v1.1 Detected"));
+    send(&mut sim, "$18=12.6\n");
+    sim.flash(Build::holey_51_292().on_board("PCB v1.1 Detected"));
+    let boot = sim.boot(0);
+    assert_eq!(boot[0], "PCB v1.1 Detected");
+    assert!(boot.contains(&"error: EEPROM read fail. Using default settings.".to_string()));
+    assert_eq!(sim.setting(18), Some(126.0), "51.292's factory Z speed");
+    assert_eq!(send(&mut sim, "B05\n")[0], "Firmware Version 51.29");
+    sim.flash(Build::holey_51_292());
+    assert_eq!(sim.boot(0).len(), 5, "the same layout keeps its settings");
+}
+
+#[test]
+fn b10_measures_each_chain_and_b04_tests_each_motor() {
+    let mut sim = sim();
+    assert_eq!(send(&mut sim, "B10 L\n"), ["[Measure: 1650.00]", "ok"]);
+    sim.chains.1 = 1700.5;
+    assert_eq!(send(&mut sim, "B10 R\n"), ["[Measure: 1700.50]", "ok"]);
+    sim.stuck_motor = Some('Z');
+    let report = send(&mut sim, "B04 \n");
+    let status = "<Idle,MPos:0,0,0,WPos:0.000,0.000,0.000>";
+    assert_eq!(report[0], "Testing L motor:");
+    assert_eq!(report[1], format!("{status}Direction 1 - Pass"));
+    assert_eq!(report[3], format!("{status}Testing R motor:"));
+    assert_eq!(report[8], format!("{status}Direction 2 - Fail"));
+    assert_eq!(&report[9..], [format!("{status}Tests complete."), "ok".into()]);
+}

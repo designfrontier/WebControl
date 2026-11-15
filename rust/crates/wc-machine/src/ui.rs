@@ -2,7 +2,9 @@
 //! Python throttles them, and the answers to `settingRequest`.
 
 use serde_json::Value;
+use wc_config::Settings;
 use wc_firmware::{PositionError, Status};
+use wc_kinematics::{Geometry, Kinematics};
 use wc_protocol::main::{ErrorValueMessage, HealthMessage, HomePositionMessage, PositionMessage, RequestedSetting};
 
 use crate::machine::{Effect, Machine, broadcast};
@@ -12,8 +14,34 @@ const MOTOR_POWER: f64 = 15.0;
 /// `data.feedRate`, which nothing updates.
 const REQUESTED_FEED: f64 = 20.0;
 const VELOCITY_FILTER: f64 = 0.5;
-/// Tells the UI there is no forward-kinematics position (wart 6) until wc-kinematics lands in M5.
+/// Tells the UI there is no forward-kinematics position (wart 6).
 const NO_COMPUTED_POSITION: f64 = -999999.0;
+/// `initializeSettings`: each model parameter as the firmware key `updateSetting` takes it.
+const MODEL_SETTINGS: [(u32, &str, &str); 13] = [
+    (2, "Maslow Settings", "motorSpacingX"),
+    (13, "Computed Settings", "distPerRot"),
+    (1, "Maslow Settings", "bedHeight"),
+    (0, "Maslow Settings", "bedWidth"),
+    (3, "Maslow Settings", "motorOffsetY"),
+    (40, "Advanced Settings", "leftChainTolerance"),
+    (41, "Advanced Settings", "rightChainTolerance"),
+    (45, "Advanced Settings", "chainElasticity"),
+    (46, "Maslow Settings", "sledWeight"),
+    (8, "Advanced Settings", "rotationRadius"),
+    (37, "Advanced Settings", "chainSagCorrection"),
+    (38, "Computed Settings", "chainOverSprocketComputed"),
+    (7, "Computed Settings", "kinematicsTypeComputed"),
+];
+
+/// The model `data.holeyKinematics` starts from; a setting that is missing or not a number keeps the default.
+pub(crate) fn computed_model(settings: &Settings) -> Kinematics {
+    MODEL_SETTINGS.iter().fold(Kinematics::new(Geometry::default()), |mut model, (key, section, name)| {
+        if let Some(text) = settings.text(section, name) {
+            model.update_setting(*key, &text);
+        }
+        model
+    })
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct PositionTracker {
@@ -103,7 +131,13 @@ impl Machine {
         if limit == 0.0 {
             return;
         }
-        let computed_enabled = self.settings.number("WebControl Settings", "computedPosition") as i64;
+        let enabled = self.settings.number("WebControl Settings", "computedPosition") as i64;
+        let enabled = if error.chains.is_some() { enabled } else { 0 };
+        // Solved on every report, as Python does, so the quadrilateral solver sees the same calls.
+        let guess = (self.position.x, self.position.y);
+        let computed =
+            error.chains.filter(|_| enabled > 0).and_then(|(l, r)| self.kinematics.forward_from(l, r, guess));
+        let (computed_x, computed_y) = computed.unwrap_or((NO_COMPUTED_POSITION, NO_COMPUTED_POSITION));
         let (left, right) = (error.left / limit, error.right / limit);
         self.reported_buffer = error.space;
         let (left_before, right_before) = self.errors.previous;
@@ -114,9 +148,9 @@ impl Machine {
         effects.push(broadcast(&ErrorValueMessage {
             left_error: left.abs(),
             right_error: right.abs(),
-            computed_x: NO_COMPUTED_POSITION,
-            computed_y: NO_COMPUTED_POSITION,
-            computed_enabled: if error.chains.is_some() { computed_enabled } else { 0 },
+            computed_x,
+            computed_y,
+            computed_enabled: enabled,
         }));
     }
 

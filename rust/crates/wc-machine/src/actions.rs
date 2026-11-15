@@ -12,7 +12,7 @@ use crate::gates;
 use crate::job::Flow;
 use crate::machine::{Effect, Link, Machine, alert, broadcast};
 
-const PROBING: &str = "Wait for Touch Z to finish or press Stop";
+pub(crate) const PROBING: &str = "Wait for Touch Z to finish or press Stop";
 const NOT_CONNECTED: &str = "The controller is not connected.";
 const Z_LIMITS_UNSUPPORTED: &str = "Z-axis limits need holey firmware 51.292 or later.";
 const JOB_LINES_HELD: &str = "The controller paused with lines of the job still in its buffer, which would run before \
@@ -23,7 +23,7 @@ const CLEARED_Z_LIMIT_MM: i32 = 9999;
 const SAFE_WHILE_PROBING: [&str; 7] =
     ["stopRun", "stopZ", "pauseRun", "createDirectory", "toggleCamera", "statusRequest", "queryCamera"];
 /// Commands that reach the controller, so they need it connected.
-const MACHINE_COMMANDS: [&str; 15] = [
+const MACHINE_COMMANDS: [&str; 17] = [
     "move",
     "moveTo",
     "moveZ",
@@ -39,7 +39,11 @@ const MACHINE_COMMANDS: [&str; 15] = [
     "setMinZ",
     "clearZ",
     "getZlimits",
+    "cutTriangularCalibrationPattern",
+    "cutHoleyCalibrationPattern",
 ];
+/// Python's `MACHINE_COMMANDS`: the manual commands a firmware pause refuses or a jog's `~` releases.
+const MANUAL_COMMANDS: usize = 15;
 
 fn is_blank(value: &Value) -> bool {
     value.as_str() == Some("")
@@ -48,11 +52,15 @@ fn is_blank(value: &Value) -> bool {
 impl Machine {
     pub(crate) fn action(&mut self, action: &Action, now: Duration, effects: &mut Vec<Effect>) {
         let command = action.command.as_str();
+        if self.upgrade.holds_link() && !crate::upgrade::allowed_while_flashing(command) {
+            return effects.push(alert("Wait for the firmware upgrade to finish."));
+        }
         if self.probing && !SAFE_WHILE_PROBING.contains(&command) {
             return effects.push(alert(PROBING));
         }
         let machine_command = MACHINE_COMMANDS.contains(&command);
-        if machine_command && self.job.firmware_paused && self.job.flow != Flow::Streaming {
+        let manual_command = MACHINE_COMMANDS[..MANUAL_COMMANDS].contains(&command);
+        if manual_command && self.job.firmware_paused && self.job.flow != Flow::Streaming {
             if self.job.holds_job_lines {
                 return effects.push(alert(JOB_LINES_HELD));
             }
@@ -70,7 +78,7 @@ impl Machine {
         if machine_command && !matches!(self.link, Link::Connected { .. }) {
             return effects.push(alert(NOT_CONNECTED));
         }
-        if machine_command && self.job.firmware_paused {
+        if manual_command && self.job.firmware_paused {
             // Streaming stays held, so releasing the firmware lets the jog run now instead of on Resume.
             self.release_firmware(now, effects);
         }
@@ -143,8 +151,11 @@ impl Machine {
             "startRun" => self.start_run(now, effects),
             "pauseRun" => self.pause_run(effects),
             "resumeRun" => self.resume_run(now, effects),
+            crate::upgrade::COMMAND => self.upgrade_action(action, now, effects),
+            "upgradeStockFirmware" | "upgradeCustomFirmware" => Some(self.other_firmware(command)),
             _ if crate::setup::COMMANDS.contains(&command) => self.setup_action(action, effects),
             _ if crate::pid::COMMANDS.contains(&command) => self.pid_action(action),
+            _ if crate::calibration::COMMANDS.contains(&command) => self.calibration_action(command),
             _ => Some(format!("Function not currently implemented.. Sorry.[{command}]")),
         };
         if let Some(text) = failure {

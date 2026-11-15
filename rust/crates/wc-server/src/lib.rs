@@ -8,6 +8,7 @@ pub mod assets;
 mod boards;
 pub mod cli;
 pub mod files;
+pub mod firmware;
 mod forms;
 pub mod gpio;
 pub mod host;

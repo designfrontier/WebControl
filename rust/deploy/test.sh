@@ -133,9 +133,16 @@ stage="$work/stage"
 mkdir -p "$stage"
 cp "$here/webcontrol-rs.service" "$here/webcontrol-conflicts.conf" "$here/wc-switch" "$here/webcontrol-rs.sudoers" "$stage/"
 printf '#!/bin/sh\necho "webcontrol-rs test"\n' > "$stage/webcontrol-rs"
+printf '#!/bin/sh\necho "apt $*" >> "%s/apt"\n' "$work" > "$work/bin/apt"
+chmod +x "$work/bin/apt"
 install_pi() {
-  PATH="$work/bin:$PATH" WC_ROOT="$work/root" WC_SYSTEMCTL=systemctl WC_SUDO=env WC_USER=maker \
+  PATH="$work/bin:$PATH" WC_ROOT="$work/root" WC_SYSTEMCTL=systemctl WC_SUDO=env WC_USER=maker WC_APT=apt \
     bash "$here/../install-pi.sh" "$stage"
+}
+
+installs_avrdude_unless_present() {
+  rm -f "$work/apt"
+  install_pi > /dev/null && { grep -q "^apt" "$work/apt" || command -v avrdude > /dev/null; }
 }
 
 installs_beside_python_without_starting() {
@@ -159,6 +166,7 @@ reinstall_keeps_the_previous_binary() {
 
 check "install-pi.sh installs beside Python and starts nothing" installs_beside_python_without_starting
 check "install-pi.sh keeps the previous binary as .prev" reinstall_keeps_the_previous_binary
+check "install-pi.sh installs avrdude for the firmware upgrade" installs_avrdude_unless_present
 
 if [ "$failures" != 0 ]; then
   echo "$failures failed"
