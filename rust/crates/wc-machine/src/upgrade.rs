@@ -215,10 +215,12 @@ impl Machine {
         }
     }
 
-    /// Stock and custom firmware are only offered by the Python backend.
+    /// Stock and custom firmware are not offered here.
     pub(crate) fn other_firmware(&self, command: &str) -> String {
         let name = if command == "upgradeStockFirmware" { "stock" } else { "custom" };
-        format!("webcontrol-rs only upgrades holey firmware. Switch to the Python backend to load the {name} firmware.")
+        format!(
+            "webcontrol-rs only upgrades holey firmware. Use another tool, such as the Arduino IDE, to load the {name} firmware."
+        )
     }
 
     /// C1: banner, B05, `$$` and both chain lengths, collected once everything queued before is answered.

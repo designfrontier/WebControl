@@ -60,7 +60,7 @@ Why this order:
 
 ## Not covered on the machine
 
-- The camera and optical calibration are out of scope for the Rust backend. Use Python for them (`wc-switch python`).
-- Stock-firmware and custom-hex upgrades: the Rust wizard tells you to use the Python backend for these.
+- The camera and optical calibration are dropped; the UI no longer offers optical calibration.
+- Stock-firmware and custom-hex upgrades: the wizard refuses them and points to another tool.
 - With no controller attached, Rust refuses machine commands (jog, Z, sprockets) with "The controller is not
   connected." Python queues them instead.
