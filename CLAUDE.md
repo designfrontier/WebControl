@@ -6,7 +6,8 @@
 
 ### Key directories
 
-- `.github/workflows/` — CI: frontend lint/typecheck/test/build, backend pytest, PyInstaller onedir smoke, Playwright e2e
+- `.github/workflows/` — CI: frontend lint/typecheck/test/build, backend pytest, PyInstaller onedir smoke, Playwright e2e,
+  and the Rust job (fmt, clippy, tests, 95% per-crate coverage, aarch64 cross-build, e2e smoke)
 - `Actions/` — `actions.py` dispatches every UI action (jog, home, run/pause/stop, settings, firmware upgrade, backup); plus triangular, holey, optical calibration and GPIO actions
 - `api/` — JSON blueprint mounted at `/api` for the new frontend; every `api/<feature>.py` exposing `blueprint` auto-registers
 - `Background/` — long-running worker loops: controller message routing, UI socket push (`UIProcessor`), log streaming, webcam capture, console/WebMCP queue
@@ -35,6 +36,7 @@
 - `frontend/` — the new React + TypeScript UI served at `/next` (see "New frontend" below)
 - `HelpManager/` — stub for fetching updated help pages from GitHub (mostly no-op)
 - `ReleaseManager/` — checks GitHub releases and self-updates PyInstaller builds
+- `rust/` — the Rust backend `webcontrol-rs` (`spec/RUST-PLAN.md`; crates, commands and Pi deploy in `rust/README.md`)
 - `static/` — browser assets served by Flask
 - `static/images/` — UI images
 - `static/images/gettingStarted/` — setup wizard images
