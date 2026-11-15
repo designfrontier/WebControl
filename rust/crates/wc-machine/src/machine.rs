@@ -84,6 +84,8 @@ impl Machine {
                 broadcast(Envelope::json(&HostAddress { host_address: self.host_address.clone() })),
                 broadcast(Envelope::json(&ConnectionStatus::disconnected())),
             ],
+            // statusRequest only asks for the camera's status, and the camera is out of scope.
+            Event::Action(action) if action.command == "statusRequest" => Vec::new(),
             Event::Action(action) => {
                 let text = format!("Function not currently implemented.. Sorry.[{}]", action.command);
                 vec![broadcast(Envelope::json(&ActivateModal::alert(&text)))]

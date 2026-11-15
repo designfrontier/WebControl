@@ -69,6 +69,12 @@ fn actions_not_implemented_yet_alert_like_python() {
 }
 
 #[test]
+fn status_requests_ask_only_for_the_camera_which_is_out_of_scope() {
+    let request = Action { command: "statusRequest".into(), arg: json!("cameraStatus"), arg1: json!("") };
+    assert!(machine().handle(Event::Action(request), Duration::ZERO).is_empty());
+}
+
+#[test]
 fn stop_while_disconnected_writes_nothing_and_says_nothing() {
     let mut machine = machine();
     assert!(machine.handle(Event::Stop(action("stopRun")), Duration::ZERO).is_empty());
