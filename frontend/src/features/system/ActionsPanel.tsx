@@ -9,21 +9,31 @@ import type { ActionItem } from "./actionsCatalog";
 import { downloadUrl } from "./api";
 import { FakeServoDialog } from "./FakeServoDialog";
 import { RestoreDialog } from "./RestoreDialog";
-
-const SETUP_LINKS = [
-  ["/files/import/groundcontrol", "Import groundcontrol.ini file"],
-  ["/files/import/webcontrol", "Import webcontrol.json file"],
-  ["/machine/quick-configure", "Quick configure"],
-  ["/machine/sprockets", "Set sprockets and chains"],
-  ["/machine/z-axis", "Set Z-axis"],
-  ["/machine/z-limits", "Set Z-axis limits"],
-  ["/machine/reset-chains", "Reset chains"],
-  ["/calibration/triangular", "Triangular calibration"],
-  ["/calibration/holey", "Holey calibration"],
-  ["/calibration/optical", "Optical calibration"],
-] as const;
+import { SETUP_LINKS } from "./setupLinks";
+import type { SetupLink } from "./setupLinks";
 
 type Open = { kind: "confirm"; item: ActionItem } | { kind: "restore" } | { kind: "fakeServo" } | null;
+
+const SetupEntry = ({ link, info }: { link: SetupLink; info: SystemInfo | null }) => {
+  const reason = link.blockedBy?.(info);
+  if (!reason)
+    return (
+      <Link className="button-link" to={link.to}>
+        {link.label}
+      </Link>
+    );
+  const id = `blocked-${link.to.replaceAll("/", "-")}`;
+  return (
+    <>
+      <button type="button" disabled aria-describedby={id}>
+        {link.label}
+      </button>
+      <p id={id} className="system-note">
+        {reason}
+      </p>
+    </>
+  );
+};
 
 const DownloadLink = ({ route, children }: { route: "downloadDiagnostics" | "backupWebControl"; children: string }) => (
   <a
@@ -91,12 +101,7 @@ export const ActionsPanel = ({ info }: { info: SystemInfo | null }) => {
                 </button>
               </>
             )}
-            {group.id === "setup" &&
-              SETUP_LINKS.map(([to, label]) => (
-                <Link key={to} className="button-link" to={to}>
-                  {label}
-                </Link>
-              ))}
+            {group.id === "setup" && SETUP_LINKS.map((link) => <SetupEntry key={link.to} link={link} info={info} />)}
             {group.id === "controller" && (
               <>
                 <Link className="button-link" to="/pid">

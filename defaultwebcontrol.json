@@ -411,6 +411,46 @@
             "title": "Position Error Limit",
             "type": "string",
             "value": "2.0"
+        },
+        {
+            "default": 12.6,
+            "desc": "The fastest the Z-axis motor may turn, in RPM. The Z feed rate is capped at this times the Z-axis distance per rotation. The stock Z motor needs 12.6; holey firmware 51.29x defaults to 126 after its settings reset, which drives Z about 10 times faster. Blank until read from the controller.\ndefault setting: 12.6",
+            "firmwareKey": 18,
+            "key": "maxZRPM",
+            "section": "Advanced Settings",
+            "title": "Max Z-Axis RPM",
+            "type": "string",
+            "value": ""
+        },
+        {
+            "default": 2000,
+            "desc": "How long, in milliseconds, an axis must sit idle before the controller stops holding it in position. Blank until read from the controller.\ndefault setting: 2000",
+            "firmwareKey": 9,
+            "key": "axisDetachTime",
+            "section": "Advanced Settings",
+            "title": "Axis Idle Detach Time",
+            "type": "string",
+            "value": ""
+        },
+        {
+            "default": 1,
+            "desc": "The ratio of Proportional on Error (1) to Proportional on Measure (0) for the left and right motors' velocity PID. Blank until read from the controller.\ndefault setting: 1",
+            "firmwareKey": 28,
+            "key": "propWeightV",
+            "section": "Advanced Settings",
+            "title": "Velocity Proportional Weighting",
+            "type": "string",
+            "value": ""
+        },
+        {
+            "default": 1,
+            "desc": "The ratio of Proportional on Error (1) to Proportional on Measure (0) for the Z-axis velocity PID. Blank until read from the controller.\ndefault setting: 1",
+            "firmwareKey": 36,
+            "key": "propWeightVZ",
+            "section": "Advanced Settings",
+            "title": "Velocity Proportional Weighting for Z-Axis",
+            "type": "string",
+            "value": ""
         }
     ],
     "Computed Settings": [

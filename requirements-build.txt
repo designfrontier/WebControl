@@ -1,0 +1,2 @@
+# PyInstaller for tools/build_release.sh; the specs need 6.0+ for contents_directory.
+pyinstaller==6.22.3

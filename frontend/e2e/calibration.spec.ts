@@ -49,8 +49,8 @@ test("optical calibration loads, validates and saves its settings", async ({ pag
 
 test("calibration pages lead back to the control screen", async ({ page }) => {
   await page.goto("/next/actions");
-  await page.getByRole("dialog", { name: "Actions" }).getByRole("link", { name: "Holey calibration" }).click();
-  await expect(page).toHaveURL(/\/next\/calibration\/holey$/);
+  await page.getByRole("dialog", { name: "Actions" }).getByRole("link", { name: "Triangular calibration" }).click();
+  await expect(page).toHaveURL(/\/next\/calibration\/triangular$/);
   await page.getByRole("link", { name: "← Back to Control" }).click();
   await expect(page).toHaveURL(/\/next\/?$/);
   await expect(page.getByRole("heading", { name: "Controls" })).toBeVisible();

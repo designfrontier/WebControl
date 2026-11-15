@@ -29,6 +29,10 @@ export const systemInfoSchema = z.object({
   firmware: z.object({ stock: z.string().nullable(), holey: z.string().nullable(), custom: z.string().nullable() }),
   canTurnOff: z.boolean(),
   fourMotor: z.boolean(),
+  /** The version narrowed by fingerprint ("51.292" or "51.29x" for a 51.29 report); null if unknown. */
+  firmwareBuild: z.string().nullable().default(null),
+  /** Only holey 51.292 and later store Z limits. */
+  firmwareSupportsZaxisLimit: z.boolean().default(false),
   update: z.object({ available: z.boolean(), version: z.string().nullable() }),
 });
 export type SystemInfo = z.infer<typeof systemInfoSchema>;

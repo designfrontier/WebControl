@@ -5,6 +5,7 @@ import re
 import frontmatter
 from flask import Blueprint, abort, current_app, jsonify, request, send_from_directory
 
+from Connection import firmwareFacts
 from File.safePaths import UnsafePathError, docsRoot, resolveInside
 
 blueprint = Blueprint("system", __name__, url_prefix="/system")
@@ -50,6 +51,8 @@ def system_info(data):
         },
         "canTurnOff": data.platform in ("RPI", "PYINSTALLER"),
         "fourMotor": firmware >= 100,
+        "firmwareBuild": firmwareFacts.firmwareBuild(data),
+        "firmwareSupportsZaxisLimit": firmwareFacts.supportsZaxisLimits(data),
         "update": {
             "available": bool(data.pyInstallUpdateAvailable),
             "version": _release_tag(data.pyInstallUpdateVersion) if data.pyInstallUpdateAvailable else None,

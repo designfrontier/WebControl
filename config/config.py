@@ -18,6 +18,17 @@ from app import app
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
 from Actions import firmware
 
+SETTING_REPLY = re.compile(r"^\$(\d+)=\s*(\S+)")
+# The firmware stores these as (unsigned) ints, so it truncates any fraction written to them.
+INTEGER_FIRMWARE_KEYS = (9, 10, 11, 15)
+# Arduino's Serial.print(float, 8) resolution, which is all a $$ reply carries.
+PRINTED_RESOLUTION = 1e-8
+# The error array goes out as $O lines, and the firmware rejects $86 and $144.
+UNSENDABLE_FIRMWARE_KEYS = (85, 86, 144)
+OPTICAL_FIRMWARE_KEYS = tuple(range(87, 99))
+# Settings.cpp sets the kinematics sprocket radius R from $13 on a write only; it boots with R = 10.1.
+WRITE_ONLY_FIRMWARE_KEYS = (13,)
+
 
 class Config(MakesmithInitFuncs):
     settings = {}
@@ -442,13 +453,14 @@ class Config(MakesmithInitFuncs):
                     break
         return ret
 
-    def syncFirmwareKey(self, firmwareKey, value, isImporting=False, useStored=False, data=None):
+    def syncFirmwareKey(self, firmwareKey, value, isImporting=False, useStored=False, data=None, reported=False):
         '''
         :param firmwareKey: the firmwareKey value
         :param value: the PREVIOUS value prior to updating.
         :param isImporting: indicates to bypass syncing until all the importing of values is done.
         :param useStored: indicates to use the value that's currently stored to update controller (holeyKinematics)
         :param data: used by optical calibration to send function the error array to send to controller. (optical)
+        :param reported: value is the controller's $$ reply, so compare it at the precision the firmware prints.
         :return:
         '''
         for section in self.settings:
@@ -473,7 +485,7 @@ class Config(MakesmithInitFuncs):
                                 value = 2
                             elif value == "Relay_Low":
                                 value = 3
-                            else:
+                            elif not reported:
                                 value = 0
                         # if error array, send by special function (optical)
                         if firmwareKey == 85:
@@ -503,7 +515,7 @@ class Config(MakesmithInitFuncs):
                                         self.data.holeyKinematics.updateSetting(firmwareKey, storedValue)
                                 else:
                                     break
-                        elif not self.isClose(float(storedValue), float(value)) and not isImporting:
+                        elif not self.firmwareValuesMatch(firmwareKey, storedValue, value, reported) and not isImporting:
                             # Update the controller value if its different enough from previous value and
                             # we are not importing the groundcontrol.ini file.
                             strValue = self.firmwareKeyString(firmwareKey, storedValue)
@@ -513,6 +525,20 @@ class Config(MakesmithInitFuncs):
                         else:
                             break
         return
+
+    def firmwareValuesMatch(self, firmwareKey, storedValue, value, reported):
+        if storedValue == "":
+            return True
+        if value == "":
+            return False
+        stored, other = float(storedValue), float(value)
+        if not reported:
+            return self.isClose(stored, other)
+        if math.isnan(other):
+            return False
+        if firmwareKey in INTEGER_FIRMWARE_KEYS:
+            return int(stored) == int(other)
+        return self.isClose(stored, other) or abs(stored - other) <= PRINTED_RESOLUTION
 
     def isPercentClose(self, a, b, rel_tol = 0.0001):
         '''
@@ -629,30 +655,71 @@ class Config(MakesmithInitFuncs):
             "$O=" + str(31) + "," + str(15) + "," + str(42) + "," + str(42) + " "
         )
 
+    def firmwareKeyOption(self, firmwareKey):
+        return next(
+            (option for section in self.settings.values() for option in section
+             if option.get("firmwareKey") == firmwareKey),
+            None,
+        )
+
+    def writeOnlyFirmwareSettings(self):
+        '''
+        Lines for the settings the firmware applies only when written, never when it loads them at boot.
+        '''
+        return [self.firmwareKeyString(key, float(self.firmwareKeyOption(key)["value"]))
+                for key in WRITE_ONLY_FIRMWARE_KEYS]
+
     def receivedSetting(self, message):
         """
         This parses a settings report from the machine, usually received in
         response to a $$ request.  If the value received does not match the
         expected value.
         """
-        parameter, position = self.parseFloat(message, 0)
-        value, position = self.parseFloat(message, position)
-        if parameter is not None and value is not None:
-            self.syncFirmwareKey(int(parameter), value)
+        match = SETTING_REPLY.match(message)
+        if not match:
+            return
+        firmwareKey, value = int(match.group(1)), self.reportedValue(match.group(2))
+        if not self.adoptUnknownSetting(firmwareKey, value):
+            self.syncFirmwareKey(firmwareKey, value, reported=True)
 
-    def parseFloat(self, text, position=0):
-        """
-            Takes a string and parses out the float found at position default to 0
-            returning a list of the matched float and the ending
-            position of the float
-            """
-        # This regex comes from a python docs recommended
-        regex = re.compile("[-+]?(\d+(\.\d*)?|\.\d+)([eE][-+]?\d+)?")
-        match = regex.search(text[position:])
-        if match:
-            return (float(match.group(0)), match.end(0))
-        else:
-            return (None, position)
+    def adoptUnknownSetting(self, firmwareKey, value):
+        '''
+        Takes the controller's value for a setting WebControl has never known; returns True if it did.
+        '''
+        option = self.firmwareKeyOption(firmwareKey)
+        if option is None or option["value"] != "" or math.isnan(value):
+            return False
+        option["value"] = "{:.8f}".format(value).rstrip("0").rstrip(".")
+        self.saveSettings()
+        return True
+
+    def restoreControllerSettings(self):
+        '''
+        Writes every setting to a controller that booted on its defaults, then reads them back.
+        '''
+        options = [option for section in self.settings.values() for option in section
+                   if option.get("firmwareKey") is not None]
+        [option.update(value=str(option["default"])) for option in options if option["value"] == ""]
+        # The boot that reported the failure already queued the write-only keys.
+        skipped = (UNSENDABLE_FIRMWARE_KEYS + WRITE_ONLY_FIRMWARE_KEYS
+                   + (OPTICAL_FIRMWARE_KEYS if self.data.controllerFirmwareVersion < 100 else ()))
+        keys = sorted({option["firmwareKey"] for option in options} - set(skipped))
+        [self.syncFirmwareKey(key, None, useStored=True) for key in keys]
+        self.data.gcode_queue.put("$$")
+        self.saveSettings()
+        self.data.ui_queue1.put("Alert", "Alert",
+                                "The controller lost its settings (EEPROM read fail), so WebControl restored them. "
+                                "WebControl doesn't keep Z-axis limits, so set them again if you use them.")
+
+    def reportedValue(self, text):
+        '''
+        The number in a $$ reply; Arduino prints "nan", "inf" or "ovf" for values it can't show, all read as NaN.
+        '''
+        try:
+            value = float(text)
+        except ValueError:
+            return math.nan
+        return value if math.isfinite(value) else math.nan
 
     def computeSettings(self, section, key, value, doAll=False):
         '''

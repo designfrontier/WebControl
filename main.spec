@@ -1,12 +1,17 @@
 # -*- mode: python ; coding: utf-8 -*-
+# Build with `pyinstaller main.spec` after `npm run build` in frontend/.
+import sys
+
+sys.path.insert(0, SPECPATH)
+from pyinstaller_datas import bundle_datas
 
 block_cipher = None
 
 a = Analysis(['main.py'],
-             pathex=['C:\\Windows\\System32\\downlevel', 'C:\\Users\\john\\PycharmProjects\\WebControl', 'C:\\Users\\jhoga\\Documents\\GitHub\\WebControl'],
+             pathex=[SPECPATH],
              binaries=[],
-             datas=[('templates', 'templates'), ('firmware','firmware'), ('static', 'static'), ('tools', 'tools'), ('docs', 'docs'), ('defaultwebcontrol.json', '.')],
-             hiddenimports=['flask', 'flask-misaka', 'clr', 'gevent', 'gevent-websocket', 'engineio.async_gevent', 'psutil', 'distro', 'markdown', 'markdown.extensions.fenced_code'],
+             datas=bundle_datas(SPECPATH),
+             hiddenimports=['flask', 'gevent', 'engineio.async_drivers.gevent', 'psutil', 'distro', 'markdown', 'markdown.extensions.fenced_code'],
              hookspath=[],
              runtime_hooks=[],
              excludes=[],
@@ -30,4 +35,4 @@ exe = EXE(pyz,
           upx_exclude=[],
           runtime_tmpdir=None,
           console=True,
-          icon = 'webcontrolicon_256px.ico')
+          icon='webcontrolicon_256px.ico' if sys.platform == 'win32' else None)

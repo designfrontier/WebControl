@@ -17,6 +17,13 @@
     },
     "controllerFirmwareVersion": {
       "type": "number"
+    },
+    "firmwareBuild": {
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
     }
   },
   "required": [

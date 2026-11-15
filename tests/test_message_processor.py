@@ -62,6 +62,7 @@ def test_a_garbled_controller_line_does_not_stop_alarms_halting_the_job(processo
 
     processor.start()
 
+    assert data.ui_controller_queue.get(timeout=2) == "Firmware Version 1.2x\r\n"
     assert data.ui_controller_queue.get(timeout=2) == ALARM
     assert data.uploadFlag == 0
 
@@ -75,3 +76,13 @@ def test_a_slow_release_check_does_not_hold_up_alarms(processor):
 
     assert data.ui_controller_queue.get(timeout=2) == ALARM
     assert data.uploadFlag == 0
+
+
+def test_a_buffer_overflow_halts_the_job_like_an_alarm(processor):
+    data = processor.data
+    data.message_queue.put("Buffer overflow!\r\n")
+
+    processor.start()
+
+    assert data.ui_controller_queue.get(timeout=2) == "Buffer overflow!\r\n"
+    assert (data.uploadFlag, data.previousUploadStatus) == (0, 1)

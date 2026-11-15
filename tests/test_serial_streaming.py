@@ -10,7 +10,8 @@ from helpers import decode_ui_message, drain
 
 SAVED_DATA = [
     "gcode", "gcodeIndex", "positioningMode", "connectionStatus", "requestSerialClose", "currentZTarget",
-    "currentTool", "pausedzval", "pausedUnits", "pausedPositioningMode", "gcodeShift",
+    "currentTool", "pausedzval", "pausedUnits", "pausedPositioningMode", "gcodeShift", "uploadFlag",
+    "jobInProgress",
 ]
 
 
@@ -159,7 +160,7 @@ def test_a_reconnect_does_not_inherit_unacked_lines_from_the_old_connection(data
 
     port = serial.run()
 
-    assert port.sent[:3] == ["B05  ", f"{'G20' if data.units == 'INCHES' else 'G21'}  ", "$$ "]
+    assert port.sent[:2] == [f"{'G20' if data.units == 'INCHES' else 'G21'}  ", "$$ "]
 
 
 def test_a_requested_close_ends_the_thread_before_it_can_take_a_stop(data, serial):
@@ -259,17 +260,63 @@ def test_a_failure_after_writing_a_line_does_not_send_it_again(data, serial, mon
     assert data.uploadFlag == 0
 
 
-def test_buffered_streaming_sends_a_line_too_long_for_the_buffer_once_it_drains(data, serial):
-    long_line = "G1 X1 Y1 " + "F100 " * 24
-    data.gcode = ["G1 X0 ", long_line, "G1 X2 "]
+def stream(data, serial, lines, buffer=False):
+    data.gcode = lines
     data.uploadFlag = 1
+    data.jobInProgress = True
     skip_startup_commands = once_after(serial.clock, 0, lambda port: drain(data.gcode_queue))
+    return serial.run(on_poll=skip_startup_commands, buffer=buffer)
 
-    port = serial.run(on_poll=skip_startup_commands, buffer=True)
 
-    assert len(port.written[1]) > SerialPortThread.bufferSize
-    assert port.sent[-1] == "G1 X2  "
+def alerts(serial):
+    return [(title, text) for command, title, text in serial.ui_messages() if command == "Alert"]
+
+
+# 129 characters; the home shift adds a space and the newline makes 131 bytes on the wire.
+LONG_LINE = "G1 X1 Y1 " + "F100 " * 24
+
+
+@pytest.mark.parametrize("buffer", [False, True])
+def test_a_line_too_long_for_the_controller_pauses_the_run_instead_of_going_out(data, serial, buffer):
+    port = stream(data, serial, ["G1 X0 ", LONG_LINE, "G1 X2 "], buffer=buffer)
+
+    assert port.sent == ["G1 X0  "]
+    assert (data.uploadFlag, data.jobInProgress, data.gcodeIndex) == (2, True, 1)
+    assert ("Line Too Long", "Line 2 is 131 characters; the controller accepts at most 126. Resume stops here "
+            "again: stop the job, fix the file (e.g. enable Truncate Floating Point Numbers) and load it again.") \
+        in alerts(serial)
+
+
+@pytest.mark.parametrize("buffer", [False, True])
+def test_a_line_that_just_fits_the_controller_buffer_goes_out(data, serial, buffer):
+    line = "G1 X1" + " " * 119  # the home shift appends a space, so 126 bytes are written
+
+    port = stream(data, serial, [line, "G1 X2 "], buffer=buffer)
+
+    assert [len(written) for written in port.written] == [126, 8]
     assert data.uploadFlag == 0
+
+
+def test_the_home_shift_can_push_a_line_over_the_limit(data, serial):
+    data.gcodeShift = [1000.1234, 1000.1234]
+    line = "G1 X1 Y1" + " " * 112
+
+    port = stream(data, serial, [line], buffer=True)
+
+    assert port.written == []
+    assert data.uploadFlag == 2
+
+
+def test_a_queued_command_too_long_for_the_controller_is_refused(data, serial):
+    def queue_commands(port):
+        drain(data.gcode_queue)
+        data.gcode_queue.put(LONG_LINE)
+        data.gcode_queue.put("G0 X1")
+
+    port = serial.run(on_poll=once_after(serial.clock, 0, queue_commands))
+
+    assert port.sent == ["G0 X1 "]
+    assert ("Command Too Long", "That command is 131 characters; the controller accepts at most 126.") in alerts(serial)
 
 
 def test_closing_the_port_mid_cut_pauses_the_run(data, serial):
@@ -306,3 +353,222 @@ def test_a_stop_while_a_line_is_being_written_leaves_the_index_at_the_start(data
     thread.sendNextLine()
 
     assert (data.gcodeIndex, data.uploadFlag) == (0, 0)
+
+
+@pytest.mark.parametrize("buffer", [False, True])
+def test_a_line_with_an_unclosed_comment_pauses_the_run(data, serial, buffer):
+    port = stream(data, serial, ["G1 X0 ", "G1 X1 (rough pass", "G1 X2 "], buffer=buffer)
+
+    assert port.sent == ["G1 X0  "]
+    assert (data.uploadFlag, data.gcodeIndex) == (2, 1)
+    assert ("Line Unclosed Comment", "Line 2 has an unclosed comment, which hangs the controller. Resume stops "
+            "here again: stop the job, fix the file and load it again.") in alerts(serial)
+
+
+def test_resuming_after_a_refused_line_stops_at_that_line_again(data, serial):
+    def resume_once_paused(port):
+        if data.uploadFlag == 2 and not alerts_seen:
+            alerts_seen.append(True)
+            data.actions.resumeRun()
+            drain(data.gcode_queue)
+
+    alerts_seen = []
+    data.gcode = ["G1 X0 ", "G1 X1 (rough pass", "G1 X2 "]
+    data.uploadFlag = 1
+    data.jobInProgress = True
+    port = serial.run(on_poll=every_poll(
+        once_after(serial.clock, 0, lambda port: drain(data.gcode_queue)), resume_once_paused,
+    ))
+
+    assert "G1 X2  " not in port.sent
+    assert (data.uploadFlag, data.gcodeIndex) == (2, 1)
+
+
+def test_a_queued_command_with_an_unclosed_comment_is_refused(data, serial):
+    def queue_commands(port):
+        drain(data.gcode_queue)
+        data.gcode_queue.put("G0 X1 (note")
+        data.gcode_queue.put("G0 X2 (closed) ; and done (")
+
+    port = serial.run(on_poll=once_after(serial.clock, 0, queue_commands))
+
+    assert port.sent == ["G0 X2   "]
+    assert ("Command Unclosed Comment", "That command has an unclosed comment, which hangs the controller.") in alerts(serial)
+
+
+def test_realtime_and_control_characters_are_removed_from_streamed_lines(data, serial):
+    port = stream(data, serial, ["G1 X1! Y2~ Z`3? F4\x18\x00 "])
+
+    assert port.sent == ["G1 X1 Y2 Z3 F4  "]
+
+
+def test_realtime_and_control_characters_are_removed_from_queued_commands(data, serial):
+    def queue_commands(port):
+        drain(data.gcode_queue)
+        data.gcode_queue.put("G0 X1!~`?\x18\x7f")
+
+    port = serial.run(on_poll=once_after(serial.clock, 0, queue_commands))
+
+    assert port.sent == ["G0 X1 "]
+
+
+def test_realtime_commands_sent_on_purpose_still_go_out(data, serial):
+    def queue_commands(port):
+        drain(data.gcode_queue)
+        data.quick_queue.put("~")
+
+    port = serial.run(on_poll=once_after(serial.clock, 0, queue_commands))
+
+    assert "~" in port.sent
+
+
+STATUS = "<Idle,MPos:0.00,0.00,0.00,WPos:0.000,0.000,0.000>\r\n"
+
+
+def every_poll(*hooks):
+    return lambda port: [hook(port) for hook in hooks]
+
+
+def status_reports_until(clock, end):
+    """Sends a status report every 0.2 s of fake time, as the firmware does, until `end` seconds from now."""
+    stop_at = clock.now + end
+    state = {"next": clock.now}
+
+    def hook(port):
+        if state["next"] <= clock.now < stop_at:
+            port.incoming.append(STATUS)
+            state["next"] = clock.now + 0.2
+
+    return hook
+
+
+def sent_after(port, line):
+    return port.sent[port.sent.index(line) + 1:]
+
+
+@pytest.mark.parametrize("halt", [
+    "ALARM: The sled is not keeping up with its expected position and has halted.\r\n",
+    "Buffer overflow!\r\n",
+])
+def test_manual_commands_go_out_after_the_controller_halts_itself(data, serial, halt):
+    data.gcode = [f"G1 X{n} " for n in range(50)]
+    data.uploadFlag = 1
+
+    def stop_acking(port):
+        port.ack = False
+
+    def controller_halts(port):
+        port.incoming.append(halt)
+        data.uploadFlag = 0  # as MessageProcessor does on this line
+        data.gcode_queue.put("G0 X99")
+
+    port = serial.run(buffer=True, on_poll=every_poll(
+        once_after(serial.clock, 0, lambda port: drain(data.gcode_queue)),
+        once_after(serial.clock, 0.5, stop_acking),
+        once_after(serial.clock, 1, controller_halts),
+        status_reports_until(serial.clock, 3),
+    ))
+
+    assert port.sent[-1] == "G0 X99 "
+
+
+def test_a_stale_ok_after_a_stop_does_not_let_two_unacked_lines_into_the_controller(data, serial):
+    def outstanding_line(port):
+        port.ack = False
+        data.gcode_queue.put("G0 X0")
+
+    def late_oks(port):
+        port.incoming.extend(["ok\r\n", "ok\r\n"])  # the outstanding line's ack, then the stop's
+        data.gcode_queue.put("G0 X1")
+        data.gcode_queue.put("G0 X2")
+
+    port = serial.run(on_poll=every_poll(
+        once_after(serial.clock, 0, lambda port: drain(data.gcode_queue)),
+        once_after(serial.clock, 0.5, outstanding_line),
+        once_after(serial.clock, 1, lambda port: data.quick_queue.put("!")),
+        once_after(serial.clock, 1.05, late_oks),
+        status_reports_until(serial.clock, 3),
+    ))
+
+    assert sent_after(port, "!") == ["G0 X1 "]
+
+
+def test_a_resume_sent_while_resyncing_after_a_stop_does_not_block_manual_commands(data, serial):
+    def stop_then_resume(port):
+        port.ack = False
+        data.quick_queue.put("!")
+        data.quick_queue.put("~")
+        data.gcode_queue.put("G0 X1")
+
+    port = serial.run(on_poll=every_poll(
+        once_after(serial.clock, 0, lambda port: drain(data.gcode_queue)),
+        once_after(serial.clock, 1, stop_then_resume),
+        status_reports_until(serial.clock, 3),
+    ))
+
+    assert sent_after(port, "!") == ["~", "G0 X1 "]
+
+
+@pytest.mark.parametrize("halt", ["ALARM: The sled is not keeping up\r\n", "Buffer overflow!\r\n"])
+def test_a_halt_mid_cut_rewinds_the_index_to_the_oldest_line_the_controller_dropped(data, serial, halt):
+    data.gcode = [f"G1 X{n} " for n in range(50)]
+    data.uploadFlag = 1
+    data.jobInProgress = True
+    first_unacked = []
+
+    def stop_acking(port):
+        port.ack = False
+        first_unacked.append(data.gcodeIndex)
+
+    def controller_halts(port):
+        port.incoming.append(halt)
+        data.uploadFlag = 0  # as MessageProcessor does on this line
+
+    serial.run(buffer=True, on_poll=every_poll(
+        once_after(serial.clock, 0, lambda port: drain(data.gcode_queue)),
+        once_after(serial.clock, 0.5, stop_acking),
+        once_after(serial.clock, 1, controller_halts),
+    ))
+
+    assert first_unacked[0] > 0
+    assert data.gcodeIndex == first_unacked[0]
+
+
+def test_a_halt_outside_a_job_leaves_the_index_alone(data, serial):
+    data.gcode = [f"G1 X{n} " for n in range(50)]
+    data.gcodeIndex = 7
+    data.jobInProgress = False
+
+    def controller_halts(port):
+        drain(data.gcode_queue)
+        port.ack = False
+        data.gcode_queue.put("G0 X1")
+        port.incoming.append("ALARM: The sled is not keeping up\r\n")
+
+    serial.run(on_poll=once_after(serial.clock, 0, controller_halts))
+
+    assert data.gcodeIndex == 7
+
+
+def test_a_status_report_still_queued_from_before_a_stop_does_not_end_the_resync(data, serial):
+    """A slow host reads reports the firmware sent before the stop well after the resync delay."""
+    PE = "[PE:0.00,0.00,126,0.00,0.00]\r\n"
+
+    def outstanding_line(port):
+        port.ack = False
+        data.gcode_queue.put("G0 X0")
+
+    def stop_behind_a_backlog(port):
+        port.incoming.extend([PE] * 40 + [STATUS, "ok\r\n", "ok\r\n"])  # the outstanding line's ack, then the stop's
+        data.quick_queue.put("!")
+        data.gcode_queue.put("G0 X1")
+        data.gcode_queue.put("G0 X2")
+
+    port = serial.run(on_poll=every_poll(
+        once_after(serial.clock, 0, lambda port: drain(data.gcode_queue)),
+        once_after(serial.clock, 0.5, outstanding_line),
+        once_after(serial.clock, 1, stop_behind_a_backlog),
+        once_after(serial.clock, 2, lambda port: port.incoming.append(STATUS)),
+    ))
+
+    assert sent_after(port, "!") == ["G0 X1 "]

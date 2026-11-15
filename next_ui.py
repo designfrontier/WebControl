@@ -4,12 +4,14 @@ import sys
 
 from flask import Blueprint, Response, send_from_directory
 
-from app import base_dir
 
-# app.base_dir is "." outside PyInstaller, which would tie /next to the process's working directory.
-DEFAULT_DIST = os.path.join(
-    base_dir if hasattr(sys, "_MEIPASS") else os.path.dirname(os.path.abspath(__file__)), "frontend", "dist"
-)
+def default_dist():
+    """frontend/dist inside a PyInstaller bundle, else beside this file (never the working directory)."""
+    root = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(root, "frontend", "dist")
+
+
+DEFAULT_DIST = default_dist()
 
 NOT_BUILT = (
     "The new WebControl UI has not been built. Run `npm ci && npm run build` in frontend/, then reload. "

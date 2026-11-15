@@ -49,6 +49,41 @@ jobs:
       - run: uv pip install --python .venv/bin/python -r requirements.txt -r requirements-dev.txt
       - run: .venv/bin/python -m pytest --cov=api --cov=next_ui --cov-report=term-missing
 
+  package:
+    name: PyInstaller onedir smoke (Linux x86_64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgl1
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          python-version: "3.9"
+      - run: uv venv --python 3.9 .venv
+      - run: uv pip install --python .venv/bin/python -r requirements.txt -r requirements-build.txt
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: tools/build_release.sh --skip-firmware
+        env:
+          PYTHON: .venv/bin/python
+          PLATFORM: linux
+      - name: Packaged app serves / and /next/
+        run: |
+          mkdir -p smoke/app smoke/home/.WebControl
+          tar -C smoke/app -xzf releases/webcontrol-*-linux-singledirectory.tar.gz
+          jq '(.["WebControl Settings"][] | select(.key == "webPort") | .value) = 5099' defaultwebcontrol.json \
+            > smoke/home/.WebControl/webcontrol.json
+          (cd smoke/app && HOME="$GITHUB_WORKSPACE/smoke/home" BROWSER=true ./webcontrol > ../app.log 2>&1 &)
+          for _ in $(seq 90); do curl -fsS -o smoke/next.html http://localhost:5099/next/ && break; sleep 1; done
+          grep -q 'id="root"' smoke/next.html
+          curl -fsS -o /dev/null http://localhost:5099/
+          curl -fsS -o /dev/null http://localhost:5099/api/state
+      - if: failure()
+        run: cat smoke/app.log || true
+
   e2e:
     name: End-to-end smoke
     runs-on: ubuntu-latest

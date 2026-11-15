@@ -26,6 +26,8 @@ def fake_data(upload_flag=0, overrides=None, firmware=51.27, job=False, manual_z
         controllerFirmwareVersion=firmware,
         jobInProgress=job,
         manualZAxisAdjust=manual_z,
+        controllerBoard="PCB v1.6 TLE9201  Detected",
+        firmwareRewriteNoticeSeen=False,
     )
 
 
@@ -41,6 +43,8 @@ def test_collects_the_computed_settings_the_ui_needs_at_startup():
         "manualZAxisAdjust": False,
         "hostAddress": "10.0.0.5:5000",
         "controllerFirmwareVersion": 51.27,
+        "controllerBoard": "PCB v1.6 TLE9201  Detected",
+        "firmwareBuild": "51.27",
         "macros": [{"command": "macro1", "title": "Spindle on"}, {"command": "macro2", "title": "Dust collector"}],
     }
 
@@ -76,6 +80,12 @@ def test_a_job_paused_by_the_controller_is_still_in_progress(client, data, monke
 def test_firmware_version_is_zero_until_the_controller_reports_one():
     assert startup_state(fake_data(firmware=0))["controllerFirmwareVersion"] == 0.0
     assert startup_state(fake_data(firmware=None))["controllerFirmwareVersion"] == 0.0
+
+
+def test_the_board_and_build_are_null_until_the_controller_reports_them():
+    data = fake_data(firmware=0)
+    data.controllerBoard = None
+    assert (startup_state(data)["controllerBoard"], startup_state(data)["firmwareBuild"]) == (None, None)
 
 
 def test_missing_macro_title_is_empty():

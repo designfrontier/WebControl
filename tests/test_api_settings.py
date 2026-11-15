@@ -59,6 +59,16 @@ def test_numeric_follows_the_type_or_a_numeric_string_value(client, config):
     assert by_key(client.get("/api/settings/webcontrol").get_json())["webPort"]["numeric"] is True
 
 
+def test_a_setting_not_yet_read_from_the_controller_is_numeric_and_saves_while_blank(client, data, config):
+    next(item for item in config.settings["Advanced Settings"] if item["key"] == "maxZRPM")["value"] = ""
+    drain(data.gcode_queue)
+    assert by_key(client.get("/api/settings/advanced").get_json())["maxZRPM"]["numeric"] is True
+
+    assert client.put("/api/settings/advanced", json={"values": {"truncate": True}}).status_code == 200
+    assert client.put("/api/settings/advanced", json={"values": {"maxZRPM": "fast"}}).status_code == 400
+    assert not [line for line in drain(data.gcode_queue) if line.startswith("$18")]
+
+
 def test_maslow_section_lists_the_serial_ports(client, data, config):
     data.comPorts = ["/dev/tty.usbmodem1", "/dev/tty.usbmodem2"]
     body = client.get("/api/settings/maslow").get_json()

@@ -31,3 +31,6 @@ __pycache__/
 .coverage
 htmlcov/
 .pytest_cache/
+
+# tools/build_release.sh output
+releases/

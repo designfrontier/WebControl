@@ -118,6 +118,10 @@ export const startupStateSchema = z.object({
   hostAddress: z.string(),
   /** 0 until the controller reports its version on connect. */
   controllerFirmwareVersion: z.number().default(0),
+  /** The controller's boot banner, such as "PCB v1.6 TLE9201 Detected"; null until it boots on this connection. */
+  controllerBoard: z.string().nullable().default(null),
+  /** The version narrowed by fingerprint: every 51.29x build reports 51.29, so "51.292" or "51.29x"; null if unknown. */
+  firmwareBuild: z.string().nullable().default(null),
   macros: z.array(z.object({ command: z.enum(["macro1", "macro2"]), title: z.string() })),
 });
 export type StartupState = z.infer<typeof startupStateSchema>;

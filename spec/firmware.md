@@ -60,7 +60,7 @@ the raw line, re-send B05 on any boot banner (`PCB v1.`, `Grbl v1.00`, `ready`),
   in `M6 T2`, `N10 T2 M6`, `G0 X1 T2` and a lone `T2` line the T is ignored, and a lone `T2` runs as a modal move.
 - `$` keys: units match WebControl's assumptions. `$13` is the only path that sets R. `$37` is used only when
   `$46 ≤ 0`. `$40`/`$41` are percent. `$10`/`$11`/`$15` are unsigned ints. `$43` is unused on holey. `$86` and `$144`
-  are rejected. **Never sent: `$18` (max Z RPM), `$9`, `$28`, `$36`.** Firmware bug: `zKpPos` is never initialised
+  are rejected. `$18` (max Z RPM), `$9`, `$28` and `$36` were never sent before fix/firmware-sync; WebControl now adopts them from `$$` and syncs them. Firmware bug: `zKpPos` is never initialised
   (0 until `$29` is sent).
 - Resync noise: `$45` and fractional `$10`/`$11`/`$15` are re-sent on every connect.
 
@@ -77,8 +77,8 @@ file's modal motion and feed. The boot feed rate is `$15/2` on 51.27/51.28, and 
 
 - **R:** the constructor sets `R = 10.1` (Kinematics.h:39). Only writing `$13` sets
   `R = distPerRot / (2 × 3.14159)` (Settings.cpp:287 on H27, :296 on H292). `settingsLoadFromEEprom()` does **not**
-  recompute R, so after every boot the firmware runs R = 10.1 until `$13` is written. WebControl only sends `$13`
-  when it differs, so in practice the firmware runs 10.1.
+  recompute R, so after every boot the firmware runs R = 10.1 until `$13` is written. WebControl used to send `$13` only
+  when it differed, so the firmware ran 10.1; since fix/firmware-sync it writes `$13` once per controller boot.
 - π is 3.14159 for R and the under-sprocket chain wrap. The firmware computes in float32.
 - Chain density 0.14 × 9.8 / 1000 = 0.001372 N/mm. Holey calibration uses the same density and π, R =
   distPerRot / (2 × 3.14159) and `$45` from the settings; it ignores `$37` and `$7`, and always fits triangular. The
@@ -123,7 +123,7 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
 | # | Severity | Finding |
 |---|---|---|
 | A1 | High | Lines over 126 characters are sent "alone" when idle; the firmware overflows and executes the line's tail. |
-| A2 | High at upgrade | `$18`, `$9`, `$28`, `$36` are never synced; after an EEPROM reset 51.292 runs Z about 10× faster. |
+| A2 | Fixed | `$18`, `$9`, `$28`, `$36` were never synced; now adopted from `$$` and synced, and an EEPROM reset triggers a full restore. Install WebControl before flashing 51.292, or the 51.292 default `$18=126` could be adopted. |
 | A3 | Fixed | Tool change: `~` was auto-sent; `T`/`M6` on separate lines ran on without a tool change; `M6 T2` stalled; a race could make Resume a no-op. |
 | A4 | Fixed | Restart/resume plunged with G0 (at zMaxFeed) and left the modal F at the XY feed. |
 | A5 | Medium | Z-limit commands do nothing on 51.27/51.28, overwrite `$43`/`$44` on 51.291, store nothing on 51.292. |
