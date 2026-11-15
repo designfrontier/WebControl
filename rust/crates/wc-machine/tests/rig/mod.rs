@@ -141,12 +141,17 @@ impl Rig {
 
     /// Port open, boot banner, the whole handshake answered.
     pub fn connected_with(settings: Settings) -> Rig {
+        Rig::connected_on(settings, "51.27")
+    }
+
+    /// `connected_with` a controller that answers B05 with `version`.
+    pub fn connected_on(settings: Settings, version: &str) -> Rig {
         let mut rig = Rig::with(settings);
         rig.open();
         ["PCB v1.6 TLE9201  Detected", "FAKE_SERVO off", "Grbl v1.00", "ready", "ok"].iter().for_each(|l| {
             rig.rx(l);
         });
-        rig.answer_until_quiet("51.27");
+        rig.answer_until_quiet(version);
         rig.rx("<Idle,MPos:0.00,0.00,0.00,WPos:0.000,0.000,0.000>");
         rig.advance(100);
         rig

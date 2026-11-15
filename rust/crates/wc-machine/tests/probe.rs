@@ -76,6 +76,7 @@ fn a_missed_probe_in_a_file_holds_the_job_at_the_probe_line() {
     rig.rx("ok");
     rig.rx("ok");
     rig.rx("probing for z axis zero");
+    rig.rx("<Idle,MPos:0.00,0.00,-4.00,WPos:0.000,0.000,0.000>");
     let missed = rig.rx("error: probe did not connect");
     assert!(alerts(&missed).iter().any(|alert| alert.contains(MISSED)), "{:?}", alerts(&missed));
     ["program stopped", "z axis not set", ""].iter().for_each(|line| {
@@ -86,8 +87,9 @@ fn a_missed_probe_in_a_file_holds_the_job_at_the_probe_line() {
     assert!(written(&rig.advance(300)).is_empty(), "the rest of the file waits");
     rig.clear_written();
     rig.act("startRun");
+    assert_eq!(rig.run_to_quiet(), ["~"], "the missed probe left the bit's height unknown");
+    rig.rx("<Idle,MPos:0.00,0.00,-10.00,WPos:0.000,0.000,0.000>");
     let restart = rig.run_to_quiet();
-    assert_eq!(restart[0], "~");
     assert!(restart.contains(&"G38.2 Z-10 F100".to_string()), "Play probes again: {restart:?}");
 }
 
@@ -116,6 +118,8 @@ fn a_probe_in_a_file_that_does_not_zero_pauses_the_job() {
     assert!(written(&rig.advance(300)).is_empty());
     rig.clear_written();
     rig.act("resumeRun");
+    rig.run_to_quiet();
+    rig.rx("<Idle,MPos:0.00,0.00,-2.00,WPos:0.000,0.000,0.000>");
     let resumed = rig.run_to_quiet();
     assert!(resumed.iter().any(|line| line.starts_with("G1 Z5.0")), "Z stayed where it was: {resumed:?}");
 }

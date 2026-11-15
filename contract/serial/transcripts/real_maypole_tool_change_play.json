@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "meta": {
     "name": "real_maypole_tool_change_play",
-    "description": "Tool change answered with Play (a resume), then the first 150 lines of a 44,500-line job. From the owner's maypole/maypole-125-endmill.nc (20260428-052325.jsonl).",
+    "description": "Tool change answered with Play (a resume), which travels at the bit's reported 10.03 mm rounded up a step (Z10.04), never down to the 5 mm safe height, then the first 150 lines of a 44,500-line job. From the owner's maypole/maypole-125-endmill.nc (20260428-052325.jsonl).",
     "firmware": {
       "variant": "holey",
       "version": "51.27"
@@ -78,8 +78,8 @@
     {"type": "rx", "line": "<Idle,MPos:64.11,-8.32,10.03,WPos:0.000,0.000,0.000>"},
     {"type": "rx", "line": "[PE:-0.00,0.00,127,1777.21,1670.88]"},
     {"type": "rx", "line": "ok"},
-    {"type": "tx", "bytes": "G0 Z5.0  \n"},
-    {"type": "rx", "line": "G0 Z5.0"},
+    {"type": "tx", "bytes": "G0 Z10.04  \n"},
+    {"type": "rx", "line": "G0 Z10.04"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G0 X64.1121 Y70.4113  \n"},
     {"type": "rx", "line": "G0 X64.1121 Y70.4113"},

@@ -55,20 +55,16 @@ pub fn move_z(direction: &str, distance: f64, units: Units, units_z: Units) -> V
     lines
 }
 
-fn safe_height(units: Units, safe_height_mm: f64) -> String {
-    match units {
-        Units::Inches => format!("G00 Z{:.3}", safe_height_mm / MM_PER_INCH),
-        Units::Mm => format!("G00 Z{}", python_float_str(safe_height_mm)),
-    }
+/// Home and Return to Center set absolute moves, then rise before they travel.
+pub const BEFORE_RAISE: &str = "G90  ";
+
+/// After the raise: rapid home, lower to Z0; `home_x`/`home_y` are the stored text.
+pub fn home(home_x: &str, home_y: &str) -> Vec<String> {
+    vec![format!("G00 X{home_x} Y{home_y} "), "G00 Z0 ".into()]
 }
 
-/// Raise to the safe height, rapid home, lower to Z0; `home_x`/`home_y` are the stored text.
-pub fn home(units: Units, safe_height_mm: f64, home_x: &str, home_y: &str) -> Vec<String> {
-    vec!["G90  ".into(), safe_height(units, safe_height_mm), format!("G00 X{home_x} Y{home_y} "), "G00 Z0 ".into()]
-}
-
-pub fn return_to_center(units: Units, safe_height_mm: f64) -> Vec<String> {
-    vec!["G90  ".into(), safe_height(units, safe_height_mm), "G00 X0.0 Y0.0 ".into()]
+pub fn return_to_center() -> Vec<String> {
+    vec!["G00 X0.0 Y0.0 ".into()]
 }
 
 /// B09 single-axis moves leave the firmware not knowing where it is, so B08 tells it.

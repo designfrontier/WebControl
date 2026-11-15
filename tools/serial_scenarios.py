@@ -86,6 +86,8 @@ SLED_HALTED = ("ALARM: The sled is not keeping up with its expected position and
 TOOL_2 = ["Tool Change: Please insert tool 2", "Maslow Paused"]
 DIRECTIONS = ["up", "upRight", "right", "downRight", "down", "downLeft", "left", "upLeft"]
 FINISHED = {"uploadFlag": 0, "jobInProgress": False, "gcodeIndex": 0}
+# A status report before the first raise, which waits for one to tell the bit's height (Rust).
+SLED = {"x": 0, "y": 0, "z": 0}
 
 
 def gcode(name):
@@ -177,14 +179,14 @@ scenario(
 scenario(
     "home_at_safe_height_mm",
     "Home raises to the safe height, rapids to the home position and lowers to Z0.",
-    {"units": "MM", "home": {"x": 100.5, "y": -50.25}},
+    {"units": "MM", "home": {"x": 100.5, "y": -50.25}, "sled": SLED},
     [ui("home"), idle()],
 )
 
 scenario(
     "return_to_center_inches",
     "Return to Center in inches: the safe height is converted from mm and printed with three decimals.",
-    {**INCHES},
+    {**INCHES, "sled": SLED},
     [ui("returnToCenter"), idle()],
 )
 
@@ -280,7 +282,8 @@ scenario(
     "returns to the job.",
     {**MM, "gcode": gcode("square_mm.nc")},
     [*resume_refused_mid_probe(), *[rx(line) for line in PROBE_MISSED[len(PROBING):]],
-     expect(alerts=[{"title": "Touch Z Failed", "message": "Z was not zeroed"}]), ui("resumeRun"), idle(),
+     expect(alerts=[{"title": "Touch Z Failed", "message": "Z was not zeroed"}]),
+     status(10.5, 10.25, -10.0), ui("resumeRun"), idle(),
      expect(state=FINISHED)],
 )
 
@@ -347,7 +350,7 @@ scenario(
     "start_mid_file_restores_modal_state",
     "Play at line 7 (G1 X25 Y25): restart sequence of units, G90, rapid to safe height and to the XY before the "
     "line, a G1 plunge at the file's plunge feed, then the file's G1 and feed restored, then the file from line 7.",
-    {**MM, "gcode": gcode("restart_mm.nc"), "gcodeIndex": 7},
+    {**MM, "gcode": gcode("restart_mm.nc"), "gcodeIndex": 7, "sled": SLED},
     [ui("startRun"), idle(), expect(state=FINISHED)],
 )
 
@@ -388,7 +391,7 @@ scenario(
     "tool_change_t_then_m6_on_separate_lines",
     "T2 and M6 on separate lines: the firmware would run the lone T2 as an empty move and skip the M6, so "
     "WebControl does not send the T2 line and leads the M6 with T2.",
-    {**MM, "gcode": {"lines": ["G21", "G90", "G0 X1", "T2", "M6", "G0 X2"]}},
+    {**MM, "gcode": {"lines": ["G21", "G90", "G0 X1", "T2", "M6", "G0 X2"]}, "sled": SLED},
     [pauses_on(r"M6", *TOOL_2), ui("startRun"), idle(), expect(state={"currentTool": 2, "uploadFlag": 0}),
      ui("resumeRun"), idle(), expect(state=FINISHED)],
 )
@@ -396,7 +399,7 @@ scenario(
 scenario(
     "tool_change_m6_before_t_is_rewritten",
     "M6 T2, which the firmware stalls on, goes out as T2 M6.",
-    {**MM, "gcode": {"lines": ["G21", "G90", "G0 X1", "M6 T2", "G0 X2"]}},
+    {**MM, "gcode": {"lines": ["G21", "G90", "G0 X1", "M6 T2", "G0 X2"]}, "sled": SLED},
     [pauses_on(r"M6", *TOOL_2), ui("startRun"), idle(), expect(state={"currentTool": 2}),
      ui("resumeRun"), idle(), expect(state=FINISHED)],
 )
