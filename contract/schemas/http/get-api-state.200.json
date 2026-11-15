@@ -45,8 +45,20 @@
         "Resume"
       ]
     },
+    "jobInProgress": {
+      "default": false,
+      "type": "boolean"
+    },
+    "manualZAxisAdjust": {
+      "default": false,
+      "type": "boolean"
+    },
     "hostAddress": {
       "type": "string"
+    },
+    "controllerFirmwareVersion": {
+      "default": 0,
+      "type": "number"
     },
     "macros": {
       "type": "array",
