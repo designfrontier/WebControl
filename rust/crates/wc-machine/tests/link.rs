@@ -38,6 +38,25 @@ fn a_client_connecting_hears_the_host_address_then_the_link_state() {
 }
 
 #[test]
+fn a_client_that_fell_behind_hears_the_current_state_again_and_no_one_else_does() {
+    let mut rig = Rig::new();
+    rig.open();
+    rig.machine.load_gcode("G0 X10 Y20\nG1 X30\n");
+    let effects = rig.send(Event::ClientResync { sid: "s1".into() });
+    let resync: Vec<_> = effects.iter().filter(|e| matches!(e, Effect::Push(_))).collect();
+    assert!(resync.iter().all(|e| matches!(e, Effect::Push(p) if p.client.as_deref() == Some("s1"))));
+    let sent = commands(&effects);
+    let expected = ["hostAddress", "connectionStatus", "statusMessage", "requestedSetting", "homePositionMessage"];
+    expected.iter().for_each(|c| assert!(sent.contains(&c.to_string()), "{c} missing from {sent:?}"));
+    ["gcodePositionMessage", "gcodeUpdateCompressed", "boardDataUpdate", "boardCutDataUpdateCompressed"]
+        .iter()
+        .for_each(|c| assert!(sent.contains(&c.to_string()), "{c} missing from {sent:?}"));
+    assert_eq!(pushed(&effects, "connectionStatus")[0]["status"], "connected");
+    let settings: Vec<_> = pushed(&effects, "requestedSetting").iter().map(|d| d["setting"].clone()).collect();
+    assert_eq!(settings, [json!("pauseButtonSetting"), json!("units")]);
+}
+
+#[test]
 fn the_port_is_opened_from_the_settings_and_retried_every_5_s() {
     let mut idle = Rig::new();
     assert!(!idle.advance(20).iter().any(|e| matches!(e, Effect::OpenPort(_))), "no COMport, no attempt");

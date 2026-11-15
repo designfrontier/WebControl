@@ -128,6 +128,11 @@ the page if the backend changed.
 - **Reconnect**: the client reconnects on any close it did not ask for, with exponential backoff: first attempt after
   1 s, doubling to a 5 s cap, each delay randomised by ±50%, forever. A reconnect gets a new sid; the client then
   re-syncs as on first connect (`GET /api/state`, `settingRequest` for units, and the screen's own GETs).
+- **A client that falls behind**: each socket holds up to 1024 unsent pushes. If it falls further behind, the
+  oldest are dropped and the server then resends the current state on that socket alone: on `/MaslowCNC`
+  `hostAddress`, `connectionStatus`, `statusMessage`, `requestedSetting` for `pauseButtonSetting` and `units`,
+  `homePositionMessage`, `gcodePositionMessage` (when a gcode line is current), the gcode preview and the board; on
+  `/MaslowCNCLogs` the logging state. Alerts and log lines that were dropped are not resent.
 - **Lifecycle events** `connect`, `disconnect` and `connect_error` are local to the client and never sent as frames,
   except the server's `connect` handshake above.
 

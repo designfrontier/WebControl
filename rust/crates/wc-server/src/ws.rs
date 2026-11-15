@@ -84,7 +84,7 @@ async fn session(socket: WebSocket, ns: Namespace, state: AppState) {
     }
     // The log viewer waits for a logging state; Rust never suspends logging, so it is always active.
     let logging = Push::log(json!({"log": "state", "state": false})).frame().encode();
-    if ns == Namespace::Logs && tx.send(Message::text(logging)).await.is_err() {
+    if ns == Namespace::Logs && tx.send(Message::text(logging.clone())).await.is_err() {
         return;
     }
     tracing::info!(sid, ns = ns.path(), "client connected");
@@ -112,7 +112,14 @@ async fn session(socket: WebSocket, ns: Namespace, state: AppState) {
                         }
                     }
                     Ok(_) => {}
-                    Err(RecvError::Lagged(missed)) => tracing::warn!(sid, missed, "client fell behind; pushes dropped"),
+                    Err(RecvError::Lagged(missed)) => {
+                        tracing::warn!(sid, missed, "client fell behind; resending the current state");
+                        if ns == Namespace::MaslowCnc {
+                            state.machine.send(Event::ClientResync { sid: sid.clone() });
+                        } else if tx.send(Message::text(logging.clone())).await.is_err() {
+                            break;
+                        }
+                    }
                     Err(RecvError::Closed) => break,
                 },
                 _ = pongs.notified() => pong_deadline = None,
