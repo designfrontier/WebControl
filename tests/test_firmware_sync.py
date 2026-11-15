@@ -88,3 +88,53 @@ def test_a_spindle_relay_setting_the_controller_already_has_is_not_rewritten(dat
     config.receivedSetting("$17=2\r\n")
 
     assert sent_keys(data) == []
+
+
+ADOPTED = {"maxZRPM": 18, "axisDetachTime": 9, "propWeightV": 28, "propWeightVZ": 36}
+
+
+@pytest.mark.parametrize("key,firmware_key", ADOPTED.items())
+def test_the_never_synced_keys_are_advanced_settings_that_start_unknown(config, key, firmware_key):
+    setting = next(item for item in config.defaults["Advanced Settings"] if item["key"] == key)
+
+    assert setting["firmwareKey"] == firmware_key
+    assert setting["value"] == ""
+    assert setting["title"] and setting["desc"]
+
+
+@pytest.mark.parametrize("key,firmware_key", ADOPTED.items())
+def test_an_unknown_key_adopts_the_controllers_value_without_writing_it(data, config, key, firmware_key):
+    set_value(config, key, "")
+
+    config.receivedSetting(f"${firmware_key}=126.00000000\r\n")
+
+    assert option(config, key)["value"] == "126"
+    assert queued(data) == []
+
+
+def test_an_unknown_key_does_not_adopt_a_nan(data, config):
+    set_value(config, "maxZRPM", "")
+
+    config.receivedSetting("$18=nan\r\n")
+
+    assert option(config, "maxZRPM")["value"] == ""
+    assert queued(data) == []
+
+
+def test_an_adopted_key_is_then_kept_in_sync(data, config):
+    set_value(config, "maxZRPM", "12.6")
+
+    config.receivedSetting("$18=126.00000000\r\n")
+
+    assert queued(data) == ["$18=12.6"]
+
+
+def test_saving_an_unknown_key_unchanged_sends_nothing_and_setting_it_sends_it(data, config):
+    set_value(config, "maxZRPM", "")
+
+    config.setValue("Advanced Settings", "maxZRPM", "", recursionBreaker=True)
+    assert queued(data) == []
+
+    config.setValue("Advanced Settings", "maxZRPM", "12.6", recursionBreaker=True)
+    assert queued(data) == ["$18=12.6"]
+

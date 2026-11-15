@@ -522,6 +522,10 @@ class Config(MakesmithInitFuncs):
         return
 
     def firmwareValuesMatch(self, firmwareKey, storedValue, value, reported):
+        if storedValue == "":
+            return True
+        if value == "":
+            return False
         stored, other = float(storedValue), float(value)
         if not reported:
             return self.isClose(stored, other)
@@ -667,8 +671,23 @@ class Config(MakesmithInitFuncs):
         expected value.
         """
         match = SETTING_REPLY.match(message)
-        if match:
-            self.syncFirmwareKey(int(match.group(1)), self.reportedValue(match.group(2)), reported=True)
+        if not match:
+            return
+        firmwareKey, value = int(match.group(1)), self.reportedValue(match.group(2))
+        if not self.adoptUnknownSetting(firmwareKey, value):
+            self.syncFirmwareKey(firmwareKey, value, reported=True)
+
+    def adoptUnknownSetting(self, firmwareKey, value):
+        '''
+        Takes the controller's value for a setting WebControl has never known; returns True if it did.
+        '''
+        option = self.firmwareKeyOption(firmwareKey)
+        if option is None or option["value"] != "" or math.isnan(value):
+            return False
+        option["value"] = "{:.8f}".format(value).rstrip("0").rstrip(".")
+        self.saveSettings()
+        return True
+
 
     def reportedValue(self, text):
         '''
