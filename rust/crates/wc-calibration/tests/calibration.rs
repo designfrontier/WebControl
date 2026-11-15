@@ -353,3 +353,16 @@ fn every_refusal_has_python_s_message() {
         "The machine was not able to be calibrated. Please ensure the work area dimensions are correct and try again."
     );
 }
+
+#[test]
+fn a_setting_that_is_not_finite_never_becomes_a_result_to_accept() {
+    let triangular_cases = [("Maslow Settings", "motorOffsetY", "nan"), ("Maslow Settings", "motorOffsetY", "inf")];
+    triangular_cases.iter().for_each(|setting| {
+        let refused = triangular::calculate(&settings(&[*setting]), &triangular_form());
+        assert_eq!(refused, Err(CalibrationError::NoSolution), "{setting:?}");
+    });
+    let configured = settings(&[]);
+    let broken = settings(&[("Advanced Settings", "leftChainTolerance", "inf")]);
+    let refused = holey::calibrate_measurements(&broken, &holey::ideal_lengths(&configured));
+    assert_eq!(refused, Err(CalibrationError::NoSolution));
+}

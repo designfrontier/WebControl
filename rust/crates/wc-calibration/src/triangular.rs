@@ -171,12 +171,15 @@ pub fn calculate_inputs(settings: &MachineSettings, inputs: &Inputs) -> Result<T
     if n == ITERATIONS {
         return Err(CalibrationError::NotCalibrated);
     }
-    Ok(TriangularResult {
+    let result = TriangularResult {
         motor_y_offset: python::round(motor_y - inputs.cut5 - (inputs.bit_diameter / 2.0) - 12.7, 1),
         rotation_radius: python::round(rotation_radius, 1),
         chain_sag_correction: python::round(sag, 6),
         cut34_y_offset: cut34_offset,
-    })
+    };
+    // A NaN error ends Python's loop as if it had converged; Accept would then send `$3=nan`.
+    let values = [result.motor_y_offset, result.rotation_radius, result.chain_sag_correction, result.cut34_y_offset];
+    if values.iter().all(|value| value.is_finite()) { Ok(result) } else { Err(CalibrationError::NoSolution) }
 }
 
 impl TriangularResult {
