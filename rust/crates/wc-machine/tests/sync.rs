@@ -185,6 +185,15 @@ fn a_value_that_does_not_stick_is_not_written_again_after_the_restart() {
 }
 
 #[test]
+fn a_read_back_after_a_restart_that_did_not_stick_never_writes_chain_over_sprocket_again() {
+    let mut rig = Rig::new();
+    rig.boot_reporting("51.27", &report(&[(38, "1")]));
+    let sent = rig.boot_reporting("51.27", &report(&[(38, "1"), (3, "478.00000000")]));
+    assert_eq!(sent, handshake_then(&["$3=463", "$13=63.5000", "$$", "$3=463"]), "no $38 from the read-back either");
+    assert!(!restarted(&rig));
+}
+
+#[test]
 fn an_eeprom_reset_skips_a_chain_over_sprocket_the_controller_already_holds() {
     let mut rig = Rig::new();
     rig.open();

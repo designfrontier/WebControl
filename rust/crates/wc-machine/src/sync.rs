@@ -52,6 +52,7 @@ impl Machine {
         skip_held_reinit_keys(&mut push, &reported);
         if self.restart != Restart::None && push.lines.iter().any(|line| reinitialises_axes(line)) {
             push.lines.retain(|line| !reinitialises_axes(line));
+            self.controller.reinit_suppressed = true;
             effects.push(alert(STILL_DIFFERS));
         }
         if self.restart == Restart::Booted {

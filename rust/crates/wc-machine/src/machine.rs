@@ -280,6 +280,8 @@ pub(crate) struct Controller {
     pub reported: Vec<(u32, f64)>,
     /// A re-initialising `$` line went out on this boot, so the controller must restart before it moves.
     pub axes_reinitialised: bool,
+    /// The restart did not make `$38` stick, so no `$$` on this boot writes it again.
+    pub reinit_suppressed: bool,
     /// A `Delay` holds writes until then.
     pub hold_until: Option<Duration>,
     /// `bufferOn` as the port opened: job lines go out while they fit, not one per `ok`.
@@ -307,6 +309,7 @@ impl Controller {
             eeprom_reset: false,
             reported: Vec::new(),
             axes_reinitialised: false,
+            reinit_suppressed: false,
             hold_until: None,
             buffering: false,
             raise_deadline: None,

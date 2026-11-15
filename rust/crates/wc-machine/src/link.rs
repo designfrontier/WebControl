@@ -323,6 +323,7 @@ impl Machine {
         self.upgrade_setting(line, if let Sync::Rewrite(text) = &sync { Some(text) } else { None });
         match sync {
             Sync::Adopt { section, key, value } => self.set_setting(&section, &key, value),
+            Sync::Rewrite(line) if self.controller.reinit_suppressed && reinitialises_axes(&line) => {}
             Sync::Rewrite(line) => self.controller.queue.push_back(Queued::Line { text: line, boot: false }),
             Sync::Agrees => {}
         }
