@@ -14,6 +14,7 @@ which is not always what the firmware needs; the known gaps are listed under "Kn
 | --------------------------- | -------------------------------------------------------------------------------------- |
 | `transcript.schema.json`    | JSON Schema (draft 2020-12) for one transcript                                         |
 | `transcripts/<name>.json`   | The corpus, one behaviour per file, named by behaviour                                 |
+| `transcripts-rust/<name>.json` | Where Rust must differ (known warts): replaces the transcript of the same name for Rust |
 | `gcode/<name>.nc`           | G-code files transcripts load by path                                                  |
 | `recording.schema.json`     | One line of a serial recording (`~/.WebControl/serial-recordings/*.jsonl`)             |
 
@@ -362,8 +363,10 @@ until a transcript and this list change together.
 4. **Handshake order and scope.** `G21`, `$$`, `G90` go out before `B05` and the `$13` write, so `$$` is compared
    before the firmware version is known. Only `$13` and settings `$$` shows differ are written, not the full set
    `spec/firmware.md` B.2 and B.9 ask for after every boot. The Python backend keeps this on purpose. **The Rust
-   backend must not copy it:** on each boot it sends `B05`, the units, `G90`, every setting, then `$$` to verify, and
-   changes the `connect_*` transcripts and this item with it (the prelude's tx is not checked).
+   backend does not copy it:** on each boot it sends `B05`, the units, `G90`, every setting the controller takes
+   (a blank one, never read from the controller, is left for `$$` to adopt), then `$$` to verify. Its four
+   `connect_*` transcripts are in `transcripts-rust/` (the prelude's tx is not checked). Python's runner reads only
+   `transcripts/`.
 5. **Number formats vary.** A restore writes `$16=0.000000`, `$21=1300.00`, `$45=0.00000516850`: whatever each
    setting's formatter produces. Moves the backend builds print Python's `str(float)` (`G00 X254.0`, `G0 Z5.0`), and
    home-shifted file coordinates keep the longer operand's decimals (`X22.8456 Y3.00`).
