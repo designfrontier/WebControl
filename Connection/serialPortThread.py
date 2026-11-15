@@ -498,6 +498,7 @@ class SerialPortThread(MakesmithInitFuncs):
         if problem is not None:
             title, reason, _advice = problem
             self.data.ui_queue1.put("Alert", "Command " + title, "That command " + reason)
+            self.data.probeInFlight = self.data.probeInFlight and "G38.2" not in command
             return
         command = self.manageToolChange(command)
         if onlySelectsTool(command):

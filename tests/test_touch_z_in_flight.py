@@ -89,3 +89,16 @@ def test_a_new_connection_forgets_a_probe(serial, data, monkeypatch):  # noqa: F
     serial.run()
 
     assert data.probeInFlight is False
+
+
+def test_a_probe_line_refused_before_it_is_written_ends_the_probe(serial, data, monkeypatch):  # noqa: F811
+    monkeypatch.setattr(data, "probeInFlight", True, raising=False)
+    thread = serial.thread(ack=False)
+    thread.machineIsReadyForData = True
+    serial.port.incoming.clear()
+
+    thread._sendQueuedCommand("G90 G38.2 Z-" + "9" * 120)
+
+    assert "Command Too Long" in str(serial.ui_messages())
+    assert not any("G38.2" in line for line in serial.port.sent)
+    assert data.probeInFlight is False
