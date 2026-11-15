@@ -588,6 +588,10 @@ class Actions(MakesmithInitFuncs):
             self.data.toolChangeWaits = False
             self.data.firmwarePaused = False
             self.data.firmwareHoldsJobLines = False
+            # The "!" flushes an M6 the firmware never ran, so it still has the tool from before it.
+            if self.data.toolBeforeChange is not None:
+                self.data.currentTool = self.data.nextTool = self.data.toolBeforeChange
+                self.data.toolBeforeChange = None
             # A later Resume at the same index must not lower the bit to this job's paused Z.
             self.data.pausedGcodeIndex = None
             self.data.pausedzval = None

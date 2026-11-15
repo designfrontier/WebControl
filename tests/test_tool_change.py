@@ -12,12 +12,13 @@ TOOL_CHANGE = ["Tool Change: Please insert tool 2\r\n", "Maslow Paused\r\n"]
 
 @pytest.fixture
 def tools(job, serial):  # noqa: F811
-    saved = {key: getattr(job, key) for key in ("nextTool", "firmwarePaused", "firmwareHoldsJobLines", "toolChangeWaits", "units")}
+    saved = {key: getattr(job, key) for key in ("nextTool", "firmwarePaused", "firmwareHoldsJobLines", "toolChangeWaits", "units", "toolBeforeChange")}
     job.currentTool = 0
     job.nextTool = 0
     job.firmwarePaused = False
     job.toolChangeWaits = False
     job.firmwareHoldsJobLines = False
+    job.toolBeforeChange = None
     job.manualZAxisAdjust = False
     yield job
     for key, value in saved.items():
@@ -387,3 +388,23 @@ def test_an_m6_for_the_tool_already_in_still_names_it_for_the_firmware(tools, se
 
     assert sent == ["T3 G0 X1  ", "T1  ", "T1 M6  ", "G1 X2  "]
     assert tools.uploadFlag == 0
+
+
+def test_stop_before_the_firmware_reaches_the_m6_keeps_the_tool_it_had(tools, serial):  # noqa: F811
+    stream(tools, serial, ["T2 M6 ", "G1 X2 "])
+
+    action(tools, "stopRun")
+
+    assert (tools.currentTool, tools.nextTool) == (0, 0)
+    sent = stream(tools, serial, ["T2 M6 ", "G1 X2 "])
+    assert sent[-1] == "T2 M6  "
+    assert tools.uploadFlag == -1
+
+
+def test_stop_after_the_firmware_confirmed_the_tool_change_keeps_the_new_tool(app, tools, serial):  # noqa: F811
+    stream(tools, serial, ["T2 M6 ", "G1 X2 "])
+    controller_says(app, tools, TOOL_CHANGE)
+
+    action(tools, "stopRun")
+
+    assert (tools.currentTool, tools.nextTool) == (2, 2)

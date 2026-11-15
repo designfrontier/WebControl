@@ -74,6 +74,7 @@ class MessageProcessor(MakesmithInitFuncs):
                 # This thread owns the tool-change state; the UIProcessor only shows the prompt.
                 self.data.manualZAxisAdjust = True
                 self.data.toolChangeWaits = True
+                self.data.toolBeforeChange = None
                 self.holdStreaming()
                 self.data.pausedUnits = self.data.units
                 self.data.pausedPositioningMode = self.data.positioningMode

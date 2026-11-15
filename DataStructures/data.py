@@ -77,6 +77,8 @@ class Data:
     gcodeShift = [0.0, 0.0]  # the amount that the gcode has been shifted
     currentTool = 0  # current tool.. upon startup, 0 is the same value as what the controller would have.
     nextTool = 0  # the firmware's pending tool, set by T and taken by M6
+    # The tool before an M6 the host sent but the firmware has not yet confirmed with "Tool Change:".
+    toolBeforeChange = None
     currentZTarget = 0  # current target for Z-Axis move.  Need to track so if user pauses, we can move back to that spot.
     message = ""  # used to update the client
     logger = Logger()  # the module which records the machines behavior to review later

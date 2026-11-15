@@ -206,6 +206,9 @@ class SerialPortThread(MakesmithInitFuncs):
         '''
         line, self.data.nextTool, pauses = toolChangeLine(line, self.data.nextTool, self.data.currentTool)
         if pauses:
+            self.data.toolBeforeChange = (
+                self.data.currentTool if self.data.toolBeforeChange is None else self.data.toolBeforeChange
+            )
             self.data.currentTool = self.data.nextTool
             self.data.pausedUnits = self.data.units
             if self.data.uploadFlag == 1:
@@ -280,6 +283,7 @@ class SerialPortThread(MakesmithInitFuncs):
             self.data.gcode_queue.put("G90 ")
             self.data.currentTool = 0  # This is necessary since the controller will have reset tool to zero.
             self.data.nextTool = 0
+            self.data.toolBeforeChange = None
             # Opening the port resets the controller, which ends any pause.
             self.data.firmwarePaused = False
             self.data.firmwareHoldsJobLines = False
