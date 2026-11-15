@@ -1,14 +1,27 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import { useClient, useMachine } from "../../app/context";
+import { ConfirmDialog } from "../../app/Dialog";
 import type { SystemInfo } from "../../protocol";
 import { selectRunState } from "../../state/machine";
 import { actionGroups, isAllowed } from "./actionsCatalog";
 import type { ActionItem } from "./actionsCatalog";
 import { downloadUrl } from "./api";
-import { ConfirmDialog } from "./Dialog";
 import { FakeServoDialog } from "./FakeServoDialog";
 import { RestoreDialog } from "./RestoreDialog";
+
+const SETUP_LINKS = [
+  ["/files/import/groundcontrol", "Import groundcontrol.ini file"],
+  ["/files/import/webcontrol", "Import webcontrol.json file"],
+  ["/machine/quick-configure", "Quick configure"],
+  ["/machine/sprockets", "Set sprockets and chains"],
+  ["/machine/z-axis", "Set Z-axis"],
+  ["/machine/z-limits", "Set Z-axis limits"],
+  ["/machine/reset-chains", "Reset chains"],
+  ["/calibration/triangular", "Triangular calibration"],
+  ["/calibration/holey", "Holey calibration"],
+  ["/calibration/optical", "Optical calibration"],
+] as const;
 
 type Open = { kind: "confirm"; item: ActionItem } | { kind: "restore" } | { kind: "fakeServo" } | null;
 
@@ -42,8 +55,7 @@ export const ActionsPanel = ({ info }: { info: SystemInfo | null }) => {
   const busy = runState === "running" || runState === "paused";
 
   return (
-    <section aria-labelledby="actions-title" className="system-panel">
-      <h2 id="actions-title">Actions</h2>
+    <section aria-label="Actions" className="system-panel">
       {busy && (
         <p className="system-note">
           A job is {runState}. Most actions stay disabled until it is stopped, as the server would refuse them.
@@ -78,15 +90,15 @@ export const ActionsPanel = ({ info }: { info: SystemInfo | null }) => {
                 </button>
               </>
             )}
-            {group.id === "positioning" && (
-              <p className="muted">
-                Calibration, sprockets, chains and the z-axis live under <Link to="/calibration">Calibration</Link> and{" "}
-                <Link to="/machine">Machine</Link>; settings imports under <Link to="/settings">Settings</Link>.
-              </p>
-            )}
+            {group.id === "setup" &&
+              SETUP_LINKS.map(([to, label]) => (
+                <Link key={to} className="button-link" to={to}>
+                  {label}
+                </Link>
+              ))}
             {group.id === "controller" && (
               <>
-                <Link className="button-link" to="/system/pid">
+                <Link className="button-link" to="/pid">
                   PID tuning (advanced)
                 </Link>
                 <button type="button" disabled={busy} onClick={() => setOpen({ kind: "fakeServo" })}>

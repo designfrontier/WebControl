@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef } from "react";
 import type { UIEvent } from "react";
-import type { SocketLike } from "../../socket/client";
+import type { Transport as SocketLike } from "../../transport";
 import { LOG_LINE_LIMIT, connectLogSocket, useLogStream } from "./logStream";
 import type { LogEvent, LogName, LogView } from "./logStream";
 
@@ -73,8 +73,7 @@ const LogPane = ({ log, title, view, dispatch }: PaneProps) => {
 export const LogsPanel = ({ connect = connectLogSocket }: { connect?: () => SocketLike }) => {
   const [view, dispatch] = useLogStream(connect);
   return (
-    <section aria-labelledby="logs-title" className="system-panel">
-      <h2 id="logs-title">Logs</h2>
+    <section aria-label="Logs" className="system-panel">
       <p className="chip log-state" data-tone={stateTone(view)} role="status">
         {stateText(view)}
       </p>

@@ -1,4 +1,4 @@
-import type { Section } from "../../app/section";
-import { SystemPage } from "./SystemPage";
-
-export const systemSection: Section = { path: "system", label: "System", Component: SystemPage };
+export { HelpPanel } from "./HelpPanel";
+export { PidTuning } from "./PidTuning";
+export { AboutModal, ActionsModal, LogsPage, UpdatesModal } from "./SystemModals";
+export { useUpdateAvailable } from "./useUpdateAvailable";

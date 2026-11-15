@@ -1,25 +1,20 @@
-import { Route, Routes } from "react-router";
-import { Layout } from "./Layout";
-import { sections } from "./sections";
+import { Route, Routes, useMatch } from "react-router";
+import { CalibrationPage } from "../features/calibration";
+import { ServerDialogs } from "../features/main";
+import { LogsPage } from "../features/system";
+import { ControlLayout } from "./ControlLayout";
+import { ThemeProvider } from "./theme";
 
-const NotFound = () => (
-  <section>
-    <h1>Not found</h1>
-    <p>There is no screen at this address.</p>
-  </section>
-);
-
-export const App = () => (
-  <Routes>
-    <Route element={<Layout />}>
-      {sections.map(({ path, label, Component }) =>
-        path === "" ? (
-          <Route key={label} index element={<Component />} />
-        ) : (
-          <Route key={label} path={`${path}/*`} element={<Component />} />
-        ),
-      )}
-      <Route path="*" element={<NotFound />} />
-    </Route>
-  </Routes>
-);
+export const App = () => {
+  const onLogs = useMatch("/logs") !== null;
+  return (
+    <ThemeProvider>
+      <Routes>
+        <Route path="logs" element={<LogsPage />} />
+        <Route path="calibration/*" element={<CalibrationPage />} />
+        <Route path="*" element={<ControlLayout />} />
+      </Routes>
+      {!onLogs && <ServerDialogs />}
+    </ThemeProvider>
+  );
+};

@@ -1,0 +1,311 @@
+import { z } from "zod";
+import {
+  boardDetailsSchema,
+  editBoardFormSchema,
+  openBoardFormSchema,
+  saveBoardFormSchema,
+  trimBoardFormSchema,
+} from "./boards";
+import {
+  holeyMeasurementsSchema,
+  holeyParametersSchema,
+  holeyResultSchema,
+  opticalSettingsSavedSchema,
+  opticalSettingsSchema,
+  opticalStateSchema,
+  triangularMeasurementsSchema,
+  triangularParametersSchema,
+  triangularResultSchema,
+} from "./calibration";
+import { errorBodySchema } from "./core";
+import {
+  classicErrorSchema,
+  classicResultSchema,
+  classicStatusSchema,
+  createdDirectorySchema,
+  directoryRequestSchema,
+  gcodeFormSchema,
+  gcodeLibrarySchema,
+  gcodeTextSchema,
+  importFormSchema,
+  librarySchema,
+  loadedGcodeSchema,
+  openGcodeFormSchema,
+  saveGcodeFormSchema,
+  uploadGcodeFormSchema,
+} from "./files";
+import { machineSetupSchema, quickConfigureSchema } from "./machine";
+import { mainScreenStateSchema, startupStateSchema } from "./main";
+import { settingsRejectionSchema, settingsSectionIds, settingsSectionSchema, settingsUpdateSchema } from "./settings";
+import {
+  helpPageSchema,
+  helpQuerySchema,
+  pidSettingsSchema,
+  pidTestRequestSchema,
+  pidTestResponseSchema,
+  releasesSchema,
+  systemInfoSchema,
+} from "./system";
+import { viewerSnapshotSchema } from "./viewer";
+
+export type BodyType = "json" | "form" | "text" | "html" | "file";
+
+export interface HttpBody {
+  type: BodyType;
+  schema?: z.ZodType;
+  description?: string;
+}
+
+export interface HttpEndpoint {
+  method: "GET" | "POST" | "PUT";
+  /** `{name}` marks a path parameter; Flask writes it `<name>`. */
+  path: string;
+  summary: string;
+  params?: z.ZodType;
+  query?: z.ZodType;
+  body?: HttpBody;
+  responses: Record<number, HttpBody>;
+  /** "api" is the JSON API for this UI; "classic" routes predate it and keep their old shapes. */
+  family: "api" | "classic" | "static";
+}
+
+const json = (schema: z.ZodType, description?: string): HttpBody => ({ type: "json", schema, description });
+const form = (schema: z.ZodType): HttpBody => ({ type: "form", schema });
+const error = (description: string) => json(errorBodySchema, description);
+const htmlNotFound = { type: "html", description: "Flask's default HTML 404 page" } satisfies HttpBody;
+const missingField = {
+  type: "html",
+  description: "Werkzeug's HTML 400 page when a form field is missing",
+} satisfies HttpBody;
+
+const api = (endpoint: Omit<HttpEndpoint, "family">): HttpEndpoint => ({ ...endpoint, family: "api" });
+const get = (path: string, summary: string, schema: z.ZodType) =>
+  api({ method: "GET", path, summary, responses: { 200: json(schema) } });
+
+const pathOutside = json(
+  classicErrorSchema,
+  '{"status": 400, "error": "Path is outside the library"}; a missing form field gives Werkzeug\'s HTML 400 instead',
+);
+const gcodeLocked = json(classicErrorSchema, "A job is running or paused; the HTTP reason phrase repeats the error");
+
+interface ClassicOptions {
+  /** Refused with 409 while a job runs or a tool change waits. */
+  locked?: boolean;
+  /** Takes library paths, so answers 400 with a JSON body for one outside the library. */
+  paths?: boolean;
+}
+
+const classic = (
+  path: string,
+  summary: string,
+  body: z.ZodType,
+  { locked = false, paths = false }: ClassicOptions,
+  ok: HttpBody,
+  failed: HttpBody,
+): HttpEndpoint => ({
+  method: "POST",
+  path,
+  summary,
+  body: form(body),
+  responses: Object.fromEntries(
+    [
+      [200, ok],
+      [400, paths ? pathOutside : missingField],
+      [409, locked ? gcodeLocked : undefined],
+      [500, failed],
+    ].filter(([, body]) => body),
+  ),
+  family: "classic",
+});
+
+const statusRoute = (path: string, summary: string, body: z.ZodType, options: ClassicOptions = {}) =>
+  classic(
+    path,
+    summary,
+    body,
+    options,
+    json(classicStatusSchema, '{"status": 200}'),
+    json(classicStatusSchema, '{"status": 500}'),
+  );
+
+const resultRoute = (path: string, summary: string, body: z.ZodType, options: ClassicOptions = {}) =>
+  classic(path, summary, body, options, json(classicResultSchema, '"success"'), json(classicResultSchema, '"failed"'));
+
+const download = (path: string, summary: string): HttpEndpoint => ({
+  method: "GET",
+  path,
+  summary,
+  query: z.object({ rnd: z.string().optional().describe("Cache buster; ignored") }),
+  responses: { 200: { type: "file", description: "application/zip" }, 500: json(classicResultSchema, '"failed"') },
+  family: "classic",
+});
+
+/** Every HTTP route the new UI calls, with what it sends and every answer the backend gives. */
+export const httpEndpoints: HttpEndpoint[] = [
+  get("/api/state", "What a client needs on (re)connect", startupStateSchema),
+  get("/api/main", "Run status and current gcode line for the control screen", mainScreenStateSchema),
+  get("/api/viewer", "What the viewer draws", viewerSnapshotSchema),
+  api({
+    method: "GET",
+    path: "/api/settings/{sectionId}",
+    summary: "One settings section as a form",
+    params: z.object({ sectionId: z.enum(settingsSectionIds) }),
+    responses: { 200: json(settingsSectionSchema), 404: htmlNotFound },
+  }),
+  api({
+    method: "PUT",
+    path: "/api/settings/{sectionId}",
+    summary: "Save changed settings in a section",
+    params: z.object({ sectionId: z.enum(settingsSectionIds) }),
+    body: json(settingsUpdateSchema),
+    responses: {
+      200: json(settingsSectionSchema, "The section as saved"),
+      400: json(z.union([settingsRejectionSchema, errorBodySchema]), "Per-setting errors, or a malformed body"),
+      404: htmlNotFound,
+    },
+  }),
+  get("/api/files/gcode", "The gcode library", gcodeLibrarySchema),
+  api({
+    method: "POST",
+    path: "/api/files/gcode/directories",
+    summary: "Create a gcode library directory; also broadcasts updateDirectories",
+    body: json(directoryRequestSchema),
+    responses: { 201: json(createdDirectorySchema), 400: error("Empty or unsafe name") },
+  }),
+  get("/api/files/gcode/loaded", "Where the loaded gcode came from", loadedGcodeSchema),
+  get("/api/files/gcode/text", "The loaded gcode as text", gcodeTextSchema),
+  get("/api/files/gcode/custom", "The gcode last sent with /sendGCode", gcodeTextSchema),
+  get("/api/boards/files", "The board library", librarySchema),
+  api({
+    method: "POST",
+    path: "/api/boards/directories",
+    summary: "Create a board library directory",
+    body: json(directoryRequestSchema),
+    responses: { 201: json(createdDirectorySchema), 400: error("Empty or unsafe name") },
+  }),
+  get("/api/boards/current", "The current board in machine units", boardDetailsSchema),
+  get("/api/machine/setup", "Firmware-dependent facts for the setup screens", machineSetupSchema),
+  get("/api/machine/quick-configure", "The quick-configure answers", quickConfigureSchema),
+  api({
+    method: "POST",
+    path: "/api/machine/quick-configure",
+    summary: "Save the quick-configure answers",
+    body: json(quickConfigureSchema),
+    responses: { 200: json(quickConfigureSchema, "The answers as saved"), 400: error("Invalid field") },
+  }),
+  get("/api/calibration/triangular", "Current triangular calibration parameters", triangularParametersSchema),
+  api({
+    method: "POST",
+    path: "/api/calibration/triangular",
+    summary: "Calculate triangular calibration from measurements",
+    body: json(triangularMeasurementsSchema),
+    responses: {
+      200: json(triangularResultSchema),
+      400: error("Missing or out-of-range measurement"),
+      422: error("The calculation did not converge"),
+    },
+  }),
+  api({
+    method: "POST",
+    path: "/api/calibration/triangular/accept",
+    summary: "Store the last triangular result",
+    body: json(z.object({}), "{}"),
+    responses: { 200: json(triangularParametersSchema), 409: error("Nothing calculated yet") },
+  }),
+  get("/api/calibration/holey", "Current holey calibration parameters", holeyParametersSchema),
+  api({
+    method: "POST",
+    path: "/api/calibration/holey",
+    summary: "Calculate holey calibration from measurements",
+    body: json(holeyMeasurementsSchema),
+    responses: {
+      200: json(holeyResultSchema),
+      400: error("Missing or non-numeric measurement"),
+      422: error("The calculation failed"),
+    },
+  }),
+  api({
+    method: "POST",
+    path: "/api/calibration/holey/accept",
+    summary: "Store the last holey result",
+    body: json(z.object({}), "{}"),
+    responses: { 200: json(holeyParametersSchema), 409: error("Nothing calculated yet") },
+  }),
+  get("/api/calibration/optical", "Optical calibration settings, curve and error matrix", opticalStateSchema),
+  api({
+    method: "PUT",
+    path: "/api/calibration/optical/settings",
+    summary: "Save optical calibration settings",
+    body: json(opticalSettingsSchema),
+    responses: {
+      200: json(opticalSettingsSavedSchema),
+      400: error("Missing or non-numeric field"),
+      500: error("Could not save"),
+    },
+  }),
+  get("/api/system/info", "Version, platform, firmware and update status", systemInfoSchema),
+  get("/api/system/pid", "Stored PID gains", pidSettingsSchema),
+  api({
+    method: "POST",
+    path: "/api/system/pid-test",
+    summary: "Start a PID test; results arrive later as updatePIDData",
+    body: json(pidTestRequestSchema),
+    responses: {
+      202: json(pidTestResponseSchema),
+      400: error("Invalid kind, motor or number"),
+      409: error("A job is running"),
+    },
+  }),
+  get("/api/system/releases", "WebControl releases on GitHub", releasesSchema),
+  api({
+    method: "GET",
+    path: "/api/system/help",
+    summary: "A docs/ page as markdown",
+    query: helpQuerySchema,
+    responses: { 200: json(helpPageSchema), 404: error('"no such help page"') },
+  }),
+  api({
+    method: "GET",
+    path: "/api/system/help/assets/{path}",
+    summary: "An image under docs/assets",
+    params: z.object({ path: z.string().describe("May contain slashes") }),
+    responses: { 200: { type: "file", description: "The file, typed by extension" }, 404: htmlNotFound },
+  }),
+  statusRoute("/openGCode", "Load a gcode file from the library", openGcodeFormSchema, { locked: true, paths: true }),
+  statusRoute("/uploadGCode", "Upload gcode files into the library and load the first", uploadGcodeFormSchema, {
+    locked: true,
+    paths: true,
+  }),
+  statusRoute("/saveGCode", "Save the loaded gcode into the library", saveGcodeFormSchema, { paths: true }),
+  resultRoute("/editGCode", "Replace the loaded gcode in memory", gcodeFormSchema, { locked: true }),
+  resultRoute("/sendGCode", "Send gcode lines to the controller now", gcodeFormSchema),
+  statusRoute("/importFile", "Import settings from groundcontrol.ini", importFormSchema),
+  statusRoute("/importFileWCJSON", "Import settings from a webcontrol.json", importFormSchema),
+  statusRoute("/importRestoreWebControl", "Restore a WebControl backup zip", importFormSchema),
+  statusRoute("/openBoard", "Load a board from the library", openBoardFormSchema, { paths: true }),
+  statusRoute("/saveBoard", "Save the current board into the library", saveBoardFormSchema, { paths: true }),
+  resultRoute("/editBoard", "Change the current board's details", editBoardFormSchema),
+  resultRoute("/trimBoard", "Trim the current board", trimBoardFormSchema),
+  download("/downloadDiagnostics", "Download a diagnostics zip"),
+  download("/backupWebControl", "Download a backup zip"),
+  {
+    method: "GET",
+    path: "/static/{filename}",
+    summary: "Images the screens show, e.g. /static/images/GPIO/RPI_pin_layout.svg",
+    params: z.object({ filename: z.string().describe("May contain slashes") }),
+    responses: { 200: { type: "file", description: "The file, typed by extension" }, 404: htmlNotFound },
+    family: "static",
+  },
+  {
+    method: "GET",
+    path: "/next/{path}",
+    summary: "This UI's built files, with index.html for any other path",
+    params: z.object({ path: z.string().describe("May be empty or contain slashes") }),
+    responses: {
+      200: { type: "file", description: "A file from frontend/dist, or index.html with Cache-Control: no-cache" },
+      404: { type: "text", description: '"Not found" for a missing path whose last segment has a dot' },
+      503: { type: "text", description: "frontend/dist has not been built" },
+    },
+    family: "static",
+  },
+];

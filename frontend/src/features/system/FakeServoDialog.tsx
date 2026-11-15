@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMachine } from "../../app/context";
 import { selectRunState } from "../../state/machine";
-import { Dialog } from "./Dialog";
+import { Dialog } from "../../app/Dialog";
 
 /** The classic UI's deliberate speed bump for enabling fake servo. */
 export const FAKE_SERVO_CODE = "42";

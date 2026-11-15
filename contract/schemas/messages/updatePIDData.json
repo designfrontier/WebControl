@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "updatePIDData",
+  "type": "object",
+  "properties": {
+    "command": {
+      "type": "string"
+    },
+    "data": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "result": {
+              "type": "string",
+              "enum": [
+                "velocity",
+                "position"
+              ]
+            },
+            "version": {
+              "type": [
+                "string",
+                "number"
+              ]
+            },
+            "data": {
+              "type": "array",
+              "items": {
+                "type": [
+                  "number",
+                  "string"
+                ]
+              }
+            }
+          },
+          "required": [
+            "result",
+            "version",
+            "data"
+          ]
+        }
+      ]
+    }
+  },
+  "required": [
+    "command",
+    "data"
+  ]
+}

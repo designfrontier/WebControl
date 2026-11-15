@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "moveGcodeIndex",
+  "type": "object",
+  "properties": {
+    "data": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "const": "moveGcodeIndex"
+        },
+        "arg": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "string",
+              "pattern": "^\\s*[-+]?\\d+\\s*$"
+            }
+          ],
+          "description": "Lines to step, signed"
+        },
+        "arg1": {
+          "description": "Ignored by the backend; the UI sends \"\".",
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "command",
+        "arg",
+        "arg1"
+      ]
+    }
+  },
+  "required": [
+    "data"
+  ]
+}

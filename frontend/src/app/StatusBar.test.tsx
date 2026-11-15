@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import { fakeFetch, startupState } from "../test/fakeFetch";
 import { createFakeSocket } from "../test/fakeSocket";
 import { renderApp } from "../test/render";
 
@@ -14,13 +15,15 @@ describe("StatusBar", () => {
 
   it("shows the host address from /api/state once connected", async () => {
     renderApp("/");
-    await waitFor(() => expect(status().getByText("Server: connected (192.168.1.20:5000)")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(status().getByText("Server: connected")).toHaveAttribute("title", "WebControl at 192.168.1.20:5000"),
+    );
   });
 
   it("omits the placeholder host address the server uses before it knows its own", () => {
     const socket = createFakeSocket();
     renderApp("/", { socket, machine: { hostAddress: "-" }, fetch: () => new Promise(() => {}) });
-    expect(status().getByText("Server: connected")).toBeInTheDocument();
+    expect(status().getByText("Server: connected")).not.toHaveAttribute("title");
   });
 
   it("shows not connected after the socket drops", () => {
@@ -52,9 +55,27 @@ describe("StatusBar", () => {
   });
 });
 
-describe("AlarmBanner", () => {
-  it("announces alarms and hides them when cleared", () => {
+describe("firmware chip", () => {
+  it.each([
+    [0, "Firmware: unknown"],
+    [1.26, "Stock 1.26"],
+    [51.27, "Holey 51.27"],
+    [100.07, "Custom 100.07"],
+  ])("reads %s as %s", async (version, text) => {
     const { socket } = renderApp("/");
+    socket.serverMessage("healthMessage", { cpuUsage: 1, bufferSize: -1, controllerFirmwareVersion: version });
+    expect(status().getByText(text)).toBeInTheDocument();
+  });
+
+  it("starts from the version in /api/state", async () => {
+    renderApp("/", { fetch: fakeFetch({ "GET /api/state": startupState({ controllerFirmwareVersion: 51.27 }) }) });
+    expect(await status().findByText("Holey 51.27")).toBeInTheDocument();
+  });
+});
+
+describe("AlarmBanner", () => {
+  it("announces alarms on the calibration page and hides them when cleared", () => {
+    const { socket } = renderApp("/calibration");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 
     socket.serverMessage("alarm", { message: "Alarm: Sled Not Keeping Up" });

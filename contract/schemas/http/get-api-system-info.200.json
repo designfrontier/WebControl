@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get-api-system-info.200",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "string"
+    },
+    "platform": {
+      "type": "string"
+    },
+    "controllerFirmwareVersion": {
+      "type": "number"
+    },
+    "firmware": {
+      "type": "object",
+      "properties": {
+        "stock": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "holey": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "custom": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "stock",
+        "holey",
+        "custom"
+      ]
+    },
+    "canTurnOff": {
+      "type": "boolean"
+    },
+    "fourMotor": {
+      "type": "boolean"
+    },
+    "update": {
+      "type": "object",
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "available",
+        "version"
+      ]
+    }
+  },
+  "required": [
+    "version",
+    "platform",
+    "controllerFirmwareVersion",
+    "firmware",
+    "canTurnOff",
+    "fourMotor",
+    "update"
+  ]
+}

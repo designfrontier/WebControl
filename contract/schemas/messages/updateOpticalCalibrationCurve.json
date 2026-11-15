@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "updateOpticalCalibrationCurve",
+  "type": "object",
+  "properties": {
+    "curveX": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      }
+    },
+    "curveY": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      }
+    }
+  },
+  "required": [
+    "curveX",
+    "curveY"
+  ]
+}

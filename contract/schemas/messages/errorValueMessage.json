@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "errorValueMessage",
+  "type": "object",
+  "properties": {
+    "leftError": {
+      "type": "number"
+    },
+    "rightError": {
+      "type": "number"
+    },
+    "computedX": {
+      "type": "number"
+    },
+    "computedY": {
+      "type": "number"
+    },
+    "computedEnabled": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "leftError",
+    "rightError",
+    "computedX",
+    "computedY",
+    "computedEnabled"
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "updateOpticalCalibrationFindCenter",
+  "type": "object",
+  "properties": {
+    "opticalCenterX": {
+      "type": "number"
+    },
+    "opticalCenterY": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "opticalCenterX",
+    "opticalCenterY"
+  ],
+  "additionalProperties": {}
+}

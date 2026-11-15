@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "healthMessage",
+  "type": "object",
+  "properties": {
+    "cpuUsage": {
+      "type": "number"
+    },
+    "bufferSize": {
+      "type": "number"
+    },
+    "controllerFirmwareVersion": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "cpuUsage",
+    "bufferSize"
+  ]
+}

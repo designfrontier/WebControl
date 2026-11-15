@@ -1,6 +1,9 @@
-import { io } from "socket.io-client";
-import { NAMESPACE } from "../protocol";
-import type { SocketLike } from "./client";
+import { LOGS_NAMESPACE, NAMESPACE } from "../protocol";
+import { connectTransport } from "../transport";
+import type { Transport } from "../transport";
 
-/** Opens the real socket.io v4 connection to the Flask-SocketIO server this page was served from. */
-export const connectSocket = (): SocketLike => io(NAMESPACE, { path: "/socket.io", reconnectionDelayMax: 5000 });
+/** Opens the connection to the backend this page was served from. */
+export const connectSocket = (): Transport => connectTransport(NAMESPACE);
+
+/** Opens a separate connection to LogStreamer's namespace; it is not the /MaslowCNC client. */
+export const connectLogSocket = (): Transport => connectTransport(LOGS_NAMESPACE, { separate: true });

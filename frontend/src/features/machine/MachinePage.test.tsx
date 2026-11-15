@@ -7,32 +7,32 @@ import { machineSetup, quickConfigureValues } from "./fixtures";
 const fetch = () =>
   fakeFetch({ "/api/machine/setup": machineSetup(), "/api/machine/quick-configure": quickConfigureValues() });
 
-describe("MachinePage", () => {
-  it("lists every setup screen and opens each one", async () => {
-    const { user } = renderApp("/machine", { fetch: fetch() });
-    expect(screen.getByRole("heading", { level: 1, name: "Machine" })).toBeInTheDocument();
-    const screens = [
-      "Getting started",
-      "Quick configure",
-      "Sprockets and chains",
-      "Reset chains",
-      "Z-axis",
-      "Z-axis limits",
-      "Fake servo",
-    ];
-    await screens.reduce(async (previous, title) => {
-      await previous;
-      await user.click(screen.getByRole("link", { name: title }));
-      expect(screen.getByRole("heading", { level: 2, name: title })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { level: 1, name: "Machine" })).toBeInTheDocument();
-      await user.click(screen.getByRole("link", { name: "← All machine setup" }));
-      expect(currentPath()).toBe("/machine");
-    }, Promise.resolve());
+describe("machine setup modals", () => {
+  it.each([
+    ["/machine/getting-started", "Getting Started"],
+    ["/machine/quick-configure", "Quick Configure"],
+    ["/machine/sprockets", "Set Sprockets & Chains"],
+    ["/machine/reset-chains", "Reset Chains"],
+    ["/machine/z-axis", "Set Z-Axis"],
+    ["/machine/z-limits", "Set Z-Axis Limits"],
+    ["/machine/fake-servo", "Fake Servo"],
+  ])("opens %s as the %s modal over the control screen", (path, title) => {
+    renderApp(path, { fetch: fetch() });
+    expect(screen.getByRole("dialog", { name: title })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Control", hidden: true })).toBeInTheDocument();
   });
 
-  it("sends unknown machine paths back to the list", () => {
+  it("sends the old machine list to the Actions modal, which links every setup screen", async () => {
+    const { user } = renderApp("/machine", { fetch: fetch() });
+    expect(currentPath()).toBe("/actions");
+    await user.click(screen.getByRole("link", { name: "Set sprockets and chains" }));
+    expect(currentPath()).toBe("/machine/sprockets");
+    expect(screen.getByRole("dialog", { name: "Set Sprockets & Chains" })).toBeInTheDocument();
+  });
+
+  it("explains an unknown machine path", () => {
     renderApp("/machine/nope");
-    expect(currentPath()).toBe("/machine");
+    expect(screen.getByRole("dialog", { name: "Not found" })).toBeInTheDocument();
   });
 
   it("links the getting started steps to the screens that do them", () => {

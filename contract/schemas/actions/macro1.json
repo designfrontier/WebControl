@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "macro1",
+  "type": "object",
+  "properties": {
+    "data": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "const": "macro1"
+        },
+        "arg": {
+          "description": "Ignored by the backend; the UI sends \"\".",
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "arg1": {
+          "description": "Ignored by the backend; the UI sends \"\".",
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "command",
+        "arg",
+        "arg1"
+      ]
+    }
+  },
+  "required": [
+    "data"
+  ]
+}

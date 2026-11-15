@@ -11,6 +11,8 @@
 - `api/` — JSON blueprint mounted at `/api` for the new frontend; every `api/<feature>.py` exposing `blueprint` auto-registers
 - `Background/` — long-running worker loops: controller message routing, UI socket push (`UIProcessor`), log streaming, webcam capture, console/WebMCP queue
 - `Boards/` — board (workpiece) model and manager tracking dimensions and cut-area grid
+- `contract/` — frozen frontend ↔ backend spec as JSON Schema, generated from `frontend/src/protocol/` (see its
+  `README.md`: layout, versioning, plain-WebSocket wire format, known warts)
 - `config/` — `Config` class: loads/saves `~/.WebControl/webcontrol.json`, computes derived settings, syncs settings with firmware
 - `Connection/` — serial link to the Arduino (`serialPortThread` buffering/flow control) and `NonVisibleWidgets`, which wires all backend services onto `Data`
 - `DataStructures/` — `Data` global state object, inter-thread queues, logger, and `MakesmithInitFuncs` base that injects `data`
@@ -70,18 +72,29 @@ events, per-client emits.
 - `frontend/src/protocol/` — zod schemas for the socket and API contract, one file per feature (`main`, `viewer`,
   `settings`, `files`, `boards`, `machine`, `calibration`, `system`), each exporting `<x>Messages` (server -> client
   `message` commands), `<x>Actions` (processAction command names) and `<x>Events` (client -> server events);
-  `core.ts` holds the envelope; `index.ts` only merges them
-- `frontend/src/socket/` — `createClient(socket)`: validates messages, drops ones whose `client` field names another
-  socket, `sendAction(command, arg?, arg1?)`, `requestSetting`, `updateSetting`, typed `emit`
+  `core.ts` holds the envelope; `index.ts` only merges them; `actionArgs.ts` types each action's `arg`/`arg1` and
+  run-state gate; `http.ts` catalogs every HTTP endpoint the UI calls with its request and response schemas
+- `frontend/src/contract/` — `buildContract()` turns the protocol into `contract/`; its tests fail when `contract/`
+  is stale or a UI request is missing from `http.ts`. Regenerate with `npm run contract`
+- `frontend/src/transport/` — the `Transport` interface the app talks to; `connectTransport` in `index.ts` picks
+  socket.io (`socketio.ts`, the only file that may import `socket.io-client`) or, later, plain WebSockets
+  (`websocket.ts`, a stub)
+- `frontend/src/socket/` — `createClient(transport)`: validates messages, drops ones whose `client` field names
+  another socket, `sendAction(command, arg?, arg1?)`, `requestSetting`, `updateSetting`, typed `emit`;
+  `connect.ts` opens the `/MaslowCNC` and log connections
 - `frontend/src/api/` — `getJson`/`sendJson(fetch, path, schema)` against `/api`
 - `frontend/src/features/files/api.ts` — `postForm(fetch, path, fields)` posts FormData to classic `main.py` form
   routes (`/openGCode`, `/trimBoard`, ...); each such route also needs an entry in the `vite.config.ts` dev proxy
 - `frontend/src/state/` — machine store (reducer + `useSyncExternalStore`) fed by the socket; reloads `GET /api/state`
   on every reconnect
-- `frontend/src/app/` — shell (`Layout`, `StatusBar`), `WebControlProvider`, hooks (`useClient`, `useFetch`,
-  `useMachine(selector)`, `useServerMessage(command, handler)`), `sections.ts` (nav order)
-- `frontend/src/features/<x>/` — one folder per slice; `index.ts` exports its `Section` (`path`, `label`,
-  `Component`). The viewer is rendered inside the main screen via `features/viewer`'s `Viewer`
+- `frontend/src/app/` — shell: `App` (routes: `/logs`, `/calibration/*`, everything else `ControlLayout`),
+  `ControlLayout` (top bar + control screen + route modal), `TopBar`/`Menu` (the classic menus), `modals.ts` (every
+  route modal's path, title and body, plus old-address redirects), `Dialog` (the one native `<dialog>` modal;
+  `dialogLayer.ts` keeps server dialogs above user ones), `modalHistory.ts` (`useCloseModal`; Back closes a modal),
+  `theme.tsx`, `StatusBar`, `WebControlProvider`, hooks (`useClient`, `useFetch`, `useMachine(selector)`,
+  `useServerMessage(command, handler)`)
+- `frontend/src/features/<x>/` — one folder per slice; `index.ts` re-exports the components `app/` uses. The control
+  screen is `features/main`'s `MainPage`, with `features/viewer`'s `Viewer` beside the controls
 - `frontend/src/test/` — `renderApp(route, opts)`, `renderWithProviders(ui, opts)`, `createFakeSocket()`
   (`serverConnect`, `serverMessage(command, data)`, `emitted`, `actions()`), `fakeFetch(routes)`, `startupState()`; `filesBoards.ts` (`expectPath`, `recorder`, `postedForm`, library and board
   fixtures)
@@ -96,7 +109,7 @@ events, per-client emits.
 - Frontend (in `frontend/`, Node 24+): `npm ci`, `npm run dev` (Vite at http://localhost:5173/next/, proxying `/api`,
   `/socket.io`, `/static` to `WEBCONTROL_BACKEND`, default http://localhost:5000), `npm run lint`,
   `npm run typecheck`, `npm test` (Vitest + v8 coverage, 95% floor), `npm run build` (to `frontend/dist`, served by
-  Flask at `/next`), `npm run format`
+  Flask at `/next`), `npm run format`, `npm run contract` (after any `src/protocol` change)
 - E2E: `npm run test:e2e` in `frontend/` builds the app and starts `tests/e2e_backend.py` on port 5055 (override with
   `E2E_BACKEND_PORT`; Python from `E2E_PYTHON`, default `../.venv/bin/python`). First time:
   `npx playwright install chromium`. It never touches the real `~/.WebControl`
@@ -107,15 +120,16 @@ events, per-client emits.
 
 Each slice edits only its own `frontend/src/features/<x>/`, `frontend/src/protocol/<x>.ts`, `api/<x>.py` and
 `tests/test_api_<x>.py`, and replaces its placeholder inside its own folder. A slice's `index.ts` only re-exports
-or declares its `Section`; logic goes in a sibling module, because coverage skips `index.ts` files. `app/sections.ts` and
-`protocol/index.ts` already import every slice, so they need no edits. Other shared files (`app/`, `state/`,
+its components; logic goes in a sibling module, because coverage skips `index.ts` files. A new modal screen needs an
+entry in `app/modals.ts`; `protocol/index.ts` already imports every slice. Other shared files (`app/`, `state/`,
 `socket/`, `test/`, `api/__init__.py`, `main.py`) change only for that slice's own placeholder entry, kept minimal
 and additive.
 
 New endpoints go in `api/<x>.py` (a module-level `blueprint`, auto-mounted under `/api`). Emit to just the requester
 with `api.client_emit.emit_to_client(command, data)`; outside a socket handler, pass `sid=`. A new socket event needs a
 `@socketio.on(..., namespace="/MaslowCNC")` handler in `main.py` or `api/`; the protocol contract test fails if an
-event has none.
+event has none. A new endpoint the UI calls also needs an entry in `protocol/http.ts`, then `npm run contract`;
+`tests/test_contract.py` checks Flask against `contract/`.
 
 ### Conventions
 
@@ -123,7 +137,9 @@ event has none.
   `erasableSyntaxOnly`, `noUnused*`), prettier (120 cols, trailing commas), eslint with type-only imports and no
   `for`/`while` loops. No i18n: WebControl is English-only
 - Tests colocated as `*.test.ts(x)`; Testing Library + user-event + jest-dom; query by role and visible text
-- Dialogs are client-owned React state. Never use `requestPage`/`activateModal` HTML from the server, and never
+- Dialogs are client-owned React state, built on `app/Dialog`; a screen of its own is a route modal in
+  `app/modals.ts`, closed with `useCloseModal()`. jsdom lacks `showModal()`, so `test/dialogPolyfill.ts` stands in
+  (`topLayer()` gives the stacking order). Never use `requestPage`/`activateModal` HTML from the server, and never
   round-trip dialog close through the server (`modalClosed` broadcasts `closeModals` to every client)
 - Data comes as JSON (`/api` or typed socket messages), never server-rendered HTML fragments
 - Plain CSS with the tokens in `theme.css`; no CSS framework. One responsive layout, no `_mobile` variants

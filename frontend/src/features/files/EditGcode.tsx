@@ -1,22 +1,25 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useNavigate } from "react-router";
-import { useFetch } from "../../app/context";
+import { useFetch, useMachine } from "../../app/context";
+import { selectGcodeLocked } from "../../state/machine";
+import { CloseButton } from "../../app/CloseButton";
+import { useCloseModal } from "../../app/modalHistory";
 import { editGcode, getGcodeText } from "./api";
 import { useResource, useSubmit } from "./hooks";
 import { FormError, GcodeEditor, Loaded, SubPage } from "./ui";
 
 const EditForm = ({ initial }: { initial: string }) => {
   const fetchImpl = useFetch();
-  const navigate = useNavigate();
+  const close = useCloseModal();
   const [text, setText] = useState(initial);
+  const locked = useMachine(selectGcodeLocked);
   const { busy, error, run } = useSubmit();
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     return run(async () => {
       await editGcode(fetchImpl, text.trimEnd());
-      navigate("/");
+      close();
     }, "Could not apply the edited gcode.");
   };
 
@@ -29,13 +32,17 @@ const EditForm = ({ initial }: { initial: string }) => {
         hint="Applying replaces the loaded gcode; use Save as to keep it in a file."
       />
       <FormError message={error} />
+      {locked && <p className="muted">A job is running or paused. Stop the job first to apply changes.</p>}
       <div className="actions">
-        <button type="submit" className="primary" disabled={busy || text === initial}>
+        <button
+          type="submit"
+          className="primary"
+          disabled={busy || locked || text === initial}
+          title={locked ? "Stop the job first" : undefined}
+        >
           {busy ? "Applying…" : "Apply changes"}
         </button>
-        <Link className="button" to="/files">
-          Cancel
-        </Link>
+        <CloseButton>Cancel</CloseButton>
       </div>
     </form>
   );
@@ -44,7 +51,7 @@ const EditForm = ({ initial }: { initial: string }) => {
 export const EditGcode = () => {
   const { resource } = useResource(getGcodeText);
   return (
-    <SubPage title="View or edit gcode" back="/files">
+    <SubPage>
       <Loaded resource={resource} what="the loaded gcode">
         {(text) => <EditForm initial={text} />}
       </Loaded>

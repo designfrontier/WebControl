@@ -1,5 +1,117 @@
 /* Design tokens. Features use these custom properties instead of literal colours or sizes. */
 :root {
+  color-scheme: light;
+
+  --bg: #ffffff;
+  --surface: #f8f9fa;
+  --surface-2: #e9ecef;
+  --line: #ced4da;
+  --text: #212529;
+  --muted: #5c636a;
+  --accent: #0b5ed7;
+  --accent-ink: #ffffff;
+  --ok: #157347;
+  --warn: #997404;
+  --danger: #c62e3c;
+  --danger-ink: #ffffff;
+  --go: #198754;
+  --go-ink: #ffffff;
+  --caution: #ffc107;
+  --caution-ink: #212529;
+  --backdrop: rgb(33 37 41 / 45%);
+  --shadow: 0 8px 24px rgb(33 37 41 / 18%);
+  /* Diagrams drawn for a white page. */
+  --paper: #ffffff;
+
+  --chart-5: #7b4bd6;
+  --chart-6: #138496;
+  --chart-7: #c2408a;
+  --chart-8: #6c757d;
+
+  /* three.js scene colours, after the classic 3D view. */
+  --scene-background: #eeeeee;
+  --scene-frame: #000000;
+  --scene-grid: #8a8a8a;
+  --scene-chain: #777777;
+  --scene-sled: #e00000;
+  --scene-computed-sled: #777777;
+  --scene-home: #00a000;
+  --scene-gcode-position: #000000;
+  --scene-cursor: #0050d0;
+  --scene-guide: #9fc7e8;
+  --scene-cut: #0000ff;
+  --scene-rapid: #00aa00;
+  --scene-plunge: #00aa00;
+  --scene-event: #e00000;
+  --scene-board-fill: #d2b48c;
+  --scene-board-edge: #783e04;
+  --scene-cut-cell: #ff6666;
+
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+
+  --radius: 6px;
+  --tap: 44px;
+  /* Compact control height on the control screen where a mouse is the main pointer. */
+  --control: 36px;
+}
+
+/* Dark: the OS preference unless the toggle chose light, or the toggle chose dark. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --bg: #14171c;
+    --surface: #1d2128;
+    --surface-2: #262b34;
+    --line: #353b46;
+    --text: #e8eaed;
+    --muted: #9aa3b0;
+    --accent: #4fa3ff;
+    --accent-ink: #06121f;
+    --ok: #3fb67a;
+    --warn: #e0a83a;
+    --danger: #e5534b;
+    --danger-ink: #1f0605;
+    --go: #2f9e66;
+    --go-ink: #06120c;
+    --caution: #e0a83a;
+    --caution-ink: #1f1500;
+    --backdrop: rgb(0 0 0 / 60%);
+    --shadow: 0 8px 24px rgb(0 0 0 / 50%);
+
+    --chart-5: #b07cff;
+    --chart-6: #2fc4c4;
+    --chart-7: #f07ab8;
+    --chart-8: #c8cdd5;
+
+    --scene-background: #14171c;
+    --scene-frame: #9aa3b0;
+    --scene-grid: #4a5260;
+    --scene-chain: #6b7480;
+    --scene-sled: #e5534b;
+    --scene-computed-sled: #9aa3b0;
+    --scene-home: #3fb67a;
+    --scene-gcode-position: #e8eaed;
+    --scene-cursor: #4fa3ff;
+    --scene-guide: #2c4a6b;
+    --scene-cut: #4fa3ff;
+    --scene-rapid: #3fb67a;
+    --scene-plunge: #3fb67a;
+    --scene-event: #e5534b;
+    --scene-board-fill: #d2b48c;
+    --scene-board-edge: #b5651d;
+    --scene-cut-cell: #ff6666;
+  }
+}
+
+:root[data-theme="dark"] {
   color-scheme: dark;
 
   --bg: #14171c;
@@ -14,18 +126,35 @@
   --warn: #e0a83a;
   --danger: #e5534b;
   --danger-ink: #1f0605;
+  --go: #2f9e66;
+  --go-ink: #06120c;
+  --caution: #e0a83a;
+  --caution-ink: #1f1500;
+  --backdrop: rgb(0 0 0 / 60%);
+  --shadow: 0 8px 24px rgb(0 0 0 / 50%);
 
-  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --chart-5: #b07cff;
+  --chart-6: #2fc4c4;
+  --chart-7: #f07ab8;
+  --chart-8: #c8cdd5;
 
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-6: 24px;
-
-  --radius: 6px;
-  --tap: 44px;
+  --scene-background: #14171c;
+  --scene-frame: #9aa3b0;
+  --scene-grid: #4a5260;
+  --scene-chain: #6b7480;
+  --scene-sled: #e5534b;
+  --scene-computed-sled: #9aa3b0;
+  --scene-home: #3fb67a;
+  --scene-gcode-position: #e8eaed;
+  --scene-cursor: #4fa3ff;
+  --scene-guide: #2c4a6b;
+  --scene-cut: #4fa3ff;
+  --scene-rapid: #3fb67a;
+  --scene-plunge: #3fb67a;
+  --scene-event: #e5534b;
+  --scene-board-fill: #d2b48c;
+  --scene-board-edge: #b5651d;
+  --scene-cut-cell: #ff6666;
 }
 
 * {
@@ -64,6 +193,13 @@ button {
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+input,
+select,
+textarea {
+  color: var(--text);
+  background: var(--bg);
 }
 
 code {

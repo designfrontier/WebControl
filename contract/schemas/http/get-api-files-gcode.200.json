@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get-api-files-gcode.200",
+  "type": "object",
+  "properties": {
+    "directories": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "directory": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "directory",
+          "name"
+        ]
+      }
+    },
+    "lastDirectory": {
+      "type": "string"
+    },
+    "lastFile": {
+      "type": "string"
+    },
+    "validExtensions": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "directories",
+    "files",
+    "lastDirectory",
+    "lastFile",
+    "validExtensions"
+  ]
+}

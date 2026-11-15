@@ -1,6 +1,6 @@
 import { act } from "@testing-library/react";
 import type { ActionCommand, ClientEvent, ClientEvents } from "../protocol";
-import type { SocketLike } from "../socket/client";
+import type { Transport } from "../transport";
 
 type Listener = (...args: unknown[]) => void;
 
@@ -9,7 +9,7 @@ export interface Emitted {
   payload: unknown;
 }
 
-export interface FakeSocket extends SocketLike {
+export interface FakeSocket extends Transport {
   /** Everything the client emitted, oldest first. */
   readonly emitted: Emitted[];
   /** Simulates the server accepting the connection, giving this socket `id`. */
@@ -20,7 +20,7 @@ export interface FakeSocket extends SocketLike {
   /** Pushes a raw `message` payload, for envelopes that are not JSON-encoded or are malformed. */
   serverRaw(payload: unknown): void;
   emittedEvents<E extends ClientEvent>(event: E): ClientEvents[E][];
-  /** The processAction calls the client made, as [command, arg, arg1]. */
+  /** The processAction calls the client made, as [command, arg, arg1], minus the viewer's statusRequest on connect. */
   actions(): [ActionCommand, string | number, string | number][];
   clearEmitted(): void;
 }
@@ -79,10 +79,11 @@ export const createFakeSocket = ({ connected = false, id = "client-1" } = {}): F
     actions: () =>
       emitted
         .filter((e) => e.event === "action")
-        .map((e) => {
+        .map((e): [ActionCommand, string | number, string | number] => {
           const { command, arg, arg1 } = (e.payload as ClientEvents["action"]).data;
           return [command as ActionCommand, arg, arg1];
-        }),
+        })
+        .filter(([command]) => command !== "statusRequest"),
     clearEmitted: () => {
       emitted.length = 0;
     },

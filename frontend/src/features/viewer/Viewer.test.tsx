@@ -4,6 +4,7 @@ import type { Object3D, Scene } from "three";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ViewerSnapshot } from "../../protocol";
 import { fakeFetch, jsonResponse } from "../../test/fakeFetch";
+import { topLayer } from "../../test/dialogPolyfill";
 import { renderWithProviders } from "../../test/render";
 import type { RenderOptions } from "../../test/render";
 import { LONG_PRESS_MS, Viewer } from "./Viewer";
@@ -86,13 +87,10 @@ describe("Viewer loading", () => {
   it("loads gcode, board and machine from /api/viewer and asks for the camera status", async () => {
     const { socket } = await loaded();
     expect(screen.getByText("Board: Shelf, Material: Birch ply")).toBeInTheDocument();
-    expect(current().fit).toHaveBeenLastCalledWith({
-      bedWidth: 96,
-      bedHeight: 48,
-      motorOffsetY: 18.2283,
-      motorSpacingX: 117.2598,
+    expect(current().fit).toHaveBeenLastCalledWith({ x: 0, y: 0, width: 96, height: 48 });
+    expect(socket.emittedEvents("action")).toContainEqual({
+      data: { command: "statusRequest", arg: "cameraStatus", arg1: "" },
     });
-    expect(socket.actions()).toContainEqual(["statusRequest", "cameraStatus", ""]);
     expect(screen.getByRole("figure", { name: "Gcode and board viewer" })).toHaveAttribute("data-cut-segments", "1");
   });
 
@@ -138,7 +136,7 @@ describe("Viewer loading", () => {
 
   it("reports a failed snapshot", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
-    renderViewer({ fetch: fakeFetch() });
+    renderViewer({ fetch: fakeFetch({ "/api/viewer": () => jsonResponse({}, 500) }) });
     expect(await screen.findByRole("alert")).toHaveTextContent("Could not load the preview from the server.");
   });
 
@@ -215,10 +213,11 @@ describe("Viewer positions", () => {
   it("shows the cursor position in machine units and clears it when the pointer leaves", async () => {
     await loaded({ machine: { units: "MM" } });
     fireEvent.pointerMove(canvas(), { pointerType: "mouse", clientX: 5, clientY: 5 });
-    expect(screen.getByText("Cursor X 313.58, Y -165.10 mm")).toBeInTheDocument();
+    const readout = screen.getByRole("status", { name: "Cursor position" });
+    expect(readout).toHaveTextContent("X: 313.58, Y: -165.10 mm");
     expect(object("cursor").visible).toBe(true);
     fireEvent.pointerLeave(canvas());
-    expect(screen.queryByText(/^Cursor/)).not.toBeInTheDocument();
+    expect(readout).toHaveTextContent("X: –, Y: –");
   });
 });
 
@@ -236,23 +235,19 @@ describe("Viewer toolbar", () => {
     expect(current().setPerspective).toHaveBeenLastCalledWith(true);
 
     await user.click(button("Reset view"));
-    expect(current().reset).toHaveBeenCalled();
+    expect(current().fit).toHaveBeenLastCalledWith({ x: 0, y: 0, width: 96, height: 48 });
 
     expect(object("boardLayer").visible).toBe(false);
-    await user.click(button("Board"));
+    await user.click(within(toolbar).getByRole("button", { name: /^Board: Shelf/ }));
     expect(object("boardLayer").visible).toBe(true);
 
     await user.click(button("Labels"));
     expect(button("Labels")).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("toggles the webcam on the server and shows its frames once decoded", async () => {
-    const { user, socket } = await loaded();
-    await user.click(screen.getByRole("button", { name: "Camera" }));
-    expect(socket.actions()).toContainEqual(["toggleCamera", "", ""]);
-
+  it("shows webcam frames once decoded while the camera is on", async () => {
+    const { socket } = await loaded();
     socket.serverMessage("cameraMessage", { command: "updateCamera", data: "on" });
-    expect(screen.getByRole("button", { name: "Camera" })).toHaveAttribute("aria-pressed", "true");
     socket.serverMessage("cameraMessage", { command: "cameraImageUpdated", data: "iVBORw0KGgo=" });
     expect(screen.queryByRole("img", { name: "Webcam view of the machine" })).not.toBeInTheDocument();
 
@@ -307,7 +302,7 @@ describe("Viewer screen actions", () => {
     fireEvent.contextMenu(canvas());
     await user.keyboard("{Escape}");
     fireEvent.contextMenu(canvas());
-    await user.click(screen.getByRole("dialog").parentElement!);
+    await user.click(screen.getByRole("dialog"));
     fireEvent.contextMenu(canvas());
     await user.click(screen.getByText(/^X /));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
@@ -353,29 +348,77 @@ describe("Viewer screen actions", () => {
     expect(screen.getByRole("button", { name: "Return to center" })).toBeEnabled();
   });
 
-  it("keeps Tab inside the dialog, makes the page inert and gives focus back on close", async () => {
+  it("opens in the top layer and gives focus back on close", async () => {
     const { user } = await loaded();
     const threeD = screen.getByRole("button", { name: "3D" });
     threeD.focus();
     fireEvent.contextMenu(canvas());
     const dialog = screen.getByRole("dialog");
-    const buttons = within(dialog).getAllByRole("button");
-    expect(canvas().closest("[inert]")).not.toBeNull();
-    expect(dialog.closest("[inert]")).toBeNull();
-
-    expect(buttons.at(-1)).toHaveFocus();
-    await user.tab();
-    expect(buttons[0]).toHaveFocus();
-    await user.tab({ shift: true });
-    expect(buttons.at(-1)).toHaveFocus();
-    buttons[0].blur();
-    await user.tab();
-    expect(buttons[0]).toHaveFocus();
+    expect(topLayer()).toEqual([dialog]);
+    expect(within(dialog).getByRole("button", { name: "Cancel" })).toHaveFocus();
 
     await user.keyboard("{Escape}");
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(document.querySelector("[inert]")).toBeNull();
+    expect(topLayer()).toEqual([]);
     expect(threeD).toHaveFocus();
+  });
+
+  it("shows the current gcode line and a placeholder without one", () => {
+    const { unmount } = renderViewer();
+    expect(screen.getByRole("status", { name: "Current gcode line" })).toHaveTextContent("No line");
+    unmount();
+    renderWithProviders(<Viewer currentLine="G1 X2" />, { fetch: fakeFetch({ "/api/viewer": snapshot() }) });
+    expect(screen.getByRole("status", { name: "Current gcode line" })).toHaveTextContent("G1 X2");
+  });
+
+  it("frames toolpath that runs off the bed", async () => {
+    const offBed = toBase64(
+      gz([
+        line([
+          [0, 0, 0],
+          [70, 0, 0],
+        ]),
+      ]),
+    );
+    renderViewer({ viewer: snapshot({ gcode: offBed }) });
+    await screen.findByText("1 cut and 0 rapid moves");
+    expect(current().fit).toHaveBeenLastCalledWith({ x: 11, y: 0, width: 118, height: 48 });
+  });
+
+  it("keeps the operator's view when home moves or the file is resent, and frames the new home on Reset", async () => {
+    const offBed = [
+      line([
+        [0, 0, 0],
+        [70, 0, 0],
+      ]),
+    ];
+    const { socket, user } = renderViewer({ viewer: snapshot({ gcode: toBase64(gz(offBed)) }) });
+    await screen.findByText("1 cut and 0 rapid moves");
+    const fit = current().fit as ReturnType<typeof vi.fn>;
+    fit.mockClear();
+
+    socket.serverMessage("homePositionMessage", { xval: 254, yval: 0 });
+    socket.serverRaw({ command: "gcodeUpdateCompressed", data: asArrayBuffer(gz(offBed)), dataFormat: "base64" });
+    expect(fit).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Reset view" }));
+    expect(fit).toHaveBeenLastCalledWith({ x: 16, y: 0, width: 128, height: 48 });
+
+    fit.mockClear();
+    const moved = [
+      line([
+        [0, 0, 0],
+        [1, 0, 0],
+      ]),
+    ];
+    socket.serverRaw({ command: "gcodeUpdateCompressed", data: asArrayBuffer(gz(moved)), dataFormat: "base64" });
+    expect(fit).toHaveBeenLastCalledWith({ x: 0, y: 0, width: 96, height: 48 });
+  });
+
+  it("recolours the scene from the theme's tokens", async () => {
+    document.documentElement.style.setProperty("--scene-background", "#eee");
+    await loaded();
+    expect((current().root.background as { getHex(): number }).getHex()).toBe(0xeeeeee);
+    document.documentElement.style.removeProperty("--scene-background");
   });
 
   it("does not start a long press for the second finger of a pinch", async () => {

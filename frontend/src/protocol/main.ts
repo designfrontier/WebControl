@@ -23,8 +23,20 @@ export const mainMessages = {
     port: z.string(),
     fakeServoStatus: z.boolean().optional(),
   }),
-  healthMessage: z.object({ cpuUsage: z.number(), bufferSize: z.number() }),
-  statusMessage: z.object({ uploadFlag: z.number(), positioningMode: z.number(), currentTool: z.number() }),
+  healthMessage: z.object({
+    cpuUsage: z.number(),
+    bufferSize: z.number(),
+    controllerFirmwareVersion: z.number().optional(),
+  }),
+  statusMessage: z.object({
+    uploadFlag: z.number(),
+    positioningMode: z.number(),
+    currentTool: z.number(),
+    /** Set from Play until Stop or the end of the file, through every kind of pause. */
+    jobInProgress: z.boolean().optional(),
+    /** The job waits for a tool change or a manual Z adjustment. */
+    manualZAxisAdjust: z.boolean().optional(),
+  }),
   positionMessage: z.object({
     xval: z.number(),
     yval: z.number(),
@@ -55,7 +67,8 @@ export const mainMessages = {
   requestedSetting: z.object({ setting: z.string(), value: z.union([z.string(), z.number(), z.boolean()]) }),
   controllerMessage: z.string(),
   alarm: z.object({ message: z.string() }),
-  clearAlarm: z.unknown(),
+  /** UIProcessor always sends `{ "data": "" }`. */
+  clearAlarm: z.object({ data: z.string() }),
   activateModal: modalSchema,
   closeModals: z.object({ title: z.string() }),
   closeAlertModals: z.object({ title: z.string() }),
@@ -100,7 +113,11 @@ export const startupStateSchema = z.object({
   distToMoveZ: z.number(),
   homePosition: z.object({ x: z.number(), y: z.number() }),
   pauseButtonSetting: z.enum(["Pause", "Resume"]),
+  jobInProgress: z.boolean().default(false),
+  manualZAxisAdjust: z.boolean().default(false),
   hostAddress: z.string(),
+  /** 0 until the controller reports its version on connect. */
+  controllerFirmwareVersion: z.number().default(0),
   macros: z.array(z.object({ command: z.enum(["macro1", "macro2"]), title: z.string() })),
 });
 export type StartupState = z.infer<typeof startupStateSchema>;

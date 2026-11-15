@@ -1,41 +1,33 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import { closeServerDialogs, resetMachine, waitForServer } from "./helpers";
 
 // These tests jog, start runs and write units: safe only because tests/e2e_backend.py runs with a temporary HOME and no port.
-const openDialog = (page: Page) => page.getByRole("dialog").or(page.getByRole("alertdialog"));
+const serverDialog = (page: Page) => page.locator("dialog[open][data-kind]");
 
-/** Closes server dialogs one by one, returning every message seen; a first-run notice may be queued too. */
-const closeAllDialogs = async (page: Page, seen: string[] = []): Promise<string[]> => {
-  if ((await openDialog(page).count()) === 0) return seen;
-  const dialog = openDialog(page);
-  const text = (await dialog.textContent()) ?? "";
-  await dialog.getByRole("button", { name: "Close" }).click();
-  return closeAllDialogs(page, [...seen, text]);
-};
-
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page, baseURL }) => {
+  await resetMachine(baseURL!);
   await page.goto("/next/");
-  await expect(page.getByText(/^Server: connected/)).toBeVisible({ timeout: 15_000 });
+  await waitForServer(page);
   await expect(page.getByRole("button", { name: "Play" })).toBeEnabled({ timeout: 15_000 });
 });
 
 test("rapid server alerts show one dialog at a time and leave the controls usable", async ({ page }) => {
   const play = page.getByRole("button", { name: "Play" });
   await play.click();
-  await expect(openDialog(page)).toBeVisible();
+  await expect(serverDialog(page)).toBeVisible();
   await play.click({ force: true });
   await play.click({ force: true });
 
-  await expect(page.locator(".dialog-backdrop")).toHaveCount(1);
-  await expect(openDialog(page)).toHaveCount(1);
+  await expect(page.locator("dialog[open]")).toHaveCount(1);
 
-  const seen = await closeAllDialogs(page);
+  const seen = await closeServerDialogs(page);
   expect(seen.join("\n")).toContain("No GCode file loaded.");
-  await expect(page.locator(".dialog-backdrop")).toHaveCount(0);
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
 
   // A stuck overlay would intercept this click and fail it.
   await page.getByRole("button", { name: "Up", exact: true }).click();
-  await expect(openDialog(page)).toHaveCount(0);
+  await expect(serverDialog(page)).toHaveCount(0);
 });
 
 test("switching units round-trips through the server", async ({ page }) => {
@@ -50,8 +42,20 @@ test("switching units round-trips through the server", async ({ page }) => {
 });
 
 test("labels every control with visible text", async ({ page }) => {
-  const names = ["Home", "Set Home Here", "Return to Center", "Raise", "Lower", "Stop", "Stop Z", "Next line"];
+  const names = ["Home", "Set Home Here", "Play", "Stop", "Go to line", "Camera"];
   await Promise.all(
     names.map((name) => expect(page.getByRole("button", { name, exact: true })).toHaveText(new RegExp(name))),
   );
+  await expect(page.getByRole("link", { name: "Z-Axis" })).toBeVisible();
+  await expect(page.getByText("Job", { exact: true })).toBeVisible();
+});
+
+test("the Z-Axis button opens its modal, which moves Z and closes again", async ({ page }) => {
+  await page.getByRole("link", { name: "Z-Axis" }).click();
+  const zAxis = page.getByRole("dialog", { name: "Z-Axis" });
+  await expect(zAxis.getByRole("button", { name: "Stop Z" })).toBeVisible();
+  await zAxis.getByRole("button", { name: /Raise/ }).click();
+  await page.keyboard.press("Escape");
+  await expect(zAxis).toBeHidden();
+  await expect(page).toHaveURL(/\/next\/?$/);
 });

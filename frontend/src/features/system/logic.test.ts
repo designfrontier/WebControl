@@ -92,10 +92,10 @@ describe("chart math", () => {
 
 describe("helpRoute", () => {
   it.each([
-    ["help", "/system/help"],
-    ["GettingStarted/firstSteps.md", "/system/help/GettingStarted/firstSteps.md"],
-    ["../Actions/index.md#top", "/system/help/Actions/index.md#top"],
-    ["/Boards/index.md", "/system/help/Boards/index.md"],
+    ["help", "/help"],
+    ["GettingStarted/firstSteps.md", "/help/GettingStarted/firstSteps.md"],
+    ["../Actions/index.md#top", "/help/Actions/index.md#top"],
+    ["/Boards/index.md", "/help/Boards/index.md"],
     ["notes.txt", null],
   ])("%s -> %s", (href, route) => {
     expect(helpRoute(href)).toBe(route);

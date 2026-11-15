@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "cameraMessage",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "const": "cameraImageUpdated"
+        },
+        "data": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "data"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "const": "updateCamera"
+        },
+        "data": {
+          "type": "string",
+          "enum": [
+            "on",
+            "off"
+          ]
+        }
+      },
+      "required": [
+        "command",
+        "data"
+      ]
+    }
+  ]
+}

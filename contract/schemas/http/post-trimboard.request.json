@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "post-trimboard.request",
+  "type": "object",
+  "properties": {
+    "trimTop": {
+      "type": "string"
+    },
+    "trimBottom": {
+      "type": "string"
+    },
+    "trimLeft": {
+      "type": "string"
+    },
+    "trimRight": {
+      "type": "string"
+    },
+    "units": {
+      "type": "string",
+      "enum": [
+        "mm",
+        "inches"
+      ]
+    }
+  },
+  "required": [
+    "trimTop",
+    "trimBottom",
+    "trimLeft",
+    "trimRight",
+    "units"
+  ]
+}

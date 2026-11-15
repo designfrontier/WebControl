@@ -20,8 +20,7 @@ export const HelpPanel = () => {
   }, [page.status, path]);
 
   return (
-    <section aria-labelledby="help-title" className="system-panel help">
-      <h2 id="help-title">Help</h2>
+    <section aria-label="Help" className="system-panel help">
       <p className="muted">
         Also online at{" "}
         <a href="https://webcontrolcnc.github.io/WebControl/" target="_blank" rel="noreferrer">

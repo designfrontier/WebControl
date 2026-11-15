@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get-api-boards-current.200",
+  "type": "object",
+  "properties": {
+    "boardID": {
+      "type": "string"
+    },
+    "material": {
+      "type": "string"
+    },
+    "width": {
+      "type": "number"
+    },
+    "height": {
+      "type": "number"
+    },
+    "thickness": {
+      "type": "number"
+    },
+    "centerX": {
+      "type": "number"
+    },
+    "centerY": {
+      "type": "number"
+    },
+    "units": {
+      "type": "string",
+      "enum": [
+        "mm",
+        "inches"
+      ]
+    },
+    "fileName": {
+      "type": "string"
+    },
+    "router": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ]
+    }
+  },
+  "required": [
+    "boardID",
+    "material",
+    "width",
+    "height",
+    "thickness",
+    "centerX",
+    "centerY",
+    "units",
+    "fileName",
+    "router"
+  ]
+}

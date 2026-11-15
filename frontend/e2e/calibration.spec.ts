@@ -28,6 +28,7 @@ test("triangular calibration calculates on the server and accepts the result", a
 
 test("optical calibration loads, validates and saves its settings", async ({ page }) => {
   await page.goto("/next/calibration/optical");
+  await expect(page.getByRole("button", { name: "Stop machine" })).toBeVisible();
   const form = page.getByRole("form", { name: "Optical calibration settings" });
   await expect(form).toBeVisible();
   await page.getByText("Curve fitting", { exact: true }).click();
@@ -44,4 +45,13 @@ test("optical calibration loads, validates and saves its settings", async ({ pag
 
   await page.reload();
   await expect(page.getByRole("textbox", { name: "Position tolerance" })).toHaveValue("0.2");
+});
+
+test("calibration pages lead back to the control screen", async ({ page }) => {
+  await page.goto("/next/actions");
+  await page.getByRole("dialog", { name: "Actions" }).getByRole("link", { name: "Holey calibration" }).click();
+  await expect(page).toHaveURL(/\/next\/calibration\/holey$/);
+  await page.getByRole("link", { name: "← Back to Control" }).click();
+  await expect(page).toHaveURL(/\/next\/?$/);
+  await expect(page.getByRole("heading", { name: "Controls" })).toBeVisible();
 });

@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get-api-main.200",
+  "type": "object",
+  "properties": {
+    "status": {
+      "type": "object",
+      "properties": {
+        "uploadFlag": {
+          "type": "number"
+        },
+        "positioningMode": {
+          "type": "number"
+        },
+        "currentTool": {
+          "type": "number"
+        },
+        "jobInProgress": {
+          "type": "boolean"
+        },
+        "manualZAxisAdjust": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "uploadFlag",
+        "positioningMode",
+        "currentTool"
+      ]
+    },
+    "touchPlate": {
+      "type": "boolean"
+    },
+    "gcode": {
+      "type": "object",
+      "properties": {
+        "lineIndex": {
+          "type": "number"
+        },
+        "line": {
+          "type": "string"
+        },
+        "lineCount": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "lineIndex",
+        "line",
+        "lineCount"
+      ]
+    }
+  },
+  "required": [
+    "status",
+    "touchPlate",
+    "gcode"
+  ]
+}

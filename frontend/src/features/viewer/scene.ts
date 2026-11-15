@@ -19,7 +19,7 @@ import type { GcodeGeometry, GcodeLabel } from "./gcodeGeometry";
 import { bedFrame, chainSegments, crosshair, cutCellTriangles, guideSegments } from "./shapes";
 import type { MachineGeometry, Point, Point3, Segments } from "./shapes";
 
-/** Scene colours, tuned for the dark theme (theme.css tokens where one fits). */
+/** Default scene colours; theme.css overrides each with a --scene-* token per theme. */
 export const COLORS = {
   background: 0x14171c,
   frame: 0x9aa3b0,
@@ -40,6 +40,30 @@ export const COLORS = {
   cutCell: 0xff6666,
 } as const;
 
+export type SceneColor = keyof typeof COLORS;
+export type Palette = Partial<Record<SceneColor, number>>;
+
+const tokenName = (color: SceneColor) => `--scene-${color.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`;
+
+/** Parses a CSS colour as a token holds it; the CSS minifier may shorten #eeeeee to #eee or #ff0000 to red. */
+export const parseCssColor = (value: string) => {
+  const text = value.trim();
+  if (!text) return null;
+  const color = new Color(Number.NaN, Number.NaN, Number.NaN).setStyle(text);
+  return Number.isNaN(color.r) ? null : color.getHex();
+};
+
+/** Reads the --scene-* colour tokens in effect on `element`, skipping any that are missing or unreadable. */
+export const readPalette = (element: Element): Palette => {
+  const style = getComputedStyle(element);
+  return Object.fromEntries(
+    (Object.keys(COLORS) as SceneColor[]).flatMap((color) => {
+      const value = parseCssColor(style.getPropertyValue(tokenName(color)));
+      return value === null ? [] : [[color, value]];
+    }),
+  );
+};
+
 export type MakeLabel = (text: string) => Object3D;
 
 export interface ViewerScene {
@@ -56,6 +80,7 @@ export interface ViewerScene {
   setBoardVisible(visible: boolean): void;
   setLabelsVisible(visible: boolean): void;
   setCursor(position: Point | null): void;
+  setPalette(palette: Palette): void;
   dispose(): void;
 }
 
@@ -94,14 +119,23 @@ const disposeTree = (object: Object3D) =>
   });
 
 export const createViewerScene = (makeLabel: MakeLabel): ViewerScene => {
-  const line = (color: number) => new LineBasicMaterial({ color });
-  const dashed = (color: number, size: number) => new LineDashedMaterial({ color, dashSize: size, gapSize: size });
+  const themed: [SceneColor, LineBasicMaterial | LineDashedMaterial | MeshBasicMaterial][] = [];
+  const track = <M extends LineBasicMaterial | LineDashedMaterial | MeshBasicMaterial>(
+    color: SceneColor,
+    material: M,
+  ) => {
+    themed.push([color, material]);
+    return material;
+  };
+  const line = (color: SceneColor) => track(color, new LineBasicMaterial({ color: COLORS[color] }));
+  const dashed = (color: SceneColor, size: number) =>
+    track(color, new LineDashedMaterial({ color: COLORS[color], dashSize: size, gapSize: size }));
   const segments = (positions: ArrayLike<number>, material: Material) => {
     const object = new LineSegments(geometryOf(positions), material);
     if (material instanceof LineDashedMaterial) object.computeLineDistances();
     return object;
   };
-  const marker = (arm: number, radius: number, color: number, z = 0) => {
+  const marker = (arm: number, radius: number, color: SceneColor, z = 0) => {
     const object = segments(crosshair(arm, radius), line(color));
     object.position.z = z;
     object.visible = false;
@@ -109,37 +143,38 @@ export const createViewerScene = (makeLabel: MakeLabel): ViewerScene => {
   };
 
   const root = new Scene();
-  root.background = new Color(COLORS.background);
+  const background = new Color(COLORS.background);
+  root.background = background;
 
-  const outline = segments([], line(COLORS.frame));
-  const grid = segments([], dashed(COLORS.grid, 0.5));
-  const chains = segments(new Float32Array(12), line(COLORS.chain));
+  const outline = segments([], line("frame"));
+  const grid = segments([], dashed("grid", 0.5));
+  const chains = segments(new Float32Array(12), line("chain"));
   chains.visible = false;
   chains.frustumCulled = false;
-  const guides = segments(new Float32Array(12), line(COLORS.guide));
+  const guides = segments(new Float32Array(12), line("guide"));
   guides.visible = false;
   guides.frustumCulled = false;
 
-  const sled = marker(1.5, 1, COLORS.sled);
-  const computedSled = marker(1.5, 1, COLORS.computedSled, -0.01);
-  const home = marker(1.25, 0.75, COLORS.home);
+  const sled = marker(1.5, 1, "sled");
+  const computedSled = marker(1.5, 1, "computedSled", -0.01);
+  const home = marker(1.25, 0.75, "home");
   home.visible = true;
-  const cursor = marker(1.5, 1, COLORS.cursor);
+  const cursor = marker(1.5, 1, "cursor");
 
-  const cuts = segments([], line(COLORS.cut));
-  const rapids = segments([], dashed(COLORS.rapid, 0.1));
-  const plunges = segments([], line(COLORS.plunge));
-  const events = segments([], line(COLORS.event));
+  const cuts = segments([], line("cut"));
+  const rapids = segments([], dashed("rapid", 0.1));
+  const plunges = segments([], line("plunge"));
+  const events = segments([], line("event"));
   const labels = new Group();
-  const gcodePosition = marker(1, 0.5, COLORS.gcodePosition);
+  const gcodePosition = marker(1, 0.5, "gcodePosition");
   const toolpath = new Group().add(cuts, rapids, plunges, events, labels, gcodePosition);
 
   const boardFill = new Mesh(
     new BoxGeometry(1, 1, 1),
-    new MeshBasicMaterial({ color: COLORS.boardFill, opacity: 0.35, transparent: true }),
+    track("boardFill", new MeshBasicMaterial({ color: COLORS.boardFill, opacity: 0.35, transparent: true })),
   );
-  const boardEdges = segments([], line(COLORS.boardEdge));
-  const cutCells = new Mesh(geometryOf([]), new MeshBasicMaterial({ color: COLORS.cutCell }));
+  const boardEdges = segments([], line("boardEdge"));
+  const cutCells = new Mesh(geometryOf([]), track("cutCell", new MeshBasicMaterial({ color: COLORS.cutCell })));
   const board = new Group().add(boardFill, boardEdges);
   const boardLayer = new Group().add(board, cutCells);
   boardLayer.visible = false;
@@ -256,6 +291,10 @@ export const createViewerScene = (makeLabel: MakeLabel): ViewerScene => {
       place(cursor, position);
       guides.visible = position !== null && machine !== null;
       if (position && machine) writePositions(guides, guideSegments(machine, position));
+    },
+    setPalette: (palette) => {
+      background.setHex(palette.background ?? COLORS.background);
+      themed.forEach(([color, material]) => material.color.setHex(palette[color] ?? COLORS[color]));
     },
     dispose: () => {
       clearLabels();

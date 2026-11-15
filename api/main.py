@@ -1,5 +1,7 @@
 from flask import Blueprint, current_app, jsonify
 
+from api.state import job_status
+
 blueprint = Blueprint("main", __name__)
 
 
@@ -23,6 +25,7 @@ def main_screen_state(data):
             "uploadFlag": data.uploadFlag,
             "positioningMode": data.positioningMode,
             "currentTool": data.currentTool,
+            **job_status(data),
         },
         "touchPlate": _flag(data.config.getValue("Advanced Settings", "touchPlate")),
         "gcode": _gcode_position(data),

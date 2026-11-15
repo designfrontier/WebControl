@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get-api-machine-setup.200",
+  "type": "object",
+  "properties": {
+    "chainExtendLength": {
+      "type": "number"
+    },
+    "fourMotor": {
+      "type": "boolean"
+    },
+    "firmwareSupportsZaxisLimit": {
+      "type": "boolean"
+    },
+    "touchPlate": {
+      "type": "boolean"
+    },
+    "controllerFirmwareVersion": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "chainExtendLength",
+    "fourMotor",
+    "firmwareSupportsZaxisLimit",
+    "touchPlate",
+    "controllerFirmwareVersion"
+  ]
+}

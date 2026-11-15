@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useFetch } from "../../app/context";
 import { restoreBackup } from "./api";
-import { Dialog } from "./Dialog";
+import { Dialog } from "../../app/Dialog";
 import { errorText } from "./useLoad";
 
 interface Props {

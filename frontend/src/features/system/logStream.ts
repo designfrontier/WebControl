@@ -1,8 +1,9 @@
 import { useEffect, useReducer } from "react";
-import { io } from "socket.io-client";
-import { LOGS_NAMESPACE, logMessageSchema } from "../../protocol";
+import { logMessageSchema } from "../../protocol";
 import type { LogMessage } from "../../protocol";
-import type { SocketLike } from "../../socket/client";
+import type { Transport as SocketLike } from "../../transport";
+
+export { connectLogSocket } from "../../socket/connect";
 
 export const LOG_LINE_LIMIT = 1000;
 
@@ -50,9 +51,6 @@ export const logReducer = (view: LogView, event: LogEvent): LogView => {
     }
   }
 };
-
-/** Opens a separate socket.io connection to LogStreamer's namespace; it is not the /MaslowCNC client. */
-export const connectLogSocket = (): SocketLike => io(LOGS_NAMESPACE, { path: "/socket.io", forceNew: true });
 
 export const useLogStream = (connect: () => SocketLike) => {
   const [view, dispatch] = useReducer(logReducer, initialLogView);

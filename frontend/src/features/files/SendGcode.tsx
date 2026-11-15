@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { Link } from "react-router";
 import { useFetch } from "../../app/context";
+import { CloseButton } from "../../app/CloseButton";
 import { getCustomGcode, sendGcode } from "./api";
 import { useResource, useSubmit } from "./hooks";
 import { FormError, GcodeEditor, Loaded, SubPage } from "./ui";
@@ -42,9 +42,7 @@ const SendForm = ({ initial }: { initial: string }) => {
         <button type="submit" className="primary" disabled={busy}>
           {busy ? "Sending…" : "Send"}
         </button>
-        <Link className="button" to="/files">
-          Done
-        </Link>
+        <CloseButton>Done</CloseButton>
       </div>
     </form>
   );
@@ -53,7 +51,7 @@ const SendForm = ({ initial }: { initial: string }) => {
 export const SendGcode = () => {
   const { resource } = useResource(getCustomGcode);
   return (
-    <SubPage title="Send gcode" back="/files">
+    <SubPage>
       <Loaded resource={resource} what="the last gcode sent">
         {(text) => <SendForm initial={text} />}
       </Loaded>

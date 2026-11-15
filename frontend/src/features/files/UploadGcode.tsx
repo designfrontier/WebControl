@@ -1,21 +1,24 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useNavigate } from "react-router";
-import { useClient, useFetch } from "../../app/context";
+import { useClient, useFetch, useMachine } from "../../app/context";
+import { CloseButton } from "../../app/CloseButton";
+import { useCloseModal } from "../../app/modalHistory";
 import type { CreatedDirectory, GcodeLibrary } from "../../protocol";
 import { createGcodeDirectory, getGcodeLibrary, uploadGcode } from "./api";
 import { useResource, useSubmit } from "./hooks";
 import { initialDirectory } from "./library";
-import { DirectorySelect, FormError, Loaded, NewDirectoryForm, SubPage } from "./ui";
+import { selectGcodeLocked } from "../../state/machine";
+import { DirectorySelect, FormError, GCODE_LOCKED_NOTE, Loaded, NewDirectoryForm, SubPage } from "./ui";
 
 const UploadForm = ({ library }: { library: GcodeLibrary }) => {
   const fetchImpl = useFetch();
   const client = useClient();
-  const navigate = useNavigate();
+  const close = useCloseModal();
   const [directories, setDirectories] = useState(library.directories);
   const [directory, setDirectory] = useState(() => initialDirectory(library));
   const [files, setFiles] = useState<File[]>([]);
   const { busy, error, setError, run } = useSubmit();
+  const locked = useMachine(selectGcodeLocked);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -23,7 +26,7 @@ const UploadForm = ({ library }: { library: GcodeLibrary }) => {
     return run(async () => {
       await uploadGcode(fetchImpl, directory, files);
       client.emit("checkForGCodeUpdate", { data: "Please" });
-      navigate("/");
+      close();
     }, "The upload failed, or the first file could not be opened as gcode.");
   };
 
@@ -53,13 +56,12 @@ const UploadForm = ({ library }: { library: GcodeLibrary }) => {
           </span>
         </div>
         <FormError message={error} />
+        {locked && <p className="muted">{GCODE_LOCKED_NOTE}</p>}
         <div className="actions">
-          <button type="submit" className="primary" disabled={busy}>
+          <button type="submit" className="primary" disabled={busy || locked}>
             {busy ? "Uploading…" : "Upload and open"}
           </button>
-          <Link className="button" to="/files">
-            Cancel
-          </Link>
+          <CloseButton>Cancel</CloseButton>
         </div>
       </form>
       <NewDirectoryForm create={(name) => createGcodeDirectory(fetchImpl, name)} onCreated={created} />
@@ -70,7 +72,7 @@ const UploadForm = ({ library }: { library: GcodeLibrary }) => {
 export const UploadGcode = () => {
   const { resource } = useResource(getGcodeLibrary);
   return (
-    <SubPage title="Upload gcode" back="/files">
+    <SubPage>
       <Loaded resource={resource} what="the gcode library">
         {(library) => <UploadForm library={library} />}
       </Loaded>

@@ -1,6 +1,7 @@
 import { screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { renderApp } from "../../test/render";
+import { topLayer } from "../../test/dialogPolyfill";
+import { currentPath, renderApp } from "../../test/render";
 
 const sendAlert = (socket: ReturnType<typeof renderApp>["socket"], text: string) =>
   socket.serverMessage("activateModal", {
@@ -23,7 +24,8 @@ const sendNotification = (socket: ReturnType<typeof renderApp>["socket"], text: 
     ...over,
   });
 
-const backdrop = () => screen.queryByTestId("dialog-backdrop");
+/** The server dialog, when one is open; user modals carry no data-kind. */
+const backdrop = () => document.querySelector("dialog[open][data-kind]");
 
 describe("ServerDialogs", () => {
   it("shows a server alert and closes it locally without telling the server", async () => {
@@ -49,7 +51,7 @@ describe("ServerDialogs", () => {
     });
 
     expect(screen.getAllByRole("alertdialog")).toHaveLength(1);
-    expect(document.querySelectorAll(".dialog-backdrop")).toHaveLength(1);
+    expect(document.querySelectorAll("dialog[open]")).toHaveLength(1);
     expect(screen.getByText("Error 0")).toBeInTheDocument();
     expect(screen.getByText("(×3)")).toBeInTheDocument();
 
@@ -134,38 +136,40 @@ describe("ServerDialogs", () => {
     expect(play).toHaveFocus();
   });
 
-  it("keeps Tab inside the dialog and makes the page behind it inert", async () => {
+  it("survives rapid alerts while a user modal is open, staying above it the whole time", async () => {
     const { socket, user } = renderApp("/");
-    socket.serverMessage("statusMessage", { uploadFlag: 0, positioningMode: 0, currentTool: 0 });
-    sendNotification(socket, "Change to tool 2", { resume: "resume" });
-    const dialog = screen.getByRole("dialog");
-    const resume = within(dialog).getByRole("button", { name: "Resume" });
-    const close = within(dialog).getByRole("button", { name: "Close" });
-    expect(document.querySelector("main")?.closest("[inert]")).not.toBeNull();
+    await user.click(screen.getByRole("button", { name: "Actions" }));
+    const actions = screen.getByRole("dialog", { name: "Actions" });
 
-    await user.tab();
-    expect(close).toHaveFocus();
-    await user.tab();
-    expect(resume).toHaveFocus();
-    await user.tab({ shift: true });
-    expect(close).toHaveFocus();
+    Array.from({ length: 8 }, (_, n) => n).forEach((n) => sendAlert(socket, `Error ${n % 3}`));
+    expect(topLayer()).toEqual([actions, backdrop()]);
+    expect(screen.getAllByRole("alertdialog")).toHaveLength(1);
 
-    await user.click(close);
-    expect(document.querySelector("[inert]")).toBeNull();
+    const dismissAll = async (): Promise<void> => {
+      if (!backdrop()) return;
+      await user.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Close" }));
+      expect(topLayer().at(-1)).toBe(backdrop() ?? actions);
+      return dismissAll();
+    };
+    await dismissAll();
+
+    expect(topLayer()).toEqual([actions]);
+    expect(currentPath()).toBe("/actions");
   });
 
-  it("pulls focus back in and closes with Escape when focus has left the dialog", async () => {
+  it("keeps an alert on top when a user modal opens after it", async () => {
     const { socket, user } = renderApp("/");
     sendAlert(socket, "Oops");
-    const close = screen.getByRole("button", { name: "Close" });
-    close.blur();
+    const alert = screen.getByRole("alertdialog");
+    await user.click(screen.getByRole("button", { name: "Actions", hidden: true }));
+    expect(topLayer()).toEqual([screen.getByRole("dialog", { name: "Actions" }), alert]);
+    expect(within(alert).getByRole("button", { name: "Close" })).toHaveFocus();
+  });
 
-    await user.tab({ shift: true });
-    expect(close).toHaveFocus();
-    close.blur();
-    await user.tab();
-    expect(close).toHaveFocus();
-    close.blur();
+  it("closes with Escape when focus has left the dialog", async () => {
+    const { socket, user } = renderApp("/");
+    sendAlert(socket, "Oops");
+    screen.getByRole("button", { name: "Close" }).blur();
     await user.keyboard("{Escape}");
     expect(backdrop()).not.toBeInTheDocument();
   });
@@ -188,5 +192,15 @@ describe("ServerDialogs", () => {
     const { socket } = renderApp("/settings");
     sendAlert(socket, "Error updating setting");
     expect(screen.getByRole("alertdialog", { name: "Alert" })).toBeInTheDocument();
+  });
+
+  it("keeps Stop in the top dialog, where the inert page behind cannot be clicked", async () => {
+    const { socket, user } = renderApp("/settings");
+    socket.clearEmitted();
+    sendNotification(socket, "Change to the 1/4 inch bit", { resume: "true" });
+    const top = topLayer().at(-1)!;
+    expect(top).toHaveAttribute("data-kind", "notification");
+    await user.click(within(top).getByRole("button", { name: "Stop machine" }));
+    expect(socket.actions()).toEqual([["stopRun", "", ""]]);
   });
 });

@@ -200,8 +200,7 @@ export const PidTuning = () => {
   });
 
   return (
-    <section aria-labelledby="pid-title" className="system-panel">
-      <h2 id="pid-title">PID tuning</h2>
+    <section aria-label="PID tuning" className="system-panel">
       <p className="muted">
         Advanced. Running a test saves its Kp, Ki and Kd to the advanced settings. Tests are refused while a job runs.
       </p>

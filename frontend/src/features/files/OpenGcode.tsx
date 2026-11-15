@@ -1,28 +1,30 @@
-import { useNavigate } from "react-router";
-import { useClient, useFetch } from "../../app/context";
+import { useClient, useFetch, useMachine } from "../../app/context";
+import { useCloseModal } from "../../app/modalHistory";
 import { getGcodeLibrary, openGcode } from "./api";
 import { useResource } from "./hooks";
 import { OpenFromLibrary } from "./LibraryForms";
-import { Loaded, SubPage } from "./ui";
+import { selectGcodeLocked } from "../../state/machine";
+import { GCODE_LOCKED_NOTE, Loaded, SubPage } from "./ui";
 
 export const OpenGcode = () => {
   const fetchImpl = useFetch();
   const client = useClient();
-  const navigate = useNavigate();
+  const close = useCloseModal();
   const { resource } = useResource(getGcodeLibrary);
+  const locked = useMachine(selectGcodeLocked);
 
   return (
-    <SubPage title="Open gcode" back="/files">
+    <SubPage>
       <Loaded resource={resource} what="the gcode library">
         {(library) => (
           <OpenFromLibrary
             library={library}
             legend="Gcode files"
-            cancelTo="/files"
+            lockedReason={locked ? GCODE_LOCKED_NOTE : undefined}
             open={async (file) => {
               await openGcode(fetchImpl, file);
               client.emit("checkForGCodeUpdate", { data: "Please" });
-              navigate("/");
+              close();
             }}
           />
         )}

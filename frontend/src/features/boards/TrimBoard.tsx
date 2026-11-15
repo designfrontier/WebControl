@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useNavigate } from "react-router";
 import { useFetch } from "../../app/context";
+import { CloseButton } from "../../app/CloseButton";
+import { useCloseModal } from "../../app/modalHistory";
 import type { BoardDetails } from "../../protocol";
 import { useResource, useSubmit } from "../files/hooks";
 import { FormError, Loaded, SubPage } from "../files/ui";
@@ -44,7 +45,7 @@ const sizeProblem = (trims: Trims, board: BoardDetails) => {
 
 const TrimForm = ({ board }: { board: BoardDetails }) => {
   const fetchImpl = useFetch();
-  const navigate = useNavigate();
+  const close = useCloseModal();
   const [trims, setTrims] = useState(NO_TRIM);
   const [checked, setChecked] = useState(false);
   const { busy, error, setError, run } = useSubmit();
@@ -58,7 +59,7 @@ const TrimForm = ({ board }: { board: BoardDetails }) => {
     if (tooMuch) return setError(tooMuch);
     return run(async () => {
       await trimBoard(fetchImpl, trims, board.units);
-      navigate("/boards");
+      close();
     }, "Could not trim the board. If you resized it, clear its cut data first.");
   };
 
@@ -86,9 +87,7 @@ const TrimForm = ({ board }: { board: BoardDetails }) => {
         <button type="submit" className="primary" disabled={busy}>
           {busy ? "Trimming…" : "Trim board"}
         </button>
-        <Link className="button" to="/boards">
-          Cancel
-        </Link>
+        <CloseButton>Cancel</CloseButton>
       </div>
     </form>
   );
@@ -97,7 +96,7 @@ const TrimForm = ({ board }: { board: BoardDetails }) => {
 export const TrimBoard = () => {
   const { resource } = useResource(getBoardDetails);
   return (
-    <SubPage title="Trim board" back="/boards">
+    <SubPage>
       <Loaded resource={resource} what="the current board">
         {(board) => <TrimForm board={board} />}
       </Loaded>

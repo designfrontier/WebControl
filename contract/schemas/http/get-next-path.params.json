@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get-next-path.params",
+  "type": "object",
+  "properties": {
+    "path": {
+      "type": "string",
+      "description": "May be empty or contain slashes"
+    }
+  },
+  "required": [
+    "path"
+  ]
+}

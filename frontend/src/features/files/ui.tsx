@@ -1,32 +1,13 @@
 import { useId, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import { Link } from "react-router";
 import type { CreatedDirectory } from "../../protocol";
 import { useSubmit } from "./hooks";
 import type { Resource } from "./hooks";
 import { directoryLabel, filesIn } from "./library";
 import type { Listing } from "./library";
 
-interface SubPageProps {
-  title: string;
-  /** Where Cancel / Back returns to. */
-  back: string;
-  children: ReactNode;
-}
-
-/** One task screen under a section: its own heading and a way back, instead of a modal over the page. */
-export const SubPage = ({ title, back, children }: SubPageProps) => {
-  const id = useId();
-  return (
-    <section className="subpage" aria-labelledby={id}>
-      <p className="subpage-back">
-        <Link to={back}>Back</Link>
-      </p>
-      <h2 id={id}>{title}</h2>
-      {children}
-    </section>
-  );
-};
+/** One file or board task, shown in a modal that supplies the heading and Close. */
+export const SubPage = ({ children }: { children: ReactNode }) => <div className="fb">{children}</div>;
 
 export const FormError = ({ message }: { message: string | null }) =>
   message ? (
@@ -183,3 +164,5 @@ export const NewDirectoryForm = ({ create, onCreated }: NewDirectoryProps) => {
     </form>
   );
 };
+
+export const GCODE_LOCKED_NOTE = "A job is running or paused. Stop the job first to load other gcode.";

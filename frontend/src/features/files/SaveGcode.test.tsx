@@ -40,7 +40,7 @@ describe("Save gcode as", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     expect(save.forms()).toEqual([{ selectedDirectory: "jobs", fileName: "leg-v2.nc" }]);
-    await expectPath("/files");
+    await expectPath("/");
   });
 
   it.each([

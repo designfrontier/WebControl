@@ -19,7 +19,7 @@ const status = (socket: FakeSocket, uploadFlag: number) =>
 /** Renders the control screen with GET /api/main answered, and waits for the run status it seeds. */
 const renderMain = async (state = mainState(), options: RenderOptions = {}) => {
   const view = renderApp("/", { fetch: fakeFetch({ "/api/main": state }), ...options });
-  await waitFor(() => expect(screen.getByRole("group", { name: "Jog" })).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByRole("region", { name: "Jog" })).toBeInTheDocument());
   await waitFor(() => expect(view.store.getState().status).not.toBeNull());
   view.socket.clearEmitted();
   return view;
@@ -30,11 +30,10 @@ const button = (name: string | RegExp) => screen.getByRole("button", { name });
 describe("MainPage run status", () => {
   it("keeps every control but Stop disabled until the run status is known", () => {
     renderApp("/");
-    ["Play", "Pause", "Up", "Home", "Set Home Here", "Raise", "Next line"].forEach((name) =>
+    ["Play", "Pause", "Up", "Home", "Set Home Here", "Next line"].forEach((name) =>
       expect(button(name)).toBeDisabled(),
     );
     expect(button("Stop")).toBeEnabled();
-    expect(button("Stop Z")).toBeEnabled();
   });
 
   it("seeds the run status from GET /api/main on connect", async () => {
@@ -42,12 +41,14 @@ describe("MainPage run status", () => {
     expect(button("Play")).toBeEnabled();
     expect(screen.getByText("Incremental (G91)")).toBeInTheDocument();
     expect(screen.getByText("G1 X10 Y5")).toBeInTheDocument();
-    expect(screen.getByLabelText("Line number")).toHaveValue(5);
+    expect(screen.getByLabelText("Line #")).toHaveValue(5);
   });
 
   it("tolerates a failed /api/main and waits for the status push", async () => {
     const { socket } = renderApp("/", { fetch: fakeFetch({ "/api/main": () => jsonResponse({}, 500) }) });
-    await waitFor(() => expect(screen.getByText("Server: connected (192.168.1.20:5000)")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Server: connected")).toHaveAttribute("title", "WebControl at 192.168.1.20:5000"),
+    );
     expect(button("Play")).toBeDisabled();
     status(socket, 0);
     expect(button("Play")).toBeEnabled();
@@ -133,7 +134,7 @@ describe("MainPage jogging", () => {
 
   it("jogs by a typed distance and refuses an invalid one", async () => {
     const { socket, user } = await renderMain();
-    const distance = screen.getByLabelText("Jog distance");
+    const distance = screen.getByLabelText("Distance");
     await user.clear(distance);
     await user.type(distance, "2.5");
     await user.click(button("Up"));
@@ -150,17 +151,17 @@ describe("MainPage jogging", () => {
 
   it("focuses an empty distance instead of jogging", async () => {
     const { socket, user } = await renderMain();
-    await user.clear(screen.getByLabelText("Jog distance"));
-    expect(screen.getByLabelText("Jog distance")).toHaveAttribute("aria-invalid", "false");
+    await user.clear(screen.getByLabelText("Distance"));
+    expect(screen.getByLabelText("Distance")).toHaveAttribute("aria-invalid", "false");
     await user.click(button("Left"));
-    expect(screen.getByLabelText("Jog distance")).toHaveFocus();
+    expect(screen.getByLabelText("Distance")).toHaveFocus();
     expect(socket.actions()).toEqual([]);
   });
 
   it("follows distance updates from the server", async () => {
     const { socket } = await renderMain();
     socket.serverMessage("requestedSetting", { setting: "distToMove", value: "0.394" });
-    expect(screen.getByLabelText("Jog distance")).toHaveValue("0.394");
+    expect(screen.getByLabelText("Distance")).toHaveValue("0.394");
   });
 
   it("switches units through the server, converting the distance", async () => {
@@ -176,7 +177,7 @@ describe("MainPage jogging", () => {
 
   it("converts the stored distance when the typed one is invalid", async () => {
     const { socket, user } = await renderMain();
-    await user.type(screen.getByLabelText("Jog distance"), "x");
+    await user.type(screen.getByLabelText("Distance"), "x");
     await user.click(button("Units: mm"));
     expect(socket.emittedEvents("updateSetting")).toEqual([{ data: { setting: "toInches", value: "0.394" } }]);
   });
@@ -185,13 +186,11 @@ describe("MainPage jogging", () => {
     const { socket, user } = await renderMain();
     await user.click(button("Home"));
     await user.click(button("Set Home Here"));
-    await user.click(button("Return to Center"));
     await user.click(button("Macro 1"));
     await user.click(button("Macro 2"));
     expect(socket.actions()).toEqual([
       ["home", "", ""],
       ["defineHome", "", ""],
-      ["returnToCenter", "", ""],
       ["macro1", "", ""],
       ["macro2", "", ""],
     ]);
@@ -209,22 +208,36 @@ describe("MainPage jogging", () => {
       },
     });
     renderApp("/", { fetch });
-    const macros = await screen.findByRole("group", { name: "Macros" });
-    await waitFor(() => expect(within(macros).getByRole("button", { name: "Spindle on" })).toBeInTheDocument());
-    expect(within(macros).getByRole("button", { name: "Macro 2" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Spindle on" })).toBeInTheDocument();
+    expect(button("Macro 2")).toBeInTheDocument();
   });
 
-  it("hides the macro row when the server lists none", async () => {
+  it("keeps both macro buttons, named by default, when the server lists none", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     renderApp("/", { fetch: fakeFetch({ "/api/state": () => jsonResponse({}, 500) }) });
-    expect(screen.queryByRole("group", { name: "Macros" })).not.toBeInTheDocument();
+    expect(button("Macro 1")).toBeInTheDocument();
+    expect(button("Macro 2")).toBeInTheDocument();
     expect(button("Units: …")).toBeDisabled();
+  });
+
+  it("opens the Z-Axis modal from beside the jog pad", async () => {
+    const { user } = await renderMain();
+    await user.click(screen.getByRole("link", { name: "Z-Axis" }));
+    expect(screen.getByRole("dialog", { name: "Z-Axis" })).toBeInTheDocument();
   });
 });
 
-describe("MainPage Z axis", () => {
+const renderZ = async (state = mainState()) => {
+  const view = renderApp("/zaxis", { fetch: fakeFetch({ "/api/main": state }) });
+  await waitFor(() => expect(view.store.getState().status).not.toBeNull());
+  await waitFor(() => expect(screen.getByLabelText("Z distance")).toHaveValue("1"));
+  view.socket.clearEmitted();
+  return view;
+};
+
+describe("Z-Axis modal", () => {
   it("raises and lowers by the Z distance", async () => {
-    const { socket, user } = await renderMain();
+    const { socket, user } = await renderZ();
     await user.click(button("Raise"));
     await user.click(button("Lower"));
     await user.click(button("Set Z Zero Here"));
@@ -238,7 +251,7 @@ describe("MainPage Z axis", () => {
   });
 
   it("refuses an invalid Z distance", async () => {
-    const { socket, user } = await renderMain();
+    const { socket, user } = await renderZ();
     const distance = screen.getByLabelText("Z distance");
     await user.type(distance, "abc");
     await user.click(button("Raise"));
@@ -247,7 +260,7 @@ describe("MainPage Z axis", () => {
   });
 
   it("switches Z units with two decimals like the old popup", async () => {
-    const { socket, user } = await renderMain();
+    const { socket, user } = await renderZ();
     const zUnits = within(screen.getByRole("region", { name: "Z axis" })).getByRole("button", { name: "Z units: mm" });
     await user.click(zUnits);
     expect(socket.emittedEvents("updateSetting")).toEqual([{ data: { setting: "toInchesZ", value: "0.04" } }]);
@@ -261,12 +274,12 @@ describe("MainPage Z axis", () => {
   });
 
   it("enables Touch Plate only when the touch plate is configured", async () => {
-    await renderMain();
+    await renderZ();
     expect(button("Touch Plate")).toBeDisabled();
   });
 
   it("probes with the touch plate", async () => {
-    const { socket, user } = await renderMain(mainState({ touchPlate: true }));
+    const { socket, user } = await renderZ(mainState({ touchPlate: true }));
     await user.click(button("Touch Plate"));
     expect(socket.actions()).toEqual([["touchZ", "", ""]]);
   });
@@ -289,7 +302,7 @@ describe("MainPage gcode stepping", () => {
 
   it("goes to a 1-based line number", async () => {
     const { socket, user } = await renderMain();
-    const line = screen.getByLabelText("Line number");
+    const line = screen.getByLabelText("Line #");
     await user.clear(line);
     await user.type(line, "42{Enter}");
     expect(socket.actions()).toEqual([["moveGcodeGoto", 41, ""]]);
@@ -297,7 +310,7 @@ describe("MainPage gcode stepping", () => {
 
   it("does not cap the line number at the length of the file loaded on mount", async () => {
     const { socket, user } = await renderMain();
-    const line = screen.getByLabelText("Line number");
+    const line = screen.getByLabelText("Line #");
     expect(line).not.toHaveAttribute("max");
     await user.clear(line);
     await user.type(line, "500");
@@ -307,7 +320,7 @@ describe("MainPage gcode stepping", () => {
 
   it("refuses a line number below 1", async () => {
     const { socket, user } = await renderMain();
-    const line = screen.getByLabelText("Line number");
+    const line = screen.getByLabelText("Line #");
     await user.clear(line);
     await user.type(line, "0");
     expect(button("Go to line")).toBeDisabled();
@@ -324,15 +337,16 @@ describe("MainPage gcode stepping", () => {
       gcodeLine: "G1 Z-0.5",
       gcodeLineIndex: 9,
     });
-    expect(screen.getByLabelText("Line number")).toHaveValue(10);
+    expect(screen.getByLabelText("Line #")).toHaveValue(10);
     expect(screen.getByText("G1 Z-0.5")).toBeInTheDocument();
+    expect(screen.getByText("Line").nextSibling).toHaveTextContent("10");
     expect(screen.getByText("X 1.00 Y 2.00 Z -0.50")).toBeInTheDocument();
   });
 
   it("shows a dash when no gcode is loaded", async () => {
     await renderMain(mainState({ gcode: { lineIndex: 0, line: "", lineCount: 0 } }));
-    expect(screen.getByLabelText("Line number")).not.toHaveAttribute("max");
-    expect(within(screen.getByRole("region", { name: "Run" })).getByText("—")).toBeInTheDocument();
+    expect(screen.getByLabelText("Line #")).not.toHaveAttribute("max");
+    expect(screen.getByRole("status", { name: "Current gcode line" })).toHaveTextContent("No line");
   });
 });
 
@@ -354,7 +368,7 @@ describe("MainPage alarms", () => {
 });
 
 describe("MainPage readouts and console", () => {
-  it("shows sled, home, tool, power and chain error", async () => {
+  it("shows sled, home, gcode target, progress, tool and chain error", async () => {
     const { socket } = await renderMain();
     expect(screen.getByText("Sled").nextSibling).toHaveTextContent("—");
     socket.serverMessage("positionMessage", {
@@ -379,30 +393,66 @@ describe("MainPage readouts and console", () => {
     });
 
     expect(screen.getByText("X 12.35 Y -6.00 Z 0.50")).toBeInTheDocument();
-    expect(screen.getByText("300.00 / 400.00")).toBeInTheDocument();
     expect(screen.getByText("X 1.00 Y 2.00")).toBeInTheDocument();
     expect(screen.getByText("12.5%")).toBeInTheDocument();
-    expect(screen.getByText("Idle")).toBeInTheDocument();
+    expect(screen.getByText("State").nextSibling).toHaveTextContent("Idle");
     expect(screen.getByText("Tool").nextSibling).toHaveTextContent("1");
-    expect(screen.getByText("Units").nextSibling).toHaveTextContent("MM");
-    expect(screen.getByText("X 12.30 Y -6.10")).toBeInTheDocument();
     expect(screen.getByRole("meter", { name: "Left chain error" })).toHaveAttribute("value", "25");
     expect(screen.getByRole("meter", { name: "Right chain error" })).toHaveAttribute("value", "50");
-    expect(screen.getByRole("meter", { name: "Z motor power" })).toHaveAttribute("value", "250");
-    expect(screen.getByRole("meter", { name: "Left motor power" })).toHaveAttribute("value", "20");
-    expect(screen.getByRole("meter", { name: "Right motor power" })).toHaveAttribute("value", "30");
   });
 
   it("logs controller messages and scrolls to the newest", async () => {
     const { socket } = await renderMain();
     expect(screen.getByText("No messages yet.")).toBeInTheDocument();
+
     socket.serverMessage("controllerMessage", "Grbl v1.1");
     socket.serverMessage("controllerMessage", "ok");
-    const log = screen.getByRole("log", { name: "Machine messages" });
+    const log = screen.getByRole("log", { name: "Controller Messages" });
     expect(
       within(log)
         .getAllByRole("listitem")
         .map((item) => item.textContent),
     ).toEqual(["Grbl v1.1", "ok"]);
+  });
+});
+
+describe("MainPage job state", () => {
+  const job = () => screen.getByText("Job").nextSibling;
+
+  it("reads Idle, Running, Paused and Waiting for tool change", async () => {
+    const { socket } = await renderMain();
+    expect(job()).toHaveTextContent("Idle");
+    socket.serverMessage("statusMessage", { uploadFlag: 1, positioningMode: 0, currentTool: 1, jobInProgress: true });
+    expect(job()).toHaveTextContent("Running");
+    socket.serverMessage("statusMessage", { uploadFlag: 0, positioningMode: 0, currentTool: 1, jobInProgress: true });
+    expect(job()).toHaveTextContent("Paused");
+    expect(button("Play")).toBeDisabled();
+    socket.serverMessage("statusMessage", {
+      uploadFlag: 0,
+      positioningMode: 0,
+      currentTool: 1,
+      jobInProgress: true,
+      manualZAxisAdjust: true,
+    });
+    expect(job()).toHaveTextContent("Waiting for tool change");
+  });
+
+  it("shows a dash before the run status is known", () => {
+    renderApp("/", { fetch: fakeFetch({ "/api/main": () => new Promise<Response>(() => {}) }) });
+    expect(job()).toHaveTextContent("—");
+  });
+});
+
+describe("MainPage camera", () => {
+  it("toggles the camera and follows the server's updateCamera broadcasts", async () => {
+    const { socket, user } = await renderMain();
+    const camera = button("Camera");
+    expect(camera).toHaveAttribute("aria-pressed", "false");
+    await user.click(camera);
+    expect(socket.actions()).toContainEqual(["toggleCamera", "", ""]);
+    socket.serverMessage("cameraMessage", { command: "updateCamera", data: "on" });
+    expect(camera).toHaveAttribute("aria-pressed", "true");
+    socket.serverMessage("cameraMessage", { command: "updateCamera", data: "off" });
+    expect(camera).toHaveAttribute("aria-pressed", "false");
   });
 });

@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useReducer, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { useClient, useFetch, useMachine, useServerMessage } from "../../app/context";
+import { useTheme } from "../../app/themePreference";
 import { selectRunState } from "../../state/machine";
 import { getViewerSnapshot } from "./api";
 import { CameraOverlay } from "./CameraOverlay";
@@ -8,11 +9,11 @@ import { createViewerEngine } from "./engine";
 import type { ViewerEngine } from "./engine";
 import { segmentCount } from "./gcodeGeometry";
 import { createTextLabel } from "./labels";
-import { createViewerScene } from "./scene";
+import { createViewerScene, readPalette } from "./scene";
 import type { ViewerScene } from "./scene";
 import { ScreenActionDialog } from "./ScreenActionDialog";
 import type { ScreenAction } from "./ScreenActionDialog";
-import { isOnBed } from "./shapes";
+import { fitKey, isOnBed, viewFrame } from "./shapes";
 import type { Point } from "./shapes";
 import { fromInches, roundForAction, toInches, unitLabel } from "./units";
 import { decodeCutPayload, decodeGcodePayload, decodeSnapshot, initialViewerData, viewerReducer } from "./viewerState";
@@ -39,8 +40,10 @@ const ToggleButton = ({ pressed, onToggle, children }: { pressed: boolean; onTog
   </button>
 );
 
-export const Viewer = () => {
+/** The toolpath, bed and sled; `currentLine` is the gcode line shown in the toolbar. */
+export const Viewer = ({ currentLine = "" }: { currentLine?: string }) => {
   const client = useClient();
+  const { theme } = useTheme();
   const fetch = useFetch();
   const socket = useMachine((state) => state.socket);
   const units = useMachine((state) => state.units);
@@ -107,13 +110,23 @@ export const Viewer = () => {
     };
   }, [socket, client, fetch]);
 
+  const toolpath = useMemo(
+    () => (data.gcode ? [data.gcode.cuts, data.gcode.rapids, data.gcode.plunges] : []),
+    [data.gcode],
+  );
+  const fitView = () => {
+    const home = { x: toInches(homePosition?.x ?? 0, units), y: toInches(homePosition?.y ?? 0, units) };
+    withView(viewRef.current, (_, engine) => engine.fit(viewFrame(data.machine, toolpath, home)));
+  };
+  const fitOnChange = useEffectEvent(fitView);
+  const viewKey = useMemo(() => fitKey(data.machine, toolpath), [data.machine, toolpath]);
+
+  useEffect(() => withView(viewRef.current, (scene) => scene.setMachine(data.machine)), [data.machine]);
+  // Re-framing mid-job would throw away the operator's zoom, so only a new file or bed size does it.
+  useEffect(() => fitOnChange(), [viewKey]);
   useEffect(
-    () =>
-      withView(viewRef.current, (scene, engine) => {
-        scene.setMachine(data.machine);
-        engine.fit(data.machine);
-      }),
-    [data.machine],
+    () => withView(viewRef.current, (scene) => scene.setPalette(readPalette(document.documentElement))),
+    [theme],
   );
   useEffect(() => withView(viewRef.current, (scene) => scene.setGcode(data.gcode)), [data.gcode]);
   useEffect(
@@ -204,9 +217,9 @@ export const Viewer = () => {
 
   const cutSegments = data.gcode ? segmentCount(data.gcode.cuts) : 0;
   const rapidSegments = data.gcode ? segmentCount(data.gcode.rapids) : 0;
-  const cursorText =
-    cursor &&
-    `Cursor X ${fromInches(cursor.x, units).toFixed(2)}, Y ${fromInches(cursor.y, units).toFixed(2)} ${unitLabel(units)}`;
+  const cursorText = cursor
+    ? `X: ${fromInches(cursor.x, units).toFixed(2)}, Y: ${fromInches(cursor.y, units).toFixed(2)} ${unitLabel(units)}`
+    : "X: –, Y: –";
 
   return (
     <figure
@@ -222,18 +235,21 @@ export const Viewer = () => {
         <ToggleButton pressed={perspective} onToggle={() => setPerspective((on) => !on)}>
           Perspective
         </ToggleButton>
-        <button type="button" onClick={() => withView(viewRef.current, (_, engine) => engine.reset())}>
+        <button type="button" onClick={fitView}>
           Reset view
         </button>
+        <output className="viewer-readout" aria-label="Cursor position">
+          {cursorText}
+        </output>
         <ToggleButton pressed={showBoard} onToggle={() => setShowBoard((on) => !on)}>
-          Board
+          {`Board: ${data.board?.boardID || "-"}, Material: ${data.board?.material || "-"}`}
         </ToggleButton>
         <ToggleButton pressed={showLabels} onToggle={() => setShowLabels((on) => !on)}>
           Labels
         </ToggleButton>
-        <ToggleButton pressed={data.camera.on} onToggle={() => client.sendAction("toggleCamera")}>
-          Camera
-        </ToggleButton>
+        <output className="viewer-readout viewer-line" aria-label="Current gcode line">
+          <code>{currentLine || "No line"}</code>
+        </output>
       </div>
 
       <div className="viewer-stage">
@@ -267,12 +283,6 @@ export const Viewer = () => {
 
       <figcaption className="viewer-caption">
         <span>{data.gcode ? `${cutSegments} cut and ${rapidSegments} rapid moves` : "No gcode loaded"}</span>
-        {data.board ? (
-          <span>
-            Board: {data.board.boardID}, Material: {data.board.material}
-          </span>
-        ) : null}
-        {cursorText ? <span>{cursorText}</span> : null}
         {data.error ? <span role="alert">{data.error}</span> : null}
       </figcaption>
 

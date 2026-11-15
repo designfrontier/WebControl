@@ -1,0 +1,1498 @@
+{
+  "version": 1,
+  "generatedFrom": "frontend/src/protocol (npm run contract)",
+  "socket": {
+    "path": "/socket.io",
+    "namespaces": {
+      "/MaslowCNC": {
+        "serverToClient": {
+          "message": {
+            "envelope": "schemas/socket/envelope.json",
+            "commands": {
+              "hostAddress": {
+                "schema": "schemas/messages/hostAddress.json",
+                "dataFormat": "json"
+              },
+              "connectionStatus": {
+                "schema": "schemas/messages/connectionStatus.json",
+                "dataFormat": "json"
+              },
+              "healthMessage": {
+                "schema": "schemas/messages/healthMessage.json",
+                "dataFormat": "json"
+              },
+              "statusMessage": {
+                "schema": "schemas/messages/statusMessage.json",
+                "dataFormat": "json"
+              },
+              "positionMessage": {
+                "schema": "schemas/messages/positionMessage.json",
+                "dataFormat": "json"
+              },
+              "homePositionMessage": {
+                "schema": "schemas/messages/homePositionMessage.json",
+                "dataFormat": "json"
+              },
+              "gcodePositionMessage": {
+                "schema": "schemas/messages/gcodePositionMessage.json",
+                "dataFormat": "json"
+              },
+              "errorValueMessage": {
+                "schema": "schemas/messages/errorValueMessage.json",
+                "dataFormat": "json"
+              },
+              "requestedSetting": {
+                "schema": "schemas/messages/requestedSetting.json",
+                "dataFormat": "json"
+              },
+              "controllerMessage": {
+                "schema": "schemas/messages/controllerMessage.json",
+                "dataFormat": "json"
+              },
+              "alarm": {
+                "schema": "schemas/messages/alarm.json",
+                "dataFormat": "json"
+              },
+              "clearAlarm": {
+                "schema": "schemas/messages/clearAlarm.json",
+                "dataFormat": "json"
+              },
+              "activateModal": {
+                "schema": "schemas/messages/activateModal.json",
+                "dataFormat": "json"
+              },
+              "closeModals": {
+                "schema": "schemas/messages/closeModals.json",
+                "dataFormat": "json"
+              },
+              "closeAlertModals": {
+                "schema": "schemas/messages/closeAlertModals.json",
+                "dataFormat": "json"
+              },
+              "showFPSpinner": {
+                "schema": "schemas/messages/showFPSpinner.json",
+                "dataFormat": "int"
+              },
+              "gcodeUpdateCompressed": {
+                "schema": "schemas/messages/gcodeUpdateCompressed.json",
+                "dataFormat": "base64"
+              },
+              "boardCutDataUpdateCompressed": {
+                "schema": "schemas/messages/boardCutDataUpdateCompressed.json",
+                "dataFormat": "base64"
+              },
+              "cameraMessage": {
+                "schema": "schemas/messages/cameraMessage.json",
+                "dataFormat": "json"
+              },
+              "updatePorts": {
+                "schema": "schemas/messages/updatePorts.json",
+                "dataFormat": "json"
+              },
+              "updateDirectories": {
+                "schema": "schemas/messages/updateDirectories.json",
+                "dataFormat": "json"
+              },
+              "boardDataUpdate": {
+                "schema": "schemas/messages/boardDataUpdate.json",
+                "dataFormat": "json"
+              },
+              "updatePIDData": {
+                "schema": "schemas/messages/updatePIDData.json",
+                "dataFormat": "json"
+              },
+              "updateOpticalCalibrationCurve": {
+                "schema": "schemas/messages/updateOpticalCalibrationCurve.json",
+                "dataFormat": "json"
+              },
+              "updateOpticalCalibrationError": {
+                "schema": "schemas/messages/updateOpticalCalibrationError.json",
+                "dataFormat": "json"
+              },
+              "updateOpticalCalibrationFindCenter": {
+                "schema": "schemas/messages/updateOpticalCalibrationFindCenter.json",
+                "dataFormat": "json"
+              },
+              "updateCalibrationImage": {
+                "schema": "schemas/messages/updateCalibrationImage.json",
+                "dataFormat": "json"
+              },
+              "pyinstallUpdate": {
+                "schema": "schemas/messages/pyinstallUpdate.json",
+                "dataFormat": "json"
+              }
+            }
+          }
+        },
+        "clientToServer": {
+          "action": {
+            "schema": "schemas/events/action.json"
+          },
+          "checkForGCodeUpdate": {
+            "schema": "schemas/events/checkForGCodeUpdate.json"
+          },
+          "checkForBoardUpdate": {
+            "schema": "schemas/events/checkForBoardUpdate.json"
+          },
+          "settingRequest": {
+            "schema": "schemas/events/settingRequest.json"
+          },
+          "updateSetting": {
+            "schema": "schemas/events/updateSetting.json"
+          },
+          "opticalCalibration": {
+            "schema": "schemas/events/opticalCalibration.json"
+          }
+        },
+        "classicOnlyClientToServer": [
+          "my event",
+          "modalClosed",
+          "contentModalClosed",
+          "alertModalClosed",
+          "requestPage"
+        ]
+      },
+      "/MaslowCNCLogs": {
+        "serverToClient": {
+          "message": {
+            "schema": "schemas/logs/message.json"
+          }
+        },
+        "clientToServer": {}
+      },
+      "/WebMCP": {
+        "serverToClient": {},
+        "clientToServer": {},
+        "classicOnlyClientToServer": [
+          "checkInRequested"
+        ]
+      }
+    }
+  },
+  "actions": {
+    "createDirectory": {
+      "summary": "Create a gcode library directory",
+      "allowedDuring": "always",
+      "via": "action",
+      "schema": "schemas/actions/createDirectory.json"
+    },
+    "stopZ": {
+      "summary": "Stop a Z-axis move",
+      "allowedDuring": "always",
+      "via": "action",
+      "schema": "schemas/actions/stopZ.json"
+    },
+    "stopRun": {
+      "summary": "Stop the job and clear the controller's buffer",
+      "allowedDuring": "always",
+      "via": "action",
+      "schema": "schemas/actions/stopRun.json"
+    },
+    "pauseRun": {
+      "summary": "Pause the job",
+      "allowedDuring": "always",
+      "via": "action",
+      "schema": "schemas/actions/pauseRun.json"
+    },
+    "resumeRun": {
+      "summary": "Resume a paused job or tool change",
+      "allowedDuring": "always",
+      "via": "action",
+      "schema": "schemas/actions/resumeRun.json"
+    },
+    "toggleCamera": {
+      "summary": "Turn the webcam stream on or off",
+      "allowedDuring": "always",
+      "via": "action",
+      "schema": "schemas/actions/toggleCamera.json"
+    },
+    "statusRequest": {
+      "summary": "Ask for a status push",
+      "allowedDuring": "always",
+      "via": "action",
+      "schema": "schemas/actions/statusRequest.json"
+    },
+    "queryCamera": {
+      "summary": "Ask whether the camera is streaming",
+      "allowedDuring": "always",
+      "via": "action",
+      "schema": "schemas/actions/queryCamera.json"
+    },
+    "shutdown": {
+      "summary": "Stop WebControl",
+      "allowedDuring": "always",
+      "via": "action",
+      "schema": "schemas/actions/shutdown.json"
+    },
+    "TurnOffRPI": {
+      "summary": "Power off the Raspberry Pi",
+      "allowedDuring": "always",
+      "via": "action",
+      "schema": "schemas/actions/TurnOffRPI.json"
+    },
+    "move": {
+      "summary": "Jog the sled",
+      "allowedDuring": "idleOrPaused",
+      "via": "action",
+      "schema": "schemas/actions/move.json"
+    },
+    "moveTo": {
+      "summary": "Move the sled to a point picked on the viewer",
+      "allowedDuring": "idleOrPaused",
+      "via": "action",
+      "schema": "schemas/actions/moveTo.json"
+    },
+    "moveZ": {
+      "summary": "Raise or lower the bit",
+      "allowedDuring": "idleOrPaused",
+      "via": "action",
+      "schema": "schemas/actions/moveZ.json"
+    },
+    "setMaxZ": {
+      "summary": "Store the current Z as the upper limit",
+      "allowedDuring": "idleOrPaused",
+      "via": "action",
+      "schema": "schemas/actions/setMaxZ.json"
+    },
+    "setMinZ": {
+      "summary": "Store the current Z as the lower limit",
+      "allowedDuring": "idleOrPaused",
+      "via": "action",
+      "schema": "schemas/actions/setMinZ.json"
+    },
+    "clearZ": {
+      "summary": "Clear the Z limits",
+      "allowedDuring": "idleOrPaused",
+      "via": "action",
+      "schema": "schemas/actions/clearZ.json"
+    },
+    "getZlimits": {
+      "summary": "Ask the controller to report its Z limits",
+      "allowedDuring": "idleOrPaused",
+      "via": "action",
+      "schema": "schemas/actions/getZlimits.json"
+    },
+    "reportSettings": {
+      "summary": "Ask the controller for its settings ($$)",
+      "allowedDuring": "idleOrPaused",
+      "via": "action",
+      "schema": "schemas/actions/reportSettings.json"
+    },
+    "home": {
+      "summary": "Move the sled to home",
+      "allowedDuring": "idleOrPaused",
+      "via": "action",
+      "schema": "schemas/actions/home.json"
+    },
+    "defineZ0": {
+      "summary": "Define the current Z as zero",
+      "allowedDuring": "idleOrPaused",
+      "via": "action",
+      "schema": "schemas/actions/defineZ0.json"
+    },
+    "touchZ": {
+      "summary": "Probe Z with the touch plate",
+      "allowedDuring": "idleOrPaused",
+      "via": "action",
+      "schema": "schemas/actions/touchZ.json"
+    },
+    "moveToDefault": {
+      "summary": "Move to the default chain lengths",
+      "allowedDuring": "idleOrPaused",
+      "via": "action",
+      "schema": "schemas/actions/moveToDefault.json"
+    },
+    "returnToCenter": {
+      "summary": "Move the sled to the bed centre",
+      "allowedDuring": "idleOrPaused",
+      "via": "action",
+      "schema": "schemas/actions/returnToCenter.json"
+    },
+    "moveGcodeZ": {
+      "summary": "Step the gcode index to the next or previous Z move",
+      "allowedDuring": "idleOrPaused",
+      "via": "action",
+      "schema": "schemas/actions/moveGcodeZ.json"
+    },
+    "moveGcodeGoto": {
+      "summary": "Set the gcode index",
+      "allowedDuring": "idleOrPaused",
+      "via": "action",
+      "schema": "schemas/actions/moveGcodeGoto.json"
+    },
+    "moveGcodeIndex": {
+      "summary": "Step the gcode index",
+      "allowedDuring": "idleOrPaused",
+      "via": "action",
+      "schema": "schemas/actions/moveGcodeIndex.json"
+    },
+    "macro1": {
+      "summary": "Run macro 1",
+      "allowedDuring": "idleOrPaused",
+      "via": "action",
+      "schema": "schemas/actions/macro1.json"
+    },
+    "macro2": {
+      "summary": "Run macro 2",
+      "allowedDuring": "idleOrPaused",
+      "via": "action",
+      "schema": "schemas/actions/macro2.json"
+    },
+    "clearLogs": {
+      "summary": "Delete old log files",
+      "allowedDuring": "idleOrPaused",
+      "via": "action",
+      "schema": "schemas/actions/clearLogs.json"
+    },
+    "startRun": {
+      "summary": "Start sending the loaded gcode",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/startRun.json"
+    },
+    "update": {
+      "summary": "Install a WebControl release and restart",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/update.json"
+    },
+    "cutTriangularCalibrationPattern": {
+      "summary": "Cut the triangular calibration pattern",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/cutTriangularCalibrationPattern.json"
+    },
+    "acceptTriangularCalibrationResults": {
+      "summary": "Store the last triangular calibration result",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/acceptTriangularCalibrationResults.json"
+    },
+    "cutHoleyCalibrationPattern": {
+      "summary": "Cut the holey calibration pattern",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/cutHoleyCalibrationPattern.json"
+    },
+    "acceptHoleyCalibrationResults": {
+      "summary": "Store the last holey calibration result",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/acceptHoleyCalibrationResults.json"
+    },
+    "resetChainLengths": {
+      "summary": "Tell the controller the chains are at their default lengths",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/resetChainLengths.json"
+    },
+    "defineHome": {
+      "summary": "Define home at a point, or at the sled when both args are empty",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/defineHome.json"
+    },
+    "testMotors": {
+      "summary": "Run each motor in both directions",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/testMotors.json"
+    },
+    "wipeEEPROM": {
+      "summary": "Erase controller EEPROM",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/wipeEEPROM.json"
+    },
+    "clearGCode": {
+      "summary": "Unload the gcode",
+      "allowedDuring": "noJob",
+      "via": "action",
+      "schema": "schemas/actions/clearGCode.json"
+    },
+    "setSprockets": {
+      "summary": "Turn a sprocket by an angle",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/setSprockets.json"
+    },
+    "rotateSprocket": {
+      "summary": "Run a motor at full speed for a time",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/rotateSprocket.json"
+    },
+    "setSprocketAutomatic": {
+      "summary": "Turn the sprockets to vertical automatically",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/setSprocketAutomatic.json"
+    },
+    "setSprocketsZero": {
+      "summary": "Define the current sprocket angles as zero",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/setSprocketsZero.json"
+    },
+    "setSprocketsDefault": {
+      "summary": "Mark the chains as at their default lengths",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/setSprocketsDefault.json"
+    },
+    "updatePorts": {
+      "summary": "Rescan serial ports; answered by an updatePorts message",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/updatePorts.json"
+    },
+    "optical_onStart": {
+      "summary": "Start the optical calibration camera",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/optical_onStart.json"
+    },
+    "optical_Calibrate": {
+      "summary": "Run optical calibration",
+      "allowedDuring": "idle",
+      "via": "opticalCalibration",
+      "schema": "schemas/actions/optical_Calibrate.json"
+    },
+    "saveOpticalCalibrationConfiguration": {
+      "summary": "Save optical settings",
+      "allowedDuring": "idle",
+      "via": "none",
+      "schema": "schemas/actions/saveOpticalCalibrationConfiguration.json"
+    },
+    "stopOpticalCalibration": {
+      "summary": "Stop optical calibration",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/stopOpticalCalibration.json"
+    },
+    "testOpticalCalibration": {
+      "summary": "Grab a test image",
+      "allowedDuring": "idle",
+      "via": "opticalCalibration",
+      "schema": "schemas/actions/testOpticalCalibration.json"
+    },
+    "findCenterOpticalCalibration": {
+      "summary": "Find the optical centre",
+      "allowedDuring": "idle",
+      "via": "opticalCalibration",
+      "schema": "schemas/actions/findCenterOpticalCalibration.json"
+    },
+    "saveAndSendOpticalCalibration": {
+      "summary": "Store the calibration and send it to the controller",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/saveAndSendOpticalCalibration.json"
+    },
+    "reloadCalibration": {
+      "summary": "Reload the stored calibration; answered by updateOpticalCalibrationError",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/reloadCalibration.json"
+    },
+    "saveCalibrationToCSV": {
+      "summary": "Write the calibration to CSV",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/saveCalibrationToCSV.json"
+    },
+    "clearCalibration": {
+      "summary": "Clear the calibration",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/clearCalibration.json"
+    },
+    "curveFitOpticalCalibration": {
+      "summary": "Fit curves; answered by updateOpticalCalibrationCurve",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/curveFitOpticalCalibration.json"
+    },
+    "adjustCenter": {
+      "summary": "Move the optical centre up or down and return to it",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/adjustCenter.json"
+    },
+    "upgradeCustomFirmware": {
+      "summary": "Flash the bundled custom firmware",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/upgradeCustomFirmware.json"
+    },
+    "upgradeStockFirmware": {
+      "summary": "Flash the bundled stock firmware",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/upgradeStockFirmware.json"
+    },
+    "upgradeHoleyFirmware": {
+      "summary": "Flash the bundled holey firmware",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/upgradeHoleyFirmware.json"
+    },
+    "adjustChain": {
+      "summary": "Extend one chain after a 5 s countdown",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/adjustChain.json"
+    },
+    "executeVelocityPIDTest": {
+      "summary": "Start a velocity PID test",
+      "allowedDuring": "idle",
+      "via": "POST /api/system/pid-test",
+      "schema": "schemas/actions/executeVelocityPIDTest.json"
+    },
+    "executePositionPIDTest": {
+      "summary": "Start a position PID test",
+      "allowedDuring": "idle",
+      "via": "POST /api/system/pid-test",
+      "schema": "schemas/actions/executePositionPIDTest.json"
+    },
+    "boardProcessGCode": {
+      "summary": "Mark the loaded gcode's area as cut on the current board",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/boardProcessGCode.json"
+    },
+    "boardClearBoard": {
+      "summary": "Clear the current board's cut area",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/boardClearBoard.json"
+    },
+    "updatePyInstaller": {
+      "summary": "Install the newer PyInstaller release and restart",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/updatePyInstaller.json"
+    },
+    "setFakeServo": {
+      "summary": "Turn the controller's fake servo on or off",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/setFakeServo.json"
+    },
+    "resetHomeToCenter": {
+      "summary": "Move home back to the bed centre",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/resetHomeToCenter.json"
+    }
+  },
+  "http": [
+    {
+      "method": "GET",
+      "path": "/api/state",
+      "family": "api",
+      "summary": "What a client needs on (re)connect",
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/get-api-state.200.json"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/main",
+      "family": "api",
+      "summary": "Run status and current gcode line for the control screen",
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/get-api-main.200.json"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/viewer",
+      "family": "api",
+      "summary": "What the viewer draws",
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/get-api-viewer.200.json"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/settings/{sectionId}",
+      "family": "api",
+      "summary": "One settings section as a form",
+      "params": "schemas/http/get-api-settings-sectionid.params.json",
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/get-api-settings-sectionid.200.json"
+        },
+        "404": {
+          "contentType": "text/html",
+          "description": "Flask's default HTML 404 page"
+        }
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/settings/{sectionId}",
+      "family": "api",
+      "summary": "Save changed settings in a section",
+      "params": "schemas/http/put-api-settings-sectionid.params.json",
+      "body": {
+        "contentType": "application/json",
+        "schema": "schemas/http/put-api-settings-sectionid.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "description": "The section as saved",
+          "schema": "schemas/http/put-api-settings-sectionid.200.json"
+        },
+        "400": {
+          "contentType": "application/json",
+          "description": "Per-setting errors, or a malformed body",
+          "schema": "schemas/http/put-api-settings-sectionid.400.json"
+        },
+        "404": {
+          "contentType": "text/html",
+          "description": "Flask's default HTML 404 page"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/files/gcode",
+      "family": "api",
+      "summary": "The gcode library",
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/get-api-files-gcode.200.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/files/gcode/directories",
+      "family": "api",
+      "summary": "Create a gcode library directory; also broadcasts updateDirectories",
+      "body": {
+        "contentType": "application/json",
+        "schema": "schemas/http/post-api-files-gcode-directories.request.json"
+      },
+      "responses": {
+        "201": {
+          "contentType": "application/json",
+          "schema": "schemas/http/post-api-files-gcode-directories.201.json"
+        },
+        "400": {
+          "contentType": "application/json",
+          "description": "Empty or unsafe name",
+          "schema": "schemas/http/post-api-files-gcode-directories.400.json"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/files/gcode/loaded",
+      "family": "api",
+      "summary": "Where the loaded gcode came from",
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/get-api-files-gcode-loaded.200.json"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/files/gcode/text",
+      "family": "api",
+      "summary": "The loaded gcode as text",
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/get-api-files-gcode-text.200.json"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/files/gcode/custom",
+      "family": "api",
+      "summary": "The gcode last sent with /sendGCode",
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/get-api-files-gcode-custom.200.json"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/boards/files",
+      "family": "api",
+      "summary": "The board library",
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/get-api-boards-files.200.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/boards/directories",
+      "family": "api",
+      "summary": "Create a board library directory",
+      "body": {
+        "contentType": "application/json",
+        "schema": "schemas/http/post-api-boards-directories.request.json"
+      },
+      "responses": {
+        "201": {
+          "contentType": "application/json",
+          "schema": "schemas/http/post-api-boards-directories.201.json"
+        },
+        "400": {
+          "contentType": "application/json",
+          "description": "Empty or unsafe name",
+          "schema": "schemas/http/post-api-boards-directories.400.json"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/boards/current",
+      "family": "api",
+      "summary": "The current board in machine units",
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/get-api-boards-current.200.json"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/machine/setup",
+      "family": "api",
+      "summary": "Firmware-dependent facts for the setup screens",
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/get-api-machine-setup.200.json"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/machine/quick-configure",
+      "family": "api",
+      "summary": "The quick-configure answers",
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/get-api-machine-quick-configure.200.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/machine/quick-configure",
+      "family": "api",
+      "summary": "Save the quick-configure answers",
+      "body": {
+        "contentType": "application/json",
+        "schema": "schemas/http/post-api-machine-quick-configure.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "description": "The answers as saved",
+          "schema": "schemas/http/post-api-machine-quick-configure.200.json"
+        },
+        "400": {
+          "contentType": "application/json",
+          "description": "Invalid field",
+          "schema": "schemas/http/post-api-machine-quick-configure.400.json"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/calibration/triangular",
+      "family": "api",
+      "summary": "Current triangular calibration parameters",
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/get-api-calibration-triangular.200.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/calibration/triangular",
+      "family": "api",
+      "summary": "Calculate triangular calibration from measurements",
+      "body": {
+        "contentType": "application/json",
+        "schema": "schemas/http/post-api-calibration-triangular.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/post-api-calibration-triangular.200.json"
+        },
+        "400": {
+          "contentType": "application/json",
+          "description": "Missing or out-of-range measurement",
+          "schema": "schemas/http/post-api-calibration-triangular.400.json"
+        },
+        "422": {
+          "contentType": "application/json",
+          "description": "The calculation did not converge",
+          "schema": "schemas/http/post-api-calibration-triangular.422.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/calibration/triangular/accept",
+      "family": "api",
+      "summary": "Store the last triangular result",
+      "body": {
+        "contentType": "application/json",
+        "description": "{}",
+        "schema": "schemas/http/post-api-calibration-triangular-accept.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/post-api-calibration-triangular-accept.200.json"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "Nothing calculated yet",
+          "schema": "schemas/http/post-api-calibration-triangular-accept.409.json"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/calibration/holey",
+      "family": "api",
+      "summary": "Current holey calibration parameters",
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/get-api-calibration-holey.200.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/calibration/holey",
+      "family": "api",
+      "summary": "Calculate holey calibration from measurements",
+      "body": {
+        "contentType": "application/json",
+        "schema": "schemas/http/post-api-calibration-holey.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/post-api-calibration-holey.200.json"
+        },
+        "400": {
+          "contentType": "application/json",
+          "description": "Missing or non-numeric measurement",
+          "schema": "schemas/http/post-api-calibration-holey.400.json"
+        },
+        "422": {
+          "contentType": "application/json",
+          "description": "The calculation failed",
+          "schema": "schemas/http/post-api-calibration-holey.422.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/calibration/holey/accept",
+      "family": "api",
+      "summary": "Store the last holey result",
+      "body": {
+        "contentType": "application/json",
+        "description": "{}",
+        "schema": "schemas/http/post-api-calibration-holey-accept.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/post-api-calibration-holey-accept.200.json"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "Nothing calculated yet",
+          "schema": "schemas/http/post-api-calibration-holey-accept.409.json"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/calibration/optical",
+      "family": "api",
+      "summary": "Optical calibration settings, curve and error matrix",
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/get-api-calibration-optical.200.json"
+        }
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/calibration/optical/settings",
+      "family": "api",
+      "summary": "Save optical calibration settings",
+      "body": {
+        "contentType": "application/json",
+        "schema": "schemas/http/put-api-calibration-optical-settings.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/put-api-calibration-optical-settings.200.json"
+        },
+        "400": {
+          "contentType": "application/json",
+          "description": "Missing or non-numeric field",
+          "schema": "schemas/http/put-api-calibration-optical-settings.400.json"
+        },
+        "500": {
+          "contentType": "application/json",
+          "description": "Could not save",
+          "schema": "schemas/http/put-api-calibration-optical-settings.500.json"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/system/info",
+      "family": "api",
+      "summary": "Version, platform, firmware and update status",
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/get-api-system-info.200.json"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/system/pid",
+      "family": "api",
+      "summary": "Stored PID gains",
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/get-api-system-pid.200.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/system/pid-test",
+      "family": "api",
+      "summary": "Start a PID test; results arrive later as updatePIDData",
+      "body": {
+        "contentType": "application/json",
+        "schema": "schemas/http/post-api-system-pid-test.request.json"
+      },
+      "responses": {
+        "202": {
+          "contentType": "application/json",
+          "schema": "schemas/http/post-api-system-pid-test.202.json"
+        },
+        "400": {
+          "contentType": "application/json",
+          "description": "Invalid kind, motor or number",
+          "schema": "schemas/http/post-api-system-pid-test.400.json"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "A job is running",
+          "schema": "schemas/http/post-api-system-pid-test.409.json"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/system/releases",
+      "family": "api",
+      "summary": "WebControl releases on GitHub",
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/get-api-system-releases.200.json"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/system/help",
+      "family": "api",
+      "summary": "A docs/ page as markdown",
+      "query": "schemas/http/get-api-system-help.query.json",
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/get-api-system-help.200.json"
+        },
+        "404": {
+          "contentType": "application/json",
+          "description": "\"no such help page\"",
+          "schema": "schemas/http/get-api-system-help.404.json"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/system/help/assets/{path}",
+      "family": "api",
+      "summary": "An image under docs/assets",
+      "params": "schemas/http/get-api-system-help-assets-path.params.json",
+      "responses": {
+        "200": {
+          "contentType": "application/octet-stream",
+          "description": "The file, typed by extension"
+        },
+        "404": {
+          "contentType": "text/html",
+          "description": "Flask's default HTML 404 page"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/openGCode",
+      "family": "classic",
+      "summary": "Load a gcode file from the library",
+      "body": {
+        "contentType": "multipart/form-data",
+        "schema": "schemas/http/post-opengcode.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "description": "{\"status\": 200}",
+          "schema": "schemas/http/post-opengcode.200.json"
+        },
+        "400": {
+          "contentType": "application/json",
+          "description": "{\"status\": 400, \"error\": \"Path is outside the library\"}; a missing form field gives Werkzeug's HTML 400 instead",
+          "schema": "schemas/http/post-opengcode.400.json"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "A job is running or paused; the HTTP reason phrase repeats the error",
+          "schema": "schemas/http/post-opengcode.409.json"
+        },
+        "500": {
+          "contentType": "application/json",
+          "description": "{\"status\": 500}",
+          "schema": "schemas/http/post-opengcode.500.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/uploadGCode",
+      "family": "classic",
+      "summary": "Upload gcode files into the library and load the first",
+      "body": {
+        "contentType": "multipart/form-data",
+        "schema": "schemas/http/post-uploadgcode.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "description": "{\"status\": 200}",
+          "schema": "schemas/http/post-uploadgcode.200.json"
+        },
+        "400": {
+          "contentType": "application/json",
+          "description": "{\"status\": 400, \"error\": \"Path is outside the library\"}; a missing form field gives Werkzeug's HTML 400 instead",
+          "schema": "schemas/http/post-uploadgcode.400.json"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "A job is running or paused; the HTTP reason phrase repeats the error",
+          "schema": "schemas/http/post-uploadgcode.409.json"
+        },
+        "500": {
+          "contentType": "application/json",
+          "description": "{\"status\": 500}",
+          "schema": "schemas/http/post-uploadgcode.500.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/saveGCode",
+      "family": "classic",
+      "summary": "Save the loaded gcode into the library",
+      "body": {
+        "contentType": "multipart/form-data",
+        "schema": "schemas/http/post-savegcode.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "description": "{\"status\": 200}",
+          "schema": "schemas/http/post-savegcode.200.json"
+        },
+        "400": {
+          "contentType": "application/json",
+          "description": "{\"status\": 400, \"error\": \"Path is outside the library\"}; a missing form field gives Werkzeug's HTML 400 instead",
+          "schema": "schemas/http/post-savegcode.400.json"
+        },
+        "500": {
+          "contentType": "application/json",
+          "description": "{\"status\": 500}",
+          "schema": "schemas/http/post-savegcode.500.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/editGCode",
+      "family": "classic",
+      "summary": "Replace the loaded gcode in memory",
+      "body": {
+        "contentType": "multipart/form-data",
+        "schema": "schemas/http/post-editgcode.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "description": "\"success\"",
+          "schema": "schemas/http/post-editgcode.200.json"
+        },
+        "400": {
+          "contentType": "text/html",
+          "description": "Werkzeug's HTML 400 page when a form field is missing"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "A job is running or paused; the HTTP reason phrase repeats the error",
+          "schema": "schemas/http/post-editgcode.409.json"
+        },
+        "500": {
+          "contentType": "application/json",
+          "description": "\"failed\"",
+          "schema": "schemas/http/post-editgcode.500.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/sendGCode",
+      "family": "classic",
+      "summary": "Send gcode lines to the controller now",
+      "body": {
+        "contentType": "multipart/form-data",
+        "schema": "schemas/http/post-sendgcode.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "description": "\"success\"",
+          "schema": "schemas/http/post-sendgcode.200.json"
+        },
+        "400": {
+          "contentType": "text/html",
+          "description": "Werkzeug's HTML 400 page when a form field is missing"
+        },
+        "500": {
+          "contentType": "application/json",
+          "description": "\"failed\"",
+          "schema": "schemas/http/post-sendgcode.500.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/importFile",
+      "family": "classic",
+      "summary": "Import settings from groundcontrol.ini",
+      "body": {
+        "contentType": "multipart/form-data",
+        "schema": "schemas/http/post-importfile.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "description": "{\"status\": 200}",
+          "schema": "schemas/http/post-importfile.200.json"
+        },
+        "400": {
+          "contentType": "text/html",
+          "description": "Werkzeug's HTML 400 page when a form field is missing"
+        },
+        "500": {
+          "contentType": "application/json",
+          "description": "{\"status\": 500}",
+          "schema": "schemas/http/post-importfile.500.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/importFileWCJSON",
+      "family": "classic",
+      "summary": "Import settings from a webcontrol.json",
+      "body": {
+        "contentType": "multipart/form-data",
+        "schema": "schemas/http/post-importfilewcjson.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "description": "{\"status\": 200}",
+          "schema": "schemas/http/post-importfilewcjson.200.json"
+        },
+        "400": {
+          "contentType": "text/html",
+          "description": "Werkzeug's HTML 400 page when a form field is missing"
+        },
+        "500": {
+          "contentType": "application/json",
+          "description": "{\"status\": 500}",
+          "schema": "schemas/http/post-importfilewcjson.500.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/importRestoreWebControl",
+      "family": "classic",
+      "summary": "Restore a WebControl backup zip",
+      "body": {
+        "contentType": "multipart/form-data",
+        "schema": "schemas/http/post-importrestorewebcontrol.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "description": "{\"status\": 200}",
+          "schema": "schemas/http/post-importrestorewebcontrol.200.json"
+        },
+        "400": {
+          "contentType": "text/html",
+          "description": "Werkzeug's HTML 400 page when a form field is missing"
+        },
+        "500": {
+          "contentType": "application/json",
+          "description": "{\"status\": 500}",
+          "schema": "schemas/http/post-importrestorewebcontrol.500.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/openBoard",
+      "family": "classic",
+      "summary": "Load a board from the library",
+      "body": {
+        "contentType": "multipart/form-data",
+        "schema": "schemas/http/post-openboard.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "description": "{\"status\": 200}",
+          "schema": "schemas/http/post-openboard.200.json"
+        },
+        "400": {
+          "contentType": "application/json",
+          "description": "{\"status\": 400, \"error\": \"Path is outside the library\"}; a missing form field gives Werkzeug's HTML 400 instead",
+          "schema": "schemas/http/post-openboard.400.json"
+        },
+        "500": {
+          "contentType": "application/json",
+          "description": "{\"status\": 500}",
+          "schema": "schemas/http/post-openboard.500.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/saveBoard",
+      "family": "classic",
+      "summary": "Save the current board into the library",
+      "body": {
+        "contentType": "multipart/form-data",
+        "schema": "schemas/http/post-saveboard.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "description": "{\"status\": 200}",
+          "schema": "schemas/http/post-saveboard.200.json"
+        },
+        "400": {
+          "contentType": "application/json",
+          "description": "{\"status\": 400, \"error\": \"Path is outside the library\"}; a missing form field gives Werkzeug's HTML 400 instead",
+          "schema": "schemas/http/post-saveboard.400.json"
+        },
+        "500": {
+          "contentType": "application/json",
+          "description": "{\"status\": 500}",
+          "schema": "schemas/http/post-saveboard.500.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/editBoard",
+      "family": "classic",
+      "summary": "Change the current board's details",
+      "body": {
+        "contentType": "multipart/form-data",
+        "schema": "schemas/http/post-editboard.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "description": "\"success\"",
+          "schema": "schemas/http/post-editboard.200.json"
+        },
+        "400": {
+          "contentType": "text/html",
+          "description": "Werkzeug's HTML 400 page when a form field is missing"
+        },
+        "500": {
+          "contentType": "application/json",
+          "description": "\"failed\"",
+          "schema": "schemas/http/post-editboard.500.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/trimBoard",
+      "family": "classic",
+      "summary": "Trim the current board",
+      "body": {
+        "contentType": "multipart/form-data",
+        "schema": "schemas/http/post-trimboard.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "description": "\"success\"",
+          "schema": "schemas/http/post-trimboard.200.json"
+        },
+        "400": {
+          "contentType": "text/html",
+          "description": "Werkzeug's HTML 400 page when a form field is missing"
+        },
+        "500": {
+          "contentType": "application/json",
+          "description": "\"failed\"",
+          "schema": "schemas/http/post-trimboard.500.json"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/downloadDiagnostics",
+      "family": "classic",
+      "summary": "Download a diagnostics zip",
+      "query": "schemas/http/get-downloaddiagnostics.query.json",
+      "responses": {
+        "200": {
+          "contentType": "application/octet-stream",
+          "description": "application/zip"
+        },
+        "500": {
+          "contentType": "application/json",
+          "description": "\"failed\"",
+          "schema": "schemas/http/get-downloaddiagnostics.500.json"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/backupWebControl",
+      "family": "classic",
+      "summary": "Download a backup zip",
+      "query": "schemas/http/get-backupwebcontrol.query.json",
+      "responses": {
+        "200": {
+          "contentType": "application/octet-stream",
+          "description": "application/zip"
+        },
+        "500": {
+          "contentType": "application/json",
+          "description": "\"failed\"",
+          "schema": "schemas/http/get-backupwebcontrol.500.json"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/static/{filename}",
+      "family": "static",
+      "summary": "Images the screens show, e.g. /static/images/GPIO/RPI_pin_layout.svg",
+      "params": "schemas/http/get-static-filename.params.json",
+      "responses": {
+        "200": {
+          "contentType": "application/octet-stream",
+          "description": "The file, typed by extension"
+        },
+        "404": {
+          "contentType": "text/html",
+          "description": "Flask's default HTML 404 page"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/next/{path}",
+      "family": "static",
+      "summary": "This UI's built files, with index.html for any other path",
+      "params": "schemas/http/get-next-path.params.json",
+      "responses": {
+        "200": {
+          "contentType": "application/octet-stream",
+          "description": "A file from frontend/dist, or index.html with Cache-Control: no-cache"
+        },
+        "404": {
+          "contentType": "text/plain",
+          "description": "\"Not found\" for a missing path whose last segment has a dot"
+        },
+        "503": {
+          "contentType": "text/plain",
+          "description": "frontend/dist has not been built"
+        }
+      }
+    }
+  ],
+  "payloads": {
+    "gcodeUpdateCompressed": "schemas/payloads/gcodeMoves.json",
+    "boardCutDataUpdateCompressed": "schemas/payloads/cutCells.json"
+  },
+  "websocket": {
+    "frame": "schemas/websocket/frame.json"
+  }
+}

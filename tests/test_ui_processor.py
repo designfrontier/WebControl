@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from Background.UIProcessor import UIProcessor
@@ -43,3 +45,39 @@ def test_an_exception_in_one_pass_does_not_end_the_loop(app, ui, data, monkeypat
 
     with pytest.raises(StopLoop):
         ui.start(app)
+
+
+@pytest.mark.parametrize("version, reported", [(51.27, 51.27), (0, 0.0), ("garbled", 0.0)])
+def test_the_health_check_reports_the_controller_firmware_version(ui, data, monkeypatch, version, reported):
+    emitted = []
+    monkeypatch.setattr("Background.UIProcessor.socketio.emit", lambda *args, **kwargs: emitted.append(args))
+    monkeypatch.setattr(ui, "performStatusCheck", lambda *args: None)
+    monkeypatch.setattr(data, "controllerFirmwareVersion", version)
+    ui.lastHealthCheck = 0
+
+    ui.performHealthCheck()
+
+    health = json.loads(next(payload["data"] for _, payload in emitted if payload["command"] == "healthMessage"))
+    assert health["controllerFirmwareVersion"] == reported
+
+
+def status_messages(emitted):
+    return [json.loads(payload["data"]) for _, payload in emitted if payload["command"] == "statusMessage"]
+
+
+def test_the_status_message_carries_the_job_state_and_goes_out_when_it_changes(ui, data, monkeypatch):
+    emitted = []
+    monkeypatch.setattr("Background.UIProcessor.socketio.emit", lambda *args, **kwargs: emitted.append(args))
+    monkeypatch.setattr(data, "uploadFlag", 0)
+    monkeypatch.setattr(data, "jobInProgress", False)
+    monkeypatch.setattr(data, "manualZAxisAdjust", False)
+    ui.performStatusCheck()
+    ui.performStatusCheck()
+    assert len(status_messages(emitted)) == 1
+
+    monkeypatch.setattr(data, "jobInProgress", True)
+    monkeypatch.setattr(data, "manualZAxisAdjust", True)
+    ui.performStatusCheck()
+
+    latest = status_messages(emitted)[-1]
+    assert (latest["uploadFlag"], latest["jobInProgress"], latest["manualZAxisAdjust"]) == (0, True, True)

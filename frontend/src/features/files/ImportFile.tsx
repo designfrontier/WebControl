@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { Link, Navigate, useParams } from "react-router";
+import { useParams } from "react-router";
 import { useFetch } from "../../app/context";
+import { CloseButton } from "../../app/CloseButton";
 import { importFile, importKinds } from "./api";
 import type { ImportKind } from "./api";
 import { useSubmit } from "./hooks";
@@ -12,7 +13,7 @@ const isImportKind = (kind: string | undefined): kind is ImportKind =>
 
 const ImportForm = ({ kind }: { kind: ImportKind }) => {
   const fetchImpl = useFetch();
-  const { title, description, accept } = importKinds[kind];
+  const { description, accept } = importKinds[kind];
   const [file, setFile] = useState<File | null>(null);
   const [done, setDone] = useState(false);
   const { busy, error, setError, run } = useSubmit();
@@ -28,7 +29,7 @@ const ImportForm = ({ kind }: { kind: ImportKind }) => {
   };
 
   return (
-    <SubPage title={title} back="/files">
+    <SubPage>
       <p className="muted">{description}</p>
       <form onSubmit={submit} noValidate>
         <div className="field">
@@ -51,9 +52,7 @@ const ImportForm = ({ kind }: { kind: ImportKind }) => {
           <button type="submit" className="primary" disabled={busy}>
             {busy ? "Working…" : kind === "restore" ? "Restore" : "Import"}
           </button>
-          <Link className="button" to="/files">
-            {done ? "Done" : "Cancel"}
-          </Link>
+          <CloseButton>{done ? "Done" : "Cancel"}</CloseButton>
         </div>
       </form>
     </SubPage>
@@ -62,5 +61,5 @@ const ImportForm = ({ kind }: { kind: ImportKind }) => {
 
 export const ImportFile = () => {
   const { kind } = useParams();
-  return isImportKind(kind) ? <ImportForm key={kind} kind={kind} /> : <Navigate to="/files" replace />;
+  return isImportKind(kind) ? <ImportForm key={kind} kind={kind} /> : <p>There is nothing to import here.</p>;
 };

@@ -21,7 +21,7 @@ const SectionPanel = ({ id, label }: { id: SettingsSectionId; label: string }) =
   const { section } = load;
   return (
     <div className="settings-section">
-      <h2>{label}</h2>
+      <h3>{label}</h3>
       <div className={id === "gpio" ? "settings-gpio" : undefined}>
         <SettingsForm section={section} onSaved={replace} />
         {id === "gpio" && (
@@ -35,14 +35,14 @@ const SectionPanel = ({ id, label }: { id: SettingsSectionId; label: string }) =
   );
 };
 
+/** Every settings section as tabs in one modal; switching tabs replaces the history entry so Back closes it. */
 export const SettingsPage = () => (
-  <section className="settings-page" aria-labelledby="settings-title">
-    <h1 id="settings-title">Settings</h1>
+  <div className="settings-page">
     <nav aria-label="Settings sections" className="settings-tabs">
       <ul>
         {settingsTabs.map(({ id, path, label }) => (
           <li key={id}>
-            <NavLink to={path === "" ? "/settings" : `/settings/${path}`} end>
+            <NavLink to={path === "" ? "/settings" : `/settings/${path}`} end replace>
               {label}
             </NavLink>
           </li>
@@ -59,5 +59,5 @@ export const SettingsPage = () => (
       )}
       <Route path="*" element={<p>There is no settings section at this address.</p>} />
     </Routes>
-  </section>
+  </div>
 );
