@@ -39,6 +39,8 @@ WebSockets, and shares `~/.WebControl` with the Python install.
 - `cargo run --release -p wc-gcode --example gcode_timing -- <file.nc> [home_x home_y]`: times each step of opening
   a gcode file, for the M3 time budget
 - `bash deploy/test.sh`: `wc-switch`, `deploy.sh` and `install-pi.sh` against stubs
+- `bash scripts/release-test.sh`: `scripts/release.sh`'s packaging (contents, checksums, version, firmware pin)
+  against stubs
 - `bash firmware/docker-build.sh <dir>`: builds the holey 51.292 hex from the Orob-Maslow/Firmware v51.292 tag in
   arm64 Docker and fails unless it matches `firmware/holey-51.292.sha256`; `WC_FIRMWARE_HEX=<dir>/holey-51.292.hex`
   then embeds it in any build (CI's cross-build and `deploy.sh build` do). Without it the upgrade wizard refuses
@@ -58,3 +60,41 @@ service run `systemctl poweroff` (the UI's Turn Off Raspberry Pi) and nothing el
 `spec/rust-checklists/`. The firmware upgrade (Actions → Upgrade holey firmware to 51.292…) runs `avrdude`, which
 `install-pi.sh` installs, and keeps each backup in `~/.WebControl/firmware-backups/<time>/`; `M6.md` rehearses an
 upgrade and a rollback before the real one.
+
+## Releases
+
+`.github/workflows/release.yml` runs on an arm64 runner. It builds the 51.292 hex with `firmware/docker-build.sh`,
+then `scripts/release.sh` checks the hex against `firmware/holey-51.292.sha256`, builds `frontend/dist` and the
+aarch64 binary with the UI, help pages and firmware embedded, checks that `webcontrol-rs --version` reports the
+release version, and writes:
+
+- `webcontrol-rs-<version>-aarch64.tar.gz`: one directory with `webcontrol-rs`, `install-pi.sh`, `wc-switch`, the
+  unit, the drop-in, the sudoers rule, this README and `rust-checklists/`
+- `webcontrol-rs-<version>-aarch64`: the bare binary, for `deploy.sh push`
+- a `.sha256` beside each, and `SHA256SUMS` with both
+
+The version is the tag without its `v`; otherwise `git describe --tags --match 'v[0-9]*'` (the short SHA until a
+`v*` tag exists).
+
+To cut a release:
+
+1. On a green `master`: `git tag -a v0.2.0 -m "webcontrol-rs 0.2.0"`, then `git push origin v0.2.0`.
+2. The Release workflow attaches the assets to a **draft** GitHub Release named after the tag. Rerunning it
+   replaces a draft's assets and refuses a published release.
+3. Install the draft's tarball on the Pi (below), run the checklists in `spec/rust-checklists/` that the release
+   touches, then publish the draft.
+
+Actions → Release → Run workflow builds the same assets from any branch as a workflow artifact, without a release.
+On the Mac, `WC_FIRMWARE_HEX=<dir>/holey-51.292.hex scripts/release.sh [out-dir]` does what CI does (zig from
+`pip install ziglang`; `WC_VERSION` overrides the version), into `target/release-assets` by default.
+
+Installing a release on the Pi, from the directory holding the tarball and its `.sha256`:
+
+```sh
+sha256sum -c webcontrol-rs-0.2.0-aarch64.tar.gz.sha256
+tar xzf webcontrol-rs-0.2.0-aarch64.tar.gz
+bash webcontrol-rs-0.2.0-aarch64/install-pi.sh webcontrol-rs-0.2.0-aarch64
+```
+
+To update from the Mac with a release's binary instead of a local build:
+`WC_SKIP_BUILD=1 WC_BINARY=webcontrol-rs-0.2.0-aarch64 ./deploy.sh push`.

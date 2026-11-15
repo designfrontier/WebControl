@@ -1,0 +1,97 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  pi-assets:
+    name: Pi install assets (aarch64, pinned 51.292 firmware)
+    # The pinned firmware digest was made on linux/arm64, and an arm64 runner can run the binary it builds.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    outputs:
+      version: ${{ steps.assets.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # git describe needs the tags and their history when the run is not on a tag.
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      # rust-toolchain.toml names the toolchain, its components and the aarch64 target.
+      - name: Install the Rust toolchain
+        run: |
+          if ! command -v rustup > /dev/null; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
+            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+            export PATH="$HOME/.cargo/bin:$PATH"
+          fi
+          rustup toolchain install
+        working-directory: rust
+      - name: Install zig and cargo-zigbuild
+        run: |
+          python3 -m venv "$HOME/zig"
+          "$HOME/zig/bin/pip" install ziglang
+          echo "$HOME/zig/bin" >> "$GITHUB_PATH"
+          cargo install --locked cargo-zigbuild
+        working-directory: rust
+      - name: Packaging script tests
+        run: bash rust/scripts/release-test.sh
+      - name: Holey 51.292 hex from the v51.292 tag, checked against its pin
+        run: bash rust/firmware/docker-build.sh "$RUNNER_TEMP/firmware"
+      - name: Build and package
+        id: assets
+        run: bash rust/scripts/release.sh "$RUNNER_TEMP/assets"
+        env:
+          WC_FIRMWARE_HEX: ${{ runner.temp }}/firmware/holey-51.292.hex
+      - uses: actions/upload-artifact@v7
+        with:
+          name: webcontrol-rs-${{ steps.assets.outputs.version }}-aarch64
+          path: ${{ runner.temp }}/assets/
+          if-no-files-found: error
+          retention-days: 30
+
+  draft-release:
+    name: Draft GitHub Release
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: pi-assets
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: webcontrol-rs-${{ needs.pi-assets.outputs.version }}-aarch64
+          path: assets
+      - name: Create the draft, or refresh its assets on a rerun
+        run: |
+          cd assets
+          sha256sum -c SHA256SUMS
+          draft="$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft 2> /dev/null || echo none)"
+          if [ "$draft" = false ]; then
+            echo "$GITHUB_REF_NAME is already published; its assets stay as they are" >&2
+            exit 1
+          elif [ "$draft" = true ]; then
+            gh release upload "$GITHUB_REF_NAME" --clobber -- *
+          else
+            gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "webcontrol-rs $VERSION" \
+              --notes "Pi install assets for webcontrol-rs $VERSION (aarch64, glibc 2.36+, holey 51.292 embedded). Install: see rust/README.md, Releases." \
+              -- *
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.pi-assets.outputs.version }}

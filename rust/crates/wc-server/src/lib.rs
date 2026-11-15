@@ -27,6 +27,9 @@ use wc_machine::MachineHandle;
 
 pub use routes::router;
 
+/// The release version (`WC_VERSION` at build time, from the tag), else the crate's.
+pub const VERSION: &str = env!("WC_VERSION");
+
 /// WebSocket liveness: ping every `interval`, close a connection that has not answered within `timeout`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PingConfig {

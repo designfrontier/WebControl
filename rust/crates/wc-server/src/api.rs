@@ -163,7 +163,7 @@ pub(crate) async fn system(State(state): State<AppState>) -> Json<SystemInfo> {
     let snapshot = state.machine.snapshot();
     let version = snapshot.controller_firmware_version;
     Json(SystemInfo {
-        version: env!("CARGO_PKG_VERSION").into(),
+        version: crate::VERSION.into(),
         platform: state.platform.name.clone(),
         controller_firmware_version: version,
         firmware: BundledFirmware { stock: None, holey: None, custom: None },
