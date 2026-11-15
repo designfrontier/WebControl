@@ -221,8 +221,9 @@ the backend has been quiet for `quiet` seconds, one line per settle.
 3. Read the result against `spec/firmware.md` before committing. The recorder records whatever the backend does.
 4. `.venv/bin/python -m pytest tests/test_serial_contract.py`.
 
-A transcript in `RUST_ONLY` is edited by hand, as the spec: Python is not its reference, the recorder skips it unless
-named, and the Python test checks only its schema and layout. Keep the 51.27 echo (`rx`) after each changed `tx`.
+A transcript in `RUST_ONLY` is edited by hand, as the spec: Python is not its reference, the recorder skips it and
+refuses to write it unless given `--stdout` or `--overwrite-rust-only`, and the Python test checks only its schema and
+layout. Keep the 51.27 echo (`rx`) after each changed `tx`.
 
 Transcripts are written one event per line; the test fails on any other layout, so always write them with the
 recorder or `serial_contract.dumps`.

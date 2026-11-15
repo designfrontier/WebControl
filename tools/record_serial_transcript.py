@@ -78,12 +78,17 @@ def main(argv=None):
     parser.add_argument("names", nargs="*", help="scenario names (default: all)")
     parser.add_argument("--stdout", action="store_true", help="print instead of writing files")
     parser.add_argument("--out", default=str(serial_contract.CONTRACT / "transcripts"))
+    parser.add_argument("--overwrite-rust-only", action="store_true",
+                        help="write a RUST_ONLY scenario's file, replacing its hand-edited Rust spec with Python's run")
     args = parser.parse_args(argv)
-    # Python would overwrite the Rust-intended transcripts with its own behaviour.
+    # RUST_ONLY transcripts are hand-edited specs, not Python recordings.
     names = args.names or sorted(set(SCENARIOS) - serial_contract.RUST_ONLY)
     unknown = [name for name in names if name not in SCENARIOS]
     if unknown:
         parser.error("unknown scenario(s): " + ", ".join(unknown))
+    rust_only = sorted(set(names) & serial_contract.RUST_ONLY)
+    if rust_only and not (args.stdout or args.overwrite_rust_only):
+        parser.error("hand-edited Rust-only transcript(s), use --stdout or --overwrite-rust-only: " + ", ".join(rust_only))
     webcontrol_commit = commit()
     failed = []
     for name in names:
