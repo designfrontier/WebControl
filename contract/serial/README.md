@@ -161,6 +161,7 @@ the backend has been quiet for `quiet` seconds, one line per settle.
 | `move_z_raise_lower_and_zero_mm`, `move_z_in_inches_on_a_mm_machine` | Z moves, `G10 Z0`, the Z panel's own units |
 | `touch_z_mm`, `touch_z_inches` | `G38.2` probe then `G10 Z0` |
 | `stream_unbuffered_with_home_shift` | one line per ok; home shift keeps both operands' decimals |
+| `stream_buffered_short_job_fits_the_buffer` | the same job buffered: 125 bytes, all sent before the first ok |
 | `stream_buffered_with_home_shift` | 126-byte character counting, refilled by each ok |
 | `start_mid_file_restores_modal_state` | restart sequence: safe height, XY, `G1` plunge at the plunge feed, `G1 F<file F>` |
 | `pause_jog_resume_returns_to_file_position` | Pause with a line in flight, jog while paused, Resume returns and replunges |

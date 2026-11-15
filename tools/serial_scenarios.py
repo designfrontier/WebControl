@@ -228,6 +228,14 @@ scenario(
 )
 
 scenario(
+    "stream_buffered_short_job_fits_the_buffer",
+    "The unbuffered job again with buffering on: all eleven lines (125 bytes with their trailing spaces and newlines) "
+    "fit in the controller's 126, so they all go out before the first ok.",
+    {**SHIFTED_HOME, "settings": BUFFERED},
+    [ui("startRun"), idle(), expect(state=FINISHED)],
+)
+
+scenario(
     "start_mid_file_restores_modal_state",
     "Play at line 7 (G1 X25 Y25): restart sequence of units, G90, rapid to safe height and to the XY before the "
     "line, a G1 plunge at the file's plunge feed, then the file's G1 and feed restored, then the file from line 7.",
