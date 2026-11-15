@@ -212,8 +212,8 @@ PROBE_MISSED = PROBING + ["error: probe did not connect", "program stopped", "z 
 
 scenario(
     "touch_z_mm",
-    "Touch Z probes with G38.2 down to the plunge limit; once the probe line's ok shows it touched, Z is zeroed "
-    "with G10 Z0.",
+    "Touch Z probes with G38.2 down to the plunge limit. On a touch the firmware zeroes Z itself and acks, so "
+    "nothing follows the probe line.",
     {**MM},
     [firmware(rule={"pattern": r"G38\.2", "replies": PROBE_TOUCHED}), ui("touchZ"), idle(),
      expect(noAlerts=[{"title": "Touch Z"}])],
@@ -252,8 +252,8 @@ def touch_z_then_resume_mid_probe():
 scenario(
     "resume_during_probe_waits_for_the_probes_own_answer",
     "Resume pressed while a touchZ probe descends during a paused job: the firmware acks the ~ at once, and that ok "
-    "is not the probe's answer. Nothing more goes out until the probe line's own ok; only then is G10 Z0 queued, "
-    "behind the restart sequence Resume queued, so it zeroes Z at the restart's height (Known warts 7).",
+    "is not the probe's answer. Nothing more goes out until the probe line's own ok, and no G10 Z0 follows it: the "
+    "firmware zeroed Z at the plate itself.",
     {**MM, "gcode": gcode("square_mm.nc")},
     [*touch_z_then_resume_mid_probe(), rx("z axis zeroed"), rx("ok", "the probe line's own ok"), idle(),
      expect(state=FINISHED)],

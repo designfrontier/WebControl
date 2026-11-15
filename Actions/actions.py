@@ -924,8 +924,8 @@ class Actions(MakesmithInitFuncs):
 
     def touchZ(self):
         '''
-        Probes down with G38.2 to the plunge limit, in the machine's units. The serial thread zeroes Z once the
-        probe line is acknowledged with ok.
+        Probes down with G38.2 to the plunge limit, in the machine's units. The firmware zeroes Z itself when the
+        probe touches; the serial thread alerts if it misses.
         '''
         try:
             plungeDepthMM = float(self.data.config.getValue("Advanced Settings", "maxTouchProbePlungeDistance"))

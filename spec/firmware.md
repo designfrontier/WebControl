@@ -56,8 +56,10 @@ the raw line, re-send B05 on any boot banner (`PCB v1.`, `Grbl v1.00`, `ready`),
   51.292 B17/B18 store nothing but report success; only `$63`/`$64` (mm) work, and B20 reads them back.
 - G17 is unsupported (sent by both calibration patterns). G38.2 moves at a fixed 60 mm/min, but touchZ's `F1` still
   sets the modal feed to 1 mm/min (without F it clamps the modal feed to zMaxFeed). G38.2 leaves the modal
-  motion mode alone. On a touch G38.2 zeroes Z itself, prints `z axis zeroed` and acks; on a miss it prints
-  `error: probe did not connect`, `program stopped`, `z axis not set` and an empty line, with no `ok`. `M2` and
+  motion mode alone. On a touch G38.2 zeroes Z itself (`zAxis.set(0)`, H27 `GCode.cpp:922`, H292
+  `GCode.cpp:1046`), prints `z axis zeroed` and acks, so a `G10 Z0` after it is redundant and WebControl sends none;
+  on a miss it prints `error: probe did not connect`, `program stopped`, `z axis not set` and an empty line, with no
+  `ok`, and sets `sys.stop` (H27 `GCode.cpp:936-937`, H292 `GCode.cpp:1061-1062`). `M2` and
   `M30` only turn the spindle off. The firmware reads T only when it leads a line that also has a G or M word (`T2 M6`, `T2 G0 X1`):
   in `M6 T2`, `N10 T2 M6`, `G0 X1 T2` and a lone `T2` line the T is ignored, and a lone `T2` runs as a modal move.
 - `$` keys: units match WebControl's assumptions. `$13` is the only path that sets R. `$37` is used only when
@@ -141,6 +143,7 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
 | A13 | Fixed | M0/M1 timing depended on the early `~`; M0 at end of line wasn't detected. |
 | A14 | Low | `$86`, `$144` rejected; `$43` unused on holey; G17 ignored. |
 | A15 | Info | `bufferSize = 126` is right; PWR:/F: parsing is dead code; PE lines are mis-parsed until B05 is parsed. |
+| A16 | Fixed | After a touching probe WebControl queued `G10 Z0` behind anything already queued; behind a Resume's restart it zeroed Z at the restart's height. The firmware zeroes Z on a touch, so none is sent. |
 
 ### B. Rust backend requirements
 
@@ -169,6 +172,7 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
 14. Kinematics: reproduce the firmware exactly (R rule, density, trig, tolerances, old-triangular branch, clamps,
     forward-solve limits).
 15. MPos has 2 decimals; never use it to restore an exact Z.
+16. Touch Z: send `G38.2` alone; no `G10 Z0` after it; a probe `error:` alerts and zeroes nothing.
 
 ### C. One-click firmware upgrade
 

@@ -7,7 +7,7 @@
       "variant": "holey",
       "version": "51.27"
     },
-    "webcontrolCommit": "1d58697"
+    "webcontrolCommit": "5e01a38"
   },
   "setup": {
     "units": "INCHES",
@@ -23,8 +23,6 @@
     {"type": "rx", "line": "max depth -10.00 mm."},
     {"type": "rx", "line": "feedrate 39.94 mm per min."},
     {"type": "rx", "line": "z axis zeroed"},
-    {"type": "rx", "line": "ok"},
-    {"type": "tx", "bytes": "G10 Z0  \n"},
     {"type": "rx", "line": "ok"},
     {"type": "expect", "state": {"units": "INCHES", "home": {"x": 3.9488, "y": 0}}}
   ]

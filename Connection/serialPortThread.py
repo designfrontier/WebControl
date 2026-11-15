@@ -526,12 +526,10 @@ class SerialPortThread(MakesmithInitFuncs):
 
     def _probeFinished(self, touched):
         '''
-        The firmware answers a probe that never touched with `error: probe did not connect` instead of ok.
+        A touching G38.2 zeroes Z itself (51.27 and 51.292); a miss answers `error: probe did not connect`.
         '''
         self.probeLine = None
-        if touched:
-            self.data.actions.defineZ0()
-        else:
+        if not touched:
             self.data.ui_queue1.put("Alert", "Touch Z Failed",
                                     "The probe did not touch the plate, so Z was not zeroed. Check the plate and its "
                                     "clip, then try again.")
