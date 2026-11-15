@@ -77,4 +77,11 @@ impl Settings {
         }
         Ok(settings)
     }
+
+    /// The settings `open` would make of a home it cannot prepare, with nothing written.
+    pub fn load_derived(paths: &Paths) -> Settings {
+        let mut settings = Settings::load(paths);
+        settings.compute();
+        settings
+    }
 }
