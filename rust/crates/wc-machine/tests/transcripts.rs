@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use serde_json::{Map, Value};
 use wc_config::{Settings, python_str};
-use wc_machine::{Effect, Event, Machine};
+use wc_machine::{Effect, Event, Machine, Request};
 use wc_protocol::{Action, Namespace};
 use wc_testkit::contract::Contract;
 use wc_testkit::runner::{SerialBackend, replay};
@@ -58,6 +58,10 @@ impl MachineBackend {
 
     fn apply(&mut self, event: Event) {
         let effects = self.machine.handle(event, self.now);
+        self.collect(effects);
+    }
+
+    fn collect(&mut self, effects: Vec<Effect>) {
         effects.into_iter().for_each(|effect| match effect {
             Effect::Write(bytes) | Effect::Realtime(bytes) => self.written.extend(bytes),
             Effect::Push(push) if push.ns == Namespace::MaslowCnc => {
@@ -106,8 +110,24 @@ impl SerialBackend for MachineBackend {
         self.apply(event);
     }
 
-    fn http(&mut self, _: &str, _: &str, _: Option<&Value>, _: Option<&BTreeMap<String, String>>) -> u16 {
-        404
+    /// The machine's HTTP writes, routed as wc-server routes them.
+    fn http(&mut self, method: &str, path: &str, json: Option<&Value>, _: Option<&BTreeMap<String, String>>) -> u16 {
+        let body = json.cloned().unwrap_or(Value::Null);
+        let request = match (method, path) {
+            ("PUT", _) if path.starts_with("/api/settings/") => {
+                Request::UpdateSettings { section: path["/api/settings/".len()..].into(), body }
+            }
+            ("POST", "/api/machine/quick-configure") => Request::QuickConfigure(body),
+            ("POST", "/api/system/pid-test") => Request::PidTest(body),
+            _ => return 404,
+        };
+        let effects = self.machine.handle(Event::Request { id: 1, request }, self.now);
+        let status = effects.iter().find_map(|effect| match effect {
+            Effect::Respond { response, .. } => Some(response.status),
+            _ => None,
+        });
+        self.collect(effects);
+        status.expect("every request is answered")
     }
 
     fn advance(&mut self, ms: u64) {
@@ -169,4 +189,50 @@ fn the_python_connect_transcripts_fail_on_the_rust_handshake() {
 fn every_transcript_passes() {
     let failures: Vec<String> = corpus().iter().filter_map(|t| replay(&mut MachineBackend::new(), t).err()).collect();
     assert!(failures.is_empty(), "{} failing:\n{}", failures.len(), failures.join("\n"));
+}
+
+/// The milestone's hardware check, simulated: edit a setting, power-cycle the controller, and every setting goes out
+/// again with the new value and `$13`, then `$$` verifies. Rust only (wart 4), so it is built from the Rust
+/// handshake transcript rather than kept beside it.
+fn edit_then_reboot() -> Transcript {
+    let path = wc_testkit::repo_root().join("contract/serial/transcripts-rust/connect_boot_handshake.json");
+    let mut raw: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    raw["meta"]["name"] = "settings_edit_then_reboot_repushes_everything".into();
+    raw["setup"]["start"] = "connected".into();
+    let boot: Vec<Value> = raw["events"].as_array().unwrap().clone();
+    let reboot: Vec<Value> = boot
+        .iter()
+        .map(|event| match event["bytes"].as_str() {
+            Some("$2=2978.4 \n") => serde_json::json!({"type": "tx", "bytes": "$2=3000 \n"}),
+            _ => event.clone(),
+        })
+        .collect();
+    // The last two events are the `$$` read-back's `ok` and the closing expect; the dump goes before them.
+    let (handshake, ending) = reboot.split_at(reboot.len() - 2);
+    let edit = serde_json::json!([
+        {"type": "http", "method": "PUT", "path": "/api/settings/maslow", "json": {"values": {"motorSpacingX": "3000"}}, "status": 200},
+        {"type": "tx", "bytes": "$2=3000 \n"},
+        {"type": "rx", "line": "ok"},
+        {"type": "expect", "settings": [{"section": "Maslow Settings", "key": "motorSpacingX", "value": "3000"}]},
+    ]);
+    let dump =
+        serde_json::json!([{"type": "rx", "line": "$2=3000.00000000"}, {"type": "rx", "line": "$13=63.50000000"}]);
+    let events: Vec<Value> =
+        [edit.as_array().unwrap().as_slice(), handshake, dump.as_array().unwrap().as_slice(), ending].concat();
+    raw["events"] = Value::Array(events);
+    serde_json::from_value(raw).unwrap()
+}
+
+#[test]
+fn an_edited_setting_is_pushed_with_all_the_others_after_a_reboot_and_verified() {
+    replay(&mut MachineBackend::new(), &edit_then_reboot()).unwrap();
+}
+
+#[test]
+fn http_writes_the_machine_does_not_answer_are_404() {
+    let mut backend = MachineBackend::new();
+    assert_eq!(backend.http("GET", "/api/state", None, None), 404);
+    let quick = serde_json::json!({});
+    assert_eq!(backend.http("POST", "/api/machine/quick-configure", Some(&quick), None), 400);
+    assert_eq!(backend.http("POST", "/api/system/pid-test", None, None), 400);
 }
