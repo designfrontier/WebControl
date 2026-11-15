@@ -170,6 +170,29 @@ fn stop_drops_a_pending_wait_and_what_follows_it() {
     assert!(written(&rig.rx("[Measure: 10]")).is_empty());
 }
 
+#[test]
+fn after_stop_the_next_command_does_not_wait_out_the_countdown() {
+    let mut rig = Rig::connected();
+    rig.act_with("adjustChain", json!("left"), json!(""));
+    rig.act("stopRun");
+    rig.rx("ok");
+    idle(&mut rig, 400);
+    assert_eq!(written(&rig.act("testMotors")), ["B04"]);
+}
+
+#[test]
+fn the_measurement_that_stops_a_chain_drops_what_was_queued_behind_it() {
+    let mut rig = Rig::connected();
+    rig.act_with("adjustChain", json!("left"), json!(""));
+    assert_eq!(idle(&mut rig, 6200), ["B02 L1 R0"]);
+    assert_eq!(written(&rig.rx("ok")), ["B10 L"]);
+    rig.act("testMotors");
+    assert_eq!(written(&rig.rx("[Measure: 1651.0]")), ["!"]);
+    rig.rx("ok");
+    let rest = idle(&mut rig, 1000);
+    assert!(rest.is_empty(), "Python clears the queue after the stop: {rest:?}");
+}
+
 fn velocity(version: &str) -> Value {
     json!({"vMotor": "L", "vStart": "0", "vStop": "1", "vSteps": "2", "vVersion": version, "KpV": "5", "KiV": "0",
         "KdV": "0.3"})
