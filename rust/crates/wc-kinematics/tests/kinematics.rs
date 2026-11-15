@@ -193,3 +193,20 @@ fn forward_refuses_chain_lengths_that_are_not_numbers() {
     assert_eq!(triangular().forward(f64::NAN, 1500.0), None);
     assert_eq!(triangular().forward(1500.0, f64::INFINITY), None);
 }
+
+#[test]
+fn a_singular_quadrilateral_jacobian_gives_no_chains_and_no_position() {
+    let pointlike = Geometry { l: 0.0, s: 0.0, h3: 0.0, mode: Mode::Quadrilateral, ..Geometry::default() };
+    let mut kinematics = Kinematics::new(pointlike);
+    assert_eq!(kinematics.inverse_unclamped(-989.2, 100.0), None);
+    assert_eq!(kinematics.forward_from(1000.0, 2500.0, (-989.2, 100.0)), None);
+    assert_eq!(triangular().inverse_unclamped(f64::NAN, 0.0), None);
+}
+
+#[test]
+fn quadrilateral_forward_settles_for_its_last_guess_after_5001_steps_like_python() {
+    let mut kinematics = simulator(Mode::Quadrilateral);
+    let (left, right) = kinematics.inverse(0.0, 375.0).expect("chains");
+    let found = kinematics.forward_from(left, right, (0.0, 375.0)).expect("position");
+    assert!(near(found, (0.0035928456562487597, 375.006805620823), 1e-9), "{found:?}");
+}
