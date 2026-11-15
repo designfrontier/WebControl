@@ -44,7 +44,18 @@ Resume or Stop: one that arrived while lines were streaming, which may have job 
 `$16=0` prompt to adjust Z by hand. While a `G38.2` probe (Touch Z or typed) is queued or descending, every action
 but `stopRun`, `stopZ`, `pauseRun`, `createDirectory`, `toggleCamera`, `statusRequest` and `queryCamera` is refused
 with an Alert, whatever its gate, and so is `/sendGCode` (500); the probe's `ok` or `error:`, Stop, or a reconnect
-ends it. HTTP `family` is `api` (JSON for this UI), `classic` (old form routes
+ends it. **The Rust backend differs here on purpose** (Python is being retired; Python's tests are unchanged):
+
+- It also lets `shutdown`, `TurnOffRPI`, `updatePorts`, `clearLogs`, `boardProcessGCode` and `boardClearBoard` run
+  during a probe, since they send the controller nothing.
+- A `G38.2` streamed from the gcode file counts as a probe too: streaming waits behind it, a miss holds the job at
+  the probe line with the Touch Z Failed alert (Play probes again), and a touch leaves the job's Z at 0.
+- A probe acked with `ok` but no `z axis zeroed` before it alerts "Probe finished but Z was not zeroed" and pauses a
+  job.
+- `GET /api/state`, `GET /api/main` and `statusMessage` carry `probing` (true while a probe is queued or descending),
+  which the UI uses to grey out every move. Python never sends it; the schemas list it as optional.
+
+HTTP `family` is `api` (JSON for this UI), `classic` (old form routes
 the UI reuses, with their old shapes) or `static`.
 
 Schemas describe the wire: what is actually sent, before the UI coerces anything. Objects do not forbid extra

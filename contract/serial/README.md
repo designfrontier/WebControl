@@ -14,7 +14,7 @@ which is not always what the firmware needs; the known gaps are listed under "Kn
 | --------------------------- | -------------------------------------------------------------------------------------- |
 | `transcript.schema.json`    | JSON Schema (draft 2020-12) for one transcript                                         |
 | `transcripts/<name>.json`   | The corpus, one behaviour per file, named by behaviour                                 |
-| `transcripts-rust/<name>.json` | Where Rust must differ (known warts): replaces the transcript of the same name for Rust |
+| `transcripts-rust/<name>.json` | Where Rust must differ (known warts): replaces the transcript of the same name for Rust; a new name is a Rust-only behaviour, its description starting "Rust only" |
 | `gcode/<name>.nc`           | G-code files transcripts load by path                                                  |
 | `recording.schema.json`     | One line of a serial recording (`~/.WebControl/serial-recordings/*.jsonl`)             |
 
@@ -175,6 +175,9 @@ the backend has been quiet for `quiet` seconds, one line per settle.
 | `touch_z_probe_fails_leaves_z_alone` | `error: probe did not connect` acks the probe: no `G10 Z0`, an alert |
 | `resume_during_probe_is_refused_until_the_probe_touches` | Resume mid-probe in a paused job is refused with an alert: no `~`, no restart; nothing follows the probe's `ok`; the next Resume returns to the job |
 | `resume_during_probe_is_refused_then_the_probe_misses` | the same, and the probe misses: the Touch Z Failed alert, no `G10 Z0` |
+| `probe_in_file_waits_for_the_touch` | Rust only: buffered streaming waits behind a `G38.2` from the file; a jog is refused and Clear Logs runs mid-probe; Resume after the touch lowers to Z 0 |
+| `probe_in_file_misses_and_waits_at_the_probe` | Rust only: a `G38.2` from the file misses: the Touch Z Failed alert, the job held at the probe line, Play returns and probes again |
+| `touch_z_without_zeroing_alerts` | Rust only: an `ok` with no `z axis zeroed` before it alerts that Z was not zeroed |
 | `stream_unbuffered_with_home_shift` | one line per ok; home shift keeps both operands' decimals |
 | `stream_buffered_short_job_fits_the_buffer` | the same job buffered: 125 bytes, all sent before the first ok |
 | `stream_buffered_with_home_shift` | 126-byte character counting, refilled by each ok |
@@ -252,6 +255,8 @@ The runner needs these seams in the backend:
    through the same handler the WebSocket `action` frame reaches, and `http` events through the router.
 5. `expect.state` names map onto `GET /api/state` and `statusMessage` fields; `emitted` checks the `message` pushes
    the WebSocket transport would send (decoded `data`).
+
+`expect.state` may also name `probing`, which only the Rust-only transcripts use.
 
 Rust does not need to reproduce the prelude's tx: it only has to reach the same state from the same rx lines. It
 must reproduce every byte after it. Where this contract pins something `spec/firmware.md` says is wrong (below), the
