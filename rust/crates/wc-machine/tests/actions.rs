@@ -103,6 +103,18 @@ fn macros_send_their_text_unless_m4_must_follow_them() {
     assert!(empty.run_to_quiet().is_empty());
 }
 
+/// The firmware runs a lone T word as a modal move, so a command that only selects a tool is dropped.
+#[test]
+fn a_macro_that_only_selects_a_tool_is_not_sent() {
+    let mut rig = Rig::connected_with(settings(&[
+        ("Maslow Settings", "macro1", json!("T2")),
+        ("Maslow Settings", "macro2", json!("G0 Z10")),
+    ]));
+    rig.act("macro1");
+    rig.act("macro2");
+    assert_eq!(rig.run_to_quiet(), ["G0 Z10"]);
+}
+
 /// Ported from test_motion: Touch Z probes in the machine's units, and every moving action waits for it.
 #[test]
 fn touch_z_refuses_other_actions_until_the_probe_answers() {
