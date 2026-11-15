@@ -73,6 +73,9 @@ impl Machine {
         if self.probing && !SAFE_WHILE_PROBING.contains(&command) {
             return effects.push(alert(PROBING));
         }
+        if let Some(refusal) = self.restart_refusal().filter(|_| !SAFE_WHILE_PROBING.contains(&command)) {
+            return effects.push(alert(refusal));
+        }
         let machine_command = MACHINE_COMMANDS.contains(&command);
         let manual_command = MACHINE_COMMANDS[..MANUAL_COMMANDS].contains(&command);
         if manual_command && self.job.firmware_paused && self.job.flow != Flow::Streaming {

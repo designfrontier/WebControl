@@ -120,6 +120,11 @@ impl Rig {
 
     /// Answers each written line as the transcript prelude does, until the machine writes nothing more.
     pub fn answer_until_quiet(&mut self, version: &str) -> Vec<String> {
+        self.answer_with(version, &[])
+    }
+
+    /// `answer_until_quiet`, with `report` before the `ok` of every `$$`.
+    pub fn answer_with(&mut self, version: &str, report: &[String]) -> Vec<String> {
         let mut all = Vec::new();
         loop {
             if self.outbox.is_empty() {
@@ -132,6 +137,11 @@ impl Rig {
             for line in &lines {
                 if line.trim_end() == "B05" {
                     self.rx(&format!("Firmware Version {version}"));
+                }
+                if line.trim_end() == "$$" {
+                    report.iter().for_each(|reply| {
+                        self.rx(reply);
+                    });
                 }
                 self.rx("ok");
             }
@@ -147,14 +157,31 @@ impl Rig {
     /// `connected_with` a controller that answers B05 with `version`.
     pub fn connected_on(settings: Settings, version: &str) -> Rig {
         let mut rig = Rig::with(settings);
-        rig.open();
-        ["PCB v1.6 TLE9201  Detected", "FAKE_SERVO off", "Grbl v1.00", "ready", "ok"].iter().for_each(|l| {
-            rig.rx(l);
-        });
-        rig.answer_until_quiet(version);
-        rig.rx("<Idle,MPos:0.00,0.00,0.00,WPos:0.000,0.000,0.000>");
-        rig.advance(100);
+        rig.boot_on(version);
         rig
+    }
+
+    /// The port opens, the board boots and the handshake is answered; returns what the handshake wrote.
+    pub fn boot_on(&mut self, version: &str) -> Vec<String> {
+        self.boot_reporting(version, &[])
+    }
+
+    /// `boot_on`, the controller answering `$$` with `report`.
+    pub fn boot_reporting(&mut self, version: &str, report: &[String]) -> Vec<String> {
+        self.open();
+        ["PCB v1.6 TLE9201  Detected", "FAKE_SERVO off", "Grbl v1.00", "ready", "ok"].iter().for_each(|l| {
+            self.rx(l);
+        });
+        let sent = self.answer_with(version, report);
+        self.rx("<Idle,MPos:0.00,0.00,0.00,WPos:0.000,0.000,0.000>");
+        self.advance(100);
+        sent
+    }
+
+    /// The controller was restarted through its port (a `$38` write) and boots again.
+    pub fn reboot(&mut self) -> Vec<String> {
+        assert_eq!(self.machine.snapshot().link, wc_protocol::main::LinkStatus::Disconnected, "restarted");
+        self.boot_on("51.27")
     }
 
     pub fn connected() -> Rig {

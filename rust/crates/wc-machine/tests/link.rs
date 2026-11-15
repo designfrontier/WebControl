@@ -87,8 +87,7 @@ fn an_inch_machine_boots_into_g20() {
         rig.rx(l);
     });
     let sent = rig.answer_until_quiet("51.27");
-    assert_eq!(&sent[..3], ["B05", "G20", "G90"]);
-    assert_eq!(sent.last().map(String::as_str), Some("$$"));
+    assert_eq!(sent, ["B05", "G20", "G90", "$$", "$13=63.5000"]);
 }
 
 #[test]
@@ -183,9 +182,12 @@ fn an_eeprom_reset_after_the_push_pushes_again() {
     let mut rig = Rig::connected();
     rig.rx("error: EEPROM read fail. Using default settings.");
     let sent = rig.run_to_quiet();
+    assert_eq!(sent.first().map(String::as_str), Some("$$"), "what the reset left is read first");
     assert!(sent.contains(&"$18=12.6".to_string()));
-    assert_eq!(sent.last().map(String::as_str), Some("$$"));
+    assert!(sent.contains(&"$38=2.00000".to_string()), "the factory $38 differs");
+    assert_eq!(sent.last().map(String::as_str), Some("$46=97.9000"), "the restart replaces the read-back");
     assert_eq!(rig.machine.snapshot().settings.text("Advanced Settings", "maxZRPM").as_deref(), Some("12.6"));
+    assert_eq!(rig.reboot(), ["B05", "G21", "G90", "$$", "$13=63.5000"]);
 }
 
 /// Ported from test_serial_streaming: Stop jumps ahead, and nothing else goes out until a late status report.

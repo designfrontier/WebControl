@@ -81,6 +81,8 @@ pub struct Sim {
     pub chains: (f64, f64),
     /// A motor whose encoder B04 finds not moving.
     pub stuck_motor: Option<char>,
+    /// `$38` was written since the boot: `setupAxes()` ran on the live board and the motors no longer follow.
+    axes_reinitialised: bool,
 }
 
 /// The 51.27 defaults a fresh EEPROM boots with.
@@ -172,7 +174,14 @@ impl Sim {
             reports_status: true,
             chains: (1650.0, 1651.0),
             stuck_motor: None,
+            axes_reinitialised: false,
         }
+    }
+
+    /// A value its EEPROM already holds, as `$$` reports it.
+    pub fn with_setting(mut self, key: u32, value: f64) -> Sim {
+        self.settings.insert(key, value);
+        self
     }
 
     /// The next boot reports `EEPROM read fail`, as after a flash to another settings version.
@@ -316,6 +325,7 @@ impl Sim {
             match (key.parse::<u32>(), value.trim().parse::<f64>()) {
                 (Ok(key), Ok(value)) => {
                     self.settings.insert(key, value);
+                    self.axes_reinitialised |= key == 38;
                     if self.build.rewrite_notice {
                         out.push("Change in setting, rewriting EEPROM".into());
                     }
@@ -370,6 +380,12 @@ impl Sim {
         }
         let axes = ['X', 'Y', 'Z'].map(|axis| word(text, axis));
         let moved = axes.iter().any(Option::is_some);
+        if moved && self.axes_reinitialised {
+            // The setpoint runs ahead of encoders that never move (the owner's machine, 2026-11-15).
+            self.stop();
+            out.push("ALARM: The sled is not keeping up with its expected position and has halted.".into());
+            return None;
+        }
         axes.iter().enumerate().for_each(|(i, value)| {
             if let Some(value) = value {
                 self.position[i] = if self.absolute { value * scale } else { self.position[i] + value * scale };
@@ -448,6 +464,10 @@ impl Sim {
     /// The machine position in mm.
     pub fn position(&self) -> [f64; 3] {
         self.position
+    }
+
+    pub fn axes_reinitialised(&self) -> bool {
+        self.axes_reinitialised
     }
 
     pub fn setting(&self, key: u32) -> Option<f64> {

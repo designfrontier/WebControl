@@ -6,8 +6,7 @@ use std::time::Duration;
 use wc_firmware::boot::{
     BOOT_BANNER_WINDOW_MS, EEPROM_READ_FAIL, EEPROM_REWRITE_NOTICE, board_banner, ends_boot, is_boot_banner,
 };
-use wc_firmware::settings::{Sync, boot_push, sync_reported};
-use wc_firmware::upgrade::migration_push;
+use wc_firmware::settings::{Sync, reinitialises_axes, sync_reported};
 use wc_firmware::{Reply, classify, split_glued};
 use wc_gcode::firmware_gcode::{only_selects_tool, tool_change_line};
 use wc_gcode::sanitise::{problem_with, sanitise};
@@ -29,8 +28,6 @@ pub const BOOT_WAIT: Duration = Duration::from_secs(3);
 /// No line at all for this long means the link is gone; the firmware reports status every 200 ms.
 pub const LINK_TIMEOUT: Duration = Duration::from_secs(5);
 
-const EEPROM_RESTORED: &str = "The controller lost its settings (EEPROM read fail), so WebControl restored them. \
-                               WebControl doesn't keep Z-axis limits, so set them again if you use them.";
 const TOUCH_Z_FAILED: &str =
     "The probe did not touch the plate, so Z was not zeroed. Check the plate and its clip, then try again.";
 const NOT_ZEROED: &str = "Probe finished but Z was not zeroed. The controller may have no Z axis attached, or Z was \
@@ -101,6 +98,7 @@ impl Machine {
         let controller = &mut self.controller;
         if controller.boot_deadline.is_some_and(|deadline| now >= deadline) {
             tracing::info!("no boot message from the controller; connecting anyway");
+            self.restart_not_seen(effects);
             self.handshake(now);
             self.controller.ready = true;
         }
@@ -114,7 +112,7 @@ impl Machine {
         }
     }
 
-    /// B2: on each boot ask for the version, then units, G90, every setting, and `$$` to verify.
+    /// B2: on each boot ask for the version, then units, G90 and `$$`; the sync after it writes what differs.
     fn handshake(&mut self, now: Duration) {
         self.upgrade_restarted(now);
         let units = if self.units() == Units::Inches { "G20 " } else { "G21 " };
@@ -122,7 +120,7 @@ impl Machine {
         let controller = &mut self.controller;
         controller.boot_deadline = None;
         controller.queue.clear();
-        controller.queue.extend([line("B05 "), line(units), line("G90 "), Queued::SettingsPush, line("$$")]);
+        controller.queue.extend([line("B05 "), line(units), line("G90 "), line("$$"), Queued::SettingsSync]);
     }
 
     fn boot(&mut self, now: Duration, effects: &mut Vec<Effect>) {
@@ -137,6 +135,7 @@ impl Machine {
         self.job.controller_reset();
         self.bit = BitHeight::new();
         self.probing = false;
+        self.restart_booted();
         self.handshake(now);
     }
 
@@ -171,13 +170,14 @@ impl Machine {
         self.watch_for_boot(line, now, effects);
         if self.controller.boot_deadline.is_some() && line == "ok" {
             // A board that did not reset on open, answering all the same.
+            self.restart_not_seen(effects);
             self.handshake(now);
         }
         if line.contains(EEPROM_READ_FAIL) {
             self.controller.eeprom_reset = true;
-            if !self.controller.queue.contains(&Queued::SettingsPush) {
-                let read_back = Queued::Line { text: "$$".into(), boot: true };
-                self.controller.queue.extend([Queued::SettingsPush, read_back]);
+            if !self.controller.queue.contains(&Queued::SettingsSync) {
+                let read = Queued::Line { text: "$$".into(), boot: true };
+                self.controller.queue.extend([read, Queued::SettingsSync]);
             }
         }
         if line == "z axis zeroed"
@@ -311,6 +311,10 @@ impl Machine {
     }
 
     fn reported_setting(&mut self, line: &str, key: u32, value: f64) {
+        if self.controller.queue.contains(&Queued::SettingsSync) {
+            self.controller.reported.push((key, value));
+            return self.upgrade_setting(line, None);
+        }
         let sync = sync_reported(&self.settings, self.firmware_version, key, value);
         self.upgrade_setting(line, if let Sync::Rewrite(text) = &sync { Some(text) } else { None });
         match sync {
@@ -406,12 +410,15 @@ impl Machine {
     /// Writes whatever the controller has room for: a queued command first, else the job's next line.
     pub(crate) fn pump(&mut self, now: Duration, effects: &mut Vec<Effect>) {
         while self.can_write(now) {
+            if self.restart_due() {
+                return self.restart_controller(now, effects);
+            }
             let Some(next) = self.controller.queue.pop_front() else {
                 break;
             };
             let written = match next {
-                Queued::SettingsPush => {
-                    self.expand_settings_push(effects);
+                Queued::SettingsSync => {
+                    self.expand_settings_sync(effects);
                     false
                 }
                 Queued::Line { text, .. } => self.send_queued(&text, now, effects),
@@ -430,26 +437,8 @@ impl Machine {
                 return;
             }
         }
-        if self.can_stream(now) {
+        if self.can_stream(now) && !self.controller.axes_reinitialised {
             self.send_next_line(now, effects);
-        }
-    }
-
-    fn expand_settings_push(&mut self, effects: &mut Vec<Effect>) {
-        let eeprom_reset = std::mem::take(&mut self.controller.eeprom_reset);
-        let migration = self.upgrade.migrating();
-        let build = wc_firmware::boot::firmware_build(self.firmware_version, self.rewrite_notice);
-        let push = match migration {
-            Some(migration) => migration_push(&self.settings, self.firmware_version, build.as_deref(), migration),
-            None => boot_push(&self.settings, self.firmware_version, eeprom_reset),
-        };
-        push.adopted.into_iter().for_each(|(section, key, value)| self.set_setting(&section, &key, value));
-        push.lines
-            .into_iter()
-            .rev()
-            .for_each(|text| self.controller.queue.push_front(Queued::Line { text, boot: true }));
-        if eeprom_reset && migration.is_none() {
-            effects.push(alert(EEPROM_RESTORED));
         }
     }
 
@@ -468,10 +457,11 @@ impl Machine {
             return false;
         }
         let command = self.manage_tool_change(&command);
-        if only_selects_tool(&command) {
+        if only_selects_tool(&command) || !self.may_reinitialise(&command, effects) {
             return false;
         }
         let id = self.write(&command, None, now, effects);
+        self.controller.axes_reinitialised |= reinitialises_axes(&command);
         if command.starts_with("$RST") {
             // The firmware never acks a reset of its EEPROM.
             self.controller.accounting.acked();
@@ -493,10 +483,10 @@ impl Machine {
         self.controller.queue.extend(lines.into_iter().map(|text| Queued::Line { text, boot: false }));
     }
 
-    /// Stop drops what the user queued and any wait; the boot's handshake and settings push still go out.
+    /// Stop drops what the user queued and any wait; the boot's handshake and settings sync still go out.
     pub(crate) fn drop_user_commands(&mut self) {
         self.controller.queue.retain(|queued| {
-            matches!(queued, Queued::Line { boot: true, .. } | Queued::SettingsPush | Queued::Mark(_))
+            matches!(queued, Queued::Line { boot: true, .. } | Queued::SettingsSync | Queued::Mark(_))
         });
         self.controller.hold_until = None;
         self.controller.raise_deadline = None;

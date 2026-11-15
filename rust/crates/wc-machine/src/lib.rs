@@ -16,6 +16,7 @@ mod machine;
 mod pid;
 mod setup;
 mod shell;
+mod sync;
 mod ui;
 mod upgrade;
 mod work;
