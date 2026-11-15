@@ -9,16 +9,20 @@ WebSockets, and shares `~/.WebControl` with the Python install.
 | `wc-config` | `~/.WebControl` layout and `webcontrol.json`, read like `config/config.py` (read-only so far) |
 | `wc-kinematics` | The holey firmware's triangular and quadrilateral inverse/forward, float for float with Python |
 | `wc-calibration` | Holey (`levenberg-marquardt`) and triangular calibration, test patterns, Accept's settings and `$` lines |
+| `wc-firmware` | The controller's serial protocol, sans IO: line classifier, flow control, boot facts, `$` lines and the boot push |
 | `wc-machine` | The sans-IO core (`Machine::handle(event, now) -> effects`) and the tokio shell; Stop has its own channel |
-| `wc-server` | The `webcontrol-rs` binary: axum routes, `/ws` sessions, embedded UI and images |
+| `wc-sim` | A simulated controller (ring buffer, `ok` timing, `!`/`~`, pauses, `$$`, boot banners, status reports) |
+| `wc-server` | The `webcontrol-rs` binary: axum routes, `/ws` sessions, the serial port, embedded UI and images |
 | `wc-testkit` | Test support: the `contract/` schema harness and the `contract/serial/` transcript runner |
 
 ## Commands (in `rust/`)
 
 - `cargo test --workspace` (needs `frontend/dist`: `npm ci && npm run build` in `frontend/`)
 - `scripts/coverage.sh`: tests under `cargo llvm-cov`, failing below 95% lines for any crate
-- `cargo run -p wc-server -- --home "$(mktemp -d)" --port 5055`: never point `--home` at the real `~/.WebControl`
-  while testing
+- `cargo run -p wc-server -- --home "$(mktemp -d)" --port 5055 [--simulate]`: never point `--home` at the real
+  `~/.WebControl` while testing; `--simulate` talks to `wc-sim` instead of the serial port
+- `cargo test -p wc-machine --test transcripts`: replays `contract/serial/` (with `transcripts-rust/` in place of the
+  Python ones it overrides); the `PASSING` list names those the backend must already pass
 - `cargo run -p wc-calibration --example calibrate -- <home> holey M1 … M12`: a calibration against a copy of
   `webcontrol.json`, printing the result and the `$` lines Accept would send
 - `bash deploy/test.sh`: `wc-switch`, `deploy.sh` and `install-pi.sh` against stubs
@@ -29,4 +33,7 @@ WebSockets, and shares `~/.WebControl` with the Python install.
 `./deploy.sh build|install|push|rollback [host]` (default `pi@maslow-next.local`) cross-builds with
 `cargo zigbuild --release --target aarch64-unknown-linux-gnu.2.36` (zig from `pip install ziglang`) and installs to
 `/opt/webcontrol-rs`. On the Pi, `wc-switch rust|python|status` picks the backend that runs and boots; the two units
-conflict, so only one holds the port. Each milestone's hardware checklist is in `spec/rust-checklists/`.
+conflict, so only one holds the port. `install-pi.sh` also adds `/etc/sudoers.d/webcontrol-rs`, which lets the
+service run `systemctl poweroff` (the UI's Turn Off Raspberry Pi) and nothing else. The serial log is
+`~/.WebControl/webcontrol-rs.log` (rotated at 5 MB). Each milestone's hardware checklist is in
+`spec/rust-checklists/`.
