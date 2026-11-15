@@ -10,6 +10,7 @@ pub mod cli;
 pub mod files;
 pub mod firmware;
 mod forms;
+pub mod gpio;
 pub mod host;
 mod routes;
 pub mod serial;

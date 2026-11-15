@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::Notify;
 use wc_config::library::resolve_inside;
 use wc_config::{Paths, Settings};
+use wc_machine::gpio::{Gpio, Leds};
 use wc_machine::{FirmwareJob, Host, JobResult};
 
 use crate::firmware::{Avrdude, BACKUPS, Flasher, run_job};
@@ -115,6 +116,7 @@ pub struct SystemHost {
     settings: Option<Paths>,
     backups: PathBuf,
     flasher: Box<dyn Flasher>,
+    gpio: Mutex<Option<Gpio>>,
 }
 
 impl SystemHost {
@@ -131,7 +133,13 @@ impl SystemHost {
             settings: None,
             backups: dir.join(BACKUPS),
             flasher: Box::new(Avrdude::default()),
+            gpio: Mutex::new(None),
         }
+    }
+
+    /// The GPIO pins the LEDs light; `None` lets them go, with the button callbacks they hold.
+    pub fn attach_gpio(&self, gpio: Option<Gpio>) {
+        *self.gpio.lock().expect("gpio lock") = gpio;
     }
 
     /// Flashes with `flasher` in place of avrdude.
@@ -215,6 +223,12 @@ impl Host for SystemHost {
                 }
             });
         made.inspect_err(|error| tracing::warn!(error, name, "could not create the directory")).is_ok()
+    }
+
+    fn leds(&self, leds: Leds) {
+        if let Some(gpio) = self.gpio.lock().expect("gpio lock").as_mut() {
+            gpio.show(leds);
+        }
     }
 
     fn cpu_load(&self) -> f64 {

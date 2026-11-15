@@ -8,6 +8,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, DuplexStream, Lines};
 use tokio::sync::mpsc;
 use wc_config::Settings;
 use wc_machine::files::{Reply, Request};
+use wc_machine::gpio::{Button, Leds};
 use wc_machine::{
     Core, Effect, Event, FirmwareJob, Host, JobResult, Machine, NoHost, NoPort, PortOpener, Serial, Snapshot, spawn,
 };
@@ -87,6 +88,9 @@ impl Host for Recorder {
         self.note(&format!("mkdir {name}"));
         name != "refused"
     }
+    fn leds(&self, leds: Leds) {
+        self.note(&format!("leds {} {} {}", leds.play, leds.pause, leds.stop));
+    }
 }
 
 struct Controller {
@@ -118,6 +122,10 @@ impl Core for Echo {
     fn handle(&mut self, event: Event, _: Duration) -> Vec<Effect> {
         let (label, write) = match &event {
             Event::Action(a) if a.command == "open" => return vec![Effect::OpenPort("p".into())],
+            Event::Action(a) if a.command == "leds" => {
+                return vec![Effect::Leds(Leds { play: true, ..Leds::default() })];
+            }
+            Event::Button(button) => (format!("{button:?}"), Effect::Realtime(b"!\n".to_vec())),
             Event::Action(a) => (a.command.clone(), Effect::Write(format!("{}\n", a.command).into_bytes())),
             Event::Stop(a) => (a.command.clone(), Effect::Realtime(b"!\n".to_vec())),
             _ => return Vec::new(),
@@ -143,6 +151,26 @@ async fn stop_first(round: usize) {
     assert_eq!(*seen.lock().unwrap(), ["stopRun", "move", "moveZ", "home"]);
     drop(handle);
     task.await.unwrap();
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn a_stop_button_jumps_the_queue_and_the_leds_reach_the_host() {
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let (opener, mut ends, _) = wire();
+    let host = Arc::new(Recorder::default());
+    let (handle, _task) = spawn(Echo { seen: seen.clone(), inner: with_port() }, opener, host.clone());
+    handle.send(Event::Action(action("open")));
+    let mut controller = Controller::new(ends.recv().await.unwrap());
+    handle.send(Event::Action(action("move")));
+    handle.send(Event::Button(Button::Stop));
+    assert_eq!([controller.next().await, controller.next().await], ["!", "move"]);
+    handle.send(Event::Button(Button::Pause));
+    handle.send(Event::Action(action("leds")));
+    assert_eq!(controller.next().await, "!");
+    tokio::time::sleep(Duration::from_millis(20)).await;
+    assert_eq!(*seen.lock().unwrap(), ["Stop", "move", "Pause"]);
+    assert!(host.calls().contains(&"leds true false false".to_string()), "{:?}", host.calls());
+    NoHost.leds(Leds::default());
 }
 
 /// Repeated because an unbiased select would still put Stop first now and then.

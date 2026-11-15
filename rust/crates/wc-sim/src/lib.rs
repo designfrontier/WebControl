@@ -371,6 +371,12 @@ impl Sim {
                 self.position[i] = if self.absolute { value * scale } else { self.position[i] + value * scale };
             }
         });
+        // `$16=0` (no Z motor): the firmware asks for each Z move by hand and pauses until `~`.
+        if axes[2].is_some() && self.settings.get(&16) == Some(&0.0) {
+            out.push(format!("Message: Please adjust Z-Axis to a depth of {:.2} mm", self.position[2]));
+            out.push("Maslow Paused".into());
+            self.held = Some(Hold::Pause);
+        }
         codes
             .iter()
             .filter(|c| !matches!(c.as_str(), "0" | "1" | "2" | "3" | "4" | "20" | "21" | "90" | "91"))
@@ -384,6 +390,7 @@ impl Sim {
         }
         self.tool = tool;
         out.push(format!("Tool Change: Please insert tool {tool}"));
+        out.push("Maslow Paused".into());
         self.held = Some(Hold::ToolChange);
         Some(())
     }

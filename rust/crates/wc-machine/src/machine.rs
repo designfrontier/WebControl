@@ -12,11 +12,15 @@ use wc_gcode::Positioning;
 use wc_gcode::board::Board;
 use wc_gcode::restart::positioning_word;
 use wc_protocol::main::{ActivateModal, ConnectionStatus, HostAddress, LinkStatus, PauseButton, StatusMessage, Units};
+
+use crate::job::Flow;
 use wc_protocol::system::FirmwareUpgrade;
 use wc_protocol::{Action, Envelope, Message, Push};
 
 use crate::edits::{Request as Edit, Response};
 use crate::files::{Preview, Reply, Request, bed_board};
+use crate::gpio::{Button, Leds};
+use crate::job::Job;
 use crate::pid::Pid;
 use crate::setup::Measure;
 use crate::ui::{ErrorTracker, PositionTracker};
@@ -75,6 +79,8 @@ pub enum Event {
         id: u64,
         request: Request,
     },
+    /// A GPIO button, debounced.
+    Button(Button),
 }
 
 /// What the shell must do after an event, in order.
@@ -107,6 +113,8 @@ pub enum Effect {
         id: u64,
         reply: Reply,
     },
+    /// The GPIO status LEDs, whenever they change.
+    Leds(Leds),
 }
 
 /// An `Arc` whose equality is identity, so comparing snapshots never walks the settings.
@@ -124,12 +132,6 @@ impl<T> Deref for Shared<T> {
     fn deref(&self) -> &T {
         &self.0
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum RunState {
-    Idle,
-    Running,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -251,6 +253,8 @@ pub(crate) struct Controller {
     pub eeprom_reset: bool,
     /// A `Delay` holds writes until then.
     pub hold_until: Option<Duration>,
+    /// `bufferOn` as the port opened: job lines go out while they fit, not one per `ok`.
+    pub buffering: bool,
 }
 
 impl Controller {
@@ -269,10 +273,12 @@ impl Controller {
             probe: None,
             eeprom_reset: false,
             hold_until: None,
+            buffering: false,
         }
     }
 }
 
+#[derive(Clone)]
 pub struct Machine {
     pub(crate) host_address: String,
     /// Opened in place of the `COMport` setting: the simulator's port.
@@ -287,10 +293,14 @@ pub struct Machine {
     pub(crate) board: Option<String>,
     pub(crate) fake_servo: bool,
     pub(crate) positioning: Positioning,
-    pub(crate) tool: u32,
     /// A Touch Z is queued or descending.
     pub(crate) probing: bool,
-    pub(crate) run: RunState,
+    pub(crate) job: Job,
+    /// Gcode loads being built off the machine task; Play waits for them.
+    pub(crate) loads: usize,
+    pub(crate) leds: Leds,
+    /// The LEDs as last handed to the shell.
+    pub(crate) leds_shown: Leds,
     pub(crate) gcode: Arc<Vec<String>>,
     pub(crate) index: usize,
     pub(crate) gcode_file: Option<PathBuf>,
@@ -343,9 +353,11 @@ impl Machine {
             board: None,
             fake_servo: false,
             positioning: Positioning::Absolute,
-            tool: 0,
             probing: false,
-            run: RunState::Idle,
+            job: Job::default(),
+            loads: 0,
+            leds: Leds::default(),
+            leds_shown: Leds::default(),
             gcode: Arc::new(Vec::new()),
             index: 0,
             gcode_file: None,
@@ -415,6 +427,11 @@ impl Machine {
                 let reply = self.request(request, &mut effects);
                 effects.push(Effect::Reply { id, reply });
             }
+            Event::Button(button) => {
+                let resumes = matches!(self.job.flow, Flow::Paused | Flow::Draining) || self.job.manual_z.is_some();
+                let action = Action::new(button.command(resumes), Value::from(""), Value::from(""));
+                self.action(&action, now, &mut effects);
+            }
         }
         self.pump(now, &mut effects);
         self.status_if_changed(&mut effects);
@@ -423,6 +440,10 @@ impl Machine {
             effects.push(Effect::SaveSettings(self.settings.clone()));
         }
         self.saved = self.settings.clone();
+        if self.leds != self.leds_shown {
+            self.leds_shown = self.leds;
+            effects.push(Effect::Leds(self.leds));
+        }
         effects
     }
 
@@ -446,7 +467,6 @@ impl Machine {
     }
 
     pub fn snapshot(&self) -> Snapshot {
-        let running = self.run == RunState::Running;
         let (link, port) = match &self.link {
             Link::Connected { port } => (LinkStatus::Connected, port.clone()),
             _ => (LinkStatus::Disconnected, "none".to_string()),
@@ -454,16 +474,16 @@ impl Machine {
         Snapshot {
             link,
             port,
-            upload_flag: i32::from(running),
-            job_in_progress: running,
-            manual_z_axis_adjust: false,
-            pause_button: PauseButton::Pause,
+            upload_flag: self.job.flow.upload_flag(),
+            job_in_progress: self.job.flow.in_job(),
+            manual_z_axis_adjust: self.job.manual_z.is_some(),
+            pause_button: self.job.pause_button(),
             controller_firmware_version: self.firmware_version,
             controller_board: self.board.clone(),
             firmware_build: wc_firmware::boot::firmware_build(self.firmware_version, self.rewrite_notice),
             host_address: self.host_address.clone(),
             positioning: self.positioning,
-            current_tool: self.tool,
+            current_tool: u32::try_from(self.job.tool).unwrap_or(0),
             gcode_index: self.index,
             gcode_line: self.gcode.get(self.index).cloned().unwrap_or_default(),
             gcode_count: self.gcode.len(),

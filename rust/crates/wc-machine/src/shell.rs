@@ -11,6 +11,7 @@ use wc_config::Settings;
 use wc_protocol::Push;
 
 use crate::files::{Reply, Request};
+use crate::gpio::{Button, Leds};
 use crate::{Effect, Event, FirmwareJob, JobResult, Machine, Response, Snapshot};
 
 const TICK: Duration = Duration::from_millis(10);
@@ -54,6 +55,8 @@ pub trait Host: Send + Sync + 'static {
     fn save_settings(&self, _settings: &Settings) {}
     /// Makes a gcode library directory; false if the name leaves the library or the directory cannot be made.
     fn create_directory(&self, name: &str) -> bool;
+    /// Lights the GPIO status LEDs.
+    fn leds(&self, _leds: Leds) {}
     /// Runs avrdude or saves a firmware backup, off the machine task.
     fn firmware(&self, job: FirmwareJob) -> JobResult {
         unsupported(job)
@@ -119,6 +122,7 @@ impl MachineHandle {
     pub fn send(&self, event: Event) {
         let _ = match event {
             Event::Action(action) if action.is_realtime() => self.realtime.send(Event::Stop(action)).map_err(drop),
+            Event::Button(Button::Stop) => self.realtime.send(Event::Button(Button::Stop)).map_err(drop),
             other => self.commands.send(Command::Event(other)).map_err(drop),
         };
     }
@@ -295,6 +299,10 @@ impl<C: Core> Task<C> {
                         if let Some(answer) = self.requests.remove(&id) {
                             let _ = answer.send(reply);
                         }
+                        None
+                    }
+                    Effect::Leds(leds) => {
+                        self.host.leds(leds);
                         None
                     }
                 };

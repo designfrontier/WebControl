@@ -2,6 +2,8 @@
 
 #![allow(dead_code)]
 
+pub mod sim;
+
 use std::time::Duration;
 
 use serde_json::{Value, json};
@@ -152,6 +154,11 @@ impl Rig {
 
     pub fn connected() -> Rig {
         Rig::connected_with(settings(&[]))
+    }
+
+    /// Forgets the lines written so far, so the next `run_to_quiet` returns only what follows.
+    pub fn clear_written(&mut self) {
+        self.outbox.clear();
     }
 
     /// Acks lines as they are written until the machine is quiet; returns what it wrote.

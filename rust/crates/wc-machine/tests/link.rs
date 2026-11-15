@@ -127,14 +127,15 @@ fn no_controller_line_for_5_s_closes_the_link_and_raises_an_alarm() {
 }
 
 #[test]
-fn losing_the_port_mid_job_stops_the_job_with_an_alert() {
+fn losing_the_port_mid_job_pauses_it_at_the_line_the_controller_lost() {
     let mut rig = Rig::connected();
     rig.machine.load_gcode("G0 X1\nG0 X2\n");
     rig.act("startRun");
     rig.advance(100);
     let effects = rig.send(Event::PortClosed);
     assert!(messages(&effects).iter().any(|(_, d)| d["title"] == "Connection Lost"));
-    assert!(!rig.machine.snapshot().job_in_progress);
+    let snapshot = rig.machine.snapshot();
+    assert_eq!((snapshot.upload_flag, snapshot.job_in_progress, snapshot.gcode_index), (2, true, 0));
     assert!(rig.send(Event::PortClosed).is_empty(), "a closed port closes once");
 }
 
@@ -217,7 +218,7 @@ fn an_alarm_mid_job_halts_and_rewinds() {
     let effects = rig.rx("ALARM: The sled is not keeping up");
     assert_eq!(pushed(&effects, "alarm"), [json!({"message": "Alarm: Sled Not Keeping Up"})]);
     let snapshot = rig.machine.snapshot();
-    assert_eq!((snapshot.job_in_progress, snapshot.gcode_index), (false, 1));
+    assert_eq!((snapshot.job_in_progress, snapshot.upload_flag, snapshot.gcode_index), (true, 0, 1));
     assert!(written(&rig.rx("ok")).is_empty(), "acks are ignored after a halt");
     let overflow = rig.rx("Buffer overflow!");
     assert_eq!(pushed(&overflow, "alarm"), [json!({"message": "Alarm: Controller Buffer Overflow"})]);

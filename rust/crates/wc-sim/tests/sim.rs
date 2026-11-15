@@ -90,9 +90,21 @@ fn a_tool_change_pauses_only_for_a_new_leading_tool() {
     let mut sim = sim();
     assert_eq!(send(&mut sim, "T0 M6\n"), ["ok"], "the same tool");
     assert_eq!(send(&mut sim, "M6 T2\n"), ["ok"], "the firmware ignores a T that does not lead");
-    assert_eq!(send(&mut sim, "T2 M6\n"), ["Tool Change: Please insert tool 2"]);
+    assert_eq!(send(&mut sim, "T2 M6\n"), ["Tool Change: Please insert tool 2", "Maslow Paused"]);
     assert_eq!(send(&mut sim, "~"), ["ok", "ok"]);
     assert_eq!(send(&mut sim, "T3\n"), ["ok"], "a lone T runs as a modal move");
+}
+
+#[test]
+fn a_z_move_without_a_z_motor_asks_for_z_by_hand_and_waits_for_tilde() {
+    let mut sim = sim();
+    assert_eq!(send(&mut sim, "$16=0\n"), ["ok"]);
+    assert_eq!(send(&mut sim, "G0 X1\n"), ["ok"], "no Z word, no prompt");
+    let prompt = ["Message: Please adjust Z-Axis to a depth of -3.00 mm", "Maslow Paused"];
+    assert_eq!(send(&mut sim, "G1 X2 Z-3\n"), prompt);
+    assert!(sim.is_paused());
+    assert_eq!(send(&mut sim, "~"), ["ok", "ok"], "the ~, then the move it held");
+    assert_eq!(send(&mut sim, "G10 Z0\n"), ["ok"], "zeroing Z is no move");
 }
 
 #[test]
@@ -103,7 +115,7 @@ fn m_words_are_read_as_numbers() {
     assert_eq!(send(&mut sim, "M\n"), ["ok"]);
     assert_eq!(send(&mut sim, "M01\n"), ["Maslow Paused"]);
     send(&mut sim, "~");
-    assert_eq!(send(&mut sim, "T4 M06\n"), ["Tool Change: Please insert tool 4"]);
+    assert_eq!(send(&mut sim, "T4 M06\n")[0], "Tool Change: Please insert tool 4");
 }
 
 #[test]

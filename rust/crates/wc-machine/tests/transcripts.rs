@@ -12,33 +12,6 @@ use wc_testkit::contract::Contract;
 use wc_testkit::runner::{SerialBackend, replay};
 use wc_testkit::transcript::{Transcript, UiAction};
 
-/// Transcripts the Rust backend must already pass; each milestone adds the ones it makes pass.
-const PASSING: &[&str] = &[
-    "connect_boot_handshake",
-    "connect_eeprom_read_fail_restores_settings",
-    "connect_settings_sync_adopts_unknown_keys",
-    "connect_without_a_reset_handshakes_after_3_s",
-    "define_home_from_sled_then_home",
-    "holey_calibration_accept_writes_settings",
-    "home_at_safe_height_mm",
-    "jog_each_direction_inches",
-    "jog_each_direction_mm",
-    "move_z_in_inches_on_a_mm_machine",
-    "move_z_raise_lower_and_zero_mm",
-    "realtime_characters_stripped_from_lines",
-    "return_to_center_inches",
-    "stop_ignores_a_status_report_read_too_soon",
-    "stop_mid_line_resets_the_index",
-    "stop_with_a_stale_ok_in_flight",
-    "stream_unbuffered_waits_for_a_slow_ok",
-    "stream_unbuffered_with_home_shift",
-    "touch_z_inches",
-    "touch_z_mm",
-    "touch_z_probe_fails_leaves_z_alone",
-    "z_limits_on_51_292",
-    "z_limits_refused_on_51_27",
-];
-
 struct MachineBackend {
     machine: Machine,
     now: Duration,
@@ -174,18 +147,10 @@ fn corpus() -> Vec<Transcript> {
 }
 
 #[test]
-fn the_passing_list_names_real_transcripts() {
-    let names: Vec<String> = corpus().into_iter().map(|t| t.meta.name).collect();
-    PASSING.iter().for_each(|name| assert!(names.iter().any(|n| n == name), "{name} is not a transcript"));
-}
-
-#[test]
-fn listed_transcripts_pass() {
-    let failures: Vec<String> = corpus()
-        .iter()
-        .filter(|t| PASSING.contains(&t.meta.name.as_str()))
-        .filter_map(|t| replay(&mut MachineBackend::new(), t).err())
-        .collect();
+fn every_transcript_passes() {
+    let corpus = corpus();
+    assert!(corpus.len() >= 39, "the whole corpus: {}", corpus.len());
+    let failures: Vec<String> = corpus.iter().filter_map(|t| replay(&mut MachineBackend::new(), t).err()).collect();
     assert!(failures.is_empty(), "{} failing:\n{}", failures.len(), failures.join("\n"));
 }
 
@@ -195,13 +160,6 @@ fn the_python_connect_transcripts_fail_on_the_rust_handshake() {
     let python = Transcript::corpus().into_iter().find(|(_, t)| t.meta.name == "connect_boot_handshake").unwrap().1;
     let err = replay(&mut MachineBackend::new(), &python).unwrap_err();
     assert!(err.contains("expected tx \"G21  \\n\", got \"B05  \\n\""), "{err}");
-}
-
-#[test]
-#[ignore = "jobs land in M4; run with --ignored to see what is left"]
-fn every_transcript_passes() {
-    let failures: Vec<String> = corpus().iter().filter_map(|t| replay(&mut MachineBackend::new(), t).err()).collect();
-    assert!(failures.is_empty(), "{} failing:\n{}", failures.len(), failures.join("\n"));
 }
 
 /// The milestone's hardware check, simulated: edit a setting, power-cycle the controller, and every setting goes out

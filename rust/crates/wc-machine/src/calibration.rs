@@ -12,7 +12,7 @@ use wc_protocol::calibration::{
 use wc_protocol::main::Units;
 
 use crate::edits::Response;
-use crate::machine::{Machine, RunState};
+use crate::machine::Machine;
 
 const MASLOW: &str = "Maslow Settings";
 const ADVANCED: &str = "Advanced Settings";
@@ -183,7 +183,7 @@ impl Machine {
 
     /// `POST /api/calibration/{kind}/accept`. Python took it mid-job or mid-probe; here it waits, as the action gates do.
     pub(crate) fn accept_calibration(&mut self, kind: Kind) -> Response {
-        if self.run != RunState::Idle {
+        if self.job.flow.in_job() {
             return Response::error(409, JOB_RUNNING);
         }
         if self.probing {

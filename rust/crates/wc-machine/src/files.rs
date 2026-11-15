@@ -14,7 +14,7 @@ use wc_protocol::files::UpdateDirectories;
 use wc_protocol::main::{ActivateModal, GcodePositionMessage, Units};
 use wc_protocol::{Envelope, Push};
 
-use crate::machine::{Effect, Machine, RunState, alert, broadcast};
+use crate::machine::{Effect, Machine, alert, broadcast};
 
 pub const GCODE_LOCKED: &str = "Cannot load gcode while a job is running or paused. Stop the job first.";
 const PROBING: &str = "Wait for Touch Z to finish or press Stop";
@@ -140,6 +140,8 @@ pub struct TrimForm {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Request {
     SetSettings(Vec<(String, String, Value)>),
+    /// A file route started building a load, which ends in `LoadGcode` or `Problem(GcodeUnreadable)`.
+    LoadStarting,
     LoadGcode {
         gcode: Box<Gcode>,
         file: Option<PathBuf>,
@@ -188,7 +190,7 @@ fn split_lines(text: &str) -> impl Iterator<Item = &str> {
 
 impl Machine {
     pub(crate) fn gcode_locked(&self) -> bool {
-        self.run != RunState::Idle
+        self.job.flow.in_job() || self.job.manual_z.is_some()
     }
 
     pub(crate) fn push_gcode(&self, effects: &mut Vec<Effect>) {
@@ -217,7 +219,7 @@ impl Machine {
     }
 
     /// `sendGCodePositionUpdate(recalculate=True)`: false where Python's answer was falsy.
-    fn push_gcode_position(&self, effects: &mut Vec<Effect>) -> bool {
+    pub(crate) fn push_gcode_position(&self, effects: &mut Vec<Effect>) -> bool {
         let Some(line) = self.gcode.get(self.index) else { return false };
         let Ok(at) = position::find_position_at(&self.gcode, self.index) else { return false };
         let scale = match (self.preview.file_units, self.units()) {
@@ -246,6 +248,7 @@ impl Machine {
     }
 
     fn load(&mut self, gcode: Gcode, file: Option<PathBuf>, origin: Origin, effects: &mut Vec<Effect>) -> Reply {
+        self.loads = self.loads.saturating_sub(1);
         if self.gcode_locked() {
             return Reply::Refused(GCODE_LOCKED.into());
         }
@@ -418,7 +421,17 @@ impl Machine {
                 Reply::Done
             }
             Request::LoadGcode { gcode, file, origin } => self.load(*gcode, file, origin, effects),
+            Request::LoadStarting => {
+                self.loads += 1;
+                effects.push(Effect::Push(Push::message(Envelope::int("showFPSpinner", 0))));
+                Reply::Done
+            }
             Request::Problem(problem) => {
+                if problem == Problem::GcodeUnreadable {
+                    // A failed load resends the current preview, so every client's spinner ends.
+                    self.loads = self.loads.saturating_sub(1);
+                    self.push_gcode(effects);
+                }
                 self.problem(problem, effects);
                 Reply::Done
             }

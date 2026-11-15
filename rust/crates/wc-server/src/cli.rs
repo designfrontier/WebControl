@@ -9,7 +9,8 @@ use std::sync::Arc;
 use tokio::sync::Notify;
 use wc_config::{Paths, Settings};
 use wc_firmware::image::Image;
-use wc_machine::{Machine, PortOpener, spawn};
+use wc_machine::gpio::{Gpio, Plan};
+use wc_machine::{Event, Machine, MachineHandle, PortOpener, spawn};
 use wc_sim::Build;
 
 use crate::firmware::{SimFlasher, simulated_target};
@@ -115,7 +116,9 @@ pub async fn serve(options: Options, shutdown: impl Future<Output = ()> + Send +
         }
         false => (machine, Box::new(SerialOpener), host),
     };
-    let (machine, task) = spawn(machine, opener, Arc::new(host));
+    let host = Arc::new(host);
+    let (machine, task) = spawn(machine, opener, host.clone());
+    host.attach_gpio(Some(start_gpio(&machine)));
     println!("webcontrol-rs listening on {bound}");
     std::io::stdout().flush()?;
     let state = AppState::new(machine, PingConfig::default(), paths);
@@ -128,9 +131,19 @@ pub async fn serve(options: Options, shutdown: impl Future<Output = ()> + Send +
         closing.close_sessions();
     };
     axum::serve(listener, router(state)).with_graceful_shutdown(stopped).await?;
+    host.attach_gpio(None);
     // The machine task ends with the last handle, once its final settings save is on disk.
     let _ = tokio::time::timeout(SAVE_ON_EXIT, task).await;
     Ok(())
+}
+
+/// The buttons and LEDs `GPIO Settings` names; a press reaches the machine as the UI's action would.
+fn start_gpio(machine: &MachineHandle) -> Gpio {
+    let plan = Plan::from_settings(&machine.snapshot().settings);
+    let presses = machine.clone();
+    let started = std::time::Instant::now();
+    let press = Arc::new(move |button| presses.send(Event::Button(button)));
+    Gpio::start(&plan, crate::gpio::open(), press, Arc::new(move || started.elapsed()))
 }
 
 async fn terminated() {

@@ -5,9 +5,7 @@ use serde_json::Value;
 use wc_config::Settings;
 use wc_firmware::{PositionError, Status};
 use wc_kinematics::{Geometry, Kinematics};
-use wc_protocol::main::{
-    ErrorValueMessage, HealthMessage, HomePositionMessage, PauseButton, PositionMessage, RequestedSetting,
-};
+use wc_protocol::main::{ErrorValueMessage, HealthMessage, HomePositionMessage, PositionMessage, RequestedSetting};
 
 use crate::machine::{Effect, Machine, broadcast};
 
@@ -186,7 +184,7 @@ impl Machine {
                 return effects.push(broadcast(&HomePositionMessage { xval: x, yval: y }));
             }
             "calibrationCurve" | "calibrationError" => return,
-            "pauseButtonSetting" => Some(serde_json::to_value(PauseButton::Pause).unwrap_or(Value::Null)),
+            "pauseButtonSetting" => Some(serde_json::to_value(self.job.pause_button()).unwrap_or(Value::Null)),
             _ => {
                 if setting == "units" {
                     // Position reports go out only on a change, so the next one is made to count as one.
