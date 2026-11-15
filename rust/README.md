@@ -11,7 +11,7 @@ WebSockets, and shares `~/.WebControl` with the Python install.
 | `wc-kinematics` | The holey firmware's triangular and quadrilateral inverse/forward, float for float with Python |
 | `wc-calibration` | Holey (scipy's trust-region least squares, ported step for step) and triangular calibration, test patterns, Accept's settings and `$` lines |
 | `wc-firmware` | The controller's serial protocol, sans IO: line classifier, flow control, boot facts, `$` lines, the boot push and the lines a settings edit sends; the 51.292 upgrade's board and version gates, avrdude lines, flash images (the pinned one embedded, the rollback one cut from a read-back) and settings migration |
-| `wc-machine` | The sans-IO core (`Machine::handle(event, now) -> effects`): link, settings, files and the job (Play, Pause, Resume, restart, tool changes, M0, alarms), the run-state gates, GPIO buttons and LEDs; and the tokio shell, where Stop has its own channel |
+| `wc-machine` | The sans-IO core (`Machine::handle(event, now) -> effects`): link, settings, files and the job (Play, Pause, Resume, restart, tool changes, M0, alarms), the run-state gates, GPIO buttons and LEDs; and the tokio shell, where Stop has its own channel, a writer task per port puts `!` and `~` before queued lines, and slow work (the computed position, gcode positions, port open and listing) runs on the blocking pool |
 | `wc-sim` | A simulated controller (ring buffer, `ok` timing, `!`/`~`, M0, tool change and `$16=0` manual-Z pauses, `$$`, boot banners, status reports, alarms, B04, B10, a flash to another EEPROM layout) |
 | `wc-server` | The `webcontrol-rs` binary: axum routes (incl. the files, boards and archive routes), `/ws` sessions, the serial port, the Pi's GPIO header (rppal, Linux only), embedded UI and images |
 | `wc-testkit` | Test support: the `contract/` schema harness and the `contract/serial/` transcript runner |
@@ -24,6 +24,9 @@ WebSockets, and shares `~/.WebControl` with the Python install.
   `~/.WebControl` while testing; `--simulate` talks to `wc-sim` instead of the serial port
 - `cargo test -p wc-machine --test transcripts`: replays every transcript in `contract/serial/` (with
   `transcripts-rust/` in place of the Python ones it overrides)
+- `cargo test -p wc-machine --test latency -- --nocapture`: a Stop sent during each piece of slow work (a
+  forward-kinematics solve, a gcode goto, a draining or stalled line, a port listing, a port open) must reach the
+  port within 5 ms; prints each latency
 - `cargo test -p wc-machine --test gates`: every contract action in every run state, each state reached through
   `wc-sim`
 - `WC_REGENERATE=1 cargo test -p wc-config --test python_roundtrip`: rewrites

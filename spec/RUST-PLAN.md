@@ -77,21 +77,25 @@ the file but unused; open question 5).
 ```
              ┌──────────── realtime mpsc (Stop, ~) ─────────────┐
  WS session ─┤                                                  ▼
- HTTP route ─┴─ command mpsc + oneshot reply ─► machine task ─► port writer (owns the write half)
+ HTTP route ─┴─ command mpsc + oneshot reply ─► machine task ─► port writer task (owns the write half)
                                                   ▲   │
-            port reader task ── ControllerLine ───┘   ├─► broadcast<ServerPush> ─► WS sessions
-            clock (tokio interval 10 ms) ─────────────┘   ├─► watch<Snapshot>  ─► HTTP GETs, /api/state
-                                                          └─► persist mpsc ─► config writer task (atomic save)
+            port reader task ── ControllerLine ───┤   ├─► broadcast<ServerPush> ─► WS sessions
+            blocking pool ── Computed, Ports … ───┤   ├─► watch<Snapshot>  ─► HTTP GETs, /api/state
+            clock (tokio interval 10 ms) ─────────┘   └─► persist mpsc ─► config writer task (atomic save)
 ```
 
-- **The machine task is the only writer of machine state and the only writer to the port.** It runs
+- **The machine task is the only writer of machine state, and its port writer task the only writer to the port.**
+  It runs
   `select! { biased; realtime, controller lines, commands, tick }` and feeds each into
   `Machine::handle(event, now) -> Vec<Effect>`. `Machine` is plain synchronous Rust with no tokio and no clock of its
   own, so every test drives it directly with a fake `now`.
 - **Stop has its own path.** `stopRun`/`stopZ` (and Resume's `~`) go on the realtime channel, which the biased select
-  takes before anything else, and the shell writes `!` at once, ahead of the 50 ms line pacing
-  (`MINTimePerLine`). Its worst-case latency is one in-flight line write (126 bytes at 57600 baud is about 22 ms).
-  The Stop handler never waits on a lock, a reply or the job state.
+  takes before anything else. The machine emits `!` at once, ahead of the 50 ms line pacing (`MINTimePerLine`), and
+  the port writer task writes it before any line still queued there. A `!` also drops those lines and cuts short a
+  line half-written; the firmware flushes its buffer on `!` anyway. The writer never flushes: on a serial port that
+  is `tcdrain`, which blocks until a line has left (126 bytes at 57600 baud is about 22 ms). The Stop handler never
+  waits on a lock, a reply, the job state or slow work (next bullet). `wc-machine/tests/latency.rs` holds a Stop
+  sent during each piece of slow work to 5 ms; before this, each one held Stop for its whole length.
 - **The reader task** owns the read half (`tokio::io::split` of the tokio-serial stream), splits on `\n`, handles
   B04's glued status line, and sends `ControllerLine`s. It never touches state.
 - **Connection management is part of the machine.** It replaces the 5 s `schedule` poller and the connect handler
@@ -100,7 +104,11 @@ the file but unused; open question 5).
   to `HandedOff` (§6), which blocks reconnects until the flash finishes.
 - **Blocking work leaves the async runtime.** avrdude runs under `tokio::process`; zip backup/restore, gcode parsing
   and the 3D gzip build run in `spawn_blocking` and report back as machine events. Python ran all of these inside
-  request handlers.
+  request handlers. Slow work the machine itself asks for leaves its task too: the forward-kinematics solve behind
+  `computedX`/`computedY` (30–60 ms per report on a Pi 3B) and the read from the top of the file behind a gcode
+  position (a goto, an index move, a rewind, a G20/G21) are `Effect::Compute(Work)`, which the shell runs on the
+  blocking pool and answers with `Event::Computed`. One of each kind runs at a time and only the newest request
+  waits. Opening the port (with its 20 ms reset pulse), listing ports and reading the CPU load also run there.
 - **Broadcast vs per-client.** Every push is a `ServerPush { client: Option<Sid>, … }` on one `broadcast` channel.
   Each WS session forwards broadcasts, and only its own per-client pushes, which also carry `client` per contract.
   An HTTP request's answer is its response (contract README).
