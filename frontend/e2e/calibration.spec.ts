@@ -26,7 +26,28 @@ test("triangular calibration calculates on the server and accepts the result", a
   await expect(page.getByRole("button", { name: "Accept results" })).toBeDisabled();
 });
 
+test("holey calibration fits twelve measurements and accepts the fit", async ({ page }) => {
+  const measurements = ["966.0", "964.5", "965.8", "964.9", "711.6", "710.9", "711.4"];
+  const rest = ["1199.5", "1198.2", "1199.1", "1198.6", "254.3"];
+  await page.goto("/next/calibration/holey");
+  await expect(row(page, "Distance between motors").getByRole("cell").first()).toHaveText(/^\d/);
+  await [...measurements, ...rest].reduce(async (previous, value, index) => {
+    await previous;
+    await page.getByRole("textbox", { name: `M${index + 1}`, exact: true }).fill(value);
+  }, Promise.resolve());
+  await page.getByRole("button", { name: "Calculate" }).click();
+  await expect(status(page)).toHaveText(/Review the calculated values/, { timeout: 15_000 });
+  const spacing = row(page, "Distance between motors").getByRole("cell");
+  await expect(spacing.last()).toHaveText(/^29\d\d(\.\d{1,5})?$/);
+  const calculated = await spacing.last().textContent();
+
+  await page.getByRole("button", { name: "Accept results" }).click();
+  await expect(status(page)).toHaveText(/Accepted/);
+  await expect(spacing.first()).toHaveText(calculated ?? "");
+});
+
 test("optical calibration loads, validates and saves its settings", async ({ page }) => {
+  test.skip(process.env.E2E_BACKEND === "rust", "Optical calibration is out of scope for the Rust backend");
   await page.goto("/next/calibration/optical");
   await expect(page.getByRole("button", { name: "Stop machine" })).toBeVisible();
   const form = page.getByRole("form", { name: "Optical calibration settings" });

@@ -13,8 +13,8 @@ const backendCommand = rust
 /** Runs a real backend (no machine attached, throwaway ~/.WebControl) serving the built app at /next. */
 export default defineConfig({
   testDir: "./e2e",
-  // Until the Rust backend reaches parity it runs only e2e/rust; Python runs everything else.
-  ...(rust ? { testMatch: "rust/**/*.spec.ts" } : { testIgnore: "rust/**" }),
+  // Until the Rust backend reaches parity it runs e2e/rust plus the specs of the milestones it has finished.
+  ...(rust ? { testMatch: ["rust/**/*.spec.ts", "calibration.spec.ts"] } : { testIgnore: "rust/**" }),
   workers: 1,
   retries: process.env.CI ? 1 : 0,
   reporter: [["list"]],
