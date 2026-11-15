@@ -36,10 +36,14 @@ What to expect, and what it means:
   `/etc/systemd/system/webcontrol.service` with `ExecStart=/home/pi/webcontrol/webcontrol` and `User=pi`. If you see
   that, every step below applies as written. If there is no such unit, step 3 reports where WebControl is started
   instead (`/etc/rc.local`, desktop autostart, crontab or a process on port 5000).
-- **Python:** `Python 3.9.x` (Raspberry Pi OS 11, Bullseye) is the easy case. Buster (3.7) and Bookworm (3.11) need
-  `uv`, which downloads its own Python 3.9:
+- **OS and architecture:** run `dpkg --print-architecture` too. `armhf` is 32-bit Pi OS and `arm64` is 64-bit.
+  - **32-bit (`armhf`) works on Bullseye only.** Its Python 3.9 wheels come from piwheels, which builds them on
+    Bullseye against Bullseye's libraries. On 32-bit Buster or Bookworm the script stops before changing anything:
+    stay on v0.94, or put Bullseye 32-bit or 64-bit Pi OS on a new SD card and keep the old card as the rollback.
+  - **64-bit (`arm64`) works on any release** with PyPI's wheels.
+- **Python:** `Python 3.9.x` (Raspberry Pi OS 11, Bullseye) is the easy case. 64-bit Buster (3.7) and Bookworm (3.11)
+  need `uv`, which downloads its own Python 3.9:
   `curl -LsSf https://astral.sh/uv/install.sh | sh`, then log out and back in.
-- **Architecture:** `armv7l` is 32-bit Pi OS, and the wheels then come from piwheels. `aarch64` uses PyPI's wheels.
 
 ## 1. Back up (on the Pi)
 
@@ -77,10 +81,11 @@ cd ~/webcontrol-source && tools/install_from_source.sh
 
 The script runs as `pi` and calls `sudo` itself. It:
 
-1. Stops if `frontend/dist` is missing (redo step 2).
+1. Stops if `frontend/dist` is missing (redo step 2), or on 32-bit Pi OS other than Bullseye (see step 0).
 2. Reports how any existing WebControl is started. Read this part.
-3. Installs a few system libraries with `apt`, creates `.venv` with Python 3.9 (uv if installed, otherwise
-   `python3 -m venv`), and installs `requirements.txt`. On 32-bit Pi OS it takes wheels from piwheels and swaps in
+3. Installs the system libraries the wheels need with `apt` (on 32-bit Pi OS, the list in `requirements-pi-apt.txt`,
+   which OpenCV makes long), creates `.venv` with Python 3.9 (uv if installed, otherwise `python3 -m venv`), and
+   installs `requirements.txt`. On 32-bit Pi OS it takes wheels from piwheels and swaps in
    `requirements-pi-overrides.txt`. It then checks that everything imports, and lists any missing system library
    by name.
 4. Finds v0.94's `webcontrol.service`, saves a copy of it as `webcontrol-v094.service` (disabled), and stages the new

@@ -22,6 +22,7 @@ old_unit=/etc/systemd/system/webcontrol-v094.service
 marker="# Installed by WebControl tools/install_from_source.sh"
 port=5000
 piwheels=https://www.piwheels.org/simple
+os_release=/etc/os-release
 
 say() { printf '\n==> %s\n' "$*"; }
 die() { printf '\nERROR: %s\n' "$*" >&2; exit 1; }
@@ -29,6 +30,11 @@ die() { printf '\nERROR: %s\n' "$*" >&2; exit 1; }
 is_ours() { [ -f "$1" ] && grep -qF "$marker" "$1"; }
 port_busy() { ss -ltnH "sport = :$port" 2>/dev/null | grep -q .; }
 find_uv() { command -v uv || { [ -x "$HOME/.local/bin/uv" ] && echo "$HOME/.local/bin/uv"; } || true; }
+# dpkg reports the userland, which is 32-bit on some Pis whose kernel uname calls aarch64.
+deb_arch() { dpkg --print-architecture 2>/dev/null || uname -m; }
+is_pi32() { case "$(deb_arch)" in armhf | armel | armv7l | armv6l) return 0 ;; *) return 1 ;; esac; }
+# shellcheck source=/dev/null
+os_codename() { (. "$os_release" 2>/dev/null && echo "${VERSION_CODENAME:-unknown}") || echo unknown; }
 is_py39() { "$1" -c 'import sys; sys.exit(sys.version_info[:2] != (3, 9))' 2>/dev/null; }
 
 explain_python() {
@@ -66,14 +72,25 @@ check_dist() {
   npm run build) and copy it here with rsync, as spec/INSTALL-PI.md step 2 shows. Building Node on a Pi 3B is too slow."
 }
 
+# piwheels builds its Python 3.9 wheels on Bullseye only, against Bullseye's libraries.
+check_platform() {
+  is_pi32 || return 0
+  [ "$(os_codename)" != bullseye ] || return 0
+  die "32-bit Raspberry Pi OS $(os_codename) cannot run this install. Its Python 3.9 wheels come from piwheels,
+  which builds them on Bullseye only, so OpenCV, NumPy and SciPy would not load here. Nothing was changed.
+  Keep v0.94, or install 32-bit Raspberry Pi OS 11 (Bullseye) or 64-bit Raspberry Pi OS on a new SD card."
+}
+
 apt_packages() {
-  local packages=()
+  local packages=() package
   [ -n "$(find_uv)" ] || packages+=(python3-venv)
-  case "$(uname -m)" in
-    armv7l | armv6l) packages+=(libatlas3-base libgfortran5 libopenblas0-pthread) ;;
-    aarch64) packages+=(gcc python3-dev) ;;
-  esac
-  [ "${#packages[@]}" -gt 0 ] || return 0
+  if is_pi32; then
+    while read -r package; do packages+=("$package"); done < <(grep -E '^[a-z0-9]' "$repo/requirements-pi-apt.txt")
+  else
+    # PyPI's opencv-python wheel loads libGL and GLib, which Raspberry Pi OS Lite leaves out.
+    packages+=(libgl1 libglib2.0-0)
+  fi
+  case "$(deb_arch)" in arm64 | aarch64) packages+=(gcc python3-dev) ;; esac
   say "Installing system packages: ${packages[*]}"
   sudo apt-get update
   sudo apt-get install -y --no-install-recommends "${packages[@]}"
@@ -111,13 +128,12 @@ create_venv() {
 effective_requirements() {
   local out="$repo/build/requirements-pi.txt" names
   mkdir -p "$repo/build"
-  case "$(uname -m)" in
-    armv7l | armv6l)
-      names="$(grep -E '^[A-Za-z]' "$repo/requirements-pi-overrides.txt" | sed 's/[=<>~!].*//' | paste -sd'|' -)"
-      { grep -vE "^($names)==" "$repo/requirements.txt"; grep -E '^[A-Za-z]' "$repo/requirements-pi-overrides.txt"; } >"$out"
-      ;;
-    *) cp "$repo/requirements.txt" "$out" ;;
-  esac
+  if is_pi32; then
+    names="$(grep -E '^[A-Za-z]' "$repo/requirements-pi-overrides.txt" | sed 's/[=<>~!].*//' | paste -sd'|' -)"
+    { grep -vE "^($names)==" "$repo/requirements.txt"; grep -E '^[A-Za-z]' "$repo/requirements-pi-overrides.txt"; } >"$out"
+  else
+    cp "$repo/requirements.txt" "$out"
+  fi
   echo "$out"
 }
 
@@ -126,12 +142,10 @@ install_requirements() {
   requirements="$(effective_requirements)"
   pip_args=(-r "$requirements")
   uv_args=(-r "$requirements")
-  case "$(uname -m)" in
-    armv7l | armv6l)
-      pip_args+=(--extra-index-url "$piwheels")
-      uv_args+=(--extra-index-url "$piwheels" --index-strategy unsafe-best-match)
-      ;;
-  esac
+  if is_pi32; then
+    pip_args+=(--extra-index-url "$piwheels")
+    uv_args+=(--extra-index-url "$piwheels" --index-strategy unsafe-best-match)
+  fi
   uv="$(find_uv)"
   say "Installing Python requirements (a few minutes on a Pi 3B)"
   if [ -n "$uv" ]; then
@@ -262,6 +276,7 @@ main() {
     return
   fi
   check_dist
+  check_platform
   report_old_webcontrol
   id -nG | tr ' ' '\n' | grep -qx dialout || echo "WARNING: $(id -un) is not in the dialout group, so /dev/ttyACM0 may be unreadable: sudo usermod -aG dialout $(id -un)"
   apt_packages

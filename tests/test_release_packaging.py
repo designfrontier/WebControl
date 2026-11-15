@@ -70,14 +70,24 @@ def test_buildLinux1_delegates_to_the_release_script():
         assert "tools/build_release.sh" in handle.read()
 
 
-def source_install_script(tmp_path, body, machine="armv7l"):
-    """Runs body in bash after sourcing tools/install_from_source.sh with uname -m faked and repo/ in tmp_path."""
-    for name in ["requirements.txt", "requirements-pi-overrides.txt"]:
+def run_install_script(tmp_path, body, machine="armv7l", userland=None, codename="bullseye"):
+    """Runs body in bash after sourcing tools/install_from_source.sh, with the platform faked and repo/ in tmp_path."""
+    for name in ["requirements.txt", "requirements-pi-overrides.txt", "requirements-pi-apt.txt"]:
         shutil.copy(os.path.join(REPO, name), tmp_path / name)
+    (tmp_path / "os-release").write_text(f"VERSION_CODENAME={codename}\n")
     script = os.path.join(REPO, "tools", "install_from_source.sh")
     prelude = f'source "{script}"; repo="{tmp_path}"; venv="$repo/.venv"; staged="$repo/build/webcontrol.service"; '
+    prelude += f'os_release="{tmp_path}/os-release"; '
     prelude += f'uname() {{ [ "$1" = -m ] && echo {machine} || command uname "$@"; }}; '
-    return subprocess.run(["bash", "-c", prelude + body], capture_output=True, text=True, check=True).stdout
+    prelude += f"dpkg() {{ echo {userland}; }}; " if userland else "dpkg() { return 1; }; "
+    prelude += 'sudo() { echo "sudo $*" >>"$repo/sudo.log"; }; '
+    return subprocess.run(["bash", "-c", prelude + body], capture_output=True, text=True)
+
+
+def source_install_script(tmp_path, body, **platform):
+    result = run_install_script(tmp_path, body, **platform)
+    assert result.returncode == 0, result.stderr
+    return result.stdout
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
@@ -102,3 +112,46 @@ def test_the_service_runs_main_from_the_venv_as_the_invoking_user(tmp_path):
     assert f"WorkingDirectory={tmp_path}" in unit
     assert f"User={subprocess.check_output(['id', '-un'], text=True).strip()}" in unit
     assert "Restart=on-failure" in unit
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+@pytest.mark.parametrize("codename", ["buster", "bookworm"])
+def test_32_bit_pi_os_other_than_bullseye_stops_before_installing_anything(tmp_path, codename):
+    result = run_install_script(tmp_path, "check_platform; echo carried on", codename=codename)
+    assert result.returncode != 0
+    assert "Bullseye" in result.stderr and "carried on" not in result.stdout
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+@pytest.mark.parametrize("machine, codename", [("armv7l", "bullseye"), ("aarch64", "bookworm"), ("aarch64", "buster")])
+def test_bullseye_32_bit_and_any_64_bit_pi_os_pass_the_platform_check(tmp_path, machine, codename):
+    assert "carried on" in source_install_script(
+        tmp_path, "check_platform; echo carried on", machine=machine, codename=codename
+    )
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+def test_a_32_bit_userland_on_a_64_bit_kernel_counts_as_32_bit(tmp_path):
+    result = run_install_script(tmp_path, "check_platform", machine="aarch64", userland="armhf", codename="bookworm")
+    assert result.returncode != 0
+
+
+def installed_packages(tmp_path):
+    lines = (tmp_path / "sudo.log").read_text().splitlines()
+    return next(line for line in lines if "apt-get install" in line).split()
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+def test_32_bit_pi_os_gets_the_libraries_the_piwheels_wheels_link(tmp_path):
+    source_install_script(tmp_path, "find_uv() { echo uv; }; apt_packages")
+    packages = installed_packages(tmp_path)
+    assert {"libavcodec58", "libgtk-3-0", "libatlas3-base", "libopenblas0-pthread", "libgfortran5"} <= set(packages)
+    assert "libgl1" not in packages
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+def test_64_bit_pi_os_gets_the_libraries_pypi_opencv_loads(tmp_path):
+    source_install_script(tmp_path, "find_uv() { echo uv; }; apt_packages", machine="aarch64", userland="arm64")
+    packages = installed_packages(tmp_path)
+    assert {"libgl1", "libglib2.0-0"} <= set(packages)
+    assert "libavcodec58" not in packages
