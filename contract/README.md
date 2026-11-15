@@ -107,9 +107,10 @@ today).
 - **Handshake**: the server's first frame is `{"ns": <ns>, "event": "connect", "data": {"sid": "<id>"}}`. Until it
   arrives the client is connecting and sends nothing. The sid is unique per connection and is what a payload's
   `client` field names.
-- **Per-client messages**: a reply meant for one client (an HTTP request's or socket event's originator) is sent only
-  on that client's socket and carries `"client": "<sid>"`. Broadcasts go to every socket of the namespace; a broadcast
-  may still carry another client's sid, which receivers drop.
+- **Per-client messages**: a reply meant for the client whose socket event caused it is sent only on that client's
+  socket and carries `"client": "<sid>"`. HTTP requests carry no sid, so an HTTP request's answer goes in its response,
+  never as a per-client push. Broadcasts go to every socket of the namespace; a broadcast may still carry another
+  client's sid, which receivers drop.
 - **Unknown input**: either side ignores frames with an unknown `event` or that fail to parse.
 - **Liveness**: the server pings every 25 s and closes a connection that has not answered within 20 s (browsers
   answer pings themselves). The client treats a close as a disconnect.
@@ -142,9 +143,9 @@ until a `VERSION` bump changes them.
 6. **Sentinels.** `connectionStatus.port` is `"none"` when disconnected; `errorValueMessage.computedX/Y` are
    `-999999` when there is no forward-kinematics position; `healthMessage.bufferSize` is `-1` when buffering is off;
    `positionMessage.pcom` is text like `"12.3%"`; `updatePorts` is `["None"]` when no port is found.
-7. **Board cut data.** `boardCutDataUpdateCompressed` inflates to a flat array of booleans (one per square inch, row
-   by row from bottom left), but after `boardProcessGCode` it holds `[x, y, 0]` convex-hull vertices instead, and the
-   two can mix after a merge.
+7. **Board cut data.** `boardCutDataUpdateCompressed` inflates to a flat array of booleans, one per square inch, row
+   by row from bottom left. A board file saved by an old WebControl, whose `boardProcessGCode` stored `[x, y, 0]`
+   convex-hull vertices, still loads that way, and marking cuts on such a board mixes the two.
 8. **Classic form routes.** They answer `{"status": 200}` / `{"status": 500}` with the HTTP status repeated in the
    body, or a bare JSON string `"success"` / `"failed"` (`/editGCode`, `/sendGCode`, `/editBoard`, `/trimBoard`). A
    409 also puts the message in the reason phrase: `409 Cannot load gcode while a job is running or paused. Stop the
@@ -159,7 +160,8 @@ until a `VERSION` bump changes them.
     classic UI's screens also receive a top-level `closeModals` event (not a `message`) with `{"data": {"title":
     "Actions"}}`. None of these matter to this UI.
 12. **Broadcast answers.** `settingRequest` answers with a `requestedSetting` broadcast, and `checkForGCodeUpdate` /
-    `checkForBoardUpdate` resend the gcode or board to every client, not just the asker.
+    `checkForBoardUpdate` resend the gcode or board to every client, not just the asker. Every `action` event, refused
+    or not, is followed by the same board resend (`boardDataUpdate`, `showFPSpinner`, `boardCutDataUpdateCompressed`).
 13. **Action args.** Commands without arguments still receive `arg` and `arg1` (the UI sends `""`). `moveTo` needs a
     JSON number `arg` (a string fails the bed-bounds check); `move`/`moveZ` parse `arg1` with `float()`, so numeric
     text works too; `defineHome` with both args `""` uses the sled position.
