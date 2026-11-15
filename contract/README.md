@@ -41,7 +41,10 @@ runs, and it resumes the job. A tool change during a job is a controller pause. 
 routes' 409: the loaded gcode, home and PID tests wait until the job is stopped or finished. Two firmware pauses
 also refuse the machine commands among the `idleOrPaused` actions (jogs, Z moves, home, macros) with an Alert until
 Resume or Stop: one that arrived while lines were streaming, which may have job lines buffered behind it, and the
-`$16=0` prompt to adjust Z by hand. HTTP `family` is `api` (JSON for this UI), `classic` (old form routes
+`$16=0` prompt to adjust Z by hand. While a `G38.2` probe (Touch Z or typed) is queued or descending, every action
+but `stopRun`, `stopZ`, `pauseRun`, `createDirectory`, `toggleCamera`, `statusRequest` and `queryCamera` is refused
+with an Alert, whatever its gate, and so is `/sendGCode` (500); the probe's `ok` or `error:`, Stop, or a reconnect
+ends it. HTTP `family` is `api` (JSON for this UI), `classic` (old form routes
 the UI reuses, with their old shapes) or `static`.
 
 Schemas describe the wire: what is actually sent, before the UI coerces anything. Objects do not forbid extra

@@ -1,4 +1,17 @@
+import types
+
 import pytest
+
+import File.gcodeFile as gcode_file
+from helpers import decode_ui_message, drain
+
+
+class InlineThread:
+    def __init__(self, target=None, **kwargs):
+        self.target = target
+
+    def start(self):
+        self.target()
 
 
 @pytest.fixture
@@ -27,3 +40,15 @@ def test_editing_the_gcode_shorter_keeps_the_index_inside_it(data, loaded_gcode)
     data.gcodeFile.loadUpdateFile("G0 X1\nG0 X2\nG0 X3")
 
     assert data.gcodeIndex == len(data.gcode) - 1
+
+
+def test_the_preview_skips_a_word_it_cannot_read_and_draws_the_rest(data, loaded_gcode, monkeypatch):
+    monkeypatch.setattr(gcode_file, "threading", types.SimpleNamespace(Thread=InlineThread))
+    [drain(queue) for queue in (data.console_queue, data.ui_queue1)]
+
+    assert data.gcodeFile.loadUpdateFile("G0 X1\nG1 X2 Z`3\nG1 X3 Y4\n") is True
+
+    scale = data.gcodeFile.canvasScaleFactor
+    assert data.gcodeFile.line3D[-1].points[-1][:2] == pytest.approx((3 * scale, 4 * scale))
+    assert any("Z`3" in line for line in drain(data.console_queue))
+    assert "Alert" not in [decode_ui_message(raw)[0] for raw in drain(data.ui_queue1)]

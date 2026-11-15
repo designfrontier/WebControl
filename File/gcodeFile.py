@@ -174,15 +174,10 @@ class GCodeFile(MakesmithInitFuncs):
                     if line.find("G21") != -1:
                         self.data.tolerance = 0.50
                         self.data.config.setValue("Computed Settings", "tolerance", self.data.tolerance)
-                    z = re.search("Z(?=.)([+-]?([0-9]*)(\.([0-9]+))?)", line)
-                    if z:
+                    z = self._wordValue("Z", line)
+                    if z is not None:
                         zList.append(z)
-                        if len(zList) > 1:
-                            if not self.isClose(
-                                float(zList[-1].groups()[0]), float(zList[-2].groups()[0])
-                            ):
-                                self.data.zMoves.append(index)  # - 1)
-                        else:
+                        if len(zList) == 1 or not self.isClose(zList[-1], zList[-2]):
                             self.data.zMoves.append(index)
         except Exception as e:
             self.data.console_queue.put(str(e))
@@ -196,6 +191,19 @@ class GCodeFile(MakesmithInitFuncs):
         self.data.gcodeFile.isChanged = True
         self.data.actions.sendGCodePositionUpdate(self.data.gcodeIndex, recalculate=True)
         return True
+
+    def _wordValue(self, letter, gCodeLine):
+        '''
+        The number after `letter` in the line, or None if it has no such word or the word is unreadable (`Z`3`).
+        '''
+        word = re.search(letter + r"(?=.)(([ ]*)?[+-]?([0-9]*)(\.([0-9]+))?)", gCodeLine)
+        if not word:
+            return None
+        try:
+            return float(word.group(1))
+        except ValueError:
+            self.data.console_queue.put("Preview skipped an unreadable " + letter + " word: " + gCodeLine.strip())
+            return None
 
     def isClose(self, a, b):
         return abs(a - b) <= self.data.tolerance
@@ -240,20 +248,20 @@ class GCodeFile(MakesmithInitFuncs):
             yTarget = self.yPosition
             zTarget = self.zPosition
 
-            x = re.search("X(?=.)(([ ]*)?[+-]?([0-9]*)(\.([0-9]+))?)", gCodeLine)
-            if x:
-                xTarget = float(x.groups()[0]) * self.canvasScaleFactor
+            x = self._wordValue("X", gCodeLine)
+            if x is not None:
+                xTarget = x * self.canvasScaleFactor
                 if self.absoluteFlag == 1:
                     xTarget = self.xPosition + xTarget
 
-            y = re.search("Y(?=.)(([ ]*)?[+-]?([0-9]*)(\.([0-9]+))?)", gCodeLine)
-            if y:
-                yTarget = float(y.groups()[0]) * self.canvasScaleFactor
+            y = self._wordValue("Y", gCodeLine)
+            if y is not None:
+                yTarget = y * self.canvasScaleFactor
                 if self.absoluteFlag == 1:
                     yTarget = self.yPosition + yTarget
-            z = re.search("Z(?=.)(([ ]*)?[+-]?([0-9]*)(\.([0-9]+))?)", gCodeLine)
-            if z:
-                zTarget = float(z.groups()[0]) * self.canvasScaleFactor
+            z = self._wordValue("Z", gCodeLine)
+            if z is not None:
+                zTarget = z * self.canvasScaleFactor
 
             if self.isNotReallyClose(self.xPosition, xTarget) or self.isNotReallyClose(
                 self.yPosition, yTarget
@@ -405,21 +413,21 @@ class GCodeFile(MakesmithInitFuncs):
             iTarget = 0
             jTarget = 0
 
-            x = re.search("X(?=.)(([ ]*)?[+-]?([0-9]*)(\.([0-9]+))?)", gCodeLine)
-            if x:
-                xTarget = float(x.groups()[0]) * self.canvasScaleFactor
-            y = re.search("Y(?=.)(([ ]*)?[+-]?([0-9]*)(\.([0-9]+))?)", gCodeLine)
-            if y:
-                yTarget = float(y.groups()[0]) * self.canvasScaleFactor
-            i = re.search("I(?=.)(([ ]*)?[+-]?([0-9]*)(\.([0-9]+))?)", gCodeLine)
-            if i:
-                iTarget = float(i.groups()[0]) * self.canvasScaleFactor
-            j = re.search("J(?=.)(([ ]*)?[+-]?([0-9]*)(\.([0-9]+))?)", gCodeLine)
-            if j:
-                jTarget = float(j.groups()[0]) * self.canvasScaleFactor
-            z = re.search("Z(?=.)(([ ]*)?[+-]?([0-9]*)(\.([0-9]+))?)", gCodeLine)
-            if z:
-                zTarget = float(z.groups()[0]) * self.canvasScaleFactor
+            x = self._wordValue("X", gCodeLine)
+            if x is not None:
+                xTarget = x * self.canvasScaleFactor
+            y = self._wordValue("Y", gCodeLine)
+            if y is not None:
+                yTarget = y * self.canvasScaleFactor
+            i = self._wordValue("I", gCodeLine)
+            if i is not None:
+                iTarget = i * self.canvasScaleFactor
+            j = self._wordValue("J", gCodeLine)
+            if j is not None:
+                jTarget = j * self.canvasScaleFactor
+            z = self._wordValue("Z", gCodeLine)
+            if z is not None:
+                zTarget = z * self.canvasScaleFactor
 
             radius = math.sqrt(iTarget ** 2 + jTarget ** 2)
             centerX = self.xPosition + iTarget

@@ -7,6 +7,7 @@ PAUSE_WORD = re.compile(r"M0*[01](?![0-9.])")
 TOOL_CHANGE_WORD = re.compile(r"M0*6(?![0-9.])")
 TOOL_WORD = re.compile(r"T\s*([0-9]+(?:\.[0-9]*)?)")
 FIRMWARE_NUMBER = re.compile(r"[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)")
+ONLY_TOOL_WORD = re.compile(r"^\s*(N[0-9]+\s*)?T\s*[0-9]+(\.[0-9]*)?\s*$")
 
 
 def pausesFirmware(line):
@@ -19,6 +20,13 @@ def changesTool(line):
 
 def _isMachineCommand(line):
     return line.lstrip()[:1] in ("B", "$")
+
+
+def onlySelectsTool(line):
+    '''
+    A line with nothing but a T word, which the firmware runs as an empty modal move.
+    '''
+    return ONLY_TOOL_WORD.match(line) is not None
 
 
 def toolNamedBy(line):

@@ -1,0 +1,40 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "touch_z_probe_fails_leaves_z_alone",
+    "description": "A probe that never touches: the firmware's `error: probe did not connect` stands in for the line's ok, so nothing zeroes Z and the user is told. The next command goes out as usual.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "1d58697"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    }
+  },
+  "events": [
+    {"type": "ui", "action": {"command": "touchZ", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G90 G38.2 Z-10 \n"},
+    {"type": "rx", "line": "probing for z axis zero"},
+    {"type": "rx", "line": "max depth -10.00 mm."},
+    {"type": "rx", "line": "feedrate 39.94 mm per min."},
+    {"type": "rx", "line": "error: probe did not connect"},
+    {"type": "rx", "line": "program stopped"},
+    {"type": "rx", "line": "z axis not set"},
+    {"type": "rx", "line": ""},
+    {"type": "expect", "alerts": [{"title": "Touch Z Failed", "message": "Z was not zeroed"}]},
+    {"type": "ui", "action": {"command": "moveZ", "arg": "raise", "arg1": "5"}},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G91  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G00 Z5.0  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "ok"}
+  ]
+}

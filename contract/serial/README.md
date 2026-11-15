@@ -73,8 +73,8 @@ Applied before the backend starts, in this order:
    bytes include the loader's normalisation: every line gains a trailing space, runs of spaces collapse, a space is
    put between a number and the next word.
 5. `start`:
-   - `"boot"`: the port has just opened (the controller resets on open) and has said nothing; the events start
-     with the boot banner.
+   - `"boot"`: the port has just opened and the controller has said nothing; the events start with the boot banner
+     (it resets on open), or without one for a board that doesn't.
    - `"connected"` (default): the runner first plays the **prelude** and checks nothing during it.
 
 **The prelude** brings the backend to "connected, handshake done, controller idle and in G90 and the setup units":
@@ -165,11 +165,15 @@ the backend has been quiet for `quiet` seconds, one line per settle.
 | `connect_boot_handshake` | boot banner → `G21`, `$$`, `G90`, `B05`, `$13` once; B05 reply parsed |
 | `connect_settings_sync_adopts_unknown_keys` | `$$` reply: `$18`/`$9`/`$28`/`$36` adopted, a differing `$3` rewritten, `$45` at 8 decimals left alone |
 | `connect_eeprom_read_fail_restores_settings` | `error: EEPROM read fail` at boot → every key written back, `$$`, alert |
+| `connect_without_a_reset_handshakes_after_3_s` | no banner and no `ok` 3 s after the port opens → the same handshake, `B05` and `$13` anyway |
 | `jog_each_direction_mm`, `jog_each_direction_inches` | the eight jog buttons |
 | `home_at_safe_height_mm`, `return_to_center_inches` | Home and Return to Center, safe height in each unit |
 | `define_home_from_sled_then_home` | Define Home from the sled and from arguments (inches → mm); Home goes there |
-| `move_z_raise_lower_and_zero_mm`, `move_z_in_inches_on_a_mm_machine` | Z moves, `G10 Z0`, the Z panel's own units |
-| `touch_z_mm`, `touch_z_inches` | `G38.2` probe then `G10 Z0` |
+| `move_z_raise_lower_and_zero_mm`, `move_z_in_inches_on_a_mm_machine` | Z moves, `G10 Z0`; a Z distance in the other unit is converted, units and home never change |
+| `touch_z_mm`, `touch_z_inches` | `G38.2` probe in the machine's units (the mm plunge limit converted); no `G10 Z0`, the firmware zeroes Z on a touch |
+| `touch_z_probe_fails_leaves_z_alone` | `error: probe did not connect` acks the probe: no `G10 Z0`, an alert |
+| `resume_during_probe_is_refused_until_the_probe_touches` | Resume mid-probe in a paused job is refused with an alert: no `~`, no restart; nothing follows the probe's `ok`; the next Resume returns to the job |
+| `resume_during_probe_is_refused_then_the_probe_misses` | the same, and the probe misses: the Touch Z Failed alert, no `G10 Z0` |
 | `stream_unbuffered_with_home_shift` | one line per ok; home shift keeps both operands' decimals |
 | `stream_buffered_short_job_fits_the_buffer` | the same job buffered: 125 bytes, all sent before the first ok |
 | `stream_buffered_with_home_shift` | 126-byte character counting, refilled by each ok |
@@ -178,7 +182,7 @@ the backend has been quiet for `quiet` seconds, one line per settle.
 | `pause_jog_resume_returns_to_file_position` | Pause with a line in flight, jog while paused, Resume returns and replunges |
 | `m0_in_file_then_resume` | M0 stops streaming; Resume sends `~` and returns |
 | `tool_change_t_and_m6_on_one_line` | `T2 M6`: stop after it, prompt, Resume returns at safe height without plunging |
-| `tool_change_t_then_m6_on_separate_lines` | `T2` / `M6` → the M6 goes out as `T2 M6` |
+| `tool_change_t_then_m6_on_separate_lines` | `T2` / `M6` → the lone `T2` is not sent; the M6 goes out as `T2 M6`; Resume sets no feed the file never set |
 | `tool_change_m6_before_t_is_rewritten` | `M6 T2` goes out as `T2 M6` |
 | `tool_change_jog_and_zero_z_then_resume` | a Z move releases the firmware once; `G10 Z0`; Resume |
 | `stop_mid_line_resets_the_index` | `!` with a line in flight; index reset; commands wait for a status report |
@@ -231,7 +235,7 @@ serial port and a virtual clock. The format is plain JSON designed for `serde`:
 - `setup.settings` values are strings, numbers or booleans as `webcontrol.json` stores them (`Value`);
   `expect.settings[].value` is always a string.
 - Numbers inside `tx.bytes` are pinned as the Python backend formats them (`G00 X254.0`, `$13=63.5000`,
-  `G0 X22.8456 Y3.00`), not as Rust's `{}` would; see "Known warts" 8.
+  `G0 X22.8456 Y3.00`), not as Rust's `{}` would; see "Known warts" 5.
 
 The runner needs these seams in the backend:
 
@@ -357,25 +361,14 @@ until a transcript and this list change together.
 3. **Doubled spaces.** Most lines end in two spaces (`G21  `, `G0 Z5  `); `home` and `returnToCenter` send `G90   `.
 4. **Handshake order and scope.** `G21`, `$$`, `G90` go out before `B05` and the `$13` write, so `$$` is compared
    before the firmware version is known. Only `$13` and settings `$$` shows differ are written, not the full set
-   `spec/firmware.md` B.9 asks for after every boot.
-5. **A lone `T2` line is sent** although the firmware runs it as an empty modal move; the following `M6` is led by
-   `T2` anyway.
-6. **touchZ** sends `G90 G38.2 Z-<limit> M02 ` and queues `G10 Z0` at once, so Z is zeroed even when the probe
-   fails (`error: probe did not connect`), and the `M02` ends the line with a program-end word.
-7. **Z moves in the other unit flip the host's units.** The Z panel's `G20`/`G21` (and touchZ's on an inch machine)
-   switch WebControl's own units and back, rescaling home by 1/25.4 and 25.4 each time, which drifts it
-   (100.3 → 100.29999999999997 after three moves) and broadcasts unit changes.
-8. **Number formats vary.** A restore writes `$16=0.000000`, `$21=1300.00`, `$45=0.00000516850`: whatever each
+   `spec/firmware.md` B.2 and B.9 ask for after every boot. The Python backend keeps this on purpose. **The Rust
+   backend must not copy it:** on each boot it sends `B05`, the units, `G90`, every setting, then `$$` to verify, and
+   changes the `connect_*` transcripts and this item with it (the prelude's tx is not checked).
+5. **Number formats vary.** A restore writes `$16=0.000000`, `$21=1300.00`, `$45=0.00000516850`: whatever each
    setting's formatter produces. Moves the backend builds print Python's `str(float)` (`G00 X254.0`, `G0 Z5.0`), and
    home-shifted file coordinates keep the longer operand's decimals (`X22.8456 Y3.00`).
-9. **Nothing is sent before the boot `ok`.** The handshake waits for the `ok` that ends the boot banner
-   (`spec/firmware.md` A12), so a board that doesn't reset on port open gets nothing. B.1 says not to gate only on
-   it; a backend that sends on the banner fails `connect_boot_handshake` until that transcript changes.
-10. **A resume sets a feed the file never asked for.** Returning to the file after a tool change, M0 or alarm ends
-    with `G0 F800.0` (or `G1`) even when the file has no `F` before that point: 800 is `maxFeedrate` times the
-    default feed scale, not the file's feed, so it replaces the firmware's modal feed (`$15/2` after a 51.27 boot).
-11. **Simplified controller replies.** Outside `z_limits_on_51_292` and `buffer_overflow_halts_streaming`, the
-    controller lines are the minimum the backend reacts to: the boot handshake's `$$` is answered with a bare `ok`
-    (a real 51.27 prints every `$n=` line first; `connect_settings_sync_adopts_unknown_keys` covers that), and the
-    prelude's 51.292 answers are generated by `tests/serial_contract.py`. A Rust parser must also tolerate the full
-    replies in `spec/firmware.md` §1, §9.
+6. **Simplified controller replies.** Outside `z_limits_on_51_292` and `buffer_overflow_halts_streaming`, the
+   controller lines are the minimum the backend reacts to: the boot handshake's `$$` is answered with a bare `ok`
+   (a real 51.27 prints every `$n=` line first; `connect_settings_sync_adopts_unknown_keys` covers that), and the
+   prelude's 51.292 answers are generated by `tests/serial_contract.py`. A Rust parser must also tolerate the full
+   replies in `spec/firmware.md` §1, §9.

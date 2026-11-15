@@ -572,3 +572,33 @@ def test_a_status_report_still_queued_from_before_a_stop_does_not_end_the_resync
     ))
 
     assert sent_after(port, "!") == ["G0 X1 "]
+
+
+def test_a_stop_or_alarm_during_a_probe_forgets_it(data):
+    thread = SerialPortThread()
+    thread.data = data
+    thread.probeLine = (16, None)
+
+    thread._awaitResync()
+
+    assert thread.probeLine is None
+
+
+@pytest.mark.parametrize("answer, missed", [("ok", False), ("error: probe did not connect", True)])
+def test_a_probe_sends_no_zero_and_only_its_own_miss_alerts(serial, data, answer, missed):
+    """Both 51.27 and 51.292 zero Z themselves on a touch; a `~` sent mid-probe is acked before the probe."""
+    thread = serial.thread(ack=False)
+    thread.machineIsReadyForData = True
+    serial.port.incoming.clear()
+    drain(data.gcode_queue)
+    drain(data.ui_queue1)
+
+    thread._sendQueuedCommand("G90 G38.2 Z-10")
+    thread._write("~", isQuickCommand=True)
+    serial.port.incoming.extend(["ok\r\n", answer + "\r\n"])
+    thread._exchangeLines()
+    thread._exchangeLines()
+
+    sent = drain(data.gcode_queue) + serial.port.sent
+    assert not any(line.startswith("G10") for line in sent)
+    assert ("Touch Z Failed" in str(serial.ui_messages())) is missed
