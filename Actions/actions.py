@@ -582,6 +582,9 @@ class Actions(MakesmithInitFuncs):
             self.data.toolChangeWaits = False
             self.data.firmwarePaused = False
             self.data.firmwareHoldsJobLines = False
+            # A later Resume at the same index must not lower the bit to this job's paused Z.
+            self.data.pausedGcodeIndex = None
+            self.data.pausedzval = None
             self.data.quick_queue.put("!")
             with self.data.gcode_queue.mutex:
                 self.data.gcode_queue.queue.clear()

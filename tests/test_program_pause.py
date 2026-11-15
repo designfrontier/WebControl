@@ -61,3 +61,19 @@ def test_resume_after_an_m0_sent_outside_a_job_does_not_start_the_file(app, tool
     assert drain(tools.quick_queue) == ["~"]
     assert drain(tools.gcode_queue) == []
     assert (tools.uploadFlag, tools.firmwarePaused) == (0, False)
+
+
+def test_resume_after_m0_ignores_the_z_of_a_pause_in_a_stopped_job(app, tools, serial):  # noqa: F811
+    lines = ["G21 ", "G90 ", "G0 X10 Y10 ", "M0 ", "G1 X30 "]
+    tools.gcode = lines
+    tools.gcodeIndex = lines.index("M0 ") + 1
+    tools.uploadFlag = 1
+    tools.currentZTarget = -6.0
+    tools.actions.pauseRun()
+    action(tools, "stopRun")
+    stream(tools, serial, lines)
+    from_controller(app, tools, "Maslow Paused\r\n")
+
+    action(tools, "resumeRun")
+
+    assert not any(line.startswith("G1 Z") for line in drain(tools.gcode_queue))
