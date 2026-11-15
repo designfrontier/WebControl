@@ -5,8 +5,8 @@ import re
 
 PAUSE_WORD = re.compile(r"M0*[01](?![0-9.])")
 TOOL_CHANGE_WORD = re.compile(r"M0*6(?![0-9.])")
-G_OR_M_WORD = re.compile(r"[GM]\s*[0-9]")
-TOOL_WORD = re.compile(r"T\s*([0-9]+)(?![0-9.])")
+TOOL_WORD = re.compile(r"T\s*([0-9]+(?:\.[0-9]*)?)")
+FIRMWARE_NUMBER = re.compile(r"[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)")
 
 
 def pausesFirmware(line):
@@ -21,26 +21,43 @@ def _isMachineCommand(line):
     return line.lstrip()[:1] in ("B", "$")
 
 
+def toolNamedBy(line):
+    '''
+    The tool the line selects as the file means it: its T word, wherever it stands.
+    '''
+    tool = None if _isMachineCommand(line) else TOOL_WORD.search(line)
+    return None if tool is None else int(float(tool.group(1)))
+
+
 def toolTheFirmwareReads(line):
     '''
-    The firmware takes T only before the line's first G or M word, so `M6 T2` keeps the current tool.
+    The firmware reads T only at the start of a line that also has a G or M word; it runs a lone `T2` as a move.
     '''
-    if _isMachineCommand(line):
+    text = line.strip().upper()
+    firstGOrM = min((index for index in (text.find("G"), text.find("M")) if index != -1), default=-1)
+    segment = text[:firstGOrM] if firstGOrM > 0 else ""
+    if _isMachineCommand(text) or len(segment) < 2 or segment[0] != "T":
         return None
-    firstGOrM = G_OR_M_WORD.search(line)
-    tool = TOOL_WORD.search(line[:firstGOrM.start()] if firstGOrM else line)
-    return None if tool is None else int(tool.group(1))
+    number = FIRMWARE_NUMBER.match(segment[1:])
+    return int(float(number.group(0))) if number else 0
 
 
-def withToolWordFirst(line):
+def withToolFirst(line, tool):
     '''
-    Moves a T that follows the G/M words of an M6 line to the front, so the firmware changes to the tool the line names.
+    Rewrites an M6 line so the firmware reads `tool` from it, by leading the line with `T<tool>`.
     '''
-    if _isMachineCommand(line) or not changesTool(line) or toolTheFirmwareReads(line) is not None:
+    if _isMachineCommand(line) or not changesTool(line) or toolTheFirmwareReads(line) == tool:
         return line
-    tool = TOOL_WORD.search(line)
-    if tool is None:
-        return line
-    rest = (line[:tool.start()].rstrip(" ") + " " + line[tool.end():].lstrip(" ")).strip(" ")
     trailing = line[len(line.rstrip(" ")):]
-    return tool.group(0).replace(" ", "") + " " + rest + trailing
+    rest = " ".join(TOOL_WORD.sub("", line).split())
+    return "T" + str(tool) + " " + rest + trailing
+
+
+def toolChangeLine(line, nextTool, currentTool):
+    '''
+    :return: the line to send, the tool the firmware will have pending after it, and whether its M6 changes tool.
+    '''
+    named = toolNamedBy(line)
+    nextTool = nextTool if named is None else named
+    pauses = changesTool(line) and nextTool != currentTool
+    return (withToolFirst(line, nextTool) if pauses else line), nextTool, pauses

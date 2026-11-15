@@ -4,7 +4,7 @@ import re
 
 import serial
 
-from Connection.firmwareGcode import changesTool, pausesFirmware, toolTheFirmwareReads, withToolWordFirst
+from Connection.firmwareGcode import pausesFirmware, toolChangeLine
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
 
 
@@ -201,14 +201,11 @@ class SerialPortThread(MakesmithInitFuncs):
 
     def manageToolChange(self, line):
         '''
-        Tracks the tool as the firmware does and stops streaming after an M6 the firmware will pause on.
-        :return: the line to send, with an M6 line's trailing T moved first.
+        Tracks the tool the file selects and stops streaming after an M6 that changes it, which pauses the firmware.
+        :return: the line to send, led by the T of the tool an M6 line changes to.
         '''
-        line = withToolWordFirst(line)
-        tool = toolTheFirmwareReads(line)
-        if tool is not None:
-            self.data.nextTool = tool
-        if changesTool(line) and self.data.nextTool != self.data.currentTool:
+        line, self.data.nextTool, pauses = toolChangeLine(line, self.data.nextTool, self.data.currentTool)
+        if pauses:
             self.data.currentTool = self.data.nextTool
             self.data.pausedUnits = self.data.units
             if self.data.uploadFlag == 1:
@@ -393,7 +390,8 @@ class SerialPortThread(MakesmithInitFuncs):
                 try:
                     line = self._stripComments(self.data.gcode[self.data.gcodeIndex])
                     # if there is space in the buffer for the line as it will be written, newline included
-                    fits = line.isspace() or self.bufferSpace > len(self._shiftToHome(line) + "\n")
+                    toSend = toolChangeLine(line, self.data.nextTool, self.data.currentTool)[0]
+                    fits = line.isspace() or self.bufferSpace > len(self._shiftToHome(toSend) + "\n")
                     # A line longer than the whole buffer goes out alone, as in unbuffered mode, so the run can't stall.
                     if fits or self._controllerIsIdle():
                         self.sendNextLine()

@@ -1,9 +1,11 @@
 """Tool changes stop streaming exactly where the firmware pauses, and only Resume releases the firmware."""
 import pytest
 
+from Connection.firmwareGcode import toolTheFirmwareReads
+from Connection.serialPortThread import SerialPortThread
 from helpers import drain
 from test_job_in_progress import action, from_controller, job  # noqa: F401
-from test_serial_streaming import serial  # noqa: F401
+from test_serial_streaming import once_after, serial  # noqa: F401
 
 TOOL_CHANGE = ["Tool Change: Please insert tool 2\r\n", "Maslow Paused\r\n"]
 
@@ -36,10 +38,10 @@ def controller_says(app, data, messages):
     [from_controller(app, data, message) for message in messages]
 
 
-def test_t_on_its_own_line_then_m6_stops_streaming_after_the_m6(tools, serial):  # noqa: F811
+def test_t_on_its_own_line_then_m6_sends_the_t_with_the_m6_the_firmware_would_skip(tools, serial):  # noqa: F811
     sent = stream(tools, serial, ["G1 X1 ", "T2 ", "M6 ", "G1 X2 "])
 
-    assert sent == ["G1 X1  ", "T2  ", "M6  "]
+    assert sent == ["G1 X1  ", "T2  ", "T2 M6  "]
     assert (tools.uploadFlag, tools.currentTool, tools.gcodeIndex) == (-1, 2, 3)
 
 
@@ -65,11 +67,39 @@ def test_m6_for_the_tool_already_in_keeps_streaming(tools, serial):  # noqa: F81
     assert tools.uploadFlag == 0
 
 
-def test_a_t_after_a_g_word_is_ignored_like_the_firmware_ignores_it(tools, serial):  # noqa: F811
+def test_a_t_after_a_g_word_still_selects_the_tool_for_the_next_m6(tools, serial):  # noqa: F811
     sent = stream(tools, serial, ["G0 X1 T2 ", "M6 ", "G1 X2 "])
 
-    assert sent == ["G0 X1 T2  ", "M6  ", "G1 X2  "]
-    assert (tools.currentTool, tools.nextTool) == (0, 0)
+    assert sent == ["G0 X1 T2  ", "T2 M6  "]
+    assert (tools.uploadFlag, tools.currentTool) == (-1, 2)
+
+
+def test_a_line_number_before_the_t_does_not_hide_the_tool_change(tools, serial):  # noqa: F811
+    sent = stream(tools, serial, ["N10 T2 M6 ", "G1 X2 "])
+
+    assert sent == ["T2 N10 M6  "]
+    assert (tools.uploadFlag, tools.currentTool) == (-1, 2)
+
+
+@pytest.mark.parametrize(
+    "line, tool",
+    [
+        ("T2 M6 ", 2), ("T2.0 M6 ", 2), ("T 2 M6 ", 0), ("t3 g0 x1 ", 3), ("T2 ", None), ("M6 T2 ", None),
+        ("N10 T2 M6 ", None), ("G0 X1 T2 ", None), ("B14 T2 M6 ", None),
+    ],
+)
+def test_the_firmware_reads_t_only_where_its_parser_does(line, tool):
+    assert toolTheFirmwareReads(line) == tool
+
+
+def test_a_tool_change_line_never_overfills_the_controller_buffer(tools, serial):  # noqa: F811
+    tools.gcode = ["T2 "] + ["G1 X1 Y1 "] * 10 + ["X1 ", "M6 ", "G1 X2 "]
+    tools.uploadFlag = 1
+    skip_startup_commands = once_after(serial.clock, 0, lambda port: drain(tools.gcode_queue))
+
+    port = serial.run(ack=False, on_poll=skip_startup_commands, buffer=True)
+
+    assert sum(len(line) for line in port.written) <= SerialPortThread.bufferSize
 
 
 def test_m60_and_b14_t_words_are_not_tool_changes(tools, serial):  # noqa: F811
@@ -168,3 +198,7 @@ def test_the_firmwares_tool_change_message_corrects_the_tracked_tool(app, tools)
     controller_says(app, tools, ["Tool Change: Please insert tool 5\r\n"])
 
     assert (tools.currentTool, tools.nextTool) == (5, 5)
+
+
+def test_a_restart_after_a_t_behind_a_g_word_changes_to_that_tool(tools):
+    assert restart_tool_change(tools, ["G21 ", "G0 X1 T4 ", "M6 ", "G0 X1 "]) == ["T4 M6 "]

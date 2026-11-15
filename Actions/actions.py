@@ -2,7 +2,7 @@ from DataStructures.data import GCODE_LOCKED_MESSAGE
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
 from File.safePaths import libraryRoot, resolveInside
 from Actions import firmware
-from Connection.firmwareGcode import changesTool, toolTheFirmwareReads, withToolWordFirst
+from Connection.firmwareGcode import changesTool, toolNamedBy
 from File.retention import keepNewest
 
 import os
@@ -1618,10 +1618,9 @@ class Actions(MakesmithInitFuncs):
             filtersparsed = re.sub(r';([^\n]*)?', '\n', filtersparsed)  # replace standard ; initiated gcode comments with nothing
             if not filtersparsed.isspace():  # if all spaces, don't send.  likely a comment. #self.data.gcode[x][0] != "(":
                 #lines = self.data.gcode[x].split(" ")
-                toolLine = withToolWordFirst(filtersparsed)
-                namedTool = toolTheFirmwareReads(toolLine)
+                namedTool = toolNamedBy(filtersparsed)
                 nextTool = nextTool if namedTool is None else namedTool
-                tool = str(nextTool) if changesTool(toolLine) and nextTool is not None else tool
+                tool = str(nextTool) if changesTool(filtersparsed) and nextTool is not None else tool
                 lines = re.sub(r"^\s*N[0-9]+", "", filtersparsed).split(" ")
                 if lines:
                     finalLines = []

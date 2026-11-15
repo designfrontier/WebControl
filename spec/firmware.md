@@ -55,7 +55,9 @@ the raw line, re-send B05 on any boot banner (`PCB v1.`, `Grbl v1.00`, `ready`),
 - **Z limits B17–B20:** `Invalid statement` on 1.26/51.27/51.28. On 51.291 B17/B18 overwrite `$43`/`$44`. On
   51.292 B17/B18 store nothing but report success; only `$63`/`$64` (mm) work, and B20 reads them back.
 - G17 is unsupported (sent by both calibration patterns). G38.2 moves at a fixed 60 mm/min, but touchZ's `F1` still
-  sets the modal feed to 1 mm/min. In `M6 T2` the T is ignored; T must come first or on its own line.
+  sets the modal feed to 1 mm/min (without F it clamps the modal feed to zMaxFeed). G38.2 leaves the modal
+  motion mode alone. The firmware reads T only when it leads a line that also has a G or M word (`T2 M6`, `T2 G0 X1`):
+  in `M6 T2`, `N10 T2 M6`, `G0 X1 T2` and a lone `T2` line the T is ignored, and a lone `T2` runs as a modal move.
 - `$` keys: units match WebControl's assumptions. `$13` is the only path that sets R. `$37` is used only when
   `$46 ≤ 0`. `$40`/`$41` are percent. `$10`/`$11`/`$15` are unsigned ints. `$43` is unused on holey. `$86` and `$144`
   are rejected. **Never sent: `$18` (max Z RPM), `$9`, `$28`, `$36`.** Firmware bug: `zKpPos` is never initialised
@@ -89,7 +91,7 @@ it leaves the modal F at the XY feed instead of the file's. The boot feed rate i
 - M0/M1: the firmware prints `Maslow Paused` and waits for `~`. WebControl sends `~` at once (timing-dependent), and
   only detects `M0 ` with a trailing space.
 - M6 with a new tool: spindle off, `Tool Change: Please insert tool N`, pause. WebControl's UIProcessor sends `~`
-  immediately. `T2` and `M6` on separate lines keep streaming with the spindle off. `M6 T2` stalls silently.
+  immediately. `T2` and `M6` on separate lines keep streaming without a tool change. `M6 T2` stalls silently.
 - Manual Z (`$16=0`): `Message: Please adjust Z-Axis…` then pause; handled correctly.
 - Alarms: "Sled not keeping up" stops the firmware with no acks; "Board invalid" hangs it.
 
