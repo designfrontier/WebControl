@@ -7,7 +7,7 @@
       "variant": "holey",
       "version": "51.27"
     },
-    "webcontrolCommit": "c859cea"
+    "webcontrolCommit": "9b31f6c"
   },
   "setup": {
     "units": "MM",
@@ -48,8 +48,6 @@
     {"type": "tx", "bytes": "G0 Z5.0  \n"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G0 X1.0 Y0.0  \n"},
-    {"type": "rx", "line": "ok"},
-    {"type": "tx", "bytes": "G0 F800.0  \n"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G90  \n"},
     {"type": "rx", "line": "ok"},

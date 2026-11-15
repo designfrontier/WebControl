@@ -4,7 +4,6 @@ import pytest
 from helpers import decode_ui_message, drain
 
 SAFE_Z_MM = "G0 Z5.0 "
-FEED = "G1 F800.0 "
 
 
 @pytest.fixture
@@ -56,7 +55,7 @@ def test_restart_mid_file_keeps_machine_mm_when_file_has_no_units(job):
     job.actions.processGCode()
 
     assert drain(job.gcode_queue) == [
-        "G21 ", "G90 ", SAFE_Z_MM, "G0 X10.0 Y20.0 ", "G1 Z-3.0 F12.8 ", FEED, "G90 ",
+        "G21 ", "G90 ", SAFE_Z_MM, "G0 X10.0 Y20.0 ", "G1 Z-3.0 F12.8 ", "G90 ",
     ]
 
 
@@ -75,7 +74,7 @@ def test_restart_mid_file_uses_the_files_units_over_the_machines(job):
     job.actions.processGCode()
 
     assert drain(job.gcode_queue) == [
-        "G20 ", "G90 ", "G0 Z0.1969 ", "G0 X10.0 Y20.0 ", "G1 Z-3.0 F0.5039 ", "G1 F31.4961 ", "G90 ",
+        "G20 ", "G90 ", "G0 Z0.1969 ", "G0 X10.0 Y20.0 ", "G1 Z-3.0 F0.5039 ", "G90 ",
     ]
 
 
@@ -106,7 +105,7 @@ def test_resume_returns_to_where_the_job_paused_before_lowering_the_bit(job):
     job.actions.resumeRun()
 
     assert drain(job.gcode_queue) == [
-        "G21 ", "G90 ", SAFE_Z_MM, "G0 X30.0 Y40.0 ", "G1 Z-3.0 F12.8 ", FEED, "G90 ",
+        "G21 ", "G90 ", SAFE_Z_MM, "G0 X30.0 Y40.0 ", "G1 Z-3.0 F12.8 ", "G90 ",
     ]
     assert job.uploadFlag == 1
     assert drain(job.quick_queue) == ["~"]
@@ -120,7 +119,7 @@ def test_resume_goes_to_the_new_line_when_the_index_moved_while_paused(job):
     job.actions.resumeRun()
 
     assert drain(job.gcode_queue) == [
-        "G21 ", "G90 ", SAFE_Z_MM, "G0 X50.0 Y60.0 ", "G1 Z2.0 F12.8 ", "G0 F800.0 ", "G90 ",
+        "G21 ", "G90 ", SAFE_Z_MM, "G0 X50.0 Y60.0 ", "G1 Z2.0 F12.8 ", "G0 ", "G90 ",
     ]
 
 
@@ -138,7 +137,7 @@ def test_resume_restores_an_absolute_z_and_relative_mode_in_a_g91_file(job):
     job.actions.resumeRun()
 
     assert drain(job.gcode_queue) == [
-        "G21 ", "G90 ", SAFE_Z_MM, "G0 X10.0 Y20.0 ", "G1 Z-3.0 F12.8 ", FEED, "G91 ",
+        "G21 ", "G90 ", SAFE_Z_MM, "G0 X10.0 Y20.0 ", "G1 Z-3.0 F12.8 ", "G91 ",
     ]
 
 
@@ -176,7 +175,6 @@ def test_return_to_center_converts_the_safe_height_to_inches(job):
         ("G1 Z-2 F100", "G1 Z-2.0 F100.0 ", "G1 F100.0 "),
         ("G1 X10 Z-2 F250", "G1 Z-2.0 F250.0 ", "G1 F250.0 "),
         ("G0 Z-2 F1000", "G1 Z-2.0 F12.8 ", "G0 F1000.0 "),
-        ("G1 X10", "G1 Z-1.0 F12.8 ", FEED),
     ],
 )
 def test_restart_plunges_at_the_files_z_feed_then_restores_its_modal_feed(job, line, plunge, feed):
@@ -185,6 +183,25 @@ def test_restart_plunges_at_the_files_z_feed_then_restores_its_modal_feed(job, l
     job.actions.processGCode()
 
     assert drain(job.gcode_queue)[4:] == [plunge, feed, "G90 "]
+
+
+@pytest.mark.parametrize(
+    "lines, restored",
+    [
+        (["G90", "G1 Z-1", "G1 X10", "G1 X1"], ["G1 Z-1.0 F12.8 ", "G90 "]),
+        (["G90", "G1 Z-1", "G0 X10", "X1"], ["G1 Z-1.0 F12.8 ", "G0 ", "G90 "]),
+        (["G90", "G1 X10 Y20", "X1"], ["G0 X10.0 Y20.0 ", "G1 ", "G90 "]),
+        (["G90", "G0 X10 Y20", "X1"], ["G0 X10.0 Y20.0 ", "G90 "]),
+    ],
+)
+def test_restart_sets_no_feed_when_the_file_has_set_none(job, lines, restored):
+    load(job, lines, len(lines) - 1)
+
+    job.actions.processGCode()
+
+    queued = drain(job.gcode_queue)
+    assert queued[-len(restored):] == restored
+    assert not any("F" in line for line in queued if not line.startswith("G1 Z"))
 
 
 def test_restart_retracts_and_moves_at_rapid_without_touching_the_modal_feed(job):
@@ -268,13 +285,13 @@ def test_restart_does_not_mistake_g91_1_arc_centres_for_relative_moves(job):
     assert queued[-1] == "G90 "
 
 
-def test_restart_converts_the_default_feeds_to_inches(job):
+def test_restart_converts_the_default_plunge_feed_to_inches(job):
     set_machine_units(job, "INCHES")
     load(job, ["G90", "G0 X1 Y1", "G1 Z-0.1", "G1 X2"], 3)
 
     job.actions.processGCode()
 
-    assert drain(job.gcode_queue)[2:] == ["G0 Z0.1969 ", "G0 X1.0 Y1.0 ", "G1 Z-0.1 F0.5039 ", "G1 F31.4961 ", "G90 "]
+    assert drain(job.gcode_queue)[2:] == ["G0 Z0.1969 ", "G0 X1.0 Y1.0 ", "G1 Z-0.1 F0.5039 ", "G90 "]
 
 
 def test_restart_converts_z_and_feeds_when_the_file_switches_units(job):

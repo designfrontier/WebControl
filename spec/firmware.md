@@ -72,7 +72,8 @@ F is per minute in current units, stored as mm/min (×25.4 under G20), clamped t
 too). G0 runs at `$15` and ignores F for speed. Z is clamped to `zMaxFeed = $18 × |$19|`: 39.9 mm/min on the 51.27
 defaults, 399 mm/min on the 51.292 defaults. WebControl's restart sequence rapids without F, plunges with
 `G1 Z… F<plunge>` (the file's last non-G0 Z feed, else 12.8 mm/min) and ends with `G0`/`G1 F<file F>` to restore the
-file's modal motion and feed. The boot feed rate is `$15/2` on 51.27/51.28, and 0
+file's modal motion and feed. If the file set no F before that point it sends no F (only `G0`/`G1` where the file's
+motion differs from the restart's last move), leaving the firmware's modal feed alone. The boot feed rate is `$15/2` on 51.27/51.28, and 0
 (clamped to 1 mm/min) on 1.26 and 51.29x.
 
 ## 6. Kinematics
@@ -157,7 +158,7 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
 9. Settings: per-version key/type table; compare at the printed precision; push the full set after every boot,
    including `$13` (sets R) and `$18`, `$9`, `$28`, `$36`; treat `EEPROM read fail` as a factory reset.
 10. Feed model: modal F clamped to [1, `$15`]; G0 at `$15`; Z clamped to `$18 × |$19|`; G38.2 at 60 mm/min. Emit F
-    on the first motion line; restart with a G1 Z plunge at an explicit feed, then restore the file's last F.
+    on the first motion line; restart with a G1 Z plunge at an explicit feed, then restore the file's last F, if it set one.
 11. Never auto-send `~`; stop streaming before any line the firmware will pause on (using its T semantics); emit
     `T<n> M6`; require Stop after an ALARM.
 12. Z limits: hide below 51.292 and never send B17/B18/B19; on 51.292+ use `$63`/`$64` (mm, shifted by zeroing)

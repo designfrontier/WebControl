@@ -1590,7 +1590,8 @@ class Actions(MakesmithInitFuncs):
         units = "G20 " if self.data.units == "INCHES" else "G21 "
         defaultFeedScale = 1 / 25.4 if units == "G20 " else 1
         zAxisFeedRate = DEFAULT_PLUNGE_FEED_MM_PER_MIN * defaultFeedScale
-        feedRate = float(self.data.config.getValue("Advanced Settings", "maxFeedrate")) * defaultFeedScale
+        # None until the file sets F; a restart must not replace the firmware's modal feed with a guess.
+        feedRate = None
         previousUnits = units
         xpos = homeX
         ypos = homeY
@@ -1710,7 +1711,11 @@ class Actions(MakesmithInitFuncs):
             self.data.gcode_queue.put("G1 Z" + str(round(zpos, 4)) + " F" + str(round(state["zFeedRate"], 4)) + " ")
         # Bare axis words in the file continue its G0 or G1, not the restart's last move; an arc needs its own words.
         motion = f"G{state['motion']} " if state["motion"] in (0, 1) else ""
-        self.data.gcode_queue.put(motion + "F" + str(round(state["feedRate"], 4)) + " ")
+        lastMove = "G1 " if zpos is not None else "G0 "
+        if state["feedRate"] is not None:
+            self.data.gcode_queue.put(motion + "F" + str(round(state["feedRate"], 4)) + " ")
+        elif motion not in ("", lastMove):
+            self.data.gcode_queue.put(motion)
         self.data.gcode_queue.put(state["positioning"])
         return False
 
