@@ -41,7 +41,7 @@ These also override anything below; `contract/README.md` ("Rust-intended differe
 
 - **Resume after an ALARM or overflow is kept.** Streaming halts and the job rewinds to the oldest unacknowledged
   line; after the status-report resync, Play resumes from there (`alarm_mid_cut_rewinds_and_resumes`). Stop also
-  clears it.
+  clears it. Until one of them does, nothing else that can move the machine is sent (`spec/firmware.md` B17).
 - **Rust's safety differences are intended:** a link lost mid-job pauses the job and rewinds it; machine commands
   are refused with "The controller is not connected." when no controller is connected; settings lines already
   queued for the controller survive Stop.

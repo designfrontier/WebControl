@@ -219,6 +219,22 @@ fn a_paused_job_never_gets_a_chain_over_sprocket_write() {
     assert!(!restarted(&rig));
 }
 
+#[test]
+fn a_chain_over_sprocket_change_during_an_alarm_hold_still_restarts_and_the_hold_stays() {
+    let mut rig = Rig::connected();
+    rig.rx("ALARM: The sled is not keeping up with its expected position and has halted.");
+    rig.advance(300);
+    rig.rx("<Idle,MPos:0.00,0.00,0.00,WPos:0.000,0.000,0.000>");
+    rig.clear_written();
+    let body = json!({"values": {"chainOverSprocket": "Top"}});
+    rig.send(Event::Edit { id: 1, request: Request::UpdateSettings { section: "advanced".into(), body } });
+    assert_eq!(rig.run_to_quiet(), ["$38=1.000000"]);
+    assert!(restarted(&rig));
+    rig.reboot();
+    let jog = rig.act_with("move", json!("up"), json!("1"));
+    assert!(alerts(&jog)[0].contains("alarm"), "the alarm still holds until Stop: {:?}", alerts(&jog));
+}
+
 /// Against the simulator, which stops following moves after a `$38` write as the owner's board did.
 #[test]
 fn a_simulated_connect_with_a_differing_chain_over_sprocket_still_jogs() {

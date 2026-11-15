@@ -151,6 +151,9 @@ impl Machine {
         if self.gcode_locked() {
             return Response::error(409, "Stop the job before starting a PID test.");
         }
+        if let Some(refusal) = self.alarm_refusal("executeVelocityPIDTest") {
+            return Response::error(409, refusal);
+        }
         self.action(&crate::pid::test_action(&test), now, effects);
         Response { status: 202, body: json!({"status": "sent"}) }
     }

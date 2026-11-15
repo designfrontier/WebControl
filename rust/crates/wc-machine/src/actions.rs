@@ -90,6 +90,9 @@ impl Machine {
         if let Some(refusal) = gates::refusal(command, self.job.flow, self.job.manual_z.is_some()) {
             return effects.push(alert(refusal));
         }
+        if let Some(refusal) = self.alarm_refusal(command) {
+            return effects.push(alert(refusal));
+        }
         if command == "startRun" && self.loads > 0 {
             return effects.push(alert(GCODE_LOADING));
         }
@@ -185,6 +188,7 @@ impl Machine {
     fn stop_z(&mut self, now: Duration, effects: &mut Vec<Effect>) -> Option<String> {
         let held = self.job.flow.in_job() || self.job.manual_z.is_some();
         self.stopped(now, effects);
+        self.clear_alarm(effects);
         if held {
             effects.push(crate::job::pause_button(PauseButton::Pause));
         }

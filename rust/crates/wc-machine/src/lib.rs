@@ -2,6 +2,7 @@
 //! The machine task is the only writer of machine state and the only writer to the port.
 
 mod actions;
+mod alarm;
 pub mod calibration;
 mod clearance;
 pub mod commands;
