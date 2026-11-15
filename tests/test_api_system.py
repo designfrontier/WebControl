@@ -15,6 +15,7 @@ def fake_data(**over):
         "customFirmwareVersion": None,
         "pyInstallUpdateAvailable": False,
         "pyInstallUpdateVersion": 0,
+        "firmwareRewriteNoticeSeen": False,
     }
     return SimpleNamespace(**{**values, **over})
 
@@ -32,8 +33,14 @@ class TestSystemInfo:
             "firmware": {"stock": "1.26", "holey": "51.28", "custom": None},
             "canTurnOff": True,
             "fourMotor": False,
+            "firmwareBuild": "51.27",
+            "firmwareSupportsZaxisLimit": False,
             "update": {"available": False, "version": None},
         }
+
+    def test_z_limits_follow_the_firmware_build(self):
+        info = system_info(fake_data(controllerFirmwareVersion=51.29, firmwareRewriteNoticeSeen=True))
+        assert (info["firmwareBuild"], info["firmwareSupportsZaxisLimit"]) == ("51.292", True)
 
     @pytest.mark.parametrize("platform, can_turn_off", [("RPI", True), ("PYINSTALLER", True), ("WINDOWS", False)])
     def test_only_pi_and_pyinstaller_builds_can_turn_off(self, platform, can_turn_off):

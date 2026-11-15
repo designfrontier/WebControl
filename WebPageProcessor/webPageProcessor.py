@@ -7,6 +7,7 @@ from flask import render_template
 import frontmatter
 import markdown
 
+from Connection import firmwareFacts
 from File.safePaths import docsRoot, resolveInside
 
 
@@ -254,11 +255,7 @@ class WebPageProcessor:
             else:
                 updateAvailable = False
                 updateRelease = "N/A"
-            if (float(self.data.controllerFirmwareVersion) > 1.26):
-                firmwareSupportsZaxisLimit = True
-            else:
-                firmwareSupportsZaxisLimit = False
-            print("action render-> firmware version is :", self.data.controllerFirmwareVersion, " so: ", firmwareSupportsZaxisLimit)
+            firmwareSupportsZaxisLimit = firmwareFacts.supportsZaxisLimits(self.data)
             page = render_template("actions.html", 
                                    updateAvailable=updateAvailable, 
                                    updateRelease=updateRelease, 

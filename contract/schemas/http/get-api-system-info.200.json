@@ -46,6 +46,17 @@
     "fourMotor": {
       "type": "boolean"
     },
+    "firmwareBuild": {
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "firmwareSupportsZaxisLimit": {
+      "default": false,
+      "type": "boolean"
+    },
     "update": {
       "type": "object",
       "properties": {

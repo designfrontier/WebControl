@@ -34,6 +34,14 @@ def firmwareBuild(data):
     return format(version, "g")
 
 
+def supportsZaxisLimits(data):
+    '''
+    Only holey 51.292 and later store Z limits ($63/$64); B17-B19 do nothing or corrupt $43/$44 on every build.
+    '''
+    build = firmwareBuild(data)
+    return build not in (None, "51.29x") and 51.292 <= float(build) < 100
+
+
 def isBootBanner(line):
     return BOOT_BANNER.search(line) is not None
 

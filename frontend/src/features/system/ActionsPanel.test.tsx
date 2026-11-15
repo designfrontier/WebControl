@@ -138,6 +138,35 @@ describe("ActionsPanel", () => {
     await user.click(screen.getByRole("link", { name: "PID tuning (advanced)" }));
     expect(screen.getByRole("dialog", { name: "PID Tuning" })).toBeInTheDocument();
   });
+
+  it("greys out Z-axis limits with the reason until the controller runs holey 51.292", async () => {
+    renderActions({
+      fetch: systemFetch({
+        "/api/system/info": systemInfo({ controllerFirmwareVersion: 51.29, firmwareBuild: "51.29x" }),
+      }),
+    });
+    const setup = group("Calibration and setup");
+    const limits = await setup.findByRole("button", { name: "Set Z-axis limits" });
+    expect(limits).toBeDisabled();
+    expect(limits).toHaveAccessibleDescription(
+      "Needs holey firmware 51.292 or later; the controller reports holey 51.29x.",
+    );
+    expect(setup.queryByRole("link", { name: "Set Z-axis limits" })).not.toBeInTheDocument();
+  });
+
+  it("links Z-axis limits on firmware that stores them", async () => {
+    renderActions({
+      fetch: systemFetch({
+        "/api/system/info": systemInfo({
+          controllerFirmwareVersion: 51.29,
+          firmwareBuild: "51.292",
+          firmwareSupportsZaxisLimit: true,
+        }),
+      }),
+    });
+    const setup = group("Calibration and setup");
+    expect(await setup.findByRole("link", { name: "Set Z-axis limits" })).toHaveAttribute("href", "/machine/z-limits");
+  });
 });
 
 describe("Restore dialog", () => {

@@ -2,6 +2,7 @@ from DataStructures.data import GCODE_LOCKED_MESSAGE
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
 from File.safePaths import libraryRoot, resolveInside
 from Actions import firmware
+from Connection import firmwareFacts
 from File.retention import keepNewest
 
 import os
@@ -25,6 +26,11 @@ def gcodeNumbers(letter, line):
 
 
 KEEP_ARCHIVES = 5
+
+
+Z_LIMITS_UNSUPPORTED = "Z-axis limits need holey firmware 51.292 or later."
+# Far beyond any Z travel; the firmware's NaN "no limit" can't be written as a $ value.
+CLEARED_Z_LIMIT_MM = 9999
 
 
 class FirmwareUpgradeError(Exception):
@@ -452,53 +458,40 @@ class Actions(MakesmithInitFuncs):
             return False
         
     def setMinZ(self):
-        '''
-        Arduino command to set minimum z axis travel position to prevent z axis motor damage
-        B18
-        '''
-        try:
-            self.data.gcode_queue.put("B18")
-            return True
-        except Exception as e:
-            self.data.console_queue.put(str(e))
-            return False
-        
+        return self._setZLimit(64)
+
     def setMaxZ(self):
-        '''
-        Arduino command to set maximum z axis travel position to prevent z axis motor damage
-        B17
-        '''
-        try:
-            self.data.gcode_queue.put("B17")
-            return True
-        except Exception as e:
-            self.data.console_queue.put(str(e))
-            return False
-        
+        return self._setZLimit(63)
+
     def clearZ(self):
-        '''
-        Arduino command to clear z axis minimum and maximum
-        B19
-        '''
-        try:
-            self.data.gcode_queue.put("B19")
+        if not self._zLimitsSupported():
             return True
-        except Exception as e:
-            self.data.console_queue.put(str(e))
-            return False
-        
+        self.data.gcode_queue.put("$63=" + str(CLEARED_Z_LIMIT_MM))
+        self.data.gcode_queue.put("$64=" + str(-CLEARED_Z_LIMIT_MM))
+        return True
+
     def getZlimits(self):
-        '''
-        Arduino command to echo z axis minimum and maximum values
-        B20
-        '''
-        try:
+        if self._zLimitsSupported():
             self.data.gcode_queue.put("B20")
+        return True
+
+    def _setZLimit(self, firmwareKey):
+        '''
+        Stores the current Z as a limit; the firmware keeps it in mm and shifts it when Z is zeroed.
+        '''
+        if not self._zLimitsSupported():
             return True
-        except Exception as e:
-            self.data.console_queue.put(str(e))
-            return False
-        
+        zMM = self.data.zval * 25.4 if self.data.units == "INCHES" else self.data.zval
+        self.data.gcode_queue.put("${}={:.3f}".format(firmwareKey, zMM))
+        return True
+
+    def _zLimitsSupported(self):
+        if firmwareFacts.supportsZaxisLimits(self.data):
+            return True
+        reported = firmwareFacts.firmwareBuild(self.data) or "no version"
+        self.data.ui_queue1.put("Alert", "Alert", Z_LIMITS_UNSUPPORTED + " The controller reports " + reported + ".")
+        return False
+
     def startRun(self):
         '''
         Starts the process of sending the gcode to the controller.

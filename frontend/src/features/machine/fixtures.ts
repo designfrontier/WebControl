@@ -6,7 +6,8 @@ export const machineSetup = (over: Partial<MachineSetup> = {}): MachineSetup => 
   fourMotor: false,
   firmwareSupportsZaxisLimit: true,
   touchPlate: false,
-  controllerFirmwareVersion: 1.3,
+  controllerFirmwareVersion: 51.29,
+  firmwareBuild: "51.292",
   ...over,
 });
 

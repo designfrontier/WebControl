@@ -34,9 +34,12 @@ export const machineEvents = {} satisfies EventSchemas;
 export const machineSetupSchema = z.object({
   chainExtendLength: z.number(),
   fourMotor: z.boolean(),
+  /** Only holey 51.292 and later store Z limits. */
   firmwareSupportsZaxisLimit: z.boolean(),
   touchPlate: z.boolean(),
   controllerFirmwareVersion: z.number(),
+  /** The version narrowed by fingerprint ("51.292" or "51.29x" for a 51.29 report); null if unknown. */
+  firmwareBuild: z.string().nullable().default(null),
 });
 export type MachineSetup = z.infer<typeof machineSetupSchema>;
 

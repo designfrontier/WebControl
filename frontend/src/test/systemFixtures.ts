@@ -8,6 +8,8 @@ export const systemInfo = (over: Partial<SystemInfo> = {}): SystemInfo => ({
   firmware: { stock: "1.26", holey: "51.28", custom: "100.07" },
   canTurnOff: false,
   fourMotor: false,
+  firmwareBuild: "1.26",
+  firmwareSupportsZaxisLimit: false,
   update: { available: false, version: null },
   ...over,
 });
