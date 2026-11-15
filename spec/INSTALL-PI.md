@@ -207,8 +207,9 @@ published release; `--version v0.2.0` installs a particular release.
 
 Before it installs, it checks the download's SHA-256 and backs up the current install to
 `/opt/webcontrol-rs/backup`: the binary, the systemd unit and drop-in, `wc-switch`, `webcontrol-update`, the sudoers
-rule and `~/.WebControl/webcontrol.json`. There is one backup; each update deletes the previous one first. After
-the restart it waits up to a minute for the service, `/api/state` with the new version and, if one was connected,
+rule and `~/.WebControl/webcontrol.json`. There is one backup; each update replaces the previous one once the new one
+is complete. It will not restart a `webcontrol-rs` that is running but not answering, since it may be mid-job, and
+if a job starts while it installs it puts the old files back and restarts nothing. After the restart it waits up to a minute for the service, `/api/state` with the new version and, if one was connected,
 the controller. If any of that fails it restores the backup by itself and prints `ROLLED BACK`. To go back by hand,
 run `webcontrol-update --rollback`; it keeps the backup.
 

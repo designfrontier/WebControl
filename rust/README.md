@@ -117,24 +117,30 @@ webcontrol-update --rollback # put the backup back
 It only sees **published** releases: GitHub hides drafts from the API, so publish the draft (Releases, above) before
 updating. `--version v0.2.0` installs that tag instead, `--force` reinstalls the installed version, and
 `--repo owner/name` (or `WEBCONTROL_REPO`) reads another fork's releases (default `designfrontier/WebControl`).
-`GITHUB_TOKEN`, if set, is sent to the API to avoid its rate limit.
+`GITHUB_TOKEN`, if set, is sent to the API (on curl's stdin, not its arguments) to avoid its rate limit.
 
 An update:
 
 1. Refuses unless the Pi is aarch64 with `curl`, `sha256sum` and `tar`, and `/api/state` shows no job running or
-   paused, no tool change or Z adjustment waiting, no probe and no controller firmware upgrade. If the service is not
-   answering it carries on and says so.
+   paused, no tool change or Z adjustment waiting, no probe and no controller firmware upgrade. If nothing answers it
+   carries on only when `webcontrol-rs` is not running; a running service that does not answer may be mid-job, so it
+   refuses until you stop it.
 2. Asks for the `sudo` password once, downloads the tarball and `SHA256SUMS` to a temporary directory, checks the
-   checksum and the tarball's contents, and stops with nothing changed if either is wrong.
-3. Backs up the current install to `/opt/webcontrol-rs/backup`, deleting the previous backup first (it says so):
+   checksum and the tarball's contents (no paths outside its directory, no links), and stops with nothing changed if
+   either is wrong. The checksum catches a corrupt download; anyone who can publish a release can also run its
+   `install-pi.sh` here, so treat write access to the repository as root on the Pi.
+3. Backs up the current install to `backup.new`, then swaps it in for the previous backup (it says so), so a backup
+   that fails partway leaves the previous one:
    the binary, `webcontrol-rs.service`, the Python unit's drop-in, `wc-switch`, `webcontrol-update`,
    `/etc/sudoers.d/webcontrol-rs`, `~/.WebControl/webcontrol.json` (gcode and boards are not touched by updates) and
    a `MANIFEST` with the version, the date and the files. There is one backup, of the install before the last update.
-4. Runs the release's own `install-pi.sh`, restarts `webcontrol-rs` and waits up to 60 s for the unit to be active,
+4. Runs the release's own `install-pi.sh` and checks `/api/state` again: if a job started meanwhile, it puts the old
+   files back without restarting anything and stops. Otherwise it restarts `webcontrol-rs` and waits up to 60 s for the unit to be active,
    `/api/state` to answer with `backend` `rust` and the new `version`, and, if a controller was connected before,
    for it to reconnect. With no controller connected it only warns.
-5. If that fails, it stops the service, restores every file in the backup, restarts and checks again, and prints
-   `ROLLED BACK` or `ROLLBACK FAILED`.
+5. If that fails, it stops the service, restores every file in the backup (a sudoers rule only if `visudo -c` passes
+   it), restarts and checks again, and prints `ROLLED BACK`, `ROLLBACK INCOMPLETE` (naming each file it could not put
+   back) or `ROLLBACK FAILED`.
 
 `--rollback` does step 5 by hand, with the same idle check, and keeps the backup, so the next update replaces it.
 If the Python backend is the one running (`wc-switch`), the update installs but does not start webcontrol-rs.
