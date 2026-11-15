@@ -12,6 +12,7 @@ use tokio::sync::Notify;
 use wc_config::library::resolve_inside;
 use wc_config::{Paths, Settings};
 use wc_machine::Host;
+use wc_machine::gpio::{Gpio, Leds};
 
 /// `install-pi.sh` allows exactly this command without a password (`/etc/sudoers.d/webcontrol-rs`).
 pub const POWER_OFF: [&str; 4] = ["sudo", "--non-interactive", "/usr/bin/systemctl", "poweroff"];
@@ -111,6 +112,7 @@ pub struct SystemHost {
     power_off: Vec<String>,
     exit: Arc<Notify>,
     settings: Option<Paths>,
+    gpio: Mutex<Option<Gpio>>,
 }
 
 impl SystemHost {
@@ -125,7 +127,13 @@ impl SystemHost {
             power_off: POWER_OFF.map(String::from).to_vec(),
             exit,
             settings: None,
+            gpio: Mutex::new(None),
         }
+    }
+
+    /// The GPIO pins the LEDs light; `None` lets them go, with the button callbacks they hold.
+    pub fn attach_gpio(&self, gpio: Option<Gpio>) {
+        *self.gpio.lock().expect("gpio lock") = gpio;
     }
 
     /// Saves the settings under `paths`; without it they stay in memory.
@@ -200,6 +208,12 @@ impl Host for SystemHost {
                 }
             });
         made.inspect_err(|error| tracing::warn!(error, name, "could not create the directory")).is_ok()
+    }
+
+    fn leds(&self, leds: Leds) {
+        if let Some(gpio) = self.gpio.lock().expect("gpio lock").as_mut() {
+            gpio.show(leds);
+        }
     }
 
     fn cpu_load(&self) -> f64 {

@@ -33,6 +33,9 @@ wc-protocol.workspace = true
 wc-sim.workspace = true
 zip.workspace = true
 
+[target.'cfg(target_os = "linux")'.dependencies]
+rppal.workspace = true
+
 [dev-dependencies]
 http-body-util.workspace = true
 tempfile.workspace = true
