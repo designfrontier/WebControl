@@ -483,6 +483,25 @@ impl Machine {
         }
     }
 
+    /// A boot or reconnect clears the queue, and with it the mark the step in progress waits for.
+    pub(crate) fn upgrade_restarted(&mut self, now: Duration) {
+        let upgrade = &mut self.upgrade;
+        match upgrade.stage {
+            Stage::Checking => upgrade.enter(Stage::Blocked, "The controller restarted during the check; check again."),
+            Stage::Testing => {
+                upgrade.enter(Stage::SelfTest, "The controller restarted during the self-test; run it again.")
+            }
+            Stage::Migrating => {
+                upgrade.enter(
+                    Stage::Restarting,
+                    "The controller restarted while its settings went back; waiting for B05.",
+                );
+                upgrade.deadline = Some(now + POST_FLASH_WAIT);
+            }
+            _ => {}
+        }
+    }
+
     pub(crate) fn upgrade_tick(&mut self, now: Duration, effects: &mut Vec<Effect>) {
         if self.upgrade.deadline.is_some_and(|deadline| now >= deadline) {
             self.post_flash_failed("The controller did not answer B05 after the flash.", now, effects);

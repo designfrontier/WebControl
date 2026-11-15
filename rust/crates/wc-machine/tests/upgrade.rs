@@ -594,3 +594,36 @@ fn a_late_job_result_is_ignored() {
     bench.apply(Event::FirmwareDone(JobResult::Written { success: true, output: String::new() }));
     assert_eq!(bench.stage(), Stage::Idle);
 }
+
+#[test]
+fn a_link_lost_while_the_settings_go_back_restarts_the_post_flash_checks() {
+    let mut bench = Bench::owners();
+    bench.act("check");
+    bench.settle(&[Stage::Checking], 10_000);
+    bench.act("upgrade");
+    bench.settle(&[Stage::BackingUp, Stage::Flashing, Stage::Restarting], 60_000);
+    assert_eq!(bench.stage(), Stage::Migrating);
+    bench.pending.clear();
+    bench.apply(Event::PortClosed);
+    let stage = bench.settle(&[Stage::Migrating, Stage::Restarting], 60_000);
+    assert_eq!(stage, Stage::SelfTest, "{:?}", bench.view().log);
+    assert_eq!(bench.sim.setting(18), Some(12.6));
+}
+
+#[test]
+fn a_controller_restart_during_the_check_or_self_test_frees_the_wizard() {
+    let mut bench = Bench::owners();
+    bench.act("check");
+    bench.pending.clear();
+    bench.apply(Event::PortClosed);
+    assert_eq!(bench.settle(&[Stage::Checking], 20_000), Stage::Blocked, "{:?}", bench.view().log);
+    bench.act("check");
+    assert_eq!(bench.settle(&[Stage::Checking], 10_000), Stage::Ready);
+
+    let mut bench = Bench::owners();
+    bench.upgrade();
+    bench.act("selfTest");
+    bench.pending.clear();
+    bench.apply(Event::PortClosed);
+    assert_eq!(bench.settle(&[Stage::Testing], 20_000), Stage::SelfTest, "{:?}", bench.view().log);
+}

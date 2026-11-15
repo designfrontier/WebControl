@@ -92,7 +92,7 @@ impl Machine {
         let controller = &mut self.controller;
         if controller.boot_deadline.is_some_and(|deadline| now >= deadline) {
             tracing::info!("no boot message from the controller; connecting anyway");
-            self.handshake();
+            self.handshake(now);
             self.controller.ready = true;
         }
         let controller = &mut self.controller;
@@ -106,7 +106,8 @@ impl Machine {
     }
 
     /// B2: on each boot ask for the version, then units, G90, every setting, and `$$` to verify.
-    fn handshake(&mut self) {
+    fn handshake(&mut self, now: Duration) {
+        self.upgrade_restarted(now);
         let units = if self.units() == Units::Inches { "G20 " } else { "G21 " };
         let line = |text: &str| Queued::Line { text: text.into(), boot: true };
         let controller = &mut self.controller;
@@ -126,7 +127,7 @@ impl Machine {
         self.rewrite_notice = false;
         self.tool = 0;
         self.probing = false;
-        self.handshake();
+        self.handshake(now);
     }
 
     fn watch_for_boot(&mut self, line: &str, now: Duration, effects: &mut Vec<Effect>) {
@@ -160,7 +161,7 @@ impl Machine {
         self.watch_for_boot(line, now, effects);
         if self.controller.boot_deadline.is_some() && line == "ok" {
             // A board that did not reset on open, answering all the same.
-            self.handshake();
+            self.handshake(now);
         }
         if line.contains(EEPROM_READ_FAIL) {
             self.controller.eeprom_reset = true;
