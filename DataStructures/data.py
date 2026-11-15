@@ -7,6 +7,7 @@ from DataStructures.loggingQueue import LoggingQueue
 from DataStructures.uiQueue import UIQueue
 
 GCODE_LOCKED_MESSAGE = "Cannot load gcode while a job is running or paused. Stop the job first."
+GCODE_LOADING_MESSAGE = "Gcode is still loading. Start the job when the preview appears."
 
 
 def pauseButtonLabel(data):

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, ReactNode } from "react";
 import { CloseButton } from "../../app/CloseButton";
 import type { CreatedDirectory, Library, LibraryFile } from "../../protocol";
 import { useSubmit } from "./hooks";
@@ -13,10 +13,12 @@ interface OpenProps {
   open: (file: LibraryFile) => Promise<void>;
   /** Why opening is refused right now, such as a job holding the gcode. */
   lockedReason?: string;
+  /** Shown while the open request is in flight. */
+  busyNote?: ReactNode;
 }
 
 /** Choose a file from a library (gcode or boards) and open it. */
-export const OpenFromLibrary = ({ library, legend, open, lockedReason }: OpenProps) => {
+export const OpenFromLibrary = ({ library, legend, open, lockedReason, busyNote }: OpenProps) => {
   const [directory, setDirectory] = useState(() => initialDirectory(library));
   const [selected, setSelected] = useState(() => initialFile(library, initialDirectory(library)));
   const { busy, error, setError, run } = useSubmit();
@@ -42,6 +44,7 @@ export const OpenFromLibrary = ({ library, legend, open, lockedReason }: OpenPro
       />
       <FormError message={error} />
       {lockedReason && <p className="muted">{lockedReason}</p>}
+      {busy && busyNote}
       <div className="actions">
         <button type="submit" className="primary" disabled={busy || lockedReason !== undefined}>
           {busy ? "Opening…" : "Open"}

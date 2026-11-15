@@ -1,4 +1,4 @@
-from DataStructures.data import GCODE_LOCKED_MESSAGE, pauseButtonLabel
+from DataStructures.data import GCODE_LOADING_MESSAGE, GCODE_LOCKED_MESSAGE, pauseButtonLabel
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
 from File.safePaths import libraryRoot, resolveInside
 from Actions import firmware
@@ -186,6 +186,8 @@ class Actions(MakesmithInitFuncs):
                     self.data.ui_queue1.put("Action", "gcodeUpdate", "")
                 else:
                     self.data.ui_queue1.put("Alert", "Alert", "Error with clearing gcode")
+            elif msg["data"]["command"] == "startRun" and self.data.gcodeFile.isLoading():
+                self.data.ui_queue1.put("Alert", "Alert", GCODE_LOADING_MESSAGE)
             # Play resumes a job the controller paused, so it passes the gate below while uploadFlag is 0.
             elif msg["data"]["command"] == "startRun" and self.data.uploadFlag == 0:
                 if not self.startRun():
@@ -1977,7 +1979,8 @@ class Actions(MakesmithInitFuncs):
                 homeY
             ]
 
-            self.data.gcodeFile.loadUpdateFile(gcode)
+            if not self.data.gcodeFile.loadUpdateFile(gcode):
+                return False
             self.data.ui_queue1.put("Action", "gcodeUpdate", "")
             return True
         except Exception as e:

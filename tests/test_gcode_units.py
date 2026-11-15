@@ -26,19 +26,6 @@ def inch_machine(data):
     data.gcodeFile.line3D[:] = []
 
 
-class InlineThread:
-    def __init__(self, target):
-        self.target = target
-
-    def start(self):
-        self.target()
-
-
-@pytest.fixture(autouse=True)
-def render_inline(monkeypatch):
-    monkeypatch.setattr("File.gcodeFile.threading.Thread", InlineThread)
-
-
 def render(data, text):
     data.gcodeFile.loadUpdateFile(text)
 

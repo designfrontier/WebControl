@@ -12,7 +12,10 @@ export type Compressed = z.infer<typeof compressedSchema>;
 
 /** Server -> client commands that feed the 3D/2D gcode and board viewer. */
 export const viewerMessages = {
-  /** Byte length of the payload about to follow; the old UI showed a spinner until it arrived. */
+  /**
+   * Show a spinner until the next gcodeUpdateCompressed or boardCutDataUpdateCompressed. 0 when a gcode load starts
+   * (the payload is still being built, and is broadcast even if the load fails); otherwise the payload's byte length.
+   */
   showFPSpinner: z.number(),
   gcodeUpdateCompressed: compressedSchema,
   /** Board cut-area grid: one truthy/falsy cell per square inch, row by row from the bottom left. */

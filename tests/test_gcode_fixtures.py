@@ -17,17 +17,8 @@ SAVED_DATA = ["gcode", "gcodeIndex", "units", "gcodeShift", "tolerance", "curren
 SAVED_FILE = ["filename", "truncate", "absoluteFlag", "canvasScaleFactor", "prependString"]
 
 
-class InlineThread:
-    def __init__(self, target=None, **kwargs):
-        self.target = target
-
-    def start(self):
-        self.target()
-
-
 @pytest.fixture
-def isolated(data, monkeypatch):
-    monkeypatch.setattr("File.gcodeFile.threading.Thread", InlineThread)
+def isolated(data):
     settings = copy.deepcopy(data.config.settings)
     saved = {name: copy.copy(getattr(data, name)) for name in SAVED_DATA}
     gcodeFile = data.gcodeFile

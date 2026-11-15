@@ -267,7 +267,6 @@ class Engine:
         import Background.messageProcessor as message_processor
         import Background.UIProcessor as ui_processor
         import Connection.serialPortThread as serial_port_thread
-        import File.gcodeFile as gcode_file
         import main
         from Background.messageProcessor import MessageProcessor
         from Background.UIProcessor import UIProcessor
@@ -287,7 +286,6 @@ class Engine:
         # main.py's own MessageProcessor thread shares this module, so it still needs a real sleep.
         self.patch.setattr(message_processor, "time", types.SimpleNamespace(time=clock.time, sleep=real_time.sleep))
         self.patch.setattr(ui_processor, "time", types.SimpleNamespace(time=clock.time, sleep=lambda seconds: None))
-        self.patch.setattr(gcode_file, "threading", types.SimpleNamespace(Thread=InlineThread))
         self.patch.setattr(data.config, "saveSettings", lambda: None)
         self.patch.setattr(data, "message_queue", OwnedQueue())
         [self._drain(q) for q in (data.gcode_queue, data.quick_queue, data.ui_queue1, data.ui_controller_queue)]
@@ -588,17 +586,6 @@ class Engine:
         self.emit_mark = len(self.emitted)
         if problems:
             raise ContractFailure(self._where() + "; ".join(problems))
-
-
-class InlineThread:
-    def __init__(self, target=None, **kwargs):
-        self.target = target
-
-    def start(self):
-        try:
-            self.target()
-        except Exception as error:  # a real thread would die here without touching the caller
-            print("background thread failed:", repr(error))
 
 
 def status_line(sled):
