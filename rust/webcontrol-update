@@ -1,0 +1,392 @@
+#!/usr/bin/env bash
+# Updates webcontrol-rs on the Pi from a published GitHub Release, keeping one backup and rolling back on failure.
+# Run it as the user the service runs as (pi); it asks for the sudo password once. See usage() or --help.
+set -euo pipefail
+
+REPO="${WEBCONTROL_REPO:-designfrontier/WebControl}"
+API="${WC_GITHUB_API:-https://api.github.com}"
+WAIT="${WC_HEALTH_WAIT:-60}"
+POLL="${WC_POLL:-1}"
+root="${WC_ROOT:-}"
+opt="$root/opt/webcontrol-rs"
+binary="$opt/webcontrol-rs"
+backup="$opt/backup"
+unit="$root/etc/systemd/system/webcontrol-rs.service"
+dropin="$root/etc/systemd/system/webcontrol.service.d/conflicts.conf"
+bindir="$root/usr/local/bin"
+sudoers="$root/etc/sudoers.d/webcontrol-rs"
+release_files=(webcontrol-rs install-pi.sh webcontrol-rs.service webcontrol-conflicts.conf wc-switch webcontrol-rs.sudoers)
+
+usage() {
+  cat <<EOF
+usage: webcontrol-update [--repo owner/name] [--version vX.Y.Z] [--force]
+       webcontrol-update --rollback | --status | --help
+
+With no flags, installs the latest published release of $REPO if it is newer
+than the installed webcontrol-rs: it checks the machine is idle, downloads the
+release's tarball and SHA256SUMS, verifies the checksum, backs up the current
+install, runs the release's install-pi.sh, restarts webcontrol-rs and checks it
+for up to ${WAIT}s. If that check fails it restores the backup by itself.
+
+Only PUBLISHED releases are seen. GitHub hides draft releases from anyone
+without write access, so publish the draft first.
+
+  --repo owner/name   the GitHub repository (or set WEBCONTROL_REPO)
+  --version vX.Y.Z    install this release tag instead of the latest
+  --force             reinstall even if that version is installed
+  --rollback          restore the backup the last update made (it is kept)
+  --status            show the installed version, the backup and the latest release
+  --help              this text
+
+The backup is one slot, $backup: the binary, the systemd unit and
+drop-in, wc-switch, webcontrol-update, the sudoers rule and webcontrol.json.
+Each update replaces it. GITHUB_TOKEN, if set, is sent to the GitHub API.
+EOF
+}
+
+say() { printf '%s\n' "$*"; }
+fail() {
+  printf 'webcontrol-update: %s\n' "$*" >&2
+  exit 1
+}
+
+# One field of flat JSON: a string's contents, or a bare true/false/number.
+field() {
+  local re="\"$2\": *(\"([^\"]*)\"|([^,} ]*))"
+  [[ "$1" =~ $re ]] && printf '%s' "${BASH_REMATCH[2]}${BASH_REMATCH[3]}"
+  return 0
+}
+
+service_user() {
+  local user
+  user="$(sed -n 's/^User=//p' "$unit" 2> /dev/null | head -n 1 || true)"
+  echo "${WC_USER:-${user:-$(id -un)}}"
+}
+
+service_home() {
+  local home
+  home="$(getent passwd "$1" 2> /dev/null | cut -d: -f6 || true)"
+  echo "${WC_HOME:-${home:-$HOME}}"
+}
+
+state_url() {
+  local port
+  port="$(grep -oE -- '--port[= ]+[0-9]+' "$unit" 2> /dev/null | grep -oE '[0-9]+$' | head -n 1 || true)"
+  echo "${WC_URL:-http://localhost:${port:-5000}}"
+}
+
+api_state() { curl -fsS --max-time 3 "$URL/api/state" 2> /dev/null || true; }
+
+installed_version() { "$binary" --version 2> /dev/null | awk '{ print $2 }' || true; }
+
+manifest_value() { sed -n "s/^$1=//p" "$backup/MANIFEST" 2> /dev/null | head -n 1 || true; }
+
+is_zero() { [[ "${1:-0}" =~ ^0*(\.0*)?$ ]]; }
+
+preflight() {
+  local arch tool
+  arch="$(uname -m)"
+  [ "$arch" = aarch64 ] || fail "webcontrol-rs is built for 64-bit ARM (aarch64); this machine is $arch."
+  for tool in curl sha256sum tar; do
+    command -v "$tool" > /dev/null || fail "$tool is needed: sudo apt-get install $tool"
+  done
+}
+
+busy_reason() {
+  local body="$1" info stage
+  [ "$(field "$body" jobInProgress)" = true ] && { echo "a job is running or paused"; return; }
+  [ "$(field "$body" pauseButtonSetting)" = Resume ] && { echo "a job or tool change is held, waiting for Resume"; return; }
+  [ "$(field "$body" manualZAxisAdjust)" = true ] && { echo "the controller is waiting for a tool change or a Z adjustment"; return; }
+  [ "$(field "$body" probing)" = true ] && { echo "a Z probe is in flight"; return; }
+  info="$(curl -fsS --max-time 3 "$URL/api/system/info" 2> /dev/null || true)"
+  stage="$(field "$info" stage)"
+  case "$stage" in
+    backingUp | flashing | restarting | migrating | selfTest | testing | rollingBack)
+      echo "a controller firmware upgrade is underway ($stage)" ;;
+  esac
+}
+
+# Sets EXPECT_CONTROLLER: a controller that answered before the restart must answer again after it.
+require_idle() {
+  local body reason
+  EXPECT_CONTROLLER=0
+  body="$(api_state)"
+  if [ -z "$body" ]; then
+    say "WebControl is not answering at $URL, so no job is running; carrying on."
+    return 0
+  fi
+  reason="$(busy_reason "$body")"
+  [ -z "$reason" ] || fail "Not now: $reason. Finish or stop it, then run webcontrol-update again."
+  if is_zero "$(field "$body" controllerFirmwareVersion)"; then
+    say "Warning: no controller is connected, so the health check will not wait for one."
+  else
+    EXPECT_CONTROLLER=1
+  fi
+}
+
+github() {
+  local auth=()
+  [ -n "${GITHUB_TOKEN:-}" ] && auth=(-H "Authorization: Bearer $GITHUB_TOKEN")
+  curl -fsSL --max-time 30 -H "Accept: application/vnd.github+json" ${auth[@]+"${auth[@]}"} \
+    "$API/repos/$REPO/releases/$1"
+}
+
+# Sets RELEASE_JSON and VERSION (the tag without its v).
+find_release() {
+  local tag
+  if [ -n "$PIN" ]; then
+    tag="v${PIN#v}"
+    RELEASE_JSON="$(github "tags/$tag")" ||
+      fail "No published release $tag in $REPO. Drafts are not visible: publish it on GitHub first."
+  else
+    RELEASE_JSON="$(github latest)" ||
+      fail "No published release found in $REPO. Drafts are not visible: publish the release on GitHub first."
+  fi
+  tag="$(field "$RELEASE_JSON" tag_name)"
+  [[ "$tag" =~ ^v?[0-9A-Za-z][0-9A-Za-z.+_-]*$ ]] || fail "The release's tag \"$tag\" is not a version."
+  VERSION="${tag#v}"
+}
+
+asset_url() {
+  grep -oE '"browser_download_url": *"[^"]*"' <<< "$RELEASE_JSON" | sed -E 's/.*: *"([^"]*)"$/\1/' |
+    grep -E "/$1\$" | head -n 1 || true
+}
+
+# Leaves the checked release unpacked in $STAGE.
+download_and_check() {
+  local name="webcontrol-rs-$VERSION-aarch64" url sums want got listing file
+  for file in "$name.tar.gz" SHA256SUMS; do
+    url="$(asset_url "$file")"
+    [ -n "$url" ] || fail "Release v$VERSION has no $file asset."
+    say "Downloading $file"
+    curl -fsSL --retry 2 -o "$tmp/$file" "$url" || fail "Could not download $url"
+  done
+  sums="$tmp/SHA256SUMS"
+  want="$(awk -v n="$name.tar.gz" '$2 == n || $2 == "*" n { print $1; exit }' "$sums")"
+  [ -n "$want" ] || fail "SHA256SUMS does not list $name.tar.gz. Nothing was changed."
+  got="$(sha256sum "$tmp/$name.tar.gz" | cut -d' ' -f1)"
+  [ "$got" = "$want" ] || fail "Checksum mismatch for $name.tar.gz (got $got, SHA256SUMS says $want). Nothing was changed."
+  say "Checksum OK."
+  listing="$(tar -tzf "$tmp/$name.tar.gz" | sed 's|/$||')" || fail "$name.tar.gz is not a readable tarball."
+  while IFS= read -r file; do
+    case "$file" in "$name" | "$name"/*) ;; *) fail "$name.tar.gz holds $file, outside $name/." ;; esac
+    case "/$file/" in */../*) fail "$name.tar.gz holds $file, which climbs out of it." ;; esac
+  done <<< "$listing"
+  for file in "${release_files[@]}"; do
+    grep -qxF "$name/$file" <<< "$listing" || fail "$name.tar.gz has no $file."
+  done
+  tar -C "$tmp" -xzf "$tmp/$name.tar.gz"
+  STAGE="$tmp/$name"
+  [ "$("$STAGE/webcontrol-rs" --version 2> /dev/null | awk '{ print $2 }')" = "$VERSION" ] ||
+    fail "The release's webcontrol-rs does not run here or does not report $VERSION. Nothing was changed."
+}
+
+backed_up_paths() {
+  printf '%s\n' "$binary" "$unit" "$dropin" "$bindir/wc-switch" "$bindir/webcontrol-update" "$sudoers" \
+    "$(service_home "$(service_user)")/.WebControl/webcontrol.json"
+}
+
+# Sets BACKED_UP to the version saved, or empty when nothing was installed.
+make_backup() {
+  local current path manifest
+  BACKED_UP=""
+  current="$(installed_version)"
+  if [ ! -e "$binary" ]; then
+    say "webcontrol-rs is not installed yet, so there is nothing to back up."
+    return 0
+  fi
+  if [ -f "$backup/MANIFEST" ]; then
+    say "Deleting the previous backup (webcontrol-rs $(manifest_value version), made $(manifest_value date))."
+    sudo rm -rf "$backup"
+  elif [ -e "$backup" ]; then
+    say "Deleting an incomplete previous backup."
+    sudo rm -rf "$backup"
+  fi
+  manifest="$(printf 'version=%s\ndate=%s\n' "${current:-unknown}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
+  sudo install -d "$backup/files"
+  while IFS= read -r path; do
+    [ -e "$path" ] || continue
+    sudo mkdir -p "$backup/files$(dirname "$path")"
+    sudo cp -p "$path" "$backup/files$path"
+    manifest="$manifest"$'\n'"file=$path"
+  done < <(backed_up_paths)
+  # Written last: a backup without a MANIFEST is incomplete and is never restored.
+  printf '%s\n' "$manifest" | sudo tee "$backup/MANIFEST" > /dev/null
+  BACKED_UP="${current:-unknown}"
+  say "Backed up webcontrol-rs ${current:-unknown} to $backup."
+}
+
+restore_backup() {
+  local line path
+  while IFS= read -r line; do
+    path="${line#file=}"
+    sudo mkdir -p "$(dirname "$path")"
+    # A rename, so a running copy of this script keeps reading the file it started from.
+    sudo cp -p "$backup/files$path" "$path.wc-restore"
+    sudo mv -f "$path.wc-restore" "$path"
+    say "  restored $path"
+  done < <(grep '^file=' "$backup/MANIFEST")
+  sudo systemctl daemon-reload
+}
+
+# Python's unit holding the port means Rust is not the chosen backend, so it is updated but not started.
+python_is_the_backend() {
+  ! systemctl is-active --quiet webcontrol-rs 2> /dev/null && systemctl is-active --quiet webcontrol 2> /dev/null
+}
+
+restart() {
+  if [ "$PYTHON_BACKEND" = 1 ]; then
+    say "The Python backend is running, so webcontrol-rs is not started (wc-switch rust starts it)."
+    return 0
+  fi
+  say "Restarting webcontrol-rs."
+  sudo systemctl restart webcontrol-rs
+}
+
+# healthy <version>: waits up to $WAIT s for the service, /api/state and the controller.
+healthy() {
+  local want="$1" active body backend version ok
+  if [ "$PYTHON_BACKEND" = 1 ]; then
+    [ "$(installed_version)" = "$want" ] && say "webcontrol-rs --version reports $want." && return 0
+    say "webcontrol-rs --version reports \"$(installed_version)\", not $want."
+    return 1
+  fi
+  say "Checking webcontrol-rs for up to ${WAIT}s."
+  local deadline=$((SECONDS + WAIT))
+  while :; do
+    active="$(systemctl is-active webcontrol-rs 2> /dev/null || true)"
+    body="$(api_state)"
+    backend="$(field "$body" backend)"
+    version="$(field "$body" version)"
+    ok=0
+    [ "$active" = active ] && [ "$backend" = rust ] && [ "$version" = "$want" ] && ok=1
+    if [ "$ok" = 1 ] && [ "$EXPECT_CONTROLLER" = 1 ] && is_zero "$(field "$body" controllerFirmwareVersion)"; then ok=2; fi
+    if [ "$ok" = 1 ]; then
+      say "webcontrol-rs $want is running and answering at $URL$([ "$EXPECT_CONTROLLER" = 1 ] && echo ", with the controller connected")."
+      return 0
+    fi
+    [ "$SECONDS" -lt "$deadline" ] || break
+    sleep "$POLL"
+  done
+  say "Health check failed after ${WAIT}s:"
+  say "  service: ${active:-unknown}"
+  [ -n "$body" ] && say "  $URL/api/state: backend \"$backend\", version \"$version\" (wanted rust, $want)"
+  [ -n "$body" ] || say "  $URL/api/state: no answer"
+  [ "$ok" = 2 ] && say "  the controller did not reconnect"
+  say "  journalctl -u webcontrol-rs -n 50 shows the service's log."
+  return 1
+}
+
+roll_back_and_check() {
+  local version
+  version="$(manifest_value version)"
+  say "Restoring the backup of webcontrol-rs $version from $backup:"
+  # Stopped first, so the failed version cannot write webcontrol.json over the restored one.
+  [ "$PYTHON_BACKEND" = 1 ] || sudo systemctl stop webcontrol-rs || true
+  restore_backup
+  restart || true
+  if healthy "$version"; then
+    say "ROLLED BACK: webcontrol-rs $version is running again, with its settings."
+    return 0
+  fi
+  say "ROLLBACK FAILED: webcontrol-rs $version did not come back healthy either."
+  say "The deeper fallback is the SSD or the old card: power off, boot from it, and look at this card later."
+  return 1
+}
+
+update() {
+  local current
+  preflight
+  require_idle
+  find_release
+  current="$(installed_version)"
+  if [ "$current" = "$VERSION" ] && [ "$FORCE" = 0 ]; then
+    say "webcontrol-rs $VERSION is installed$([ -z "$PIN" ] && echo ", the latest published release of $REPO"). Nothing to do (--force reinstalls it)."
+    return 0
+  fi
+  say "Updating webcontrol-rs ${current:-(not installed)} to $VERSION from $REPO."
+  sudo -v
+  tmp="$(mktemp -d)"
+  trap 'rm -rf "$tmp"' EXIT
+  download_and_check
+  PYTHON_BACKEND=0
+  python_is_the_backend && PYTHON_BACKEND=1
+  make_backup
+  export WC_USER
+  WC_USER="$(service_user)"
+  local installed=1
+  bash "$STAGE/install-pi.sh" "$STAGE" || installed=0
+  if [ "$installed" = 1 ] && restart && healthy "$VERSION"; then
+    say "Updated webcontrol-rs to $VERSION."
+    [ -n "$BACKED_UP" ] && say "The backup of $BACKED_UP stays in $backup; webcontrol-update --rollback restores it."
+    return 0
+  fi
+  [ "$installed" = 1 ] || say "install-pi.sh failed."
+  if [ -z "$BACKED_UP" ]; then
+    say "UPDATE FAILED, and there was no earlier install to roll back to."
+    return 1
+  fi
+  say "UPDATE FAILED: rolling back to webcontrol-rs $BACKED_UP."
+  roll_back_and_check || return 1
+  say "The update to $VERSION did not take; webcontrol-rs $BACKED_UP is back."
+  return 1
+}
+
+rollback() {
+  preflight
+  require_idle
+  [ -f "$backup/MANIFEST" ] || fail "There is no backup in $backup to roll back to."
+  sudo -v
+  PYTHON_BACKEND=0
+  python_is_the_backend && PYTHON_BACKEND=1
+  say "Rolling back webcontrol-rs $(installed_version) to $(manifest_value version) (backed up $(manifest_value date))."
+  roll_back_and_check || return 1
+  say "The backup stays in $backup; the next update replaces it."
+}
+
+status() {
+  local latest installed
+  installed="$(installed_version)"
+  say "Installed:       ${installed:+webcontrol-rs }${installed:-none}"
+  say "Service:         $(systemctl is-active webcontrol-rs 2> /dev/null || true)"
+  if [ -f "$backup/MANIFEST" ]; then
+    say "Backup:          webcontrol-rs $(manifest_value version), made $(manifest_value date), in $backup"
+  else
+    say "Backup:          none"
+  fi
+  if latest="$(github latest 2> /dev/null)"; then
+    say "Latest release:  $(field "$latest" tag_name) ($REPO)"
+  else
+    say "Latest release:  none published in $REPO (drafts are not visible)"
+  fi
+}
+
+main() {
+  local mode=update
+  PIN=""
+  FORCE=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --repo) REPO="${2:?--repo needs owner/name}"; shift ;;
+      --repo=*) REPO="${1#--repo=}" ;;
+      --version) PIN="${2:?--version needs a tag, such as v0.2.0}"; shift ;;
+      --version=*) PIN="${1#--version=}" ;;
+      --force) FORCE=1 ;;
+      --rollback) mode=rollback ;;
+      --status) mode=status ;;
+      -h | --help) usage; return 0 ;;
+      *) usage >&2; return 2 ;;
+    esac
+    shift
+  done
+  [[ "$REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || fail "--repo takes owner/name, not \"$REPO\"."
+  URL="$(state_url)"
+  case "$mode" in
+    update) update ;;
+    rollback) rollback ;;
+    status) status ;;
+  esac
+}
+
+# On one line, so bash has read it all before install-pi.sh replaces this file.
+main "$@"; exit $?

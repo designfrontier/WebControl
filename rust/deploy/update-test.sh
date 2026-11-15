@@ -1,0 +1,470 @@
+#!/usr/bin/env bash
+# Tests webcontrol-update against release.sh's real tarballs, a file:// GitHub API and /api/state, and stub
+# sudo, systemctl, uname and webcontrol-rs binaries; nothing touches a real system.
+set -euo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+rust="$(dirname "$here")"
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+real_curl="$(command -v curl)"
+failures=0
+mkdir -p "$work/bin" "$work/releases"
+
+printf ':00000001FF\n' > "$work/fw.hex"
+(sha256sum "$work/fw.hex" 2> /dev/null || shasum -a 256 "$work/fw.hex") | cut -d' ' -f1 > "$work/fw.sha256"
+
+# Every stub logs to $work/calls. sudo runs its command as is.
+cat > "$work/bin/sudo" <<EOF
+#!/usr/bin/env bash
+echo "sudo \$*" >> "$work/calls"
+[ "\$1" = -v ] && exit 0
+exec "\$@"
+EOF
+cat > "$work/bin/uname" <<EOF
+#!/usr/bin/env bash
+if [ "\$1" = -m ]; then cat "$work/arch"; else exec /usr/bin/uname "\$@"; fi
+EOF
+cat > "$work/bin/curl" <<EOF
+#!/usr/bin/env bash
+echo "curl \$*" >> "$work/calls"
+exec "$real_curl" "\$@"
+EOF
+# The service: a binary containing BROKEN runs without answering and rewrites webcontrol.json when stopped; a
+# working one answers /api/state with its version (or $work/stale-version), and with the controller unless
+# $work/controller-lost exists.
+cat > "$work/bin/systemctl" <<EOF
+#!/usr/bin/env bash
+echo "systemctl \$*" >> "$work/calls"
+bin="$work/root/opt/webcontrol-rs/webcontrol-rs"
+case "\$1" in
+  is-active)
+    unit="\${*: -1}"
+    if [ "\$unit" = webcontrol-rs ]; then s="\$(cat "$work/active" 2> /dev/null || echo inactive)"
+    else s="\$(cat "$work/python-active" 2> /dev/null || echo inactive)"; fi
+    [ "\$2" = --quiet ] || echo "\$s"
+    [ "\$s" = active ]
+    exit ;;
+  restart | start | stop)
+    if grep -qs BROKEN "$work/running"; then echo '{"scribbled": true}' > "$work/home/.WebControl/webcontrol.json"; fi
+    rm -f "$work/srv/api/state" "$work/running"
+    echo inactive > "$work/active"
+    [ "\$1" = stop ] && exit 0
+    cp "\$bin" "$work/running"
+    echo active > "$work/active"
+    grep -q BROKEN "\$bin" && exit 0
+    v="\$(cat "$work/stale-version" 2> /dev/null || "\$bin" --version | cut -d' ' -f2)"
+    fw="\$(cat "$work/controller" 2> /dev/null || echo 0)"
+    [ -f "$work/controller-lost" ] && fw=0
+    printf '{"backend":"rust","jobInProgress":false,"pauseButtonSetting":"Pause","manualZAxisAdjust":false,"probing":false,"controllerFirmwareVersion":%s,"version":"%s"}' \
+      "\$fw" "\$v" > "$work/srv/api/state" ;;
+esac
+exit 0
+EOF
+chmod +x "$work/bin/"*
+
+# release <version> [BROKEN]: release.sh's assets for a stub binary, cached in $work/releases/<version>.
+release() {
+  local v="$1" out="$work/releases/$1"
+  [ -d "$out" ] && return 0
+  printf '#!/bin/sh\n# :00000001FF %s\necho "webcontrol-rs %s (abc1234, contract 2)"\n' "${2:-}" "$v" > "$work/stub"
+  chmod +x "$work/stub"
+  env -u GITHUB_REF_TYPE -u GITHUB_REF_NAME -u GITHUB_OUTPUT WC_SKIP_BUILD=1 WC_BINARY="$work/stub" \
+    WC_FIRMWARE_HEX="$work/fw.hex" WC_FIRMWARE_PIN="$work/fw.sha256" WC_VERSION="$v" \
+    bash "$rust/scripts/release.sh" "$out" > /dev/null
+}
+
+api="$work/gh/repos/designfrontier/WebControl/releases"
+
+# publish <version> [BROKEN]: a published release as GitHub's API describes it.
+publish() {
+  local v="$1" dl="file://$work/releases/$1"
+  release "$@"
+  mkdir -p "$api/tags"
+  cat > "$api/tags/v$v" <<EOF
+{
+  "tag_name": "v$v",
+  "draft": false,
+  "assets": [
+    {"name": "webcontrol-rs-$v-aarch64.tar.gz", "browser_download_url": "$dl/webcontrol-rs-$v-aarch64.tar.gz"},
+    {"name": "webcontrol-rs-$v-aarch64", "browser_download_url": "$dl/webcontrol-rs-$v-aarch64"},
+    {"name": "SHA256SUMS", "browser_download_url": "$dl/SHA256SUMS"}
+  ]
+}
+EOF
+}
+
+latest() { cp "$api/tags/v$1" "$api/latest"; }
+
+# installed <version>: that release installed by its own install-pi.sh, running, with the owner's settings.
+installed() {
+  release "$1"
+  tar -C "$work/x" -xzf "$work/releases/$1/webcontrol-rs-$1-aarch64.tar.gz"
+  env PATH="$work/bin:$PATH" WC_ROOT="$work/root" WC_USER=pi WC_APT=true \
+    bash "$work/x/webcontrol-rs-$1-aarch64/install-pi.sh" "$work/x/webcontrol-rs-$1-aarch64" > /dev/null
+  PATH="$work/bin:$PATH" systemctl restart webcontrol-rs
+  rm -f "$work/calls"
+}
+
+fresh() {
+  rm -rf "${work:?}/root" "${work:?}/home" "$work/srv" "$work/gh" "$work/x" "$work/calls" "$work/active" \
+    "$work/python-active" "$work/controller" "$work/controller-lost" "$work/stale-version" "$work/running" "$work/out" "$work/err"
+  mkdir -p "$work/root" "$work/home/.WebControl" "$work/srv/api" "$work/x"
+  echo '{"owner": "settings"}' > "$work/home/.WebControl/webcontrol.json"
+  echo aarch64 > "$work/arch"
+}
+
+# update [NAME=value...] [flags...]
+update() {
+  local vars=()
+  while [[ "${1:-}" =~ ^[A-Z_]+= ]]; do
+    vars+=("$1")
+    shift
+  done
+  env -u GITHUB_TOKEN -u WEBCONTROL_REPO PATH="$work/bin:$PATH" WC_ROOT="$work/root" WC_HOME="$work/home" \
+    WC_URL="file://$work/srv" WC_GITHUB_API="file://$work/gh" WC_HEALTH_WAIT=1 WC_POLL=0.1 WC_APT=true \
+    ${vars[@]+"${vars[@]}"} bash "$rust/webcontrol-update" "$@"
+}
+
+opt="$work/root/opt/webcontrol-rs"
+backup="$opt/backup"
+version_of() { "$1" --version | cut -d' ' -f2; }
+snapshot() { (cd "$work" && find root home -type f -exec cksum {} + | sort); }
+no_changes_since() { [ "$(snapshot)" = "$1" ] && ! grep -qs "systemctl restart" "$work/calls"; }
+
+check() {
+  local name="$1"
+  shift
+  if "$@"; then echo "ok   $name"; else echo "FAIL $name"; failures=$((failures + 1)); fi
+}
+
+up_to_date() {
+  fresh
+  installed 1.0
+  publish 1.0
+  latest 1.0
+  local before
+  before="$(snapshot)"
+  update > "$work/out" && grep -q "1.0 is installed, the latest published release" "$work/out" &&
+    no_changes_since "$before" && ! grep -q "sudo" "$work/calls"
+}
+
+update_without_a_backup() {
+  fresh
+  installed 1.0
+  echo 51.29 > "$work/controller"
+  systemctl_restart
+  publish 1.1
+  latest 1.1
+  update > "$work/out" &&
+    [ "$(version_of "$opt/webcontrol-rs")" = 1.1 ] &&
+    grep -q "Updated webcontrol-rs to 1.1" "$work/out" && grep -q "controller connected" "$work/out" &&
+    ! grep -q "Deleting the previous backup" "$work/out" &&
+    [ "$(grep -c "^sudo -v" "$work/calls")" = 1 ] && grep -q "systemctl restart webcontrol-rs" "$work/calls" &&
+    grep -qx "version=1.0" "$backup/MANIFEST" && grep -qE "^date=20[0-9-]+T" "$backup/MANIFEST" &&
+    [ "$(version_of "$backup/files$opt/webcontrol-rs")" = 1.0 ] &&
+    cmp -s "$backup/files$work/home/.WebControl/webcontrol.json" "$work/home/.WebControl/webcontrol.json" &&
+    [ "$(grep -c "^file=" "$backup/MANIFEST")" = 7 ] &&
+    grep -qx "file=$work/root/etc/sudoers.d/webcontrol-rs" "$backup/MANIFEST" &&
+    grep -qx "file=$work/root/etc/systemd/system/webcontrol.service.d/conflicts.conf" "$backup/MANIFEST" &&
+    grep -qx "file=$work/root/usr/local/bin/webcontrol-update" "$backup/MANIFEST" &&
+    grep -qx "file=$work/root/usr/local/bin/wc-switch" "$backup/MANIFEST" &&
+    grep -qx "file=$work/root/etc/systemd/system/webcontrol-rs.service" "$backup/MANIFEST"
+}
+
+systemctl_restart() { PATH="$work/bin:$PATH" systemctl restart webcontrol-rs; rm -f "$work/calls"; }
+
+update_over_a_backup() {
+  fresh
+  installed 1.0
+  publish 1.1
+  publish 1.2
+  latest 1.1
+  update > /dev/null || return 1
+  touch "$backup/files/stale"
+  latest 1.2
+  update > "$work/out" &&
+    grep -q "Deleting the previous backup (webcontrol-rs 1.0, made 20" "$work/out" &&
+    [ "$(version_of "$opt/webcontrol-rs")" = 1.2 ] &&
+    grep -qx "version=1.1" "$backup/MANIFEST" && [ ! -e "$backup/files/stale" ] &&
+    [ "$(version_of "$backup/files$opt/webcontrol-rs")" = 1.1 ]
+}
+
+first_install_skips_the_backup() {
+  fresh
+  publish 1.1
+  latest 1.1
+  update > "$work/out" && grep -q "nothing to back up" "$work/out" &&
+    grep -q "not answering" "$work/out" && [ "$(version_of "$opt/webcontrol-rs")" = 1.1 ] && [ ! -e "$backup" ]
+}
+
+checksum_mismatch_changes_nothing() {
+  fresh
+  installed 1.0
+  publish 1.1
+  latest 1.1
+  update > /dev/null || return 1
+  publish 1.3
+  latest 1.3
+  sed -i.orig 's/^[0-9a-f]\{8\}/00000000/' "$work/releases/1.3/SHA256SUMS"
+  local before
+  before="$(snapshot)"
+  rm -f "$work/calls"
+  ! update > "$work/out" 2> "$work/err" && grep -q "Checksum mismatch" "$work/err" &&
+    grep -q "Nothing was changed" "$work/err" && no_changes_since "$before" &&
+    [ "$(version_of "$opt/webcontrol-rs")" = 1.1 ] && grep -qx "version=1.0" "$backup/MANIFEST"
+}
+
+refuses_a_tarball_without_install_files() {
+  fresh
+  installed 1.0
+  publish 1.4
+  latest 1.4
+  local v="$work/releases/1.4" before
+  mkdir "$work/y" && tar -C "$work/y" -xzf "$v/webcontrol-rs-1.4-aarch64.tar.gz" &&
+    rm "$work/y/webcontrol-rs-1.4-aarch64/install-pi.sh" &&
+    tar -C "$work/y" -czf "$v/webcontrol-rs-1.4-aarch64.tar.gz" webcontrol-rs-1.4-aarch64 && rm -rf "$work/y"
+  (cd "$v" && (sha256sum webcontrol-rs-1.4-aarch64.tar.gz 2> /dev/null ||
+    shasum -a 256 webcontrol-rs-1.4-aarch64.tar.gz) > SHA256SUMS)
+  before="$(snapshot)"
+  ! update 2> "$work/err" > /dev/null && grep -q "has no install-pi.sh" "$work/err" && no_changes_since "$before"
+  local result=$?
+  rm -rf "$v"
+  return "$result"
+}
+
+refuses_while_busy() {
+  local busy
+  for busy in '"jobInProgress":true' '"pauseButtonSetting":"Resume"' '"manualZAxisAdjust":true' '"probing":true'; do
+    local key="${busy%%:*}"
+    fresh
+    installed 1.0
+    publish 1.1
+    latest 1.1
+    sed -i.orig "s/$key:[^,}]*/$busy/" "$work/srv/api/state"
+    local before
+    before="$(snapshot)"
+    if ! { ! update > /dev/null 2> "$work/err" && grep -q "Not now" "$work/err" && no_changes_since "$before" &&
+      ! grep -q "releases/latest" "$work/calls"; }; then
+      echo "  not refused with $busy" >&2
+      return 1
+    fi
+  done
+}
+
+refuses_during_a_firmware_upgrade() {
+  fresh
+  installed 1.0
+  publish 1.1
+  latest 1.1
+  mkdir -p "$work/srv/api/system"
+  echo '{"firmwareUpgrade": {"target": "51.292", "stage": "flashing", "message": ""}}' > "$work/srv/api/system/info"
+  ! update > /dev/null 2> "$work/err" && grep -q "firmware upgrade is underway (flashing)" "$work/err" &&
+    [ "$(version_of "$opt/webcontrol-rs")" = 1.0 ]
+}
+
+# The installed 1.0 files carry a marker each, so a restore is told from 1.1's install of the same files.
+mark_installed_files() {
+  local f
+  for f in etc/systemd/system/webcontrol-rs.service etc/systemd/system/webcontrol.service.d/conflicts.conf \
+    usr/local/bin/wc-switch usr/local/bin/webcontrol-update etc/sudoers.d/webcontrol-rs; do
+    chmod u+w "$work/root/$f"
+    echo "# installed by 1.0" >> "$work/root/$f"
+  done
+}
+
+all_marked() {
+  local f
+  for f in etc/systemd/system/webcontrol-rs.service etc/systemd/system/webcontrol.service.d/conflicts.conf \
+    usr/local/bin/wc-switch usr/local/bin/webcontrol-update etc/sudoers.d/webcontrol-rs; do
+    grep -q "^# installed by 1.0" "$work/root/$f" || { echo "  $f was not restored" >&2; return 1; }
+  done
+}
+
+failed_health_check_rolls_back() {
+  fresh
+  installed 1.0
+  mark_installed_files
+  publish 1.9 BROKEN
+  latest 1.9
+  ! update > "$work/out" 2>&1 && grep -q "Health check failed" "$work/out" &&
+    grep -q "ROLLED BACK: webcontrol-rs 1.0 is running again" "$work/out" &&
+    [ "$(version_of "$opt/webcontrol-rs")" = 1.0 ] && all_marked &&
+    grep -qx '{"owner": "settings"}' "$work/home/.WebControl/webcontrol.json" &&
+    grep -q '"version":"1.0"' "$work/srv/api/state" && [ "$(cat "$work/active")" = active ] &&
+    grep -qx "version=1.0" "$backup/MANIFEST"
+}
+
+stale_version_rolls_back() {
+  fresh
+  installed 1.0
+  publish 1.1
+  latest 1.1
+  echo 1.0 > "$work/stale-version"
+  ! update > "$work/out" 2>&1 && grep -q 'version "1.0" (wanted rust, 1.1)' "$work/out" &&
+    [ "$(version_of "$opt/webcontrol-rs")" = 1.0 ]
+}
+
+lost_controller_rolls_back() {
+  fresh
+  echo 51.29 > "$work/controller"
+  installed 1.0
+  publish 1.1
+  latest 1.1
+  touch "$work/controller-lost"
+  ! update > "$work/out" 2>&1 && grep -q "the controller did not reconnect" "$work/out" &&
+    grep -q "ROLLBACK FAILED" "$work/out" && grep -q "SSD or the old card" "$work/out" &&
+    [ "$(version_of "$opt/webcontrol-rs")" = 1.0 ]
+}
+
+no_controller_only_warns() {
+  fresh
+  installed 1.0
+  publish 1.1
+  latest 1.1
+  update > "$work/out" && grep -q "Warning: no controller is connected" "$work/out" &&
+    [ "$(version_of "$opt/webcontrol-rs")" = 1.1 ]
+}
+
+manual_rollback() {
+  fresh
+  installed 1.0
+  mark_installed_files
+  publish 1.1
+  latest 1.1
+  update > /dev/null || return 1
+  echo '{"owner": "changed by 1.1"}' > "$work/home/.WebControl/webcontrol.json"
+  rm -f "$work/calls"
+  update --rollback > "$work/out" && grep -q "ROLLED BACK: webcontrol-rs 1.0" "$work/out" &&
+    [ "$(version_of "$opt/webcontrol-rs")" = 1.0 ] && all_marked &&
+    grep -qx '{"owner": "settings"}' "$work/home/.WebControl/webcontrol.json" &&
+    grep -q "systemctl restart webcontrol-rs" "$work/calls" && grep -q '"version":"1.0"' "$work/srv/api/state" &&
+    grep -qx "version=1.0" "$backup/MANIFEST" && [ -f "$backup/files$opt/webcontrol-rs" ]
+}
+
+rollback_refuses_while_busy_or_without_a_backup() {
+  fresh
+  installed 1.0
+  ! update --rollback > /dev/null 2> "$work/err" && grep -q "no backup" "$work/err" || return 1
+  publish 1.1
+  latest 1.1
+  update > /dev/null || return 1
+  sed -i.orig 's/"jobInProgress":false/"jobInProgress":true/' "$work/srv/api/state"
+  ! update --rollback > /dev/null 2> "$work/err" && grep -q "Not now" "$work/err" &&
+    [ "$(version_of "$opt/webcontrol-rs")" = 1.1 ]
+}
+
+status_shows_versions() {
+  fresh
+  installed 1.0
+  publish 1.1
+  publish 1.2
+  latest 1.1
+  update > /dev/null || return 1
+  latest 1.2
+  rm -f "$work/calls"
+  update --status > "$work/out" && grep -qE "^Installed: +webcontrol-rs 1.1$" "$work/out" &&
+    grep -qE "^Backup: +webcontrol-rs 1.0, made 20[0-9-]+T.*, in $backup$" "$work/out" &&
+    grep -qE "^Latest release: +v1.2 \(designfrontier/WebControl\)$" "$work/out" &&
+    grep -qE "^Service: +active$" "$work/out" && ! grep -q sudo "$work/calls"
+}
+
+status_without_releases_or_backup() {
+  fresh
+  update --status > "$work/out" && grep -qE "^Installed: +none$" "$work/out" &&
+    grep -qE "^Backup: +none$" "$work/out" && grep -q "none published .*(drafts are not visible)" "$work/out"
+}
+
+pins_a_version() {
+  fresh
+  installed 1.0
+  publish 1.1
+  publish 1.2
+  latest 1.2
+  update --version v1.1 > /dev/null && [ "$(version_of "$opt/webcontrol-rs")" = 1.1 ] &&
+    grep -q "releases/tags/v1.1" "$work/calls" || return 1
+  update --version 1.1 > "$work/out" && grep -q "1.1 is installed. Nothing to do" "$work/out" &&
+    update --version=1.1 --force > /dev/null && grep -qx "version=1.1" "$backup/MANIFEST"
+}
+
+drafts_are_invisible() {
+  fresh
+  installed 1.0
+  ! update > /dev/null 2> "$work/err" && grep -q "No published release found in designfrontier/WebControl" "$work/err" &&
+    grep -q "Drafts are not visible" "$work/err"
+}
+
+refuses_off_aarch64() {
+  fresh
+  installed 1.0
+  publish 1.1
+  latest 1.1
+  echo x86_64 > "$work/arch"
+  local before
+  before="$(snapshot)"
+  ! update > /dev/null 2> "$work/err" && grep -q "aarch64); this machine is x86_64" "$work/err" &&
+    no_changes_since "$before" && ! update --rollback > /dev/null 2>&1
+}
+
+takes_the_repo_and_token() {
+  fresh
+  installed 1.0
+  mkdir -p "$work/gh/repos/maker/fork/releases"
+  publish 1.1
+  cp "$api/tags/v1.1" "$work/gh/repos/maker/fork/releases/latest"
+  update GITHUB_TOKEN=secret --repo maker/fork > /dev/null &&
+    grep -q "Authorization: Bearer secret .*repos/maker/fork/releases/latest" "$work/calls" &&
+    ! grep "SHA256SUMS" "$work/calls" | grep -q Authorization || return 1
+  fresh
+  installed 1.0
+  mkdir -p "$work/gh/repos/maker/fork/releases"
+  publish 1.1
+  cp "$api/tags/v1.1" "$work/gh/repos/maker/fork/releases/latest"
+  update WEBCONTROL_REPO=maker/fork > /dev/null && [ "$(version_of "$opt/webcontrol-rs")" = 1.1 ] &&
+    ! update --repo 'x;y' > /dev/null 2>&1
+}
+
+python_backend_is_not_started() {
+  fresh
+  installed 1.0
+  echo inactive > "$work/active"
+  echo active > "$work/python-active"
+  publish 1.1
+  latest 1.1
+  update > "$work/out" && grep -q "Python backend is running" "$work/out" &&
+    ! grep -q "systemctl restart" "$work/calls" && [ "$(version_of "$opt/webcontrol-rs")" = 1.1 ]
+}
+
+help_and_bad_flags() {
+  update --help > "$work/out" && grep -q "Only PUBLISHED releases" "$work/out" && grep -q -- "--rollback" "$work/out" &&
+    ! update --frobnicate > /dev/null 2>&1
+}
+
+check "up to date: exits 0 and changes nothing" up_to_date
+check "updates with no earlier backup, backing up every file" update_without_a_backup
+check "an update deletes the old backup and makes a new one" update_over_a_backup
+check "a first install has nothing to back up" first_install_skips_the_backup
+check "a checksum mismatch aborts with nothing changed" checksum_mismatch_changes_nothing
+check "refuses a tarball missing an install file" refuses_a_tarball_without_install_files
+check "refuses during a job, a pause, a tool change or a probe" refuses_while_busy
+check "refuses during a controller firmware upgrade" refuses_during_a_firmware_upgrade
+check "a failed health check rolls back by itself" failed_health_check_rolls_back
+check "a service answering with another version fails the update" stale_version_rolls_back
+check "a controller that does not reconnect fails the update" lost_controller_rolls_back
+check "no controller attached is a warning" no_controller_only_warns
+check "--rollback restores the backup and keeps it" manual_rollback
+check "--rollback refuses during a job or with no backup" rollback_refuses_while_busy_or_without_a_backup
+check "--status shows installed, backup and latest" status_shows_versions
+check "--status with nothing installed or published" status_without_releases_or_backup
+check "--version installs that tag" pins_a_version
+check "drafts are invisible: no published release is an error" drafts_are_invisible
+check "refuses a machine that is not aarch64" refuses_off_aarch64
+check "--repo, WEBCONTROL_REPO and GITHUB_TOKEN" takes_the_repo_and_token
+check "leaves the Python backend running" python_backend_is_not_started
+check "--help and unknown flags" help_and_bad_flags
+
+if [ "$failures" != 0 ]; then
+  echo "$failures failed"
+  exit 1
+fi
+echo "all webcontrol-update tests passed"

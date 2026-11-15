@@ -168,6 +168,7 @@ jobs:
       - name: Coverage, 95% lines for every crate
         run: scripts/coverage.sh
       - run: bash deploy/test.sh
+      - run: bash deploy/update-test.sh
       - run: bash scripts/release-test.sh
       - uses: actions/download-artifact@v8
         with:
