@@ -155,7 +155,8 @@ is spelled out with `tick`: after `!`, an ALARM or `Buffer overflow!` the backen
 it reads a status report once its input has run dry at least 0.25 s after the halt, so those transcripts `tick`
 0.3 s and then send a status report; `stop_ignores_a_status_report_read_too_soon` pins that an earlier report
 releases nothing. After an ALARM or overflow the resync releases only `$` and modal lines: anything that moves waits
-for Stop, or Play on the held job (Rust-intended deviation 4). The backend treats 5 s without any controller line as a lost connection, so no transcript waits that long without an rx.
+for Stop, or Play on the held job (Rust-intended deviation 4). The backend treats 5 s without any controller line as a
+lost connection, so no transcript waits that long without an rx.
 
 The Python recorder used the same rules, so a recorded transcript replayed: its controller model answered only once
 the backend had been quiet for `quiet` seconds, one line per settle.

@@ -53,28 +53,49 @@ pub(crate) fn survives_alarm(queued: &Queued) -> bool {
     }
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct Hold {
+    message: String,
+    /// False once the firmware could not place the sled: it then takes the sled to be at 0, 0.
+    job_resumes: bool,
+}
+
 impl Machine {
     pub(crate) fn alarm_held(&self) -> bool {
         self.alarm.is_some()
     }
 
+    fn job_resumes(&self) -> bool {
+        self.job.flow.in_job() && self.alarm.as_ref().is_some_and(|hold| hold.job_resumes)
+    }
+
     /// Why `command` is refused while an alarm holds the controller; Play on the held job is how it resumes.
     pub(crate) fn alarm_refusal(&self, command: &str) -> Option<&'static str> {
-        let resumes_job = matches!(command, "startRun" | "resumeRun") && self.job.flow.in_job();
-        if !self.alarm_held() || resumes_job || ALLOWED.contains(&command) {
+        let play = matches!(command, "startRun" | "resumeRun") && self.job.flow.in_job();
+        let allowed = if play { self.job_resumes() } else { ALLOWED.contains(&command) };
+        if !self.alarm_held() || allowed {
             return None;
         }
-        Some(if self.job.flow.in_job() { JOB_HELD } else { HELD })
+        Some(if self.job_resumes() { JOB_HELD } else { HELD })
     }
 
     /// Drops every queued command that would move the machine and holds the rest until the alarm is cleared.
-    pub(crate) fn latch_alarm(&mut self, message: String, effects: &mut Vec<Effect>) {
+    pub(crate) fn latch_alarm(&mut self, message: String, job_resumes: bool, effects: &mut Vec<Effect>) {
         tracing::warn!(message, "alarm: holding every command that moves the machine until Stop");
         self.controller.queue.retain(survives_alarm);
         self.controller.hold_until = None;
         self.controller.raise_deadline = None;
         effects.push(broadcast(&Alarm { message: message.clone() }));
-        self.alarm = Some(message);
+        let job_resumes = job_resumes && self.alarm.as_ref().is_none_or(|hold| hold.job_resumes);
+        self.alarm = Some(Hold { message, job_resumes });
+    }
+
+    /// `Unable to find valid machine position`: Stop's own reload repeats it, so only that one does not hold.
+    pub(crate) fn unplaceable_sled(&mut self, message: String, effects: &mut Vec<Effect>) {
+        match std::mem::take(&mut self.controller.stop_reload) {
+            true => effects.push(broadcast(&Alarm { message })),
+            false => self.latch_alarm(message, false, effects),
+        }
     }
 
     /// Stop, or Play on the held job: the UI's alarm goes with it.
@@ -88,7 +109,7 @@ impl Machine {
     /// What a B05 reply shows: no alarm after a reconnect, unless one still holds the controller.
     pub(crate) fn alarm_after_boot(&self) -> Effect {
         match &self.alarm {
-            Some(message) => broadcast(&Alarm { message: message.clone() }),
+            Some(hold) => broadcast(&Alarm { message: hold.message.clone() }),
             None => broadcast(&ClearAlarm::new()),
         }
     }

@@ -336,3 +336,34 @@ fn stop_z_clears_the_alarm_too() {
     assert_eq!((written(&stopped), commands(&stopped).contains(&"clearAlarm".to_string())), (vec!["!".into()], true));
     assert!(alerts(&rig.act("home")).is_empty());
 }
+
+const UNABLE: &str = "Message: Unable to find valid machine position for chain lengths 1.00, 2.00";
+
+#[test]
+fn stops_reload_never_holds_again_however_long_the_firmware_takes_to_give_up() {
+    let mut rig = Rig::connected();
+    rig.rx(UNABLE);
+    rig.act("stopRun");
+    rig.rx("ok");
+    rig.rx("[Forward Calculating Position]");
+    reports_for(&mut rig, 1000);
+    assert_eq!(commands(&rig.rx(UNABLE)), ["alarm"], "200 failed guesses outlast the resync");
+    rig.clear_written();
+    assert!(alerts(&rig.act_with("move", json!("up"), json!("1"))).is_empty());
+    assert_eq!(rig.run_to_quiet(), ["G91", "G00 Y1.0", "G90"]);
+}
+
+#[test]
+fn a_reload_that_cannot_place_the_sled_after_an_alarm_leaves_only_stop() {
+    let (mut rig, _) = job_halted(false);
+    rig.rx("[Forward Calculating Position]");
+    rig.rx(UNABLE);
+    reports_for(&mut rig, 400);
+    ["startRun", "resumeRun"].iter().for_each(|command| {
+        let refused = rig.act(command);
+        assert!(alerts(&refused)[0].ends_with(HELD), "{command}: {refused:?}");
+        assert!(written(&refused).is_empty(), "{command}");
+    });
+    stop(&mut rig);
+    assert!(alerts(&rig.act("home")).is_empty());
+}

@@ -263,6 +263,7 @@ impl Machine {
         self.measure = None;
         self.pid.end_tests();
         self.realtime("!", now, effects);
+        self.controller.stop_reload = true;
         self.drop_user_commands();
         self.end_job();
         let job = &mut self.job;

@@ -207,8 +207,9 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
     oldest unacknowledged line. Every action and HTTP write that reaches the controller is refused (an alert or a
     409) except Stop, Stop Z, Pause, Resume's `~`, `$$` and settings writes. Stop or Stop Z clears it, and so does
     Play (or Resume) on the held job, which returns as from any halt (B11). A reboot or reconnect keeps it, and B05's
-    reply shows the alarm again instead of clearing it. The unplaceable-sled message read during Stop's own resync is
-    shown but does not hold again, since Stop's reload repeats it. `alarm_mid_home_holds_the_plunge_until_stop`.
+    reply shows the alarm again instead of clearing it. The unplaceable-sled message that ends Stop's own reload is
+    shown but does not hold again, however long the 200 failed guesses take. After it the firmware takes the sled to
+    be at 0, 0, so a job it held resumes only from Stop. `alarm_mid_home_holds_the_plunge_until_stop`.
 
 ### C. One-click firmware upgrade
 

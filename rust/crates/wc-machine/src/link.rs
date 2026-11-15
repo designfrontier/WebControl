@@ -186,6 +186,9 @@ impl Machine {
         {
             probe.zeroed = true;
         }
+        if line == "position loaded at:" {
+            self.controller.stop_reload = false;
+        }
         let reply = classify(line);
         self.acknowledge(line, &reply, effects);
         self.react(line, reply, now, effects);
@@ -271,11 +274,11 @@ impl Machine {
                     _ if text.contains("Position Lost") => "Alarm: Position Lost.  Reset Chains.".into(),
                     other => other,
                 };
-                self.latch_alarm(message, effects);
+                self.latch_alarm(message, true, effects);
             }
             Reply::BufferOverflow => {
                 self.halt(now, effects);
-                self.latch_alarm("Alarm: Controller Buffer Overflow".into(), effects);
+                self.latch_alarm("Alarm: Controller Buffer Overflow".into(), true, effects);
             }
             Reply::FirmwareVersion(version) => {
                 effects.push(self.alarm_after_boot());
@@ -303,11 +306,8 @@ impl Machine {
             effects.push(broadcast(&ActivateModal::notification(body, true)));
         } else if text.contains("Unable to find valid") {
             // Setting the sprockets to zero reports a zero chain length, which is expected.
-            // Stop's own position reload repeats it, so only Stop's resync may show it without holding.
-            match (text.contains("lengths 0.00") || text.contains(", 0.00"), self.controller.resync_after) {
-                (true, _) => {}
-                (false, None) => self.latch_alarm(text.into(), effects),
-                (false, Some(_)) => effects.push(broadcast(&Alarm { message: text.into() })),
+            if !(text.contains("lengths 0.00") || text.contains(", 0.00")) {
+                self.unplaceable_sled(text.into(), effects);
             }
         } else {
             effects.push(broadcast(&ActivateModal::notification(body, false)));
