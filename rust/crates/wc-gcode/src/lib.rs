@@ -2,8 +2,10 @@
 //! the restart half of `Actions/actions.py`), and the board model (`Boards/`). Pure functions, no IO: every string
 //! that reaches the controller or a shared file matches Python's byte for byte (tests/fixtures/gcode).
 
+mod decimal;
 pub mod load;
 pub mod py;
+pub mod shift;
 mod words;
 
 use std::fmt;
