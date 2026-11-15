@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { io } from "socket.io-client";
-import { chooseMenu, closeServerDialogs, openActions, resetMachine, waitForServer } from "./helpers";
+import { chooseMenu, closeServerDialogs, connectBackend, openActions, resetMachine, waitForServer } from "./helpers";
 
 test.beforeEach(async ({ page, baseURL }) => {
   await resetMachine(baseURL!);
@@ -51,9 +50,8 @@ test("a server alert stacks above an open modal and leaves it usable", async ({ 
   const actions = page.getByRole("dialog", { name: "Actions" });
   await expect(actions).toBeVisible();
 
-  const socket = io(`${baseURL}/MaslowCNC`, { transports: ["polling"] });
+  const socket = await connectBackend(baseURL!);
   try {
-    await new Promise((resolve) => socket.on("connect", () => resolve(null)));
     const play = () => socket.emit("action", { data: { command: "startRun", arg: "", arg1: "" } });
     play();
     play();

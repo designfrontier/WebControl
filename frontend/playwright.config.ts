@@ -10,13 +10,10 @@ const backendCommand = rust
     `../rust/target/debug/webcontrol-rs --port ${port} --home "$(mktemp -d)"`
   : `npm run build && ${python} ../tests/e2e_backend.py`;
 
-/** The specs the Rust backend passes so far; each milestone adds its own until it runs them all. */
-const rustSpecs = ["rust/**/*.spec.ts", "files-boards.spec.ts", "viewer.spec.ts", "calibration.spec.ts"];
-
 /** Runs a real backend (no machine attached, throwaway ~/.WebControl) serving the built app at /next. */
 export default defineConfig({
   testDir: "./e2e",
-  ...(rust ? { testMatch: rustSpecs } : { testIgnore: "rust/**" }),
+  ...(rust ? {} : { testIgnore: "rust/**" }),
   workers: 1,
   retries: process.env.CI ? 1 : 0,
   reporter: [["list"]],

@@ -46,6 +46,10 @@ test("quick configure saves to the server and reloads", async ({ page }) => {
 });
 
 test("Z-axis and sprocket screens drive the machine with no controller attached", async ({ page }) => {
+  test.skip(
+    process.env.E2E_BACKEND === "rust",
+    "The Rust backend refuses machine commands with no controller attached",
+  );
   await page.goto("/next/machine/z-axis");
   await expect(page.getByText(/^Server: connected/)).toBeVisible({ timeout: 15_000 });
   const step = page.getByRole("textbox", { name: "Step" });
