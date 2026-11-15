@@ -323,8 +323,8 @@ scenario(
 
 scenario(
     "tool_change_t_then_m6_on_separate_lines",
-    "T2 and M6 on separate lines: the firmware would run the lone T2 as a move and skip the M6, so WebControl "
-    "leads the M6 with T2.",
+    "T2 and M6 on separate lines: the firmware would run the lone T2 as an empty move and skip the M6, so "
+    "WebControl does not send the T2 line and leads the M6 with T2.",
     {**MM, "gcode": {"lines": ["G21", "G90", "G0 X1", "T2", "M6", "G0 X2"]}},
     [pauses_on(r"M6", *TOOL_2), ui("startRun"), idle(), expect(state={"currentTool": 2, "uploadFlag": 0}),
      ui("resumeRun"), idle(), expect(state=FINISHED)],

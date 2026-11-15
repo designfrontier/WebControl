@@ -2,12 +2,12 @@
   "formatVersion": 1,
   "meta": {
     "name": "tool_change_t_then_m6_on_separate_lines",
-    "description": "T2 and M6 on separate lines: the firmware would run the lone T2 as a move and skip the M6, so WebControl leads the M6 with T2.",
+    "description": "T2 and M6 on separate lines: the firmware would run the lone T2 as an empty move and skip the M6, so WebControl does not send the T2 line and leads the M6 with T2.",
     "firmware": {
       "variant": "holey",
       "version": "51.27"
     },
-    "webcontrolCommit": "c859cea"
+    "webcontrolCommit": "8e1c18f"
   },
   "setup": {
     "units": "MM",
@@ -33,8 +33,6 @@
     {"type": "tx", "bytes": "G90  \n"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G0 X1  \n"},
-    {"type": "rx", "line": "ok"},
-    {"type": "tx", "bytes": "T2  \n"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "T2 M6  \n"},
     {"type": "rx", "line": "Tool Change: Please insert tool 2"},

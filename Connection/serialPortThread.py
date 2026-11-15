@@ -4,7 +4,7 @@ import re
 
 import serial
 
-from Connection.firmwareGcode import pausesFirmware, toolChangeLine
+from Connection.firmwareGcode import onlySelectsTool, pausesFirmware, toolChangeLine
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
 
 
@@ -219,7 +219,8 @@ class SerialPortThread(MakesmithInitFuncs):
             # check if command is going to be issued that pauses the controller.
             self.managePause(line)
             line = self.manageToolChange(line)
-            if not line.isspace(): # if all spaces, don't send.  likely a comment.
+            # A blank line is likely a comment; a lone T only selects the tool the next M6 is led by.
+            if not line.isspace() and not onlySelectsTool(line):
                 positioningMode = self._positioningModeOf(line)
                 line = self._shiftToHome(line)
                 self._write(line, gcodeIndex=self.data.gcodeIndex)
@@ -468,7 +469,7 @@ class SerialPortThread(MakesmithInitFuncs):
                     line = self._sanitise(self.data.gcode[self.data.gcodeIndex])
                     toSend = toolChangeLine(line, self.data.nextTool, self.data.currentTool)[0]
                     # sendNextLine refuses a problem line at once, so it needn't wait for room.
-                    fits = (line.isspace() or self._streamProblem(toSend) is not None
+                    fits = (line.isspace() or onlySelectsTool(line) or self._streamProblem(toSend) is not None
                             or self.bufferSpace >= len(self._shiftToHome(toSend) + "\n"))
                     if fits:
                         self.sendNextLine()
@@ -490,6 +491,8 @@ class SerialPortThread(MakesmithInitFuncs):
             self.data.ui_queue1.put("Alert", "Command " + title, "That command " + reason)
             return
         command = self.manageToolChange(command)
+        if onlySelectsTool(command):
+            return
         self._write(command)
         # Queued commands go out one at a time, so the next ok or error: answers the probe.
         self.probeInFlight = "G38.2" in command

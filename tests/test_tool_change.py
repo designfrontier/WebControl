@@ -41,11 +41,27 @@ def controller_says(app, data, messages):
     [from_controller(app, data, message) for message in messages]
 
 
-def test_t_on_its_own_line_then_m6_sends_the_t_with_the_m6_the_firmware_would_skip(tools, serial):  # noqa: F811
+def test_t_on_its_own_line_is_not_sent_and_leads_the_m6_the_firmware_would_skip(tools, serial):  # noqa: F811
     sent = stream(tools, serial, ["G1 X1 ", "T2 ", "M6 ", "G1 X2 "])
 
-    assert sent == ["G1 X1  ", "T2  ", "T2 M6  "]
+    assert sent == ["G1 X1  ", "T2 M6  "]
     assert (tools.uploadFlag, tools.currentTool, tools.gcodeIndex) == (-1, 2, 3)
+
+
+@pytest.mark.parametrize("line", ["T2 ", "T 3 ", "N10 T2 ", "T2.0 "])
+def test_a_line_that_only_selects_a_tool_is_not_sent(tools, serial, line):  # noqa: F811
+    sent = stream(tools, serial, ["G1 X1 ", line, "G1 X2 "])
+
+    assert sent == ["G1 X1  ", "G1 X2  "]
+    assert tools.nextTool in (2, 3)
+
+
+def test_a_queued_lone_t_is_not_sent_but_selects_the_tool(tools, serial):  # noqa: F811
+    tools.gcode_queue.put("T2")
+    tools.gcode_queue.put("M6")
+    port = serial.run()
+
+    assert "T2 " not in port.sent and "T2 M6 " in port.sent
 
 
 def test_m6_before_its_t_is_sent_t_first_so_the_firmware_changes_tool(tools, serial):  # noqa: F811
@@ -386,7 +402,7 @@ def test_an_m6_for_the_tool_already_in_still_names_it_for_the_firmware(tools, se
 
     sent = stream(tools, serial, ["T3 G0 X1 ", "T1 ", "M6 ", "G1 X2 "])
 
-    assert sent == ["T3 G0 X1  ", "T1  ", "T1 M6  ", "G1 X2  "]
+    assert sent == ["T3 G0 X1  ", "T1 M6  ", "G1 X2  "]
     assert tools.uploadFlag == 0
 
 
@@ -415,7 +431,7 @@ def test_the_t_added_to_an_m6_can_push_it_over_the_controllers_limit(tools, seri
 
     sent = stream(tools, serial, ["T2 ", long_m6, "G1 X2 "])
 
-    assert sent == ["T2  "]
+    assert sent == []
     assert (tools.uploadFlag, tools.currentTool) == (2, 0)
 
 
