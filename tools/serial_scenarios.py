@@ -134,6 +134,17 @@ scenario(
             settings=[{"section": "Advanced Settings", "key": "maxZRPM", "value": "12.6"}])],
 )
 
+scenario(
+    "connect_without_a_reset_handshakes_after_3_s",
+    "A board that does not reset when the port opens prints no banner and no boot ok, only its status reports. "
+    "After 3 s without either WebControl sends the handshake anyway, with the B05 and $13 a banner would have queued.",
+    {**MM, "start": "boot"},
+    [status(), tick(1.0, "no banner, no ok"), status(), tick(1.0), status(),
+     tick(1.0, "3 s after the port opened the handshake goes out"), idle(),
+     expect(state={"firmwareBuild": "51.27"},
+            emitted=[{"command": "controllerMessage", "data": "Firmware Version 51.27"}])],
+)
+
 # ----- manual moves -----
 
 scenario(
@@ -187,24 +198,43 @@ scenario(
 
 scenario(
     "move_z_in_inches_on_a_mm_machine",
-    "The Z panel in inches on a mm machine: G20 for the move, then G21 to put the controller back.",
-    {**MM, "unitsZ": "INCHES"},
-    [ui("moveZ", "raise", "0.25"), idle()],
+    "The Z panel in inches on a mm machine: each move goes out converted to mm, so neither the controller's units "
+    "nor WebControl's units and home change.",
+    {"units": "MM", "unitsZ": "INCHES", "home": {"x": 100.3, "y": -50.25}},
+    [step for _ in range(3) for step in (ui("moveZ", "raise", "0.25"), idle())]
+    + [expect(state={"units": "MM", "home": {"x": 100.3, "y": -50.25}})],
 )
+
+# What G38() prints on 51.27 before the probe line's ok or error; the feed is the boot feed clamped to zMaxFeed.
+PROBING = ["probing for z axis zero", "max depth -10.00 mm.", "feedrate 39.94 mm per min."]
+PROBE_TOUCHED = PROBING + ["z axis zeroed"]
+PROBE_MISSED = PROBING + ["error: probe did not connect", "program stopped", "z axis not set", ""]
 
 scenario(
     "touch_z_mm",
-    "Touch Z probes with G38.2 down to the plunge limit and then zeroes Z with G10 Z0. The zero is queued with the "
-    "probe, not after it succeeds.",
+    "Touch Z probes with G38.2 down to the plunge limit; once the probe line's ok shows it touched, Z is zeroed "
+    "with G10 Z0.",
     {**MM},
-    [ui("touchZ"), idle()],
+    [firmware(rule={"pattern": r"G38\.2", "replies": PROBE_TOUCHED}), ui("touchZ"), idle(),
+     expect(noAlerts=[{"title": "Touch Z"}])],
 )
 
 scenario(
     "touch_z_inches",
-    "Touch Z on an inch machine switches to G21 for the probe (its plunge limit is in mm) and back to G20.",
-    {**INCHES},
-    [ui("touchZ"), idle()],
+    "Touch Z on an inch machine probes in inches: the plunge limit (mm) is converted, so the units never change.",
+    {"units": "INCHES", "home": {"x": 3.9488, "y": 0}},
+    [firmware(rule={"pattern": r"G38\.2", "replies": PROBE_TOUCHED}), ui("touchZ"), idle(),
+     expect(state={"units": "INCHES", "home": {"x": 3.9488, "y": 0}})],
+)
+
+scenario(
+    "touch_z_probe_fails_leaves_z_alone",
+    "A probe that never touches: the firmware's `error: probe did not connect` stands in for the line's ok, so "
+    "nothing zeroes Z and the user is told. The next command goes out as usual.",
+    {**MM},
+    [ui("touchZ"), wait_tx(r"G38\.2"), firmware(forget=True), *[rx(line) for line in PROBE_MISSED], idle(),
+     expect(alerts=[{"title": "Touch Z Failed", "message": "Z was not zeroed"}]),
+     ui("moveZ", "raise", "5"), idle()],
 )
 
 # ----- streaming -----
@@ -304,8 +334,8 @@ scenario(
 
 scenario(
     "tool_change_t_then_m6_on_separate_lines",
-    "T2 and M6 on separate lines: the firmware would run the lone T2 as a move and skip the M6, so WebControl "
-    "leads the M6 with T2.",
+    "T2 and M6 on separate lines: the firmware would run the lone T2 as an empty move and skip the M6, so "
+    "WebControl does not send the T2 line and leads the M6 with T2.",
     {**MM, "gcode": {"lines": ["G21", "G90", "G0 X1", "T2", "M6", "G0 X2"]}},
     [pauses_on(r"M6", *TOOL_2), ui("startRun"), idle(), expect(state={"currentTool": 2, "uploadFlag": 0}),
      ui("resumeRun"), idle(), expect(state=FINISHED)],

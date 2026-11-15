@@ -4,7 +4,8 @@ import re
 
 import serial
 
-from Connection.firmwareGcode import pausesFirmware, toolChangeLine
+from Connection.firmwareFacts import isBootBanner
+from Connection.firmwareGcode import onlySelectsTool, pausesFirmware, toolChangeLine
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
 
 
@@ -24,6 +25,8 @@ class SerialPortThread(MakesmithInitFuncs):
     # could be smaller (0.02) however larger number doesn't seem to impact performance
     MINTimePerLine = 0.05
     RESYNC_DELAY = 0.25
+    # Longer than a reset takes to print its banner, shorter than the 5 s link timeout.
+    BOOT_WAIT = 3.0
 
     serialInstance = None
 
@@ -34,6 +37,8 @@ class SerialPortThread(MakesmithInitFuncs):
         self.unackedLines = deque()  # (length, gcode index or None) per line sent, newest on the left
         self.resyncAfter = None
         self.caughtUpSinceHalt = False
+        self.probeLine = None  # the probe's entry in unackedLines while it awaits its ok or error:
+        self.bootDeadline = None
 
     def _write(self, message, isQuickCommand=False, gcodeIndex=None):
         '''
@@ -101,6 +106,7 @@ class SerialPortThread(MakesmithInitFuncs):
         acks and hold regular lines until a status report read after the input ran dry past the resync delay.
         '''
         self._emptyAccounting()
+        self.probeLine = None
         self.machineIsReadyForData = False
         self.resyncAfter = time.time() + self.RESYNC_DELAY
         self.caughtUpSinceHalt = False
@@ -217,7 +223,8 @@ class SerialPortThread(MakesmithInitFuncs):
             # check if command is going to be issued that pauses the controller.
             self.managePause(line)
             line = self.manageToolChange(line)
-            if not line.isspace(): # if all spaces, don't send.  likely a comment.
+            # A blank line is likely a comment; a lone T only selects the tool the next M6 is led by.
+            if not line.isspace() and not onlySelectsTool(line):
                 positioningMode = self._positioningModeOf(line)
                 line = self._shiftToHome(line)
                 self._write(line, gcodeIndex=self.data.gcodeIndex)
@@ -341,6 +348,7 @@ class SerialPortThread(MakesmithInitFuncs):
             self.serialInstance.open()
 
             self.lastMessageTime = time.time()
+            self.bootDeadline = time.time() + self.BOOT_WAIT
             self.data.connectionStatus = 1
             self._startRecording()
             # The port open resets the board, and its boot banner queues B05 and the write-only settings.
@@ -423,6 +431,7 @@ class SerialPortThread(MakesmithInitFuncs):
         except:
             pass
 
+        self._watchForBoot(lineFromMachine)
         if self.resyncAfter is not None:
             if lineFromMachine.startswith("<") and self.caughtUpSinceHalt:
                 self.resyncAfter = None
@@ -431,9 +440,12 @@ class SerialPortThread(MakesmithInitFuncs):
         # Check if a line has been completed
         elif lineFromMachine == "ok\r\n" or (len(lineFromMachine) >= 6 and lineFromMachine[0:6] == "error:"):
             self.machineIsReadyForData = True
-            if bool(self.unackedLines) is True:  # if we've sent lines to the machine
-                # free up that space in the buffer
-                self.bufferSpace = (self.bufferSpace + self.unackedLines.pop()[0])
+            acked = self.unackedLines.pop() if self.unackedLines else None
+            if acked is not None:
+                self.bufferSpace = self.bufferSpace + acked[0]
+            # Identity, not equality: a `~` sent mid-probe is acked first with an entry of its own.
+            if acked is not None and acked is self.probeLine:
+                self._probeFinished(lineFromMachine == "ok\r\n")
         # The firmware stops itself on these and never acks the lines it held.
         if lineFromMachine.startswith(("ALARM:", "Buffer overflow!")):
             self._rewindToDroppedLines()
@@ -464,7 +476,7 @@ class SerialPortThread(MakesmithInitFuncs):
                     line = self._sanitise(self.data.gcode[self.data.gcodeIndex])
                     toSend = toolChangeLine(line, self.data.nextTool, self.data.currentTool)[0]
                     # sendNextLine refuses a problem line at once, so it needn't wait for room.
-                    fits = (line.isspace() or self._streamProblem(toSend) is not None
+                    fits = (line.isspace() or onlySelectsTool(line) or self._streamProblem(toSend) is not None
                             or self.bufferSpace >= len(self._shiftToHome(toSend) + "\n"))
                     if fits:
                         self.sendNextLine()
@@ -486,13 +498,43 @@ class SerialPortThread(MakesmithInitFuncs):
             self.data.ui_queue1.put("Alert", "Command " + title, "That command " + reason)
             return
         command = self.manageToolChange(command)
+        if onlySelectsTool(command):
+            return
         self._write(command)
+        self.probeLine = self.unackedLines[0] if "G38.2" in command and self.unackedLines else None
         # if units have changed, update settings and notify UI clients to stay in sync
         if command.find("G20") != -1 and self.data.units != "INCHES":
             self.data.actions.updateSetting("toInches", 0, True)  # value = doesn't matter
         if command.find("G21") != -1 and self.data.units != "MM":
             self.data.actions.updateSetting("toMM", 0, True)  # value = doesn't matter
         self.data.actions.sendGCodePositionUpdate(self.data.gcodeIndex, recalculate=True)
+
+    def _watchForBoot(self, lineFromMachine):
+        '''
+        A board that doesn't reset when the port opens never sends the boot ok the handshake waits for.
+        '''
+        if self.bootDeadline is None:
+            return
+        if lineFromMachine == "ok\r\n" or isBootBanner(lineFromMachine):
+            self.bootDeadline = None
+        elif time.time() >= self.bootDeadline:
+            self.bootDeadline = None
+            self.data.console_queue.put("No boot message from the controller; connecting anyway")
+            self.data.gcode_queue.put("B05 ")
+            [self.data.gcode_queue.put(line) for line in self.data.config.writeOnlyFirmwareSettings()]
+            self.machineIsReadyForData = True
+
+    def _probeFinished(self, touched):
+        '''
+        The firmware answers a probe that never touched with `error: probe did not connect` instead of ok.
+        '''
+        self.probeLine = None
+        if touched:
+            self.data.actions.defineZ0()
+        else:
+            self.data.ui_queue1.put("Alert", "Touch Z Failed",
+                                    "The probe did not touch the plate, so Z was not zeroed. Check the plate and its "
+                                    "clip, then try again.")
 
     def _controllerIsIdle(self):
         '''

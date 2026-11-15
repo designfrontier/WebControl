@@ -56,7 +56,9 @@ the raw line, re-send B05 on any boot banner (`PCB v1.`, `Grbl v1.00`, `ready`),
   51.292 B17/B18 store nothing but report success; only `$63`/`$64` (mm) work, and B20 reads them back.
 - G17 is unsupported (sent by both calibration patterns). G38.2 moves at a fixed 60 mm/min, but touchZ's `F1` still
   sets the modal feed to 1 mm/min (without F it clamps the modal feed to zMaxFeed). G38.2 leaves the modal
-  motion mode alone. The firmware reads T only when it leads a line that also has a G or M word (`T2 M6`, `T2 G0 X1`):
+  motion mode alone. On a touch G38.2 zeroes Z itself, prints `z axis zeroed` and acks; on a miss it prints
+  `error: probe did not connect`, `program stopped`, `z axis not set` and an empty line, with no `ok`. `M2` and
+  `M30` only turn the spindle off. The firmware reads T only when it leads a line that also has a G or M word (`T2 M6`, `T2 G0 X1`):
   in `M6 T2`, `N10 T2 M6`, `G0 X1 T2` and a lone `T2` line the T is ignored, and a lone `T2` runs as a modal move.
 - `$` keys: units match WebControl's assumptions. `$13` is the only path that sets R. `$37` is used only when
   `$46 ≤ 0`. `$40`/`$41` are percent. `$10`/`$11`/`$15` are unsigned ints. `$43` is unused on holey. `$86` and `$144`
@@ -70,7 +72,9 @@ F is per minute in current units, stored as mm/min (×25.4 under G20), clamped t
 too). G0 runs at `$15` and ignores F for speed. Z is clamped to `zMaxFeed = $18 × |$19|`: 39.9 mm/min on the 51.27
 defaults, 399 mm/min on the 51.292 defaults. WebControl's restart sequence rapids without F, plunges with
 `G1 Z… F<plunge>` (the file's last non-G0 Z feed, else 12.8 mm/min) and ends with `G0`/`G1 F<file F>` to restore the
-file's modal motion and feed. The boot feed rate is `$15/2` on 51.27/51.28, and 0
+file's modal motion and feed. If the file set no F before that point it restores no F (only `G0`/`G1` where the
+file's motion differs from the restart's last move). With no plunge that leaves the firmware's modal feed alone; after
+a plunge the plunge's 12.8 mm/min stays the modal feed, so the file's next F-less G1 runs at it. The boot feed rate is `$15/2` on 51.27/51.28, and 0
 (clamped to 1 mm/min) on 1.26 and 51.29x.
 
 ## 6. Kinematics
@@ -133,7 +137,7 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
 | A9 | Low–Med | The version only reaches the console; all 51.29x builds report 51.29. |
 | A10 | Low | An unclosed `(` reaches the firmware and hangs 51.27; `!`, `~` and backtick inside a line act as realtime commands. |
 | A11 | Low | `$45` and fractional `$10`/`$11`/`$15` are rewritten on every connect; NaN parses as 1. |
-| A12 | Low | Nothing is sent if the board doesn't reset on port open (WebControl waits for the boot `ok`). |
+| A12 | Fixed | Nothing was sent if the board didn't reset on port open; now, with no banner or `ok` 3 s after the port opens, the handshake goes out anyway. |
 | A13 | Fixed | M0/M1 timing depended on the early `~`; M0 at end of line wasn't detected. |
 | A14 | Low | `$86`, `$144` rejected; `$43` unused on holey; G17 ignored. |
 | A15 | Info | `bufferSize = 126` is right; PWR:/F: parsing is dead code; PE lines are mis-parsed until B05 is parsed. |
@@ -155,7 +159,8 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
 9. Settings: per-version key/type table; compare at the printed precision; push the full set after every boot,
    including `$13` (sets R) and `$18`, `$9`, `$28`, `$36`; treat `EEPROM read fail` as a factory reset.
 10. Feed model: modal F clamped to [1, `$15`]; G0 at `$15`; Z clamped to `$18 × |$19|`; G38.2 at 60 mm/min. Emit F
-    on the first motion line; restart with a G1 Z plunge at an explicit feed, then restore the file's last F.
+    on the first motion line; restart with a G1 Z plunge at an explicit feed, then restore the file's last F, if it set one
+    (without one the plunge feed stays modal).
 11. Never auto-send `~`; stop streaming before any line the firmware will pause on (using its T semantics); emit
     `T<n> M6`; require Stop after an ALARM.
 12. Z limits: hide below 51.292 and never send B17/B18/B19; on 51.292+ use `$63`/`$64` (mm, shifted by zeroing)

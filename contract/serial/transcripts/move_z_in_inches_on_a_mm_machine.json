@@ -2,32 +2,49 @@
   "formatVersion": 1,
   "meta": {
     "name": "move_z_in_inches_on_a_mm_machine",
-    "description": "The Z panel in inches on a mm machine: G20 for the move, then G21 to put the controller back.",
+    "description": "The Z panel in inches on a mm machine: each move goes out converted to mm, so neither the controller's units nor WebControl's units and home change.",
     "firmware": {
       "variant": "holey",
       "version": "51.27"
     },
-    "webcontrolCommit": "c859cea"
+    "webcontrolCommit": "6dceb8d"
   },
   "setup": {
     "units": "MM",
+    "unitsZ": "INCHES",
     "home": {
-      "x": 0,
-      "y": 0
-    },
-    "unitsZ": "INCHES"
+      "x": 100.3,
+      "y": -50.25
+    }
   },
   "events": [
     {"type": "ui", "action": {"command": "moveZ", "arg": "raise", "arg1": "0.25"}},
-    {"type": "tx", "bytes": "G20  \n"},
+    {"type": "tx", "bytes": "G21  \n"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G91  \n"},
     {"type": "rx", "line": "ok"},
-    {"type": "tx", "bytes": "G00 Z0.25  \n"},
+    {"type": "tx", "bytes": "G00 Z6.35  \n"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G90  \n"},
     {"type": "rx", "line": "ok"},
+    {"type": "ui", "action": {"command": "moveZ", "arg": "raise", "arg1": "0.25"}},
     {"type": "tx", "bytes": "G21  \n"},
-    {"type": "rx", "line": "ok"}
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G91  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G00 Z6.35  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "ui", "action": {"command": "moveZ", "arg": "raise", "arg1": "0.25"}},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G91  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G00 Z6.35  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "state": {"units": "MM", "home": {"x": 100.3, "y": -50.25}}}
   ]
 }
