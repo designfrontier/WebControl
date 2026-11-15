@@ -272,7 +272,7 @@ describe("the WebSocket transport", () => {
         }
       },
     );
-    const transport = connectWebSocket("/MaslowCNCLogs", { separate: true });
+    const transport = connectWebSocket("/MaslowCNCLogs");
     expect(created).toEqual([webSocketUrl("/MaslowCNCLogs", window.location)]);
     transport.disconnect();
   });

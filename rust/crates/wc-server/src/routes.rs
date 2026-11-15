@@ -1,7 +1,7 @@
 use axum::Json;
 use axum::Router;
 use axum::extract::{DefaultBodyLimit, Path};
-use axum::http::{StatusCode, Uri, header};
+use axum::http::{Method, StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use serde_json::json;
@@ -9,24 +9,28 @@ use serde_json::json;
 use crate::forms::UPLOAD_LIMIT;
 use crate::{AppState, api, archive, assets, boards, files, help, ws};
 
-fn redirect(status: StatusCode, to: &'static str) -> Response {
-    (status, [(header::LOCATION, to)]).into_response()
+/// The UI's old `/next` addresses: the same path and query at the root.
+async fn from_next(uri: Uri) -> Response {
+    let path = uri.path().strip_prefix("/next").unwrap_or_default().trim_start_matches('/');
+    let to = uri.query().map_or(format!("/{path}"), |query| format!("/{path}?{query}"));
+    (StatusCode::PERMANENT_REDIRECT, [(header::LOCATION, to)]).into_response()
 }
 
-/// `/api` errors are JSON, including the 404s Python answered with HTML (wart 9).
-async fn fallback(uri: Uri) -> Response {
-    match uri.path().starts_with("/api/") {
-        true => (StatusCode::NOT_FOUND, Json(json!({"error": "Not found"}))).into_response(),
-        false => assets::not_found_html(),
+/// `/api` errors are JSON, including the 404s Python answered with HTML (wart 9); any other GET is the UI.
+async fn fallback(method: Method, uri: Uri) -> Response {
+    let path = uri.path().trim_start_matches('/');
+    match method {
+        _ if path.starts_with("api/") => (StatusCode::NOT_FOUND, Json(json!({"error": "Not found"}))).into_response(),
+        Method::GET | Method::HEAD => assets::page(path),
+        _ => assets::not_found_html(),
     }
 }
 
 pub fn router(state: AppState) -> Router {
     Router::new()
-        .route("/", get(|| async { redirect(StatusCode::FOUND, "/next/") }))
-        .route("/next", get(|| async { redirect(StatusCode::PERMANENT_REDIRECT, "/next/") }))
-        .route("/next/", get(|| async { assets::next("") }))
-        .route("/next/{*path}", get(|Path(path): Path<String>| async move { assets::next(&path) }))
+        .route("/next", get(from_next))
+        .route("/next/", get(from_next))
+        .route("/next/{*path}", get(from_next))
         .route("/static/{*filename}", get(|Path(name): Path<String>| async move { assets::image(&name) }))
         .route("/api/state", get(api::state))
         .route("/api/main", get(api::main_screen))

@@ -12,9 +12,4 @@ export interface Transport {
   disconnect(): unknown;
 }
 
-export interface TransportOptions {
-  /** Open a connection of its own even if one to the same server is already open. */
-  separate?: boolean;
-}
-
-export type ConnectTransport = (namespace: string, options?: TransportOptions) => Transport;
+export type ConnectTransport = (namespace: string) => Transport;

@@ -1,19 +1,14 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const port = Number(process.env.E2E_BACKEND_PORT ?? 5055);
-const python = process.env.E2E_PYTHON ?? "../.venv/bin/python";
-const rust = process.env.E2E_BACKEND === "rust";
 
-/** Python: `tests/e2e_backend.py`. Rust: `webcontrol-rs` built with this dist embedded, on a throwaway home. */
-const backendCommand = rust
-  ? `npm run build && cargo build --manifest-path ../rust/Cargo.toml -p wc-server && ` +
-    `../rust/target/debug/webcontrol-rs --port ${port} --home "$(mktemp -d)"`
-  : `npm run build && ${python} ../tests/e2e_backend.py`;
+/** `webcontrol-rs` built with this dist embedded, on a throwaway home and with no controller. */
+const backendCommand =
+  `npm run build && cargo build --manifest-path ../rust/Cargo.toml -p wc-server && ` +
+  `"\${CARGO_TARGET_DIR:-../rust/target}/debug/webcontrol-rs" --port ${port} --home "$(mktemp -d)"`;
 
-/** Runs a real backend (no machine attached, throwaway ~/.WebControl) serving the built app at /next. */
 export default defineConfig({
   testDir: "./e2e",
-  ...(rust ? {} : { testIgnore: "rust/**" }),
   workers: 1,
   retries: process.env.CI ? 1 : 0,
   reporter: [["list"]],
@@ -24,9 +19,9 @@ export default defineConfig({
   ],
   webServer: {
     command: backendCommand,
-    url: `http://localhost:${port}/next/`,
+    url: `http://localhost:${port}/`,
     reuseExistingServer: !process.env.CI && !process.env.E2E_BACKEND_PORT,
     timeout: 180_000,
-    env: { E2E_BACKEND_PORT: String(port), PYTHONUNBUFFERED: "1" },
+    env: { E2E_BACKEND_PORT: String(port) },
   },
 });

@@ -8,7 +8,7 @@ const gcode = (lines: string[]) => ({
   buffer: Buffer.from(lines.join("\n")),
 });
 
-const atControl = (page: Page) => expect(page).toHaveURL(/\/next\/?$/);
+const atControl = (page: Page) => expect(page).toHaveURL(/\/$/);
 
 const loadedGcode = async (page: Page) => {
   await chooseMenu(page, "G-Code", "View/Edit");
@@ -23,7 +23,7 @@ const loadedGcode = async (page: Page) => {
 test.beforeEach(({ baseURL }) => resetMachine(baseURL!));
 
 test("uploads, opens, edits, saves and clears gcode from the G-Code menu", async ({ page }) => {
-  await page.goto("/next/files/upload");
+  await page.goto("/files/upload");
   await waitForServer(page);
 
   await page.getByLabel("New directory").fill("e2e jobs");
@@ -66,7 +66,7 @@ test("uploads, opens, edits, saves and clears gcode from the G-Code menu", async
 });
 
 test("edits, trims and saves the current board from the Boards menu", async ({ page }) => {
-  await page.goto("/next/");
+  await page.goto("/");
   await waitForServer(page);
   // Editing a board resizes it without resizing its cut record, which trimming indexes; start from a clear one.
   await chooseMenu(page, "Boards", "Clear Board");

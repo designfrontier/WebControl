@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "generatedFrom": "frontend/src/protocol (npm run contract)",
   "socket": {
     "path": "/socket.io",
@@ -1498,10 +1498,10 @@
     },
     {
       "method": "GET",
-      "path": "/next/{path}",
+      "path": "/{path}",
       "family": "static",
-      "summary": "This UI's built files, with index.html for any other path",
-      "params": "schemas/http/get-next-path.params.json",
+      "summary": "This UI's built files, with index.html for any other path outside /api/; /next/... redirects here (308)",
+      "params": "schemas/http/get-path.params.json",
       "responses": {
         "200": {
           "contentType": "application/octet-stream",

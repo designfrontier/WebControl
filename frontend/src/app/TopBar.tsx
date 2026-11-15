@@ -26,13 +26,12 @@ const CONFIRMS = {
   },
 } as const;
 
-/** The classic navbar (templates/base.html): the same menus in the same order, each opening a modal. */
+/** The classic navbar: the same menus in the same order, each opening a modal. */
 export const TopBar = () => {
   const navigate = useNavigate();
   const client = useClient();
   const updateAvailable = useUpdateAvailable();
   const locked = useMachine(selectGcodeLocked) ? GCODE_LOCKED_REASON : undefined;
-  const hasClassicUi = useMachine((state) => state.backend === "python");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [confirm, setConfirm] = useState<keyof typeof CONFIRMS | null>(null);
 
@@ -75,7 +74,7 @@ export const TopBar = () => {
     { label: "Offline Help", onSelect: open("/help") },
     { label: "About", onSelect: open("/about") },
     { label: "Update", onSelect: open("/updates"), badge: updateAvailable ? "New" : undefined },
-    { label: "Logs", href: "/next/logs", newTab: true },
+    { label: "Logs", href: "/logs", newTab: true },
   ];
 
   return (
@@ -104,11 +103,6 @@ export const TopBar = () => {
       <div className="topbar-end">
         <StatusBar />
         <ThemeToggle />
-        {hasClassicUi && (
-          <a className="classic-link" href="/">
-            Classic UI
-          </a>
-        )}
       </div>
       {confirm && (
         <ConfirmDialog

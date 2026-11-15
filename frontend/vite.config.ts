@@ -4,15 +4,14 @@ import { defineConfig } from "vite";
 const backend = process.env.WEBCONTROL_BACKEND ?? "http://localhost:5000";
 
 export default defineConfig({
-  base: "/next/",
+  base: "/",
   plugins: [react()],
   server: {
     proxy: {
       "/api": backend,
-      "/socket.io": { target: backend, ws: true },
       "/ws": { target: backend, ws: true },
       "/static": backend,
-      // Classic form and download routes the Files and Boards screens reuse.
+      // The form and download routes the Files, Boards and System screens use.
       "^/(openGCode|uploadGCode|saveGCode|editGCode|sendGCode|importFile|importFileWCJSON|importRestoreWebControl|downloadDiagnostics|backupWebControl|openBoard|saveBoard|editBoard|trimBoard)$":
         backend,
     },

@@ -26,8 +26,14 @@ const sources = import.meta.glob<string>(["../**/*.{ts,tsx}", "!../**/*.test.{ts
 
 const pattern = ({ path }: HttpEndpoint) =>
   new RegExp(`^${path.replace(/\{[^}]+\}/g, "[^?]+").replace(/\//g, "\\/")}(\\?.*)?$`);
+/** The UI's catch-all never answers under /api/, so an unlisted API call is not mistaken for a page. */
 const endpointFor = (method: string, url: string) =>
-  httpEndpoints.find((endpoint) => endpoint.method === method && pattern(endpoint).test(url));
+  httpEndpoints.find(
+    (endpoint) =>
+      endpoint.method === method &&
+      pattern(endpoint).test(url) &&
+      !(endpoint.family === "static" && url.startsWith("/api/")),
+  );
 
 const formFields = (body: FormData) =>
   Object.fromEntries(
@@ -164,6 +170,7 @@ describe("the HTTP contract", () => {
     const text = Object.values(sources).join("\n");
     expect(text).toMatch(/"\/static\/images\//);
     expect(endpointFor("GET", "/static/images/GPIO/RPI_pin_layout.svg")?.family).toBe("static");
-    expect(endpointFor("GET", "/next/files")?.family).toBe("static");
+    expect(endpointFor("GET", "/files/open")?.family).toBe("static");
+    expect(endpointFor("GET", "/api/nope")).toBeUndefined();
   });
 });

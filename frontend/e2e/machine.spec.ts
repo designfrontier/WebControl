@@ -3,8 +3,8 @@ import type { Page } from "@playwright/test";
 import { closeServerDialogs, waitForServer } from "./helpers";
 
 test("quick configure saves to the server and reloads", async ({ page }) => {
-  await page.goto("/next/machine");
-  await expect(page).toHaveURL(/\/next\/actions$/);
+  await page.goto("/machine");
+  await expect(page).toHaveURL(/\/actions$/);
   await page.getByRole("dialog", { name: "Actions" }).getByRole("link", { name: "Quick configure" }).click();
   await expect(page.getByRole("dialog", { name: "Quick Configure" })).toBeVisible();
 
@@ -47,15 +47,14 @@ test("quick configure saves to the server and reloads", async ({ page }) => {
   await expect(page.getByText("Saved. The controller has the new machine dimensions.")).toBeVisible();
 });
 
-/** Rust refuses machine commands with no controller; Python queues them silently. */
+/** The backend refuses machine commands with no controller. */
 const expectNoControllerRefusal = async (page: Page) => {
-  if (process.env.E2E_BACKEND !== "rust") return;
   await expect(page.locator("dialog[open][data-kind]")).toContainText("The controller is not connected.");
   await closeServerDialogs(page);
 };
 
 test("Z-axis and sprocket screens with no controller attached", async ({ page }) => {
-  await page.goto("/next/machine/z-axis");
+  await page.goto("/machine/z-axis");
   await waitForServer(page);
   const step = page.getByRole("textbox", { name: "Step" });
   await expect(step).not.toHaveValue("");
@@ -64,7 +63,7 @@ test("Z-axis and sprocket screens with no controller attached", async ({ page })
   await expectNoControllerRefusal(page);
   await expect(page.getByRole("button", { name: "Touch off Z" })).toBeDisabled();
 
-  await page.goto("/next/machine/sprockets");
+  await page.goto("/machine/sprockets");
   await expect(page.getByRole("dialog", { name: "Set Sprockets & Chains" })).toBeVisible();
   const extendLeft = page.getByRole("button", { name: /^Extend left chain to \d+ mm$/ });
   await expect(extendLeft).toBeDisabled();

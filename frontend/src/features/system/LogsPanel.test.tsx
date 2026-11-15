@@ -6,13 +6,13 @@ import { renderWithProviders } from "../../test/render";
 import { LOG_LINE_LIMIT, initialLogView, logReducer } from "./logStream";
 import { LogsPanel } from "./LogsPanel";
 
-const io = vi.hoisted(() => vi.fn(() => ({ id: undefined, connected: false })));
-vi.mock("socket.io-client", () => ({ io }));
+const connectWebSocket = vi.hoisted(() => vi.fn(() => ({ id: undefined, connected: false })));
+vi.mock("../../transport/websocket", () => ({ connectWebSocket }));
 
 /** LogStreamer queues each entry with its trailing newline. */
 const line = (log: "log" | "alog", data: string, state = false) => ({ log, data: `${data}\n`, state });
 
-/** StrictMode mounts twice, so each connect gets a fresh socket like the real forceNew one; tests drive the last. */
+/** StrictMode mounts twice, so each connect gets a fresh socket like the real one; tests drive the last. */
 const renderLogs = ({ connected = false } = {}) => {
   const sockets: FakeSocket[] = [];
   const connect = vi.fn(() => sockets[sockets.push(createFakeSocket({ connected })) - 1]);
@@ -114,7 +114,7 @@ describe("LogsPanel", () => {
   it("connects to the /MaslowCNCLogs namespace by default", async () => {
     const { connectLogSocket } = await import("./logStream");
     connectLogSocket();
-    expect(io).toHaveBeenCalledWith("/MaslowCNCLogs", expect.objectContaining({ path: "/socket.io", forceNew: true }));
+    expect(connectWebSocket).toHaveBeenCalledWith("/MaslowCNCLogs");
   });
 });
 

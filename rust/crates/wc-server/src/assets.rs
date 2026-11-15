@@ -28,8 +28,8 @@ pub(crate) fn not_found_html() -> Response {
     (StatusCode::NOT_FOUND, [(header::CONTENT_TYPE, "text/html; charset=utf-8")], page).into_response()
 }
 
-/// `next_ui.py`: a built file, a 404 for a missing path whose last segment has a dot, else `index.html`.
-pub(crate) fn next(path: &str) -> Response {
+/// A built file, a 404 for a missing path whose last segment has a dot, else `index.html`.
+pub(crate) fn page(path: &str) -> Response {
     if let Some(data) = Dist::get(path).filter(|_| !path.is_empty()) {
         return file(data);
     }

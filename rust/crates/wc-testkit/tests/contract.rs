@@ -133,7 +133,7 @@ fn path_parameters_match_templates() {
     assert_eq!(entry.path, "/api/settings/{sectionId}");
     assert!(contract().endpoint("GET", "/api/settings/a/b").is_none());
     assert!(contract().endpoint("DELETE", "/api/state").is_none());
-    assert_eq!(contract().endpoint("GET", "/next/a/b/c.js").unwrap().path, "/next/{path}");
+    assert_eq!(contract().endpoint("GET", "/a/b/c.js").unwrap().path, "/{path}");
 }
 
 #[test]
@@ -146,7 +146,7 @@ fn non_json_responses_check_their_content_type() {
     assert!(contract().validate_response("GET", "/static/images/a.svg", 200, &octets).is_ok());
     let json = ResponseBody::Json(json!({}));
     assert!(contract().validate_response("GET", "/api/settings/x", 404, &json).unwrap_err().contains("text/html"));
-    assert!(contract().validate_response("GET", "/nowhere", 200, &json).unwrap_err().contains("/nowhere"));
+    assert!(contract().validate_response("GET", "/api/nowhere", 200, &json).unwrap_err().contains("/api/nowhere"));
 }
 
 #[test]
@@ -155,7 +155,7 @@ fn request_bodies_validate_against_the_request_schema() {
     assert!(contract().validate_request("POST", path, &json!({"name": "jobs"})).is_ok());
     assert!(contract().validate_request("POST", path, &json!({"name": "jobs", "parent": ""})).is_err());
     assert!(contract().validate_request("GET", "/api/state", &json!({})).unwrap_err().contains("no request body"));
-    assert!(contract().validate_request("GET", "/nowhere", &json!({})).is_err());
+    assert!(contract().validate_request("GET", "/api/nowhere", &json!({})).is_err());
 }
 
 #[test]

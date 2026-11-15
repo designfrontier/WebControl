@@ -29,7 +29,7 @@ const zigzag = (teeth: number) =>
 const currentGcode = async (request: APIRequestContext) =>
   ((await (await request.get("/api/viewer")).json()) as { gcode: string | null }).gcode;
 
-/** Uploads through the classic UI's route, then waits for the background parse to replace the compressed preview. */
+/** Uploads through the /uploadGCode form route, then waits for the background parse to replace the compressed preview. */
 const uploadGcode = async (request: APIRequestContext, name: string, gcode: string) => {
   const before = await currentGcode(request);
   const response = await request.post("/uploadGCode", {
@@ -58,7 +58,7 @@ test("draws uploaded gcode, follows socket broadcasts and defines home from the 
   isMobile,
 }) => {
   await uploadGcode(request, "square.nc", square(50));
-  await page.goto("/next/");
+  await page.goto("/");
 
   const viewer = page.getByRole("figure", { name: "Gcode and board viewer" });
   await expect(page.getByText(/^Server: connected/)).toBeVisible({ timeout: 15_000 });
@@ -66,7 +66,7 @@ test("draws uploaded gcode, follows socket broadcasts and defines home from the 
   await expect(viewer).toHaveAttribute("data-cut-segments", /^[1-9]\d*$/);
   const squareCuts = await viewer.getAttribute("data-cut-segments");
 
-  // The gcodeUpdateCompressed broadcast is what the classic UI receives too (binary on socket.io, base64 on Rust).
+  // The gcodeUpdateCompressed broadcast arrives as base64 text over the WebSocket.
   await uploadGcode(request, "zigzag.nc", zigzag(7));
   const socket = await connectBackend(baseURL!);
   try {

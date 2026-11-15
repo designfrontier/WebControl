@@ -307,8 +307,8 @@ export const httpEndpoints: HttpEndpoint[] = [
   },
   {
     method: "GET",
-    path: "/next/{path}",
-    summary: "This UI's built files, with index.html for any other path",
+    path: "/{path}",
+    summary: "This UI's built files, with index.html for any other path outside /api/; /next/... redirects here (308)",
     params: z.object({ path: z.string().describe("May be empty or contain slashes") }),
     responses: {
       200: { type: "file", description: "A file from frontend/dist, or index.html with Cache-Control: no-cache" },

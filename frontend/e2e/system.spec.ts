@@ -4,8 +4,8 @@ import { resetMachine, waitForServer } from "./helpers";
 test.beforeEach(({ baseURL }) => resetMachine(baseURL!));
 
 test("destructive actions ask first, and cancelling leaves the Actions modal usable", async ({ page }) => {
-  await page.goto("/next/system");
-  await expect(page).toHaveURL(/\/next\/actions$/);
+  await page.goto("/system");
+  await expect(page).toHaveURL(/\/actions$/);
   await waitForServer(page);
   const actions = page.getByRole("dialog", { name: "Actions" });
 
@@ -26,8 +26,8 @@ test("destructive actions ask first, and cancelling leaves the Actions modal usa
 });
 
 test("PID tuning loads the saved gains and starts a velocity test", async ({ page }) => {
-  await page.goto("/next/system/pid");
-  await expect(page).toHaveURL(/\/next\/pid$/);
+  await page.goto("/system/pid");
+  await expect(page).toHaveURL(/\/pid$/);
   const velocity = page.getByRole("region", { name: "Velocity PID test" });
   await expect(velocity.getByRole("textbox", { name: "Kp" })).not.toHaveValue("");
 
@@ -39,7 +39,7 @@ test("PID tuning loads the saved gains and starts a velocity test", async ({ pag
 });
 
 test("offline help renders docs with working links and images", async ({ page }) => {
-  await page.goto("/next/help");
+  await page.goto("/help");
   const article = page.locator("article");
   await expect(article.getByRole("heading", { name: "WebControl", level: 1 })).toBeVisible();
   await expect
@@ -47,19 +47,19 @@ test("offline help renders docs with working links and images", async ({ page })
     .toBeGreaterThan(0);
 
   await page.getByRole("navigation", { name: "Help pages" }).getByRole("link", { name: "First Steps" }).click();
-  await expect(page).toHaveURL(/\/next\/help\/GettingStarted\/firstSteps\.md$/);
+  await expect(page).toHaveURL(/\/help\/GettingStarted\/firstSteps\.md$/);
   await expect(article.getByRole("heading", { level: 1 })).toBeVisible();
 });
 
 test("the logs page connects to the log stream, without the app chrome", async ({ page }) => {
-  await page.goto("/next/logs");
+  await page.goto("/logs");
   await expect(page.getByText(/^Logging (active|suspended)$/)).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole("region", { name: "Abridged log" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Primary" })).toHaveCount(0);
 });
 
 test("Help ▸ Logs opens the logs in a new tab", async ({ page, isMobile }) => {
-  await page.goto("/next/");
+  await page.goto("/");
   await waitForServer(page);
   if (isMobile) await page.getByRole("button", { name: "Menu", exact: true }).click();
   await page.getByRole("navigation", { name: "Primary" }).getByRole("button", { name: "Help" }).click();
@@ -67,6 +67,6 @@ test("Help ▸ Logs opens the logs in a new tab", async ({ page, isMobile }) => 
     page.context().waitForEvent("page"),
     page.getByRole("menuitem", { name: "Logs" }).click(),
   ]);
-  await expect(tab).toHaveURL(/\/next\/logs$/);
+  await expect(tab).toHaveURL(/\/logs$/);
   await tab.close();
 });

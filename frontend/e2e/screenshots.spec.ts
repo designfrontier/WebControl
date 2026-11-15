@@ -14,16 +14,16 @@ const shoot = async (page: Page, path: string, name: string) => {
 test("control screen, light and dark", async ({ page, isMobile }) => {
   const prefix = isMobile ? "phone" : "desktop";
   await page.emulateMedia({ colorScheme: "light" });
-  await shoot(page, "/next/", `${prefix}-control-light`);
+  await shoot(page, "/", `${prefix}-control-light`);
   await page.emulateMedia({ colorScheme: "dark" });
-  await shoot(page, "/next/", `${prefix}-control-dark`);
+  await shoot(page, "/", `${prefix}-control-dark`);
 });
 
 test("representative modals", async ({ page, isMobile }) => {
   const prefix = isMobile ? "phone" : "desktop";
   await page.emulateMedia({ colorScheme: "light" });
-  await shoot(page, "/next/settings/advanced", `${prefix}-modal-settings`);
-  await shoot(page, "/next/files/open", `${prefix}-modal-open-gcode`);
+  await shoot(page, "/settings/advanced", `${prefix}-modal-settings`);
+  await shoot(page, "/files/open", `${prefix}-modal-open-gcode`);
   await page.emulateMedia({ colorScheme: "dark" });
-  await shoot(page, "/next/actions", `${prefix}-modal-actions`);
+  await shoot(page, "/actions", `${prefix}-modal-actions`);
 });

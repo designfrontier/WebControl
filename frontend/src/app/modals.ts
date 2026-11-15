@@ -16,7 +16,7 @@ import { SettingsPage } from "../features/settings";
 import { AboutModal, ActionsModal, HelpPanel, PidTuning, UpdatesModal } from "../features/system";
 
 export interface ModalRoute {
-  /** Relative to /next/; the modal renders over the control screen at this address. */
+  /** Relative to /; the modal renders over the control screen at this address. */
   path: string;
   title: string | ((params: Params) => string);
   Component: ComponentType;
