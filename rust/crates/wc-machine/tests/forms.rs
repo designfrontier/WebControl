@@ -70,6 +70,15 @@ fn a_setting_with_missing_fields_is_still_described() {
 }
 
 #[test]
+fn a_retired_python_setting_stays_in_the_file_but_off_the_screen() {
+    let settings = loaded(json!({"WebControl Settings": [{"key": "recordSerial", "type": "bool", "value": 1}]}));
+    assert_eq!(settings.value("WebControl Settings", "recordSerial"), Some(&json!(1)));
+    let webcontrol = section(&settings, "webcontrol", 0.0, &[]).unwrap();
+    assert!(webcontrol.settings.iter().all(|field| field.key != "recordSerial"));
+    assert!(webcontrol.settings.iter().any(|field| field.key == "webPort"));
+}
+
+#[test]
 fn custom_settings_follow_the_firmware_version() {
     [(0.0, false), (99.9, false), (100.0, true), (101.5, true)].iter().for_each(|(version, enabled)| {
         assert_eq!(section(&Settings::defaults(), "maslow", *version, &[]).unwrap().enable_custom, *enabled);

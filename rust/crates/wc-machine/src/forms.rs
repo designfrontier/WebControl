@@ -33,6 +33,8 @@ pub const GPIO_ACTIONS: [&str; 12] = [
     "StopLED",
 ];
 const RING_RADIUS: f64 = 138.4;
+/// Python-only settings an older `webcontrol.json` still carries; kept in the file, left off the screens.
+const RETIRED_KEYS: [&str; 1] = ["recordSerial"];
 
 pub fn section_title(id: &str) -> Option<&'static str> {
     SECTIONS.iter().find(|(known, _)| *known == id).map(|(_, title)| *title)
@@ -96,7 +98,12 @@ pub fn section(settings: &Settings, id: &str, firmware_version: f64, ports: &[St
         id: id.into(),
         title: title.into(),
         enable_custom: firmware_version >= CUSTOM_FIRMWARE_VERSION,
-        settings: settings.section(title).into_iter().map(|option| describe(title, option)).collect(),
+        settings: settings
+            .section(title)
+            .into_iter()
+            .map(|option| describe(title, option))
+            .filter(|field| !RETIRED_KEYS.contains(&field.key.as_str()))
+            .collect(),
         ports: (id == "maslow").then(|| ports.to_vec()),
     })
 }

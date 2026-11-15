@@ -39,9 +39,9 @@ export const webcontrolSection = (): SettingsSection => ({
   settings: [
     setting({ key: "loggingTimeout", title: "Logger Idle Timeout", type: "float", value: 0, numeric: true }),
     setting({
-      key: "recordSerial",
-      title: "Record serial traffic",
-      desc: "Append every line sent to and received from the controller to ~/.WebControl/serial-recordings.",
+      key: "computedPosition",
+      title: "Computed Sled Position",
+      desc: "Enable on-screen reporting of actual sled position computed from chain lengths reported by controller.",
       type: "bool",
       value: 0,
     }),
