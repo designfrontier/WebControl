@@ -49,13 +49,11 @@ pub enum Command {
     Help,
 }
 
+/// A literal in the binary, so `rust/scripts/release.sh` can check a build it cannot run.
+pub const VERSION_PREFIX: &str = concat!("webcontrol-rs ", env!("WC_VERSION"), " (", env!("WC_GIT_SHA"));
+
 pub fn version_text() -> String {
-    format!(
-        "webcontrol-rs {} ({}, contract {})",
-        env!("CARGO_PKG_VERSION"),
-        env!("WC_GIT_SHA"),
-        wc_protocol::CONTRACT_VERSION
-    )
+    format!("{VERSION_PREFIX}, contract {})", wc_protocol::CONTRACT_VERSION)
 }
 
 /// `args` without the program name; `home` is `$HOME`.
