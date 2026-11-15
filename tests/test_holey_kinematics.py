@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from Actions.HoleySimulationKinematics import Kinematics
+from Actions.HoleySimulationKinematics import FIRMWARE_PI, Kinematics
 from Background.UIProcessor import UIProcessor
 from calibration_fixture_cases import simulator
 from calibration_helpers import holey_form, ideal_holey_measurements
@@ -35,8 +35,8 @@ def stored(data, section, key):
     "key, value, attribute, expected",
     [
         (2, "2990.5", "D", 2990.5),
-        (13, "63.5", "R", 63.5 / math.pi / 2),
-        (13, 76.2, "R", 76.2 / math.pi / 2),
+        (13, "63.5", "R", 63.5 / (2 * FIRMWARE_PI)),
+        (13, 76.2, "R", 76.2 / (2 * FIRMWARE_PI)),
         (1, "1219.2", "machineHeight", 1219.2),
         (0, "2438.4", "machineWidth", 2438.4),
         (3, "470", "motorOffsetY", 470.0),
@@ -81,7 +81,7 @@ def test_changing_the_sprocket_saves_the_whole_form(client, settings_saved, key,
     assert data.config.getValue("Advanced Settings", "rotationRadius") == "140.5"
     assert stored(data, "Advanced Settings", key) == value
     distance_per_rotation = float(data.config.getValue("Computed Settings", "distPerRot"))
-    assert data.holeyKinematics.R == pytest.approx(distance_per_rotation / math.pi / 2)
+    assert data.holeyKinematics.R == pytest.approx(distance_per_rotation / (2 * FIRMWARE_PI), rel=1e-15)
 
 
 def test_changing_the_sprocket_through_the_settings_api(client, settings_saved):
@@ -89,7 +89,7 @@ def test_changing_the_sprocket_through_the_settings_api(client, settings_saved):
     response = client.put("/api/settings/advanced", json={"values": {"gearTeeth": 11}})
     assert response.status_code == 200
     assert stored(data, "Advanced Settings", "gearTeeth") == "11"
-    assert data.holeyKinematics.R == pytest.approx(11 * 6.35 / math.pi / 2)
+    assert data.holeyKinematics.R == pytest.approx(11 * 6.35 / (2 * FIRMWARE_PI), rel=1e-15)
 
 
 def triangular():
