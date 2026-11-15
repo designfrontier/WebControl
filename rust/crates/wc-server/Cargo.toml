@@ -1,0 +1,34 @@
+[package]
+name = "wc-server"
+description = "The webcontrol-rs binary: HTTP, the plain-WebSocket transport and the embedded React UI"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "webcontrol-rs"
+path = "src/main.rs"
+
+[dependencies]
+axum.workspace = true
+futures-util.workspace = true
+rust-embed.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uuid.workspace = true
+wc-config.workspace = true
+wc-machine.workspace = true
+wc-protocol.workspace = true
+
+[dev-dependencies]
+http-body-util.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["test-util", "io-util"] }
+tokio-tungstenite.workspace = true
+tower.workspace = true
+wc-testkit.workspace = true
