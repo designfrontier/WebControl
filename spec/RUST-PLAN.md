@@ -498,14 +498,14 @@ M5 routes and M6a can follow M1/M2 while M4 is under way.
     `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`, `cargo llvm-cov` with the §5.6 floors, the
     zigbuild cross-build, and the Playwright e2e against `--simulate`.
   - Upload `webcontrol-rs-aarch64` with `actions/upload-artifact@v7`, the versions the workflow already uses.
+  - Confirm each action's `runs.using` is `node24` when the job is written.
+  - Cache `~/.cargo` and `rust/target` only with an action that is itself on node24.
 - **Releases** `.github/workflows/release.yml`, on `ubuntu-24.04-arm`: a pushed `v*` tag, or a manual run. It
   builds the 51.292 hex as CI does and runs `rust/scripts/release.sh`, which checks the hex against its pin, builds
   with `WC_VERSION` from the tag (else `git describe`), checks that `--version` reports it and that the hex is
   embedded, and packages `webcontrol-rs-<version>-aarch64.tar.gz` (binary, `install-pi.sh`, `wc-switch`, unit,
   drop-in, sudoers rule, `rust/README.md`, `spec/rust-checklists/`) and the bare binary, each with a SHA-256. A tag
   makes a draft GitHub Release with them; a manual run only uploads them as an artifact. No Python bundle.
-  - Confirm each action's `runs.using` is `node24` when the job is written.
-  - Cache `~/.cargo` and `rust/target` only with an action that is itself on node24.
 
 ## 8. Risks and open questions
 
