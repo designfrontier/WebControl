@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import subprocess
 
@@ -8,7 +9,7 @@ from conftest import REPO
 from pyinstaller_datas import MISSING_DIST, bundle_datas
 
 SPECS = ["main.spec", "main-onedir.spec"]
-SCRIPTS = ["tools/build_release.sh", "tools/install_from_source.sh", "buildLinux1.sh"]
+SCRIPTS = ["tools/build_release.sh", "tools/install_from_source.sh", "tools/test-install/run.sh", "buildLinux1.sh"]
 
 
 @pytest.fixture
@@ -317,8 +318,21 @@ def test_the_runtime_requirements_pin_setuptools_because_uv_venvs_lack_pkg_resou
         assert "setuptools==75.3.0" in handle.read().splitlines()
 
 
+def read(*path):
+    with open(os.path.join(REPO, *path)) as handle:
+        return handle.read()
+
+
+def rsync_excludes(text):
+    return set(re.findall(r"--exclude ([^\s)]+)", text))
+
+
 def test_the_pi_guide_copies_no_firmware_so_upgrade_firmware_has_nothing_to_flash():
     with open(os.path.join(REPO, "spec", "INSTALL-PI.md")) as handle:
         guide = handle.read()
     rsync = guide[guide.index("rsync -az"):guide.index("pi@192.168.86.155:webcontrol-source/")]
     assert "--exclude /firmware" in rsync
+
+
+def test_the_docker_install_test_copies_the_repo_as_the_guide_does():
+    assert rsync_excludes(read("spec", "INSTALL-PI.md")) == rsync_excludes(read("tools", "test-install", "run.sh"))
