@@ -32,6 +32,7 @@ class SerialPortThread(MakesmithInitFuncs):
         self.bufferSpace = self.bufferSize  # The amount of space currently available in the buffer
         self.unackedLines = deque()  # (length, gcode index or None) per line sent, newest on the left
         self.resyncAfter = None
+        self.caughtUpSinceHalt = False
 
     def _write(self, message, isQuickCommand=False, gcodeIndex=None):
         '''
@@ -94,12 +95,13 @@ class SerialPortThread(MakesmithInitFuncs):
 
     def _awaitResync(self):
         '''
-        The controller has flushed its buffer, but acks sent before it did may still be in flight. Ignore acks
-        and hold regular lines until a status report sent after they would have arrived.
+        The controller has flushed its buffer, but acks sent before it did may still be in flight or unread. Ignore
+        acks and hold regular lines until a status report read after the input ran dry past the resync delay.
         '''
         self._emptyAccounting()
         self.machineIsReadyForData = False
         self.resyncAfter = time.time() + self.RESYNC_DELAY
+        self.caughtUpSinceHalt = False
 
     def _rewindToDroppedLines(self):
         '''
@@ -415,11 +417,13 @@ class SerialPortThread(MakesmithInitFuncs):
                 lineFromMachine = self.serialInstance.readline().decode()
                 self.lastMessageTime = time.time()
                 self.data.message_queue.put(lineFromMachine)
+            elif self.resyncAfter is not None and time.time() >= self.resyncAfter:
+                self.caughtUpSinceHalt = True
         except:
             pass
 
         if self.resyncAfter is not None:
-            if lineFromMachine.startswith("<") and time.time() >= self.resyncAfter:
+            if lineFromMachine.startswith("<") and self.caughtUpSinceHalt:
                 self.resyncAfter = None
                 self._emptyAccounting()
                 self.machineIsReadyForData = True

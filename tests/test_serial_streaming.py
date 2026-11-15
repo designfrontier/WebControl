@@ -548,3 +548,27 @@ def test_a_halt_outside_a_job_leaves_the_index_alone(data, serial):
     serial.run(on_poll=once_after(serial.clock, 0, controller_halts))
 
     assert data.gcodeIndex == 7
+
+
+def test_a_status_report_still_queued_from_before_a_stop_does_not_end_the_resync(data, serial):
+    """A slow host reads reports the firmware sent before the stop well after the resync delay."""
+    PE = "[PE:0.00,0.00,126,0.00,0.00]\r\n"
+
+    def outstanding_line(port):
+        port.ack = False
+        data.gcode_queue.put("G0 X0")
+
+    def stop_behind_a_backlog(port):
+        port.incoming.extend([PE] * 40 + [STATUS, "ok\r\n", "ok\r\n"])  # the outstanding line's ack, then the stop's
+        data.quick_queue.put("!")
+        data.gcode_queue.put("G0 X1")
+        data.gcode_queue.put("G0 X2")
+
+    port = serial.run(on_poll=every_poll(
+        once_after(serial.clock, 0, lambda port: drain(data.gcode_queue)),
+        once_after(serial.clock, 0.5, outstanding_line),
+        once_after(serial.clock, 1, stop_behind_a_backlog),
+        once_after(serial.clock, 2, lambda port: port.incoming.append(STATUS)),
+    ))
+
+    assert sent_after(port, "!") == ["G0 X1 "]
