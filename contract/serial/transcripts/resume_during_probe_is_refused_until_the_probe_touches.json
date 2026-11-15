@@ -1,13 +1,13 @@
 {
   "formatVersion": 1,
   "meta": {
-    "name": "resume_during_probe_then_the_probe_misses",
-    "description": "Resume pressed while a touchZ probe descends during a paused job, and the probe then misses: the ~'s ok is not taken as a touch, the probe's `error: probe did not connect` is its answer, so no G10 Z0 goes out and the user is told.",
+    "name": "resume_during_probe_is_refused_until_the_probe_touches",
+    "description": "Resume pressed while a touchZ probe descends during a paused job is refused with an alert, so no ~ reaches the firmware and no restart is queued behind the probe. The probe touches and the firmware zeroes Z itself, so nothing follows its ok; the next Resume returns to the job.",
     "firmware": {
       "variant": "holey",
       "version": "51.27"
     },
-    "webcontrolCommit": "26d1a6c"
+    "webcontrolCommit": "d744dbf"
   },
   "setup": {
     "units": "MM",
@@ -35,16 +35,15 @@
     {"type": "rx", "line": "probing for z axis zero"},
     {"type": "rx", "line": "max depth -10.00 mm."},
     {"type": "rx", "line": "feedrate 39.94 mm per min."},
-    {"type": "ui", "action": {"command": "resumeRun", "arg": "", "arg1": ""}, "comment": "the probe is still descending"},
+    {"type": "ui", "action": {"command": "resumeRun", "arg": "", "arg1": ""}, "comment": "the probe is still descending: refused, so no ~ and no restart"},
+    {"type": "expect", "state": {"uploadFlag": 2, "jobInProgress": true, "pauseButtonSetting": "Resume"}, "alerts": [{"title": "Alert", "message": "Wait for Touch Z to finish or press Stop"}]},
+    {"type": "rx", "line": "z axis zeroed"},
+    {"type": "rx", "line": "ok", "comment": "the probe line's own ok"},
+    {"type": "expect", "noAlerts": [{"title": "Touch Z"}]},
+    {"type": "ui", "action": {"command": "resumeRun", "arg": "", "arg1": ""}},
     {"type": "tx", "bytes": "~\n", "realtime": true},
-    {"type": "rx", "line": "ok", "comment": "the ~'s own ack, which is not the probe's answer"},
-    {"type": "expect", "state": {"uploadFlag": 1}, "noAlerts": [{"title": "Touch Z"}]},
-    {"type": "rx", "line": "error: probe did not connect"},
+    {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G21  \n"},
-    {"type": "rx", "line": "program stopped"},
-    {"type": "rx", "line": "z axis not set"},
-    {"type": "rx", "line": ""},
-    {"type": "expect", "alerts": [{"title": "Touch Z Failed", "message": "Z was not zeroed"}]},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G90  \n"},
     {"type": "rx", "line": "ok"},

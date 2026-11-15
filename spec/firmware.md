@@ -143,7 +143,7 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
 | A13 | Fixed | M0/M1 timing depended on the early `~`; M0 at end of line wasn't detected. |
 | A14 | Low | `$86`, `$144` rejected; `$43` unused on holey; G17 ignored. |
 | A15 | Info | `bufferSize = 126` is right; PWR:/F: parsing is dead code; PE lines are mis-parsed until B05 is parsed. |
-| A16 | Fixed | After a touching probe WebControl queued `G10 Z0` behind anything already queued; behind a Resume's restart it zeroed Z at the restart's height. The firmware zeroes Z on a touch, so none is sent. |
+| A16 | Fixed | After a touching probe WebControl queued `G10 Z0` behind anything already queued; behind a Resume's restart it zeroed Z at the restart's height. The firmware zeroes Z on a touch, so none is sent. Resume and other moving actions pressed mid-probe are now refused until the probe answers or Stop. |
 
 ### B. Rust backend requirements
 
@@ -172,7 +172,8 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
 14. Kinematics: reproduce the firmware exactly (R rule, density, trig, tolerances, old-triangular branch, clamps,
     forward-solve limits).
 15. MPos has 2 decimals; never use it to restore an exact Z.
-16. Touch Z: send `G38.2` alone; no `G10 Z0` after it; a probe `error:` alerts and zeroes nothing.
+16. Touch Z: send `G38.2` alone; no `G10 Z0` after it; a probe `error:` alerts and zeroes nothing; until the probe
+    answers, refuse every action that moves the machine (Resume included), except Stop.
 
 ### C. One-click firmware upgrade
 

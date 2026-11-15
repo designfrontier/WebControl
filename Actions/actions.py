@@ -41,6 +41,8 @@ JOB_LINES_HELD_MESSAGE = (
     "The controller paused with lines of the job still in its buffer, which would run before this move. "
     "Press Resume or STOP first."
 )
+PROBING_MESSAGE = "Wait for Touch Z to finish or press Stop"
+SAFE_WHILE_PROBING = {"stopRun", "stopZ", "pauseRun", "createDirectory", "toggleCamera", "statusRequest", "queryCamera"}
 ADJUST_Z_FIRST_MESSAGE = "The controller is waiting for Z to be adjusted by hand. Adjust it, then press Resume."
 TOOL_CHANGE_WAITS_MESSAGE = (
     "Cannot issue command while a tool change waits. Press Resume or STOP before setting home or running a PID test."
@@ -69,6 +71,9 @@ class Actions(MakesmithInitFuncs):
         '''
         try:
             self.data.serialRecorder.action(msg["data"]["command"], msg["data"].get("arg", ""), msg["data"].get("arg1", ""))
+            if self.data.probeInFlight and msg["data"]["command"] not in SAFE_WHILE_PROBING:
+                self.data.ui_queue1.put("Alert", "Alert", PROBING_MESSAGE)
+                return
             if self.data.firmwarePaused and self.data.uploadFlag != 1 and msg["data"]["command"] in MACHINE_COMMANDS:
                 if self.data.firmwareHoldsJobLines:
                     self.data.ui_queue1.put("Alert", "Alert", JOB_LINES_HELD_MESSAGE)
@@ -481,6 +486,7 @@ class Actions(MakesmithInitFuncs):
         :return:
         '''
         try:
+            self.data.probeInFlight = False
             self.data.quick_queue.put("!")
             with self.data.gcode_queue.mutex:
                 self.data.gcode_queue.queue.clear()
@@ -582,6 +588,7 @@ class Actions(MakesmithInitFuncs):
             self.data.toolChangeWaits = False
             self.data.firmwarePaused = False
             self.data.firmwareHoldsJobLines = False
+            self.data.probeInFlight = False
             # The "!" flushes an M6 the firmware never ran, so it still has the tool from before it.
             if self.data.toolBeforeChange is not None:
                 self.data.currentTool = self.data.nextTool = self.data.toolBeforeChange
@@ -932,6 +939,7 @@ class Actions(MakesmithInitFuncs):
             plungeDepth = ("%.4f" % (plungeDepthMM * self.unitScale("MM", self.data.units))).rstrip("0").rstrip(".")
             # The firmware probes at a fixed 60 mm/min; an F here would only become the job's modal feed.
             self.data.gcode_queue.put("G90 G38.2 Z-" + plungeDepth)
+            self.data.probeInFlight = True
             return True
         except Exception as e:
             self.data.console_queue.put(str(e))
@@ -1264,6 +1272,9 @@ class Actions(MakesmithInitFuncs):
         :param gcode:
         :return:
         '''
+        if self.data.probeInFlight:
+            self.data.ui_queue1.put("Alert", "Alert", PROBING_MESSAGE)
+            return False
         try:
             self.data.sentCustomGCode = gcode
             gcodeLines = gcode.splitlines()
