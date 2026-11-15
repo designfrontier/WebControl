@@ -1,5 +1,7 @@
 //! The browser <-> backend wire as `contract/` describes it. Modules mirror `frontend/src/protocol/` slices.
 
+#[path = "slices/calibration.rs"]
+pub mod calibration;
 mod envelope;
 mod events;
 mod frame;
