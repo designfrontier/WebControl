@@ -107,7 +107,7 @@ check_same_user() {
 
 check_dist() {
   [ -f "$repo/frontend/dist/index.html" ] || die "frontend/dist is missing. Build it on the Mac (cd frontend && npm ci &&
-  npm run build) and copy it here with rsync, as spec/INSTALL-PI.md step 2 shows. Building Node on a Pi 3B is too slow."
+  npm run build) and copy it here with rsync, as spec/INSTALL-PI.md step 5 shows. Building Node on a Pi 3B is too slow."
 }
 
 # piwheels builds its Python 3.9 wheels on Bullseye only, against Bullseye's libraries.

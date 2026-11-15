@@ -328,10 +328,7 @@ def rsync_excludes(text):
 
 
 def test_the_pi_guide_copies_no_firmware_so_upgrade_firmware_has_nothing_to_flash():
-    with open(os.path.join(REPO, "spec", "INSTALL-PI.md")) as handle:
-        guide = handle.read()
-    rsync = guide[guide.index("rsync -az"):guide.index("pi@192.168.86.155:webcontrol-source/")]
-    assert "--exclude /firmware" in rsync
+    assert "/firmware" in rsync_excludes(read("spec", "INSTALL-PI.md"))
 
 
 def test_the_docker_install_test_copies_the_repo_as_the_guide_does():

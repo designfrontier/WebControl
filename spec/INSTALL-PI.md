@@ -1,183 +1,194 @@
-# Upgrading the shop Pi from WebControl v0.94 to this build
+# Trying this WebControl on a microSD card, with v0.94 left on the SSD
 
-The machine: Raspberry Pi 3B at `http://192.168.86.155:5000`, controller on `/dev/ttyACM0`, settings in
-`~/.WebControl/webcontrol.json`, running the v0.94 release build (`webcontrol-0.94-rpi-singledirectory.tar.gz`).
+The shop Pi is a Raspberry Pi 3B that boots from a USB SSD: Raspbian 10 Buster 32-bit, WebControl v0.94 as
+`webcontrol.service` (`ExecStart=/home/pi/webcontrol/webcontrol`, `User=pi`), settings in `/home/pi/.WebControl`,
+at `http://192.168.86.155:5000`. This build cannot run on 32-bit Buster, and `tools/install_from_source.sh` refuses
+it.
 
-The new build runs from source in `~/webcontrol-source` with its own Python 3.9 in `.venv`, as the systemd service
-`webcontrol.service`. v0.94 stays installed in `~/webcontrol`, untouched, for rollback.
+So the new build goes on a microSD card with 64-bit Raspberry Pi OS Lite. A Pi 3B with USB boot enabled tries the
+SD slot before USB, so with the card in it boots the card, and the SSD stays plugged in and unchanged.
 
-- **Time:** 20–45 minutes the first time, mostly `pip` on the Pi (step 3). v0.94 keeps running during that.
-- **Downtime:** about 1 minute, during the switch (step 4).
-- **Rollback:** under 2 minutes, one command (step 6).
+- **Time:** about 1 hour, between cuts. The install itself (step 6) takes 10–20 minutes on a Pi 3B.
+- **Rollback:** power off, pull the card, power on (step 8). v0.94 comes back from the SSD exactly as before.
+- **The classic UI is still at `/`.** The new UI is at `/next/`. Both talk to the same server.
 
-What carries over and what changes:
+`tools/install_from_source.sh --rollback` and `webcontrol-v094.service` are for upgrading v0.94 in place on the same
+disk. This guide does not use them: the card has no v0.94 on it, and rolling back means pulling the card.
 
-- **Settings carry over unchanged.** This build reads `~/.WebControl/webcontrol.json` as it is: the setting keys are
-  the same as v0.94's. It also keeps a `webcontrol.json.bak` next to it, which v0.94 ignores. G-code and boards in
-  `~/.WebControl` are used as they are. Switching saves v0.94's copy as `webcontrol.json.v094`, and rolling back puts
-  it back.
-- **The classic UI is still at `/`.** The new UI is at `/next/`. Both talk to the same server, so you can use either
-  one.
-- **Re-run holey calibration once.** The solver's library version differs from v0.94's, so the calibration numbers
-  can shift slightly. Re-run holey calibration before the next real cut.
-- **Leave the controller firmware alone.** Step 2 leaves `firmware/` out, so the Pi has no firmware `.hex` files and
-  Upgrade Firmware stops with "No firmware file found" before it touches the controller. The firmware already on
-  the controller is fine.
+## 0. What you need
 
-## 0. Check what the Pi runs (read only, 2 minutes)
+- A 16 GB or larger microSD card, A1 or Class 10.
+- A USB card reader for the Mac.
+- Raspberry Pi Imager on the Mac: `brew install --cask raspberry-pi-imager`, or from raspberrypi.com/software.
+- The Pi idle: no job running or loaded.
 
-```sh
-ssh pi@192.168.86.155
-grep -E '^(PRETTY_NAME|VERSION_CODENAME)' /etc/os-release; python3 --version; uname -m
-systemctl cat webcontrol.service
-```
+## 1. Back up from the current Pi to the Mac (after the cut)
 
-What to expect, and what it means:
-
-- **How v0.94 starts:** both the webcontrol-pi SD image and the README's instructions install
-  `/etc/systemd/system/webcontrol.service` with `ExecStart=/home/pi/webcontrol/webcontrol` and `User=pi`. If you see
-  that, every step below applies as written. If there is no such unit, step 3 reports where WebControl is started
-  instead (`/etc/rc.local`, desktop autostart, crontab or a process on port 5000).
-- **OS and architecture:** run `dpkg --print-architecture` too. `armhf` is 32-bit Pi OS and `arm64` is 64-bit.
-  - **32-bit (`armhf`) works on Bullseye only.** Its Python 3.9 wheels come from piwheels, which builds them on
-    Bullseye against Bullseye's libraries. On 32-bit Buster or Bookworm the script stops before changing anything:
-    stay on v0.94, or put Bullseye 32-bit or 64-bit Pi OS on a new SD card and keep the old card as the rollback.
-  - **64-bit (`arm64`) works on any release** with PyPI's wheels.
-- **Python:** `Python 3.9.x` (Raspberry Pi OS 11, Bullseye) is the easy case. 64-bit Buster (3.7) and Bookworm (3.11)
-  need `uv`, which downloads its own Python 3.9:
-  `curl -LsSf https://astral.sh/uv/install.sh | sh`, then log out and back in.
-
-## 1. Back up (on the Pi)
+Run these on the Mac, each in its own terminal window, because `ssh` and `scp` ask for the Pi's password:
 
 ```sh
-cd ~ && tar czf ~/webcontrol-backup-$(date +%F).tar.gz .WebControl webcontrol
+mkdir -p ~/webcontrol-backup
+scp -r pi@192.168.86.155:/home/pi/.WebControl ~/webcontrol-backup/
+ssh pi@192.168.86.155 systemctl cat webcontrol.service > ~/webcontrol-backup/webcontrol.service.txt
 ```
 
-That holds the settings, G-code and boards (`~/.WebControl`) and the v0.94 install (`~/webcontrol`). Copy it off
-the Pi, from the Mac:
+`~/webcontrol-backup/.WebControl` now holds the settings (`webcontrol.json`), G-code and boards. The unit file is for
+reference only.
+
+Optional, so that ssh stops asking for the password: `ssh-copy-id pi@192.168.86.155`. If you have no key yet, make
+one first with `ssh-keygen -t ed25519`. Step 2 puts the same key on the card.
+
+## 2. Flash the card
+
+Put the card in the reader and open Raspberry Pi Imager:
+
+1. **Device:** Raspberry Pi 3.
+2. **OS:** Raspberry Pi OS (other) → **Raspberry Pi OS Lite (64-bit)** ("A port of Debian Trixie with no desktop
+   environment"). If that one gives trouble, **Raspberry Pi OS (Legacy, 64-bit) Lite** (Debian Bookworm) works the
+   same way. Both are tested (`tools/test-install/run.sh`). Not a 32-bit image, and not one with a desktop.
+3. **Storage:** the microSD card. Check the size, so you do not pick another disk.
+4. **OS customisation:** say yes when Imager asks to customise, and set:
+   - **Hostname:** `maslow-next`, so it cannot be confused with the old system.
+   - **User:** `pi`, with a password. The username must be `pi`.
+   - **Wi-Fi:** your network name, password and country, unless the Pi uses Ethernet.
+   - **Locale:** your time zone and keyboard layout.
+   - **SSH:** enabled, with public-key authentication. Paste your key: run `cat ~/.ssh/id_ed25519.pub` on the Mac.
+5. Write the card. Imager verifies it and ejects it.
+
+## 3. Boot from the card
+
+1. Shut the old system down: `ssh pi@192.168.86.155 sudo poweroff`. Wait until the green LED stops blinking, then
+   unplug the power.
+2. Insert the card. Leave the SSD plugged in.
+3. Plug the power in. The first boot takes 2–3 minutes and reboots once by itself.
+4. On the Mac:
+
+   ```sh
+   ssh pi@maslow-next.local
+   ```
+
+   The Pi's IP address will probably not be 192.168.86.155. Use `maslow-next.local` everywhere below. If the Mac
+   cannot find that name, look for `maslow-next` in your router's device list and use its IP address.
+5. On the Pi, check that it booted from the card:
+
+   ```sh
+   findmnt -n -o SOURCE /
+   ```
+
+   It must print `/dev/mmcblk0p2`, the card. `/dev/sda2` means it booted the SSD's Buster: see below.
+
+**If it boots the SSD anyway:** a Pi 3B tries the SD slot first, so it booted the SSD because it could not boot the
+card. Power off, push the card fully in and try again. If that fails, flash the card again and let Imager verify
+it, or try another card: some cards do not work with the 3B's boot ROM. As a last resort, unplug the SSD while you
+use the card, and copy the settings from the Mac backup in step 4.
+
+## 4. Copy WebControl's folder from the SSD, read-only
+
+On the Pi, find the SSD's root partition:
 
 ```sh
-scp 'pi@192.168.86.155:webcontrol-backup-*.tar.gz' ~/Desktop/
+lsblk -o NAME,SIZE,FSTYPE,MOUNTPOINTS
 ```
 
-## 2. Build the new UI on the Mac and copy the repo to the Pi
+`mmcblk0` is the card, mounted at `/` and `/boot/firmware`. The SSD is `sda`: `sda1` is its small `vfat` boot
+partition and `sda2` its large `ext4` root. If yours differs, use the SSD's `ext4` partition below.
 
-Node on a Pi 3B is too slow, so `frontend/dist` is built on the Mac and copied over with the source:
+```sh
+sudo mkdir -p /mnt/ssd
+sudo mount -o ro,noload /dev/sda2 /mnt/ssd
+cp -a /mnt/ssd/home/pi/.WebControl ~/
+sudo umount /mnt/ssd
+ls -l ~/.WebControl/webcontrol.json
+```
+
+`ro` mounts it read-only. `noload` stops ext4 from replaying its journal, which would write to the SSD even on a
+read-only mount.
+
+Or copy the backup from step 1, from the Mac:
+
+```sh
+scp -r ~/webcontrol-backup/.WebControl pi@maslow-next.local:
+```
+
+## 5. Copy the code from the Mac
+
+Node on a Pi 3B is too slow, so the new UI is built on the Mac and copied with the source:
 
 ```sh
 cd ~/projects/me/WebControl
-git switch build/pi-packaging        # or master, once this is merged
+git switch master
 (cd frontend && npm ci && npm run build)
 rsync -az --delete \
   --exclude .git --exclude .venv --exclude node_modules --exclude build --exclude releases --exclude .claude \
   --exclude /firmware --exclude /dist \
-  ./ pi@192.168.86.155:webcontrol-source/
+  ./ pi@maslow-next.local:webcontrol-source/
 ```
 
-`--delete` leaves the excluded paths alone on the Pi, so a later re-sync keeps the Pi's own `.venv`.
+The script needs `frontend/dist` and stops without it. `/firmware` is left out on purpose (step 9).
 
-## 3. Install (on the Pi, while v0.94 keeps running)
+## 6. Install
+
+On the Pi:
 
 ```sh
-cd ~/webcontrol-source && tools/install_from_source.sh
+cd ~/webcontrol-source && tools/install_from_source.sh && tools/install_from_source.sh --activate
 ```
 
-The script runs as `pi` and calls `sudo` itself. It:
+It takes 10–20 minutes on a Pi 3B. The script runs as `pi` and calls `sudo` itself. It:
 
-1. Stops if `frontend/dist` is missing (redo step 2), or on 32-bit Pi OS other than Bullseye (see step 0).
-2. Reports how any existing WebControl is started. Read this part.
-3. Installs the system libraries the wheels need with `apt` (on 32-bit Pi OS, the list in `requirements-pi-apt.txt`,
-   which OpenCV makes long), creates `.venv` with Python 3.9 (uv if installed, otherwise `python3 -m venv`), and
-   installs `requirements.txt`. On 32-bit Pi OS it takes wheels from piwheels and swaps in
-   `requirements-pi-overrides.txt`. It then checks that everything imports, and lists any missing system library
-   by name.
-4. Finds v0.94's `webcontrol.service`, saves a copy of it as `webcontrol-v094.service` (disabled), and stages the new
-   unit in `build/webcontrol.service`. **It does not stop, disable or replace v0.94.**
+1. Installs uv, which downloads Python 3.9 for WebControl. Raspberry Pi OS has Python 3.13 (Trixie) or 3.11
+   (Bookworm). uv's installer prints a note about `PATH`; you can ignore it.
+2. Installs a few system packages with `apt`: `libgl1` and `libglib2.0-0` for OpenCV, and `gcc` and `libc6-dev`
+   to build psutil.
+3. Creates `~/webcontrol-source/.venv`, installs `requirements.txt` and checks that everything imports.
+4. Installs `webcontrol.service`, which runs as `pi` and starts at boot, and starts it. `--activate` restarts it
+   and waits until `/next/` answers.
 
-It warns if `pi` is not in the `dialout` group, which it needs to open `/dev/ttyACM0`. It stops if v0.94's unit runs
-as a different user than the one running the script, because the settings live in that user's `~/.WebControl`.
+It ends with `WebControl is up after …s: http://<ip>:5000/next/`.
 
-## 4. Switch (machine idle)
+## 7. Verify
 
-```sh
-cd ~/webcontrol-source && tools/install_from_source.sh --activate
-```
+1. Open `http://maslow-next.local:5000/next/`. The status bar shows `Server: connected` and
+   `Controller: /dev/ttyACM0`.
+2. The firmware chip shows the controller's holey firmware version (for example `Holey 51.28`), not
+   `Firmware: unknown`, and the firmware line appears in Controller Messages.
+3. Open the classic UI at `http://maslow-next.local:5000/`. It loads and shows the controller connected.
+4. Settings → Maslow Settings: Distance Between Motors and the other values are yours, not the defaults.
+5. **Dry jog.** Raise the bit clear of the work, or take it out. Jog 10 mm, and check that the sled moves the right
+   way by the right amount. Then jog 200 mm and press **Stop** while it moves. It must stop at once.
+6. **Run one fresh holey calibration before the next real cut.** The calibration model and `$13` changed in this
+   build, so the old numbers are not exact.
 
-This stops and disables v0.94's `webcontrol.service` (and `webcontrol-v094.service`, if it is running), installs the
-new unit under the same name, enables and starts it, and waits until `/next/` answers. Before that it copies
-`~/.WebControl/webcontrol.json` to `webcontrol.json.v094`, the settings step 6 puts back. To do the same by hand:
+If something is wrong, read the log with `journalctl -u webcontrol -n 100 --no-pager`. These lines are normal:
+`can't open camera by index` (no camera), `WebSocket transport not available`, and `Trying to connect to controller`
+while the controller is unplugged. If you wired buttons or LEDs to the Pi's GPIO pins, check that the log says
+`GPIO pin factory:` followed by something other than `MockFactory`; `MockFactory` means GPIO does nothing.
 
-```sh
-sudo systemctl disable --now webcontrol
-cp -p ~/.WebControl/webcontrol.json ~/.WebControl/webcontrol.json.v094
-sudo cp ~/webcontrol-source/build/webcontrol.service /etc/systemd/system/webcontrol.service
-sudo systemctl daemon-reload
-sudo systemctl enable --now webcontrol
-```
+## 8. Roll back
 
-If v0.94 was not a systemd service, stop it the way step 3 reported it is started (and remove that autostart), then
-run `--activate`.
+Power off (`sudo poweroff`, then wait for the green LED), remove the card, power on. The Pi boots v0.94 from the
+SSD at `http://192.168.86.155:5000`, exactly as before. Nothing on the SSD was changed.
 
-## 5. Verify
+To go back to the new build, put the card back in.
 
-1. Open `http://192.168.86.155:5000/`. The classic UI loads and shows the controller connected.
-2. Open `http://192.168.86.155:5000/next/`. The status bar shows `Server: connected`, `Controller: /dev/ttyACM0`, and
-   the firmware chip shows the controller's firmware (for example `Holey 51.28`), not `Firmware: unknown`.
-3. **Dry jog.** Raise the bit clear of the work, or take it out. In `/next/`, jog each direction once with a small
-   distance (10 mm) and check that the sled moves the right way by the right amount.
-4. **Check Stop.** Jog a long distance (200 mm) and press **Stop** while the sled is moving. It must stop at once.
-   Do the same once from the classic UI.
-5. Re-run holey calibration before the next real cut.
-6. Optional: run `sudo reboot` and check that both UIs come back by themselves.
+## 9. Later: making it permanent
 
-If something is wrong, see the log with `journalctl -u webcontrol -n 100 --no-pager`, or roll back.
+Once you are happy with the new build, move the card's system to the SSD between jobs, never right before a
+production cut. Either flash the same OS to the SSD with Imager and repeat steps 3–7 on it, or copy the card to
+the SSD with `rpi-clone`. Both replace v0.94 on the SSD, so keep the backup from step 1.
 
-## 6. Roll back to v0.94 (under 2 minutes)
+**Firmware:** install this WebControl before flashing firmware 51.292 to the controller, and do not flash firmware
+from this install. Step 5 copies no `firmware/` folder, so Upgrade Firmware stops with "No firmware file found"
+before it touches the controller.
 
-```sh
-cd ~/webcontrol-source && tools/install_from_source.sh --rollback
-```
+## Updating the new build
 
-This stops and disables the new `webcontrol.service`, puts back the settings v0.94 last saved
-(`webcontrol.json.v094`), enables and starts `webcontrol-v094.service`, and waits until `/` answers. v0.94 is back at
-`http://192.168.86.155:5000/` and stays there after a reboot. On its first connect it writes its own settings back
-to the controller.
-
-Settings changed in the new build, such as a re-run holey calibration, are kept in
-`~/.WebControl/webcontrol.json.next`. They are not handed to v0.94, because v0.94 reads every entry in
-`webcontrol.json` and syncs any entry with a firmware key to the controller, and a newer backend can add entries whose
-values v0.94 cannot parse.
-
-The same by hand, if the script cannot run:
-
-```sh
-sudo systemctl disable --now webcontrol
-cp -p ~/.WebControl/webcontrol.json ~/.WebControl/webcontrol.json.next
-cp -p ~/.WebControl/webcontrol.json.v094 ~/.WebControl/webcontrol.json
-sudo systemctl enable --now webcontrol-v094
-```
-
-To put back all of `~/.WebControl` from step 1 instead (G-code and boards too), with the date from step 1:
-
-```sh
-sudo systemctl stop webcontrol-v094
-tar xzf ~/webcontrol-backup-YYYY-MM-DD.tar.gz -C ~ .WebControl
-sudo systemctl start webcontrol-v094
-```
-
-To return to the new build later, run `tools/install_from_source.sh --activate` again. It saves v0.94's settings
-again, disables `webcontrol-v094.service` and starts the new one on the settings v0.94 left.
-
-## Updating the new build later
-
-On the Mac, repeat step 2. Then run `tools/install_from_source.sh` on the Pi. It updates `.venv` and the unit but
+On the Mac, repeat step 5. Then run `tools/install_from_source.sh` on the Pi. It updates `.venv` and the unit but
 leaves the running service alone, so a cut in progress carries on. With the machine idle, run
-`tools/install_from_source.sh --activate` to restart `webcontrol.service` on the new code.
+`tools/install_from_source.sh --activate` to restart it on the new code.
 
-## A PyInstaller release instead (optional)
+## Testing the install without a Pi
 
-`tools/build_release.sh` makes `webcontrol-<version>-rpi-singledirectory.tar.gz`, with the same layout as v0.94's
-tarball. PyInstaller only builds for the machine it runs on, so this has to run on a Pi or an ARM runner:
-`pip install -r requirements.txt -r requirements-build.txt`, then
-`tools/build_release.sh --skip-frontend --skip-firmware` with `frontend/dist` copied over as in step 2. The source
-install above is simpler, and it is the one this guide covers.
+`tools/test-install/run.sh` runs steps 4–6 in Debian Trixie and Bookworm arm64 containers with systemd, then checks
+the service, both UIs, `/api/state`, socket.io, the copied settings and a restart. It needs Docker, `jq`, `rsync`
+and a built `frontend/dist`.
