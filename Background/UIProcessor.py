@@ -17,6 +17,10 @@ This class is not MakesmithInitFuncs inherited, so it doesn't have direct access
 passed the app.  
 '''
 
+# No firmware reports motor power; the classic UI shows this value as green.
+MOTOR_POWER = 15
+
+
 def _firmware_version(data):
     try:
         return float(data.controllerFirmwareVersion)
@@ -208,27 +212,6 @@ class UIProcessor:
                 self.app.data.yval = float(valz[1])
                 self.app.data.zval = float(valz[2])
 
-                startpt = message.find("PWR:") + 4
-                if startpt > 4:
-                    endpt = message.find(">", startpt)
-                    numz = message[startpt:endpt]
-                    valz = numz.split(",")
-                    lpwr = abs(int(valz[0]))
-                    rpwr = abs(int(valz[1]))
-                    zpwr = abs(int(valz[2]))
-                else:
-                    #No PWR message from Maslow, so just say 15/255% to keep it green.
-                    lpwr = 15
-                    rpwr = 15
-                    zpwr = 15
-
-                startpt = message.find("F:") + 2
-                if startpt > 2:
-                    endpt = message.find(",", startpt)
-                    numz = message[startpt:endpt+1]
-                    valz = numz.split(",")
-                    self.app.data.feedRate= abs(float(valz[0]))
-
                 if math.isnan(self.app.data.xval):
                     self.sendControllerMessage("Unable to resolve x Kinematics.")
                     self.app.data.xval = 0
@@ -272,9 +255,9 @@ class UIProcessor:
                 "rqvel": self.app.data.feedRate,
                 "pcom": percentComplete,
                 "state": state,
-                "lpwr": lpwr,
-                "rpwr": rpwr,
-                "zpwr": zpwr
+                "lpwr": MOTOR_POWER,
+                "rpwr": MOTOR_POWER,
+                "zpwr": MOTOR_POWER
             }
             # call command to send the position data
             self.sendPositionMessage(position)

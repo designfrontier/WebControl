@@ -133,3 +133,13 @@ def test_a_stock_error_report_is_parsed_by_its_field_count(error_report, data, m
     assert (data.leftError, data.rightError, data.bufferSize, data.leftChain) == (0.25, 0.125, 120, 1.0)
     assert drain(data.console_queue) == []
 
+
+
+def test_the_position_message_reports_default_motor_power_and_feed(ui, data, monkeypatch):
+    sent = []
+    monkeypatch.setattr(ui, "sendPositionMessage", sent.append)
+    monkeypatch.setattr(data, "feedRate", 20)
+
+    ui.setPosOnScreen("<Idle,MPos:9.0,8.0,7.0,WPos:0.0,0.0,0.0>\r\n")
+
+    assert {key: sent[0][key] for key in ["lpwr", "rpwr", "zpwr", "rqvel"]} == {"lpwr": 15, "rpwr": 15, "zpwr": 15, "rqvel": 20}
