@@ -7,6 +7,7 @@ use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
+use serde_json::json;
 use tokio::sync::Notify;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::time::{Instant, interval_at, sleep_until};
@@ -80,6 +81,11 @@ async fn session(socket: WebSocket, ns: Namespace, state: AppState) {
     }
     if ns == Namespace::MaslowCnc {
         state.machine.send(Event::ClientConnected { sid: sid.clone() });
+    }
+    // The log viewer waits for a logging state; Rust never suspends logging, so it is always active.
+    let logging = Push::log(json!({"log": "state", "state": false})).frame().encode();
+    if ns == Namespace::Logs && tx.send(Message::text(logging)).await.is_err() {
+        return;
     }
     tracing::info!(sid, ns = ns.path(), "client connected");
     let pongs = Notify::new();

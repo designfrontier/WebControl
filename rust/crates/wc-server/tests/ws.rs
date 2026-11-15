@@ -149,12 +149,14 @@ async fn frames_that_do_not_parse_or_belong_elsewhere_are_ignored() {
 }
 
 #[tokio::test]
-async fn the_log_namespace_gets_its_handshake_and_no_ui_messages() {
+async fn the_log_namespace_gets_its_handshake_the_logging_state_and_no_ui_messages() {
     let address = serve().await;
     let mut logs = open(&address, "/MaslowCNCLogs").await;
     let handshake = next_frame(&mut logs).await;
     assert_eq!(handshake["ns"], "/MaslowCNCLogs");
     assert_eq!(handshake["event"], "connect");
+    let state = next_frame(&mut logs).await;
+    assert_eq!(state, json!({"ns": "/MaslowCNCLogs", "event": "message", "data": {"log": "state", "state": false}}));
     let mut ui = open(&address, "/MaslowCNC").await;
     for _ in 0..3 {
         next_frame(&mut ui).await;
@@ -217,6 +219,7 @@ async fn log_pushes_reach_the_log_namespace() {
     let (machine, _task) = spawn(Echo(Machine::new("h", Settings::defaults())), Box::new(NoPort), Arc::new(NoHost));
     let address = serve_with(machine, PingConfig::default()).await;
     let mut logs = open(&address, "/MaslowCNCLogs").await;
+    next_frame(&mut logs).await;
     next_frame(&mut logs).await;
     let mut ui = open(&address, "/MaslowCNC").await;
     handshake(&mut ui).await;
