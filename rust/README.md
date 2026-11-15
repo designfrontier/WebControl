@@ -7,6 +7,8 @@ WebSockets, and shares `~/.WebControl` with the Python install.
 | --- | --- |
 | `wc-protocol` | The browser wire: envelope, WebSocket frame, messages, events, `GET /api/state` |
 | `wc-config` | `~/.WebControl` layout and `webcontrol.json`, read like `config/config.py` (read-only so far) |
+| `wc-kinematics` | The holey firmware's triangular and quadrilateral inverse/forward, float for float with Python |
+| `wc-calibration` | Holey (`levenberg-marquardt`) and triangular calibration, test patterns, Accept's settings and `$` lines |
 | `wc-machine` | The sans-IO core (`Machine::handle(event, now) -> effects`) and the tokio shell; Stop has its own channel |
 | `wc-server` | The `webcontrol-rs` binary: axum routes, `/ws` sessions, embedded UI and images |
 | `wc-testkit` | Test support: the `contract/` schema harness and the `contract/serial/` transcript runner |
@@ -17,6 +19,8 @@ WebSockets, and shares `~/.WebControl` with the Python install.
 - `scripts/coverage.sh`: tests under `cargo llvm-cov`, failing below 95% lines for any crate
 - `cargo run -p wc-server -- --home "$(mktemp -d)" --port 5055`: never point `--home` at the real `~/.WebControl`
   while testing
+- `cargo run -p wc-calibration --example calibrate -- <home> holey M1 … M12`: a calibration against a copy of
+  `webcontrol.json`, printing the result and the `$` lines Accept would send
 - `bash deploy/test.sh`: `wc-switch`, `deploy.sh` and `install-pi.sh` against stubs
 - `E2E_BACKEND=rust npm run test:e2e` in `frontend/`: the Playwright smoke against the binary
 
