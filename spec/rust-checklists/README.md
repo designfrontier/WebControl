@@ -1,7 +1,7 @@
 # Rust backend hardware checklists: the order to run them
 
 These checklists take `webcontrol-rs` from "installed beside Python" to "cutting and upgrading firmware" on the
-microSD card (`pi@maslow-next.local`). The SSD with v0.94 is never touched. Run them in the order below. Each one
+microSD card (`pi@maslow.local`). The SSD with v0.94 is never touched. Run them in the order below. Each one
 assumes every earlier one passed. CI already covers everything that can run without the machine (each checklist's
 section 1 or "CI" boxes), so start each one with a green `master`.
 
@@ -20,7 +20,7 @@ The Python backend stays installed and working on the card throughout. Only one 
   (`spec/INSTALL-PI.md`, step 8).
 
 Both backends share `~/.WebControl`. Each checklist that writes it starts with a backup to the Mac
-(`scp -r pi@maslow-next.local:.WebControl ~/webcontrol-backup-<milestone>/`). Never edit the original.
+(`scp -r pi@maslow.local:.WebControl ~/webcontrol-backup-<milestone>/`). Never edit the original.
 
 ## Order
 

@@ -43,7 +43,7 @@ WebSockets, and shares `~/.WebControl` with the Python install.
 
 ## The Pi
 
-`./deploy.sh build|install|push|rollback [host]` (default `pi@maslow-next.local`) cross-builds with
+`./deploy.sh build|install|push|rollback [host]` (default `pi@maslow.local`) cross-builds with
 `cargo zigbuild --release --target aarch64-unknown-linux-gnu.2.36` (zig from `pip install ziglang`) and installs to
 `/opt/webcontrol-rs`. On the Pi, `wc-switch rust|python|status` picks the backend that runs and boots; the two units
 conflict, so only one holds the port. `install-pi.sh` also adds `/etc/sudoers.d/webcontrol-rs`, which lets the
