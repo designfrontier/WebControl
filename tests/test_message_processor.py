@@ -62,6 +62,7 @@ def test_a_garbled_controller_line_does_not_stop_alarms_halting_the_job(processo
 
     processor.start()
 
+    assert data.ui_controller_queue.get(timeout=2) == "Firmware Version 1.2x\r\n"
     assert data.ui_controller_queue.get(timeout=2) == ALARM
     assert data.uploadFlag == 0
 

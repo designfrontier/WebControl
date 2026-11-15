@@ -55,6 +55,8 @@ def setting_options(section, setting, data):
 def describe_setting(section, setting, data):
     """One setting as the form needs it; `numeric` mirrors the old template's isnumber check."""
     kind = setting.get("type", "string")
+    # A setting not yet read from the controller is blank, but numeric all the same.
+    value_or_default = setting.get("value") if setting.get("value") != "" else setting.get("default")
     described = {
         "key": setting["key"],
         "title": setting.get("title", setting["key"]),
@@ -62,7 +64,7 @@ def describe_setting(section, setting, data):
         "type": kind,
         "value": setting.get("value", ""),
         "custom": setting.get("custom") == 1,
-        "numeric": kind in ("int", "float") or (kind == "string" and is_number(setting.get("value"))),
+        "numeric": kind in ("int", "float") or (kind == "string" and is_number(value_or_default)),
     }
     options = setting_options(section, setting, data)
     return {**described, "options": options} if options is not None else described

@@ -25,6 +25,8 @@ export const startupState = (over: Partial<StartupState> = {}): StartupState => 
   manualZAxisAdjust: false,
   hostAddress: "192.168.1.20:5000",
   controllerFirmwareVersion: 0,
+  controllerBoard: null,
+  firmwareBuild: null,
   macros: [
     { command: "macro1", title: "Macro 1" },
     { command: "macro2", title: "Macro 2" },

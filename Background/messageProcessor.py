@@ -1,3 +1,4 @@
+from Connection import firmwareFacts
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
 
 import threading
@@ -33,7 +34,27 @@ class MessageProcessor(MakesmithInitFuncs):
                     self.data.console_queue.put("Update check failed: " + str(e))
             time.sleep(60)
 
+    def watchForBoot(self, message):
+        '''
+        On each controller boot, asks for the version and rewrites what the firmware only applies on a write.
+        '''
+        if firmwareFacts.EEPROM_REWRITE_NOTICE in message:
+            self.data.firmwareRewriteNoticeSeen = True
+        if not firmwareFacts.isBootBanner(message):
+            return
+        self.data.controllerBoard = firmwareFacts.boardBanner(message) or self.data.controllerBoard
+        now = time.time()
+        if not self.data.bootInProgress or now - self.data.lastBootBannerTime > firmwareFacts.BOOT_BANNER_WINDOW:
+            self.data.firmwareRewriteNoticeSeen = False
+            self.data.gcode_queue.put("B05 ")
+            [self.data.gcode_queue.put(line) for line in self.data.config.writeOnlyFirmwareSettings()]
+        self.data.bootInProgress = not firmwareFacts.endsBoot(message)
+        self.data.lastBootBannerTime = now
+
     def processMessage(self, message):
+        self.watchForBoot(message)
+        if "EEPROM read fail" in message:
+            self.data.config.restoreControllerSettings()
         if message != "":
             if message[0] == "<":
                 # message to be processed by UIProcessor
@@ -98,9 +119,11 @@ class MessageProcessor(MakesmithInitFuncs):
 
                 self.data.logger.writeToLog("Ground Control Version " + str(self.data.version) + "\n")
                 self.data.console_queue.put("WebControl " + str(self.data.version) + "\r\n" + message + "\r\n")
-                # Check that version numbers match
-                self.data.controllerFirmwareVersion = float(message[16-len(message):])
-                tmpVersion = self.data.controllerFirmwareVersion
+                self.data.ui_controller_queue.put(message)
+                tmpVersion = firmwareFacts.parseFirmwareVersion(message)
+                if tmpVersion is None:
+                    return
+                self.data.controllerFirmwareVersion = tmpVersion
                 # <50 implies a stock firmware
                 if tmpVersion <50:
                     if self.data.stockFirmwareVersion is not None:

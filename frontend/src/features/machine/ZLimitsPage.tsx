@@ -12,11 +12,12 @@ export const ZLimitsPage = () => {
   return (
     <Screen title="Z-axis limits">
       <p>Router Z limits help Maslow avoid damage from plunging too deep or retracting too far.</p>
+      <p>The controller stores each limit in mm. Zeroing Z shifts the saved limits by the same amount.</p>
       <LoadStatus load={setup} what="machine setup" onRetry={retry} />
       {setup.status === "ready" && !supported && (
         <p className="notice" data-tone="warn">
-          Z-axis limits need controller firmware newer than 1.26. The controller reports version{" "}
-          {setup.data.controllerFirmwareVersion || "unknown"}.
+          Z-axis limits need holey firmware 51.292 or later. The controller reports{" "}
+          {setup.data.firmwareBuild ?? "no version yet"}.
         </p>
       )}
       <h3>Step 1: Clear the Z-axis limits</h3>

@@ -35,6 +35,10 @@ class Data:
     customFirmwareVersion = None
     holeyFirmwareVersion = None
     controllerFirmwareVersion = 0
+    controllerBoard = None
+    firmwareRewriteNoticeSeen = False
+    lastBootBannerTime = 0.0
+    bootInProgress = False
 
     """
     Version Updater

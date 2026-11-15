@@ -35,13 +35,16 @@ def fake_config(overrides=None):
     return SimpleNamespace(getValue=lambda section, key: settings.get((section, key)))
 
 
-def fake_data(version=0, overrides=None):
-    return SimpleNamespace(config=fake_config(overrides), controllerFirmwareVersion=version)
+def fake_data(version=0, overrides=None, rewrite_notice=False):
+    return SimpleNamespace(
+        config=fake_config(overrides), controllerFirmwareVersion=version, firmwareRewriteNoticeSeen=rewrite_notice
+    )
 
 
 @pytest.mark.parametrize(
     "version, four_motor, z_limits",
-    [(0, False, False), (1.26, False, False), (1.27, False, True), (100, True, True), ("51.2", False, True)],
+    [(0, False, False), (1.26, False, False), (1.27, False, False), (51.27, False, False), (51.29, False, False),
+     (51.293, False, True), (100, True, False), ("51.2", False, False)],
 )
 def test_setup_derives_capabilities_from_the_firmware_version(version, four_motor, z_limits):
     setup = machine_setup(fake_data(version))
@@ -54,12 +57,18 @@ def test_setup_reports_chain_length_and_touch_plate():
     assert machine_setup(fake_data(1.3)) == {
         "chainExtendLength": 1650.0,
         "fourMotor": False,
-        "firmwareSupportsZaxisLimit": True,
+        "firmwareSupportsZaxisLimit": False,
         "touchPlate": False,
         "controllerFirmwareVersion": 1.3,
+        "firmwareBuild": "1.3",
     }
     touch = machine_setup(fake_data(0, {("Advanced Settings", "touchPlate"): 1}))
     assert touch["touchPlate"] is True
+
+
+def test_z_limits_need_51_292_which_51_29_proves_with_its_eeprom_rewrite_notice():
+    assert machine_setup(fake_data(51.29, rewrite_notice=True))["firmwareSupportsZaxisLimit"] is True
+    assert machine_setup(fake_data(51.29, rewrite_notice=True))["firmwareBuild"] == "51.292"
 
 
 def test_setup_survives_unparseable_values():

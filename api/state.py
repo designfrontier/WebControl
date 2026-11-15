@@ -1,5 +1,7 @@
 from flask import Blueprint, current_app, jsonify
 
+from Connection import firmwareFacts
+
 blueprint = Blueprint("state", __name__)
 
 
@@ -35,6 +37,8 @@ def startup_state(data):
         **job_status(data),
         "hostAddress": data.hostAddress,
         "controllerFirmwareVersion": _number(data.controllerFirmwareVersion),
+        "controllerBoard": data.controllerBoard,
+        "firmwareBuild": firmwareFacts.firmwareBuild(data),
         "macros": [
             {"command": f"macro{n}", "title": str(config.getValue("Maslow Settings", f"macro{n}_title") or "")}
             for n in (1, 2)

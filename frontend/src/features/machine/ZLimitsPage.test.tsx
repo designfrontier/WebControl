@@ -28,16 +28,21 @@ describe("ZLimitsPage", () => {
     ]);
   });
 
-  it("explains and locks the limit buttons on older firmware", async () => {
-    renderLimits({ firmwareSupportsZaxisLimit: false, controllerFirmwareVersion: 1.2 });
-    expect(await screen.findByText(/need controller firmware newer than 1.26/)).toHaveTextContent("version 1.2.");
+  it("explains and locks the limit buttons on firmware before 51.292", async () => {
+    renderLimits({ firmwareSupportsZaxisLimit: false, controllerFirmwareVersion: 51.29, firmwareBuild: "51.29x" });
+    expect(await screen.findByText(/need holey firmware 51.292 or later/)).toHaveTextContent("reports 51.29x.");
     LIMIT_BUTTONS.forEach((name) => expect(screen.getByRole("button", { name })).toBeDisabled());
     expect(screen.getByRole("button", { name: "↑ Raise" })).toBeEnabled();
   });
 
   it("says unknown when no controller has reported a version", async () => {
-    renderLimits({ firmwareSupportsZaxisLimit: false, controllerFirmwareVersion: 0 });
-    expect(await screen.findByText(/need controller firmware/)).toHaveTextContent("version unknown.");
+    renderLimits({ firmwareSupportsZaxisLimit: false, controllerFirmwareVersion: 0, firmwareBuild: null });
+    expect(await screen.findByText(/need holey firmware/)).toHaveTextContent("reports no version yet.");
+  });
+
+  it("warns that zeroing Z moves the saved limits", async () => {
+    renderLimits();
+    expect(await screen.findByText(/Zeroing Z shifts the saved limits/)).toBeInTheDocument();
   });
 
   it("shows the latest controller messages", async () => {

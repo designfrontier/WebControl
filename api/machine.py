@@ -3,6 +3,8 @@ import math
 
 from flask import Blueprint, current_app, jsonify, request
 
+from Connection import firmwareFacts
+
 blueprint = Blueprint("machine", __name__)
 
 KINEMATICS_TYPES = ("Ring", "Linkage", "Pantograph", "Metal Maslow", "Custom", "Quadrilateral")
@@ -29,9 +31,10 @@ def machine_setup(data):
     return {
         "chainExtendLength": _number(config.getValue("Advanced Settings", "chainExtendLength")),
         "fourMotor": version >= 100,
-        "firmwareSupportsZaxisLimit": version > 1.26,
+        "firmwareSupportsZaxisLimit": firmwareFacts.supportsZaxisLimits(data),
         "touchPlate": bool(config.getValue("Advanced Settings", "touchPlate")),
         "controllerFirmwareVersion": version,
+        "firmwareBuild": firmwareFacts.firmwareBuild(data),
     }
 
 
