@@ -57,8 +57,7 @@ fn recorder() -> (Recorder, Arc<Mutex<Vec<String>>>) {
     (Recorder { seen: seen.clone(), inner: Machine::new("h") }, seen)
 }
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
-async fn stop_jumps_the_queue_of_commands() {
+async fn stop_first(round: usize) {
     let (core, seen) = recorder();
     let port = Port::default();
     let (handle, task) = spawn(core, Some(Box::new(port.clone())));
@@ -66,10 +65,18 @@ async fn stop_jumps_the_queue_of_commands() {
     handle.send(Event::Action(action("stopRun")));
     tokio::time::sleep(Duration::from_millis(1)).await;
     let handled: Vec<String> = seen.lock().unwrap().iter().filter(|s| *s != "tick").cloned().collect();
-    assert_eq!(handled, ["stopRun", "move", "moveZ", "home"]);
+    assert_eq!(handled, ["stopRun", "move", "moveZ", "home"], "round {round}");
     assert_eq!(String::from_utf8(port.0.lock().unwrap().clone()).unwrap(), "!\nmove\nmoveZ\nhome\n");
     drop(handle);
     task.await.unwrap();
+}
+
+/// Repeated because an unbiased select would still put Stop first now and then.
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn stop_jumps_the_queue_of_commands() {
+    for round in 0..32 {
+        stop_first(round).await;
+    }
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
