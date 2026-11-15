@@ -136,7 +136,7 @@ impl Machine {
         // Solved on every report, as Python does, so the quadrilateral solver sees the same calls.
         let guess = (self.position.x, self.position.y);
         let computed =
-            error.chains.filter(|_| enabled > 0).and_then(|(l, r)| self.kinematics.forward_from(l, r, guess));
+            error.chains.filter(|_| enabled > 0).and_then(|(l, r)| self.kinematics.forward_as_firmware(l, r, guess));
         let (computed_x, computed_y) = computed.unwrap_or((NO_COMPUTED_POSITION, NO_COMPUTED_POSITION));
         let (left, right) = (error.left / limit, error.right / limit);
         self.reported_buffer = error.space;

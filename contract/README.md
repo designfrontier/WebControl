@@ -182,3 +182,16 @@ until a `VERSION` bump changes them.
     (`/editGCode` resends it itself). A load waits for one already running, and `startRun` is refused meanwhile;
     a load that finishes after a job has started is dropped with a 500 and the job keeps its gcode. The board resend
     after any `action` (wart 12) ends the spinner early too.
+
+## Rust-intended deviations
+
+Where the Rust backend answers differently from Python by owner decision. The shapes are the same, so the schemas and
+`tests/test_contract.py` hold for both.
+
+- **Computed sled position in float32** (decision 6, 2026-11-15). `errorValueMessage.computedX/Y` solve the chain
+  lengths of a `[PE:` report with the firmware's own float32 triangular kinematics (including its pre-catenary model
+  when `sledWeight` is 0 or less), stopping at 0.001 mm of chain, where Python solves in `f64` to 1e-9 mm. The two
+  differ by about 0.002 mm; quadrilateral kinematics still use the `f64` model. Every value is exactly a float32.
+- **Calibration Accept refusals.** `POST /api/calibration/{triangular,holey}/accept` also answers its 409 when the
+  triangular Accept has no finite Z-axis safe height to rise to before it moves (decision 3; see
+  `serial/README.md`, "Rust-intended deviations") and when a value it would save or send is not finite.

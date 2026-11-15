@@ -170,7 +170,9 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
     and B20 to read them.
 13. Spindle on 51.29x: send `S` on its own line after M3.
 14. Kinematics: reproduce the firmware exactly (R rule, density, trig, tolerances, old-triangular branch, clamps,
-    forward-solve limits).
+    forward-solve limits). The live computed sled position uses the float32 triangular inverse
+    (`wc-kinematics` `Firmware32`, checked against the same C built for float); holey calibration keeps Python's
+    `f64` model so it matches the fixtures.
 15. MPos has 2 decimals; never use it to restore an exact Z.
 16. Touch Z: send `G38.2` alone; no `G10 Z0` after it; a probe `error:` alerts and zeroes nothing; until the probe
     answers, refuse every action that moves the machine (Resume included), except Stop.
