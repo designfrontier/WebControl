@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "logMessage",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "log": {
+          "type": "string",
+          "enum": [
+            "log",
+            "alog"
+          ]
+        },
+        "data": {
+          "type": "string"
+        },
+        "state": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "log",
+        "data",
+        "state"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "log": {
+          "type": "string",
+          "const": "state"
+        },
+        "state": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "log",
+        "state"
+      ]
+    }
+  ]
+}

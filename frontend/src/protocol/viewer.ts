@@ -45,7 +45,10 @@ export const gcodeMoveSchema = z.object({
 });
 export type GcodeMove = z.infer<typeof gcodeMoveSchema>;
 export const gcodeMovesSchema = z.array(gcodeMoveSchema);
-export const cutCellsSchema = z.array(z.unknown());
+/** One boolean per square inch; old board files may hold [x, y, 0] hull vertices. See the contract README. */
+export const cutCellsSchema = z.array(
+  z.union([z.boolean(), z.number(), z.tuple([z.number(), z.number(), z.number()])]),
+);
 
 const inches = z.number().nullable();
 

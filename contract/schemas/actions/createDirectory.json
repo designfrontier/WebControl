@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "createDirectory",
+  "type": "object",
+  "properties": {
+    "data": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "const": "createDirectory"
+        },
+        "arg": {
+          "type": "string",
+          "description": "Directory name"
+        },
+        "arg1": {
+          "description": "Ignored by the backend; the UI sends \"\".",
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "command",
+        "arg",
+        "arg1"
+      ]
+    }
+  },
+  "required": [
+    "data"
+  ]
+}

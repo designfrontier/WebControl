@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "put-api-settings-sectionid.params",
+  "type": "object",
+  "properties": {
+    "sectionId": {
+      "type": "string",
+      "enum": [
+        "maslow",
+        "advanced",
+        "webcontrol",
+        "camera",
+        "gpio"
+      ]
+    }
+  },
+  "required": [
+    "sectionId"
+  ]
+}

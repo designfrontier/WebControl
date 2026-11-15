@@ -1,9 +1,11 @@
 import { z } from "zod";
 import type { EventSchemas, MessageSchemas } from "./core";
+import { pidResultSchema } from "./system";
 
 /** Server -> client commands for machine setup: chains, sprockets, z-axis, PID and firmware. */
 export const machineMessages = {
-  updatePIDData: z.object({ command: z.string(), data: z.unknown() }),
+  /** The backend sends `data` as JSON text of a PidResult; the object itself is accepted too. */
+  updatePIDData: z.object({ command: z.string(), data: z.union([z.string(), pidResultSchema]) }),
 } satisfies MessageSchemas;
 
 export const machineActions = [

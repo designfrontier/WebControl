@@ -1,15 +1,6 @@
 import { decodeEnvelopeData, envelopeSchema, serverMessages } from "../protocol";
 import type { ActionCommand, ClientEvent, ClientEvents, MessageData, ServerCommand } from "../protocol";
-
-/** The slice of a socket.io-client Socket the app uses, so tests can substitute a fake. */
-export interface SocketLike {
-  readonly id: string | undefined;
-  readonly connected: boolean;
-  on(event: string, listener: (...args: never[]) => void): unknown;
-  emit(event: string, ...args: unknown[]): unknown;
-  connect(): unknown;
-  disconnect(): unknown;
-}
+import type { Transport } from "../transport";
 
 export type ConnectionStatus = "connecting" | "connected" | "disconnected";
 
@@ -34,7 +25,7 @@ const isForSomeoneElse = (data: unknown, ownId: string | undefined) => {
   return client !== "all" && client !== ownId;
 };
 
-export const createClient = (socket: SocketLike): WebControlClient => {
+export const createClient = (socket: Transport): WebControlClient => {
   const handlers = new Map<string, Set<Handler>>();
   const statusListeners = new Set<(status: ConnectionStatus) => void>();
   let status: ConnectionStatus = socket.connected ? "connected" : "connecting";

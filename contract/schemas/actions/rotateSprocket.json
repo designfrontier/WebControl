@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "rotateSprocket",
+  "type": "object",
+  "properties": {
+    "data": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "const": "rotateSprocket"
+        },
+        "arg": {
+          "type": "string",
+          "description": "Motor letter: \"L\", \"R\", or on four-motor firmware \"M\", \"S\"/\"N\"."
+        },
+        "arg1": {
+          "type": "number",
+          "description": "Seconds; the sign sets the direction"
+        }
+      },
+      "required": [
+        "command",
+        "arg",
+        "arg1"
+      ]
+    }
+  },
+  "required": [
+    "data"
+  ]
+}

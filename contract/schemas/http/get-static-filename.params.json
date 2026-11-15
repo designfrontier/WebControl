@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get-static-filename.params",
+  "type": "object",
+  "properties": {
+    "filename": {
+      "type": "string",
+      "description": "May contain slashes"
+    }
+  },
+  "required": [
+    "filename"
+  ]
+}

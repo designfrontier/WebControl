@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "post-api-boards-directories.201",
+  "type": "object",
+  "properties": {
+    "directories": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "directory": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "directory",
+          "name"
+        ]
+      }
+    },
+    "directory": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "directories",
+    "files",
+    "directory"
+  ]
+}

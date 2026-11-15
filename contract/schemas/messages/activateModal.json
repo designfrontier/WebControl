@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "activateModal",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "message": {
+      "type": "string"
+    },
+    "modalType": {
+      "type": "string"
+    },
+    "modalSize": {
+      "type": "string"
+    },
+    "resume": {
+      "type": [
+        "string",
+        "boolean"
+      ]
+    },
+    "progress": {
+      "type": [
+        "string",
+        "boolean"
+      ]
+    },
+    "isStatic": {
+      "type": "boolean"
+    },
+    "client": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "title",
+    "message"
+  ],
+  "additionalProperties": {}
+}

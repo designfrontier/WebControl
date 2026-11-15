@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "positionMessage",
+  "type": "object",
+  "properties": {
+    "xval": {
+      "type": "number"
+    },
+    "yval": {
+      "type": "number"
+    },
+    "zval": {
+      "type": "number"
+    },
+    "vel": {
+      "type": "number"
+    },
+    "rqvel": {
+      "type": "number"
+    },
+    "pcom": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string"
+    },
+    "lpwr": {
+      "type": "number"
+    },
+    "rpwr": {
+      "type": "number"
+    },
+    "zpwr": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "xval",
+    "yval",
+    "zval",
+    "vel",
+    "rqvel",
+    "pcom",
+    "state",
+    "lpwr",
+    "rpwr",
+    "zpwr"
+  ]
+}

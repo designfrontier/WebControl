@@ -1,6 +1,6 @@
 import { act } from "@testing-library/react";
 import type { ActionCommand, ClientEvent, ClientEvents } from "../protocol";
-import type { SocketLike } from "../socket/client";
+import type { Transport } from "../transport";
 
 type Listener = (...args: unknown[]) => void;
 
@@ -9,7 +9,7 @@ export interface Emitted {
   payload: unknown;
 }
 
-export interface FakeSocket extends SocketLike {
+export interface FakeSocket extends Transport {
   /** Everything the client emitted, oldest first. */
   readonly emitted: Emitted[];
   /** Simulates the server accepting the connection, giving this socket `id`. */

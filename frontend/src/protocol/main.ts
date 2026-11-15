@@ -55,7 +55,8 @@ export const mainMessages = {
   requestedSetting: z.object({ setting: z.string(), value: z.union([z.string(), z.number(), z.boolean()]) }),
   controllerMessage: z.string(),
   alarm: z.object({ message: z.string() }),
-  clearAlarm: z.unknown(),
+  /** UIProcessor always sends `{ "data": "" }`. */
+  clearAlarm: z.object({ data: z.string() }),
   activateModal: modalSchema,
   closeModals: z.object({ title: z.string() }),
   closeAlertModals: z.object({ title: z.string() }),

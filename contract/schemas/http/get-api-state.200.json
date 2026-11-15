@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get-api-state.200",
+  "type": "object",
+  "properties": {
+    "units": {
+      "type": "string",
+      "enum": [
+        "MM",
+        "INCHES"
+      ]
+    },
+    "distToMove": {
+      "type": "number"
+    },
+    "unitsZ": {
+      "type": "string",
+      "enum": [
+        "MM",
+        "INCHES"
+      ]
+    },
+    "distToMoveZ": {
+      "type": "number"
+    },
+    "homePosition": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ]
+    },
+    "pauseButtonSetting": {
+      "type": "string",
+      "enum": [
+        "Pause",
+        "Resume"
+      ]
+    },
+    "hostAddress": {
+      "type": "string"
+    },
+    "macros": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "macro1",
+              "macro2"
+            ]
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "command",
+          "title"
+        ]
+      }
+    }
+  },
+  "required": [
+    "units",
+    "distToMove",
+    "unitsZ",
+    "distToMoveZ",
+    "homePosition",
+    "pauseButtonSetting",
+    "hostAddress",
+    "macros"
+  ]
+}

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { binaryField } from "./core";
 import type { EventSchemas, MessageSchemas } from "./core";
 
 /** Server -> client commands for opening, uploading, saving and editing gcode. */
@@ -43,3 +44,22 @@ export const formErrorSchema = z.object({ error: z.string() });
 
 /** GET /api/files/gcode/text and /api/files/gcode/custom. */
 export const gcodeTextSchema = z.object({ text: z.string() });
+
+/** POST /api/files/gcode/directories and /api/boards/directories body. */
+export const directoryRequestSchema = z.object({ name: z.string() });
+
+export const libraryPathField = z.string().describe('"<directory>/<file name>"; directory "." is the library root.');
+
+/** Form bodies (multipart/form-data) of the classic gcode and import routes. */
+export const openGcodeFormSchema = z.object({ selectedGCode: libraryPathField });
+export const uploadGcodeFormSchema = z.object({ selectedDirectory: z.string(), "file[]": z.array(binaryField).min(1) });
+export const saveGcodeFormSchema = z.object({ selectedDirectory: z.string(), fileName: z.string() });
+export const gcodeFormSchema = z.object({ gcode: z.string() });
+export const importFormSchema = z.object({ file: binaryField });
+
+/** What most classic form routes answer, with the HTTP status repeated in the body. */
+export const classicStatusSchema = z.object({ status: z.number().int() });
+/** A classic route's refusal: 409 while a job runs, 400 for a path outside the library. */
+export const classicErrorSchema = z.object({ status: z.number().int(), error: z.string() });
+/** /editGCode, /sendGCode, /editBoard and /trimBoard answer a bare JSON string. */
+export const classicResultSchema = z.enum(["success", "failed"]);

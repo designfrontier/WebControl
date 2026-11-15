@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "moveTo",
+  "type": "object",
+  "properties": {
+    "data": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "const": "moveTo"
+        },
+        "arg": {
+          "type": "number",
+          "description": "X in inches from the bed centre"
+        },
+        "arg1": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\s*[-+]?(\\d+\\.?\\d*|\\.\\d+)([eE][-+]?\\d+)?\\s*$"
+            }
+          ],
+          "description": "Y in inches from the bed centre"
+        }
+      },
+      "required": [
+        "command",
+        "arg",
+        "arg1"
+      ]
+    }
+  },
+  "required": [
+    "data"
+  ]
+}

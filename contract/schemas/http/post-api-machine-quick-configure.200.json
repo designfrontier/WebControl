@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "post-api-machine-quick-configure.200",
+  "type": "object",
+  "properties": {
+    "kinematicsType": {
+      "type": "string",
+      "enum": [
+        "Ring",
+        "Linkage",
+        "Pantograph",
+        "Metal Maslow",
+        "Custom",
+        "Quadrilateral"
+      ]
+    },
+    "rotationRadius": {
+      "type": "number",
+      "minimum": 0
+    },
+    "chainOverSprocket": {
+      "type": "string",
+      "enum": [
+        "Top",
+        "Bottom"
+      ]
+    },
+    "motorSpacingX": {
+      "type": "number",
+      "minimum": 0
+    },
+    "motorOffsetY": {
+      "type": "number",
+      "minimum": 0
+    }
+  },
+  "required": [
+    "kinematicsType",
+    "rotationRadius",
+    "chainOverSprocket",
+    "motorSpacingX",
+    "motorOffsetY"
+  ]
+}

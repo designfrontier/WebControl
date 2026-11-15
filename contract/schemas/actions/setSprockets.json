@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "setSprockets",
+  "type": "object",
+  "properties": {
+    "data": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "const": "setSprockets"
+        },
+        "arg": {
+          "type": "string",
+          "description": "Motor letter: \"L\", \"R\", or on four-motor firmware \"M\", \"S\"/\"N\"."
+        },
+        "arg1": {
+          "type": "number",
+          "description": "Degrees, signed"
+        }
+      },
+      "required": [
+        "command",
+        "arg",
+        "arg1"
+      ]
+    }
+  },
+  "required": [
+    "data"
+  ]
+}

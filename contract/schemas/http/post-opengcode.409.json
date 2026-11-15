@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "post-opengcode.409",
+  "type": "object",
+  "properties": {
+    "status": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "error": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "status",
+    "error"
+  ]
+}

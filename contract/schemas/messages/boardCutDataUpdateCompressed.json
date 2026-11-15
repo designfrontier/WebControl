@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "boardCutDataUpdateCompressed",
+  "anyOf": [
+    {
+      "type": "string",
+      "contentEncoding": "base64",
+      "contentMediaType": "application/gzip",
+      "description": "gzip-compressed JSON; empty when nothing is loaded"
+    },
+    {
+      "type": "null"
+    }
+  ],
+  "description": "socket.io sends the gzip bytes as a binary attachment; HTTP and plain WebSocket send them as base64 text."
+}

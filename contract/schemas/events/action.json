@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "action",
+  "type": "object",
+  "properties": {
+    "data": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "arg": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "arg1": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "command",
+        "arg",
+        "arg1"
+      ]
+    }
+  },
+  "required": [
+    "data"
+  ]
+}

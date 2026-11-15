@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get-api-files-gcode-loaded.200",
+  "type": "object",
+  "properties": {
+    "directory": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "name": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "lineCount": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "directory",
+    "name",
+    "lineCount"
+  ]
+}
