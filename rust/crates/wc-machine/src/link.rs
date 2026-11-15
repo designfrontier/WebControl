@@ -3,18 +3,18 @@
 
 use std::time::Duration;
 
-use serde_json::Value;
 use wc_firmware::boot::{
     BOOT_BANNER_WINDOW_MS, EEPROM_READ_FAIL, EEPROM_REWRITE_NOTICE, board_banner, ends_boot, is_boot_banner,
 };
 use wc_firmware::settings::{Sync, boot_push, sync_reported};
 use wc_firmware::{Reply, classify, split_glued};
-use wc_gcode::firmware_gcode::{changes_tool, only_selects_tool, pauses_firmware};
+use wc_gcode::firmware_gcode::{only_selects_tool, tool_change_line};
 use wc_gcode::sanitise::{problem_with, sanitise};
-use wc_gcode::shift::{HomeShift, positioning_set_by, shift_to_home};
-use wc_protocol::main::{ActivateModal, Alarm, ClearAlarm, ControllerMessage, PauseButton, RequestedSetting, Units};
+use wc_gcode::shift::positioning_set_by;
+use wc_protocol::main::{ActivateModal, Alarm, ClearAlarm, ControllerMessage, Units};
 
-use crate::machine::{Controller, Effect, Link, Machine, Queued, RunState, alert, broadcast};
+use crate::job::Flow;
+use crate::machine::{Controller, Effect, Link, Machine, Queued, alert, broadcast};
 
 /// The 5 s poller Python used to reopen the port.
 pub const RECONNECT: Duration = Duration::from_secs(5);
@@ -44,6 +44,8 @@ impl Machine {
     pub(crate) fn port_opened(&mut self, port: String, now: Duration, effects: &mut Vec<Effect>) {
         self.controller = Controller::new(now);
         self.controller.boot_deadline = Some(now + BOOT_WAIT);
+        self.controller.buffering = self.settings.number("Maslow Settings", "bufferOn") != 0.0;
+        self.job.controller_reset();
         effects.push(controller_message(&format!("Connected on port {port}")));
         self.link = Link::Connected { port };
         effects.push(broadcast(&self.connection_status()));
@@ -55,9 +57,9 @@ impl Machine {
             return;
         }
         tracing::warn!(why, "controller link lost");
-        if self.run == RunState::Running {
+        if self.job.flow.upload_flag() > 0 {
             effects.push(broadcast(&ActivateModal::titled_alert("Connection Lost", CONNECTION_LOST)));
-            self.end_job();
+            self.pause_for_lost_link(effects);
         } else {
             effects.push(broadcast(&Alarm { message: "Alarm: Connection Failed or Invalid Firmware".into() }));
         }
@@ -115,14 +117,14 @@ impl Machine {
 
     fn boot(&mut self, now: Duration, effects: &mut Vec<Effect>) {
         tracing::info!("controller boot");
-        if self.run == RunState::Running {
+        if matches!(self.job.flow, Flow::Streaming | Flow::Draining) {
             effects.push(alert(RESTARTED));
             self.end_job();
         }
-        let eeprom_reset = self.controller.eeprom_reset;
-        self.controller = Controller { eeprom_reset, ..Controller::new(now) };
+        let (eeprom_reset, buffering) = (self.controller.eeprom_reset, self.controller.buffering);
+        self.controller = Controller { eeprom_reset, buffering, ..Controller::new(now) };
         self.rewrite_notice = false;
-        self.tool = 0;
+        self.job.controller_reset();
         self.probing = false;
         self.handshake();
     }
@@ -206,16 +208,11 @@ impl Machine {
             Reply::Setting { key, value } => self.reported_setting(key, value),
             Reply::Measured(mm) => self.measured(mm, now, effects),
             Reply::FakeServo(on) => self.fake_servo = on,
-            Reply::MaslowPaused => effects.push(broadcast(&RequestedSetting {
-                setting: "pauseButtonSetting".into(),
-                value: serde_json::to_value(PauseButton::Resume).unwrap_or(Value::Null),
-            })),
-            Reply::ToolChange { .. } => {
-                effects.push(broadcast(&ActivateModal::notification(line.get(13..).unwrap_or_default(), true)));
-            }
+            Reply::MaslowPaused => self.firmware_paused(effects),
+            Reply::ToolChange { tool } => self.tool_change_prompt(line, tool, effects),
             Reply::Message(text) => self.controller_notice(&text, effects),
             Reply::Alarm(text) => {
-                self.halt(now);
+                self.halt(now, effects);
                 let message = match text {
                     _ if text.contains("The sled is not keeping up") => "Alarm: Sled Not Keeping Up".into(),
                     _ if text.contains("Position Lost") => "Alarm: Position Lost.  Reset Chains.".into(),
@@ -224,7 +221,7 @@ impl Machine {
                 effects.push(broadcast(&Alarm { message }));
             }
             Reply::BufferOverflow => {
-                self.halt(now);
+                self.halt(now, effects);
                 effects.push(broadcast(&Alarm { message: "Alarm: Controller Buffer Overflow".into() }));
             }
             Reply::FirmwareVersion(version) => {
@@ -240,9 +237,12 @@ impl Machine {
         }
     }
 
+    /// `Message:` lines hold the job: the firmware likely pauses next.
     fn controller_notice(&mut self, text: &str, effects: &mut Vec<Effect>) {
+        self.hold_streaming();
         let body = text.get(9..).unwrap_or_default();
         if text.contains("adjust Z-Axis") {
+            self.manual_z_prompt();
             effects.push(broadcast(&ActivateModal::notification(body, true)));
         } else if text.contains("Unable to find valid") {
             // Setting the sprockets to zero reports a zero chain length, which is expected.
@@ -263,11 +263,11 @@ impl Machine {
     }
 
     /// The firmware stops itself on these and never acks the lines it held (B6).
-    fn halt(&mut self, now: Duration) {
-        if let Some(index) = self.controller.accounting.oldest_index() {
-            self.index = index;
+    fn halt(&mut self, now: Duration, effects: &mut Vec<Effect>) {
+        self.rewind_job(effects);
+        if self.job.flow.in_job() {
+            self.job.flow = Flow::Held;
         }
-        self.run = RunState::Idle;
         self.await_resync(now);
     }
 
@@ -298,7 +298,7 @@ impl Machine {
         }
     }
 
-    fn write(&mut self, text: &str, index: Option<usize>, now: Duration, effects: &mut Vec<Effect>) -> u64 {
+    pub(crate) fn write(&mut self, text: &str, index: Option<usize>, now: Duration, effects: &mut Vec<Effect>) -> u64 {
         let message = format!("{text}\n");
         let sent = self.controller.accounting.sent(message.len(), index);
         self.controller.ready = false;
@@ -311,14 +311,31 @@ impl Machine {
         sent.id
     }
 
-    fn can_write(&self, now: Duration) -> bool {
+    /// Connected, not resyncing, not held by a `Delay`, and 50 ms since the last write.
+    fn may_write(&self, now: Duration) -> bool {
         let controller = &self.controller;
         matches!(self.link, Link::Connected { .. })
-            && controller.accounting.is_empty()
-            && controller.ready
             && controller.resync_after.is_none()
             && controller.hold_until.is_none_or(|until| now >= until)
             && controller.last_write.is_none_or(|at| now >= at + LINE_GAP)
+    }
+
+    /// The controller has acked everything: a queued command, or an unbuffered job line, may go.
+    fn can_write(&self, now: Duration) -> bool {
+        self.may_write(now) && self.controller.accounting.is_empty() && self.controller.ready
+    }
+
+    /// Buffered, a job line goes whenever it fits the controller's free bytes.
+    fn can_stream(&self, now: Duration) -> bool {
+        let room = match self.controller.buffering {
+            true => self.next_line_fits(),
+            false => self.controller.accounting.is_empty() && self.controller.ready,
+        };
+        self.job.flow == Flow::Streaming
+            && !self.gcode.is_empty()
+            && self.controller.queue.is_empty()
+            && self.may_write(now)
+            && room
     }
 
     /// Writes whatever the controller has room for: a queued command first, else the job's next line.
@@ -342,7 +359,7 @@ impl Machine {
                 return;
             }
         }
-        if self.run == RunState::Running && self.controller.queue.is_empty() && self.can_write(now) {
+        if self.can_stream(now) {
             self.send_next_line(now, effects);
         }
     }
@@ -367,12 +384,14 @@ impl Machine {
             return false;
         }
         let command = format!("{command} ");
-        if let Some(problem) = problem_with(&command) {
+        let to_send = tool_change_line(&command, self.job.next_tool, self.job.tool).line;
+        if let Some(problem) = problem_with(&to_send) {
             let reason = format!("That command {}", problem.reason());
             effects.push(broadcast(&ActivateModal::titled_alert(&format!("Command {}", problem.title()), &reason)));
             self.probing = self.probing && !command.contains("G38.2");
             return false;
         }
+        let command = self.manage_tool_change(&command);
         if only_selects_tool(&command) {
             return false;
         }
@@ -386,6 +405,7 @@ impl Machine {
             self.controller.probe = Some(id);
             self.probing = true;
         }
+        self.follow_units_in(&command, effects);
         true
     }
 
@@ -397,57 +417,6 @@ impl Machine {
     pub(crate) fn drop_user_commands(&mut self) {
         self.controller.queue.retain(|queued| matches!(queued, Queued::Line { boot: true, .. } | Queued::SettingsPush));
         self.controller.hold_until = None;
-    }
-
-    pub(crate) fn end_job(&mut self) {
-        self.run = RunState::Idle;
-        self.index = 0;
-    }
-
-    fn refuse_line(&mut self, title: &str, reason: &str, effects: &mut Vec<Effect>) {
-        let message = format!("Line {} {reason} The job was stopped.", self.index + 1);
-        effects.push(broadcast(&ActivateModal::titled_alert(&format!("Line {title}"), &message)));
-        self.end_job();
-    }
-
-    /// `sendNextLine`, unbuffered; lines that pause the firmware or change units wait for M4's job model.
-    fn send_next_line(&mut self, now: Duration, effects: &mut Vec<Effect>) {
-        let Some(raw) = self.gcode.get(self.index) else {
-            return self.end_job();
-        };
-        let line = sanitise(raw);
-        let skipped = line.trim().is_empty() || only_selects_tool(&line);
-        if !skipped {
-            let home = |key: &str| self.settings.number("Advanced Settings", key);
-            let shift = HomeShift::from_home(home("homeX"), home("homeY"), self.truncate);
-            let shifted = shift_to_home(&line, self.positioning, &shift);
-            if let Some(problem) = problem_with(&shifted) {
-                return self.refuse_line(problem.title(), &problem.reason(), effects);
-            }
-            if let Some(reason) = self.unsupported(&line) {
-                return self.refuse_line("Not Supported Yet", reason, effects);
-            }
-            self.write(&shifted, Some(self.index), now, effects);
-        }
-        self.index += 1;
-        if self.index >= self.gcode.len() {
-            self.end_job();
-        }
-    }
-
-    /// Words whose handling (pauses, tool changes, unit switches) arrives with M4; never sent half-handled.
-    pub(crate) fn unsupported(&self, line: &str) -> Option<&'static str> {
-        let switches_units = match self.units() {
-            Units::Mm => line.contains("G20"),
-            Units::Inches => line.contains("G21"),
-        };
-        if pauses_firmware(line) || changes_tool(line) {
-            Some("pauses the controller (M0, M1 or M6), which this version of webcontrol-rs cannot resume yet.")
-        } else if switches_units {
-            Some("switches units, which this version of webcontrol-rs does not follow yet.")
-        } else {
-            None
-        }
     }
 
     pub(crate) fn ports_found(&mut self, ports: Vec<String>, effects: &mut Vec<Effect>) {

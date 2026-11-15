@@ -12,7 +12,8 @@ use wc_protocol::system::PidTest;
 
 use crate::commands::round4;
 use crate::forms;
-use crate::machine::{Effect, Link, Machine, RunState, alert, broadcast};
+use crate::job::Flow;
+use crate::machine::{Effect, Link, Machine, alert, broadcast};
 
 const COMPUTED: &str = "Computed Settings";
 const ADVANCED: &str = "Advanced Settings";
@@ -104,8 +105,8 @@ impl Machine {
         if self.fixed_port.is_some() || !matches!(self.link, Link::Connected { .. }) {
             return;
         }
-        if self.run == RunState::Running {
-            self.end_job();
+        if self.job.flow.upload_flag() > 0 {
+            self.pause_for_lost_link(effects);
         }
         self.probing = false;
         self.link = Link::Disconnected { retry_at: now };
@@ -140,7 +141,7 @@ impl Machine {
             Ok(test) => test,
             Err(message) => return Response::error(400, &message),
         };
-        if self.run != RunState::Idle {
+        if self.gcode_locked() {
             return Response::error(409, "Stop the job before starting a PID test.");
         }
         self.action(&crate::pid::test_action(&test), now, effects);
@@ -150,11 +151,11 @@ impl Machine {
     /// `Actions.updateSetting`: the front page's unit switches; anything else is ignored, as in Python.
     pub(crate) fn update_setting(&mut self, setting: &str, value: &Value, effects: &mut Vec<Effect>) {
         let units = matches!(setting, "toInches" | "toMM" | "toInchesZ" | "toMMZ");
-        if units && self.run == RunState::Running {
+        if units && self.job.flow == Flow::Streaming {
             return effects.push(alert(SENDING));
         }
         let done = match setting {
-            "toInches" | "toMM" => self.switch_units(setting == "toInches", value, effects),
+            "toInches" | "toMM" => self.switch_units(setting == "toInches", value, true, effects),
             "toInchesZ" | "toMMZ" => {
                 let units_z = if setting == "toInchesZ" { "INCHES" } else { "MM" };
                 self.write_setting(COMPUTED, "unitsZ", &Value::from(units_z));
@@ -174,15 +175,26 @@ impl Machine {
         effects.push(broadcast(&RequestedSetting { setting: key.into(), value }));
     }
 
+    /// `updateSetting(..., fromGcode=True)`: a G20/G21 went to the controller, so the units, the jog step and home
+    /// follow it.
+    pub(crate) fn follow_units(&mut self, inches: bool, effects: &mut Vec<Effect>) {
+        let scale = if inches { 1.0 / MM_PER_INCH } else { MM_PER_INCH };
+        let step = self.settings.value(COMPUTED, "distToMove").and_then(wc_config::python_float).unwrap_or(0.0);
+        self.switch_units(inches, &Value::from(step * scale), false, effects);
+        self.push_gcode_position(effects);
+    }
+
     /// Units, tolerance, the jog step as the UI converted it, and home scaled to 4 places.
-    fn switch_units(&mut self, inches: bool, step: &Value, effects: &mut Vec<Effect>) -> bool {
+    fn switch_units(&mut self, inches: bool, step: &Value, tell_controller: bool, effects: &mut Vec<Effect>) -> bool {
         let (units, scale, tolerance, line) = match inches {
             true => ("INCHES", 1.0 / MM_PER_INCH, 0.020, "G20 "),
             false => ("MM", MM_PER_INCH, 0.5, "G21 "),
         };
         self.write_setting(COMPUTED, "units", &Value::from(units));
         self.write_setting(COMPUTED, "tolerance", &Value::from(tolerance));
-        self.queue([line.to_string()]);
+        if tell_controller {
+            self.queue([line.to_string()]);
+        }
         self.write_setting(COMPUTED, "distToMove", step);
         let home = |key: &str| self.settings.value(ADVANCED, key).and_then(wc_config::python_float);
         let Some((x, y)) = home("homeX").zip(home("homeY")) else {

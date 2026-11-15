@@ -1,0 +1,407 @@
+//! The job: streaming the file and every way it pauses (Pause, M0/M1, a tool change, manual Z, an alarm, a refused
+//! line, a lost link), then Play, Resume and Stop, as `actions.py`, `serialPortThread.py` and
+//! `messageProcessor.py` keep it.
+
+use std::time::Duration;
+
+use serde_json::Value;
+use wc_config::python_float;
+use wc_gcode::firmware_gcode::{only_selects_tool, pauses_firmware, tool_change_line};
+use wc_gcode::position::{Position, line_target, word};
+use wc_gcode::restart::{Restart, sequence, state_at};
+use wc_gcode::sanitise::{sanitise, stream_problem};
+use wc_gcode::shift::{HomeShift, positioning_set_by, shift_to_home};
+use wc_gcode::{Positioning, py};
+use wc_protocol::main::{ActivateModal, ClearAlarm, GcodePositionMessage, PauseButton, RequestedSetting, Units};
+
+use crate::gpio::Led;
+use crate::machine::{Effect, Machine, broadcast};
+
+/// Where the job is; `uploadFlag` on the wire.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Flow {
+    #[default]
+    Idle,
+    Streaming,
+    /// The line the firmware pauses on has gone out, and nothing follows it.
+    Draining,
+    /// Pause, a line the controller cannot take, or a lost link.
+    Paused,
+    /// The controller paused or halted the job; Play resumes it.
+    Held,
+}
+
+impl Flow {
+    pub fn upload_flag(self) -> i32 {
+        match self {
+            Flow::Streaming => 1,
+            Flow::Draining => -1,
+            Flow::Paused => 2,
+            Flow::Idle | Flow::Held => 0,
+        }
+    }
+
+    pub fn in_job(self) -> bool {
+        self != Flow::Idle
+    }
+}
+
+/// What the job and the firmware's pauses leave behind; only `Machine::handle` writes it.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Job {
+    pub flow: Flow,
+    /// `Maslow Paused`: the firmware runs nothing until `~`.
+    pub firmware_paused: bool,
+    /// Job lines may be buffered behind the firmware's pause, so a jog must not release it.
+    pub holds_job_lines: bool,
+    /// The firmware waits for Z by hand; `true` when that is a tool change.
+    pub manual_z: Option<bool>,
+    pub tool: i64,
+    pub next_tool: i64,
+    /// The tool before an M6 the firmware has not confirmed yet, which a Stop flushes.
+    pub tool_before_change: Option<i64>,
+    pub paused_units: Option<Units>,
+    /// Where Pause left the job: the index and the last Z sent.
+    pub paused_at: Option<(usize, f64)>,
+    /// The last Z the file sent, as an absolute target.
+    pub z_target: f64,
+    /// The last streamed line's target, for `gcodePositionMessage`.
+    pub streamed: Position,
+}
+
+impl Default for Job {
+    fn default() -> Job {
+        Job {
+            flow: Flow::Idle,
+            firmware_paused: false,
+            holds_job_lines: false,
+            manual_z: None,
+            tool: 0,
+            next_tool: 0,
+            tool_before_change: None,
+            paused_units: None,
+            paused_at: None,
+            z_target: 0.0,
+            streamed: Position { x: 0.0, y: 0.0, z: 0.0, feed_rate: None },
+        }
+    }
+}
+
+impl Job {
+    /// A reset controller is not paused and has tool 0.
+    pub fn controller_reset(&mut self) {
+        self.firmware_paused = false;
+        self.holds_job_lines = false;
+        self.tool = 0;
+        self.next_tool = 0;
+        self.tool_before_change = None;
+    }
+
+    /// `pauseButtonLabel`: Resume whenever a job or a tool change is held.
+    pub fn pause_button(&self) -> PauseButton {
+        let held = self.flow.in_job() || self.manual_z.is_some();
+        if self.flow == Flow::Streaming || !held { PauseButton::Pause } else { PauseButton::Resume }
+    }
+}
+
+pub(crate) fn pause_button(button: PauseButton) -> Effect {
+    let value = serde_json::to_value(button).unwrap_or(Value::Null);
+    broadcast(&RequestedSetting { setting: "pauseButtonSetting".into(), value })
+}
+
+impl Machine {
+    /// `holdStreaming`: the controller said something that stops the job where it is.
+    pub(crate) fn hold_streaming(&mut self) {
+        let job = &mut self.job;
+        job.holds_job_lines |= job.flow.upload_flag() > 0;
+        if job.flow.in_job() {
+            job.flow = Flow::Held;
+        }
+    }
+
+    pub(crate) fn firmware_paused(&mut self, effects: &mut Vec<Effect>) {
+        self.hold_streaming();
+        self.job.firmware_paused = true;
+        effects.push(pause_button(PauseButton::Resume));
+    }
+
+    /// `Tool Change: Please insert tool N`: the firmware's word on the tool wins, as a Stop can flush an M6.
+    pub(crate) fn tool_change_prompt(&mut self, line: &str, tool: Option<u32>, effects: &mut Vec<Effect>) {
+        self.job.manual_z = Some(true);
+        self.job.tool_before_change = None;
+        self.hold_streaming();
+        self.job.paused_units = Some(self.units());
+        if let Some(tool) = tool {
+            self.job.tool = i64::from(tool);
+            self.job.next_tool = i64::from(tool);
+        }
+        effects.push(broadcast(&ActivateModal::notification(line.get(13..).unwrap_or_default(), true)));
+    }
+
+    /// `$16=0`'s prompt to adjust Z by hand, which Resume confirms.
+    pub(crate) fn manual_z_prompt(&mut self) {
+        self.job.manual_z = Some(self.job.manual_z.unwrap_or(false));
+        self.job.paused_units = Some(self.units());
+    }
+
+    /// The firmware stopped itself and dropped the lines it held; a job resumes from the oldest of them.
+    pub(crate) fn rewind_job(&mut self, effects: &mut Vec<Effect>) {
+        if !self.job.flow.in_job() {
+            return;
+        }
+        if let Some(index) = self.controller.accounting.oldest_index() {
+            self.index = index;
+            self.push_gcode_position(effects);
+        }
+    }
+
+    pub(crate) fn end_job(&mut self) {
+        self.job.flow = Flow::Idle;
+        self.index = 0;
+    }
+
+    pub(crate) fn release_firmware(&mut self, now: Duration, effects: &mut Vec<Effect>) {
+        self.job.firmware_paused = false;
+        self.job.holds_job_lines = false;
+        self.realtime("~", now, effects);
+    }
+
+    fn restart(&self, z_target: Option<f64>, change_tool: bool) -> Option<Restart> {
+        let number = |section: &str, key: &str| self.settings.value(section, key).and_then(python_float);
+        let (home_x, home_y) = (number("Advanced Settings", "homeX")?, number("Advanced Settings", "homeY")?);
+        let safe_height = number("Maslow Settings", "zAxisSafeHeight")?;
+        let state = state_at(&self.gcode, self.index, home_x, home_y, self.units()).ok()?;
+        Some(sequence(&state, z_target, change_tool, self.job.tool, safe_height))
+    }
+
+    /// Play: a job paused by the controller or a tool change resumes; otherwise the file starts at the index.
+    pub(crate) fn start_run(&mut self, now: Duration, effects: &mut Vec<Effect>) -> Option<String> {
+        if self.job.manual_z.is_some() || self.job.flow.in_job() {
+            return self.resume_run(now, effects);
+        }
+        if self.gcode.is_empty() {
+            return Some("No GCode file loaded.".into());
+        }
+        self.job.z_target = self.position.z;
+        let mut flow = Flow::Streaming;
+        if self.index > 0 {
+            let Some(restart) = self.restart(None, true) else {
+                self.index = 0;
+                return Some("Error with starting run.".into());
+            };
+            self.queue(restart.lines);
+            self.push_gcode_position(effects);
+            // The firmware pauses on the restart's M6; Resume after the change returns and streams.
+            if restart.stopped_at_tool_change {
+                flow = Flow::Draining;
+            }
+        }
+        self.job.flow = flow;
+        self.leds.light(Led::Play);
+        None
+    }
+
+    pub(crate) fn pause_run(&mut self, effects: &mut Vec<Effect>) -> Option<String> {
+        if self.job.flow == Flow::Streaming {
+            self.job.flow = Flow::Paused;
+            effects.push(pause_button(PauseButton::Resume));
+            self.job.paused_at = Some((self.index, self.job.z_target));
+            self.job.paused_units = Some(self.units());
+            self.leds.light(Led::Pause);
+        }
+        None
+    }
+
+    /// Releases the firmware, then, unless it only asked for Z by hand, returns to the file's position at safe height
+    /// and lowers the bit only if it is still the bit that paused there.
+    pub(crate) fn resume_run(&mut self, now: Duration, effects: &mut Vec<Effect>) -> Option<String> {
+        let tool_change = self.job.manual_z == Some(true);
+        let manual = self.job.manual_z == Some(false);
+        if self.job.flow == Flow::Streaming && !manual {
+            // A second Resume must not lift and replunge mid-cut.
+            return None;
+        }
+        self.job.manual_z = None;
+        self.release_firmware(now, effects);
+        if manual {
+            self.job.flow = if self.job.flow.in_job() { Flow::Streaming } else { Flow::Idle };
+        } else if self.job.flow.in_job() {
+            if let Some(units) = self.job.paused_units.filter(|&units| units != self.units()) {
+                self.follow_units(units == Units::Inches, effects);
+            }
+            let paused_here = self.job.paused_at.filter(|&(index, _)| index == self.index && !tool_change);
+            let Some(restart) = self.restart(paused_here.map(|(_, z)| z), false) else {
+                return Some("Error with resuming run.".into());
+            };
+            self.queue(restart.lines);
+            self.job.paused_units = None;
+            self.job.paused_at = None;
+            self.push_gcode_position(effects);
+            self.job.flow = Flow::Streaming;
+        }
+        effects.push(pause_button(PauseButton::Pause));
+        self.leds.set(Led::Pause, false);
+        None
+    }
+
+    /// Stop: `!` at once, the queue dropped, and every pause and the job forgotten.
+    pub(crate) fn stopped(&mut self, now: Duration, effects: &mut Vec<Effect>) {
+        self.probing = false;
+        self.measure = None;
+        self.pid.end_tests();
+        self.realtime("!", now, effects);
+        self.drop_user_commands();
+        self.end_job();
+        let job = &mut self.job;
+        job.manual_z = None;
+        job.firmware_paused = false;
+        job.holds_job_lines = false;
+        // The `!` flushes an M6 the firmware never ran, so it still has the tool from before it.
+        if let Some(tool) = job.tool_before_change.take() {
+            job.tool = tool;
+            job.next_tool = tool;
+        }
+        job.paused_at = None;
+        job.paused_units = None;
+    }
+
+    pub(crate) fn stop_run(&mut self, now: Duration, effects: &mut Vec<Effect>) -> Option<String> {
+        self.stopped(now, effects);
+        self.push_line_position(effects);
+        effects.push(broadcast(&ClearAlarm::new()));
+        self.leds.light(Led::Stop);
+        effects.push(pause_button(PauseButton::Pause));
+        None
+    }
+
+    /// The link is gone mid-job: the controller's buffered lines are lost, so the job pauses at the oldest of them.
+    pub(crate) fn pause_for_lost_link(&mut self, effects: &mut Vec<Effect>) {
+        self.rewind_job(effects);
+        self.job.flow = Flow::Paused;
+        self.job.paused_at = None;
+        self.job.paused_units = Some(self.units());
+        effects.push(pause_button(PauseButton::Resume));
+        self.leds.light(Led::Pause);
+    }
+
+    /// `_refuseStreamLine`: the job pauses before a line the controller cannot safely take.
+    fn refuse_line(&mut self, alert: (String, String), effects: &mut Vec<Effect>) {
+        effects.push(broadcast(&ActivateModal::titled_alert(&alert.0, &alert.1)));
+        self.pause_run(effects);
+    }
+
+    fn home_shift(&self) -> HomeShift {
+        let home = |key: &str| self.settings.number("Advanced Settings", key);
+        HomeShift::from_home(home("homeX"), home("homeY"), self.truncate)
+    }
+
+    /// The next line as it would go out, or `None` when nothing of it is written.
+    fn next_line_written(&self) -> Option<String> {
+        let line = sanitise(self.gcode.get(self.index)?);
+        let to_send = tool_change_line(&line, self.job.next_tool, self.job.tool).line;
+        let written = !line.is_empty() && !py::isspace(&line) && !only_selects_tool(&line);
+        written.then(|| shift_to_home(&to_send, self.positioning, &self.home_shift()))
+    }
+
+    /// Buffered streaming: the next line fits the controller's free bytes, or is refused or skipped without them.
+    pub(crate) fn next_line_fits(&self) -> bool {
+        match self.next_line_written() {
+            Some(line) if wc_gcode::sanitise::problem_with(&line).is_none() => {
+                self.controller.accounting.space() > line.len() as i64
+            }
+            _ => true,
+        }
+    }
+
+    /// `managePause` and `manageToolChange`: the line to send, with streaming stopped after one the firmware pauses on.
+    pub(crate) fn manage_tool_change(&mut self, line: &str) -> String {
+        let change = tool_change_line(line, self.job.next_tool, self.job.tool);
+        self.job.next_tool = change.next_tool;
+        if change.pauses {
+            self.job.tool_before_change = self.job.tool_before_change.or(Some(self.job.tool));
+            self.job.tool = change.next_tool;
+            self.job.paused_units = Some(self.units());
+            if self.job.flow == Flow::Streaming {
+                self.job.flow = Flow::Draining;
+            }
+        }
+        change.line
+    }
+
+    fn manage_pause(&mut self, line: &str, effects: &mut Vec<Effect>) {
+        if !pauses_firmware(line) {
+            return;
+        }
+        if self.job.flow == Flow::Streaming {
+            self.job.flow = Flow::Draining;
+        }
+        self.job.paused_units = Some(self.units());
+        effects.push(pause_button(PauseButton::Resume));
+    }
+
+    /// `sendNextLine`: one file line, or the pause before one the controller cannot take.
+    pub(crate) fn send_next_line(&mut self, now: Duration, effects: &mut Vec<Effect>) {
+        let Some(raw) = self.gcode.get(self.index) else {
+            return self.end_job();
+        };
+        let line = sanitise(raw);
+        let to_send = tool_change_line(&line, self.job.next_tool, self.job.tool).line;
+        if let Some(problem) = stream_problem(&to_send, self.positioning, &self.home_shift()) {
+            return self.refuse_line(problem.alert(self.index), effects);
+        }
+        self.manage_pause(&line, effects);
+        let line = self.manage_tool_change(&line);
+        if !line.is_empty() && !py::isspace(&line) && !only_selects_tool(&line) {
+            let positioning = positioning_set_by(&line).unwrap_or(self.positioning);
+            let shifted = shift_to_home(&line, self.positioning, &self.home_shift());
+            self.write(&shifted, Some(self.index), now, effects);
+            self.after_line_sent(&shifted, positioning, effects);
+        }
+        if self.index + 1 < self.gcode.len() {
+            self.index += 1;
+        } else {
+            self.end_job();
+        }
+    }
+
+    /// `_afterLineSent`: the Z target, the units a G20/G21 switches to, and the line's position for the viewer.
+    fn after_line_sent(&mut self, line: &str, positioning: Positioning, effects: &mut Vec<Effect>) {
+        let Ok(z) = word(line, 'Z') else {
+            return tracing::debug!(line, "unreadable Z word; Python raised here");
+        };
+        if let Some(z) = z {
+            self.job.z_target = if positioning == Positioning::Absolute { z } else { self.job.z_target + z };
+        }
+        self.follow_units_in(line, effects);
+        self.push_line_position(effects);
+    }
+
+    /// A G20 or G21 sent to the controller switches WebControl's units with it.
+    pub(crate) fn follow_units_in(&mut self, line: &str, effects: &mut Vec<Effect>) {
+        if line.contains("G20") && self.units() != Units::Inches {
+            self.follow_units(true, effects);
+        }
+        if line.contains("G21") && self.units() != Units::Mm {
+            self.follow_units(false, effects);
+        }
+    }
+
+    /// `sendGCodePositionUpdate` without recalculating: the line at the index, from the one streamed before it.
+    pub(crate) fn push_line_position(&mut self, effects: &mut Vec<Effect>) {
+        let Some(raw) = self.gcode.get(self.index) else { return };
+        let Ok(target) = line_target(self.job.streamed, self.positioning, &sanitise(raw)) else { return };
+        self.job.streamed = target;
+        let scale = match (self.preview.file_units, self.units()) {
+            (Units::Mm, Units::Inches) => 1.0 / 25.4,
+            (Units::Inches, Units::Mm) => 25.4,
+            _ => 1.0,
+        };
+        effects.push(broadcast(&GcodePositionMessage {
+            xval: target.x * scale,
+            yval: target.y * scale,
+            zval: target.z * scale,
+            gcode_line: raw.clone(),
+            gcode_line_index: self.index,
+        }));
+    }
+}

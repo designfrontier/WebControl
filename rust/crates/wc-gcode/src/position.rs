@@ -63,6 +63,29 @@ fn read(line: &str, position: &mut Position, positioning: &mut Positioning) -> R
     Ok(())
 }
 
+/// A word whose number Python's `float()` would not read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Unreadable;
+
+/// A word's number as Python's `float()` reads it: `Ok(None)` without the word.
+pub fn word(line: &str, letter: char) -> Result<Option<f64>, Unreadable> {
+    words::value(line, letter).map_err(|()| Unreadable)
+}
+
+/// `sendGCodePositionUpdate` without recalculating: the target of one streamed line, from the one before it.
+pub fn line_target(previous: Position, positioning: Positioning, line: &str) -> Result<Position, Unreadable> {
+    let relative = positioning == Positioning::Relative;
+    let axis = |letter: char, before: f64| -> Result<f64, Unreadable> {
+        Ok(word(line, letter)?.map_or(before, |value| if relative { before + value } else { value }))
+    };
+    Ok(Position {
+        x: axis('X', previous.x)?,
+        y: axis('Y', previous.y)?,
+        z: axis('Z', previous.z)?,
+        feed_rate: word(line, 'F')?.or(previous.feed_rate),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -93,5 +116,16 @@ mod tests {
         assert_eq!(find_position_at(&file(&["G1 X2", "G1 X. Y2"]), 2), Err(GcodeError::Unreadable { index: 1 }));
         assert!(find_position_at(&file(&["G1 F"]), 1).is_err());
         assert_eq!(find_position_at(&file(&["G1"]), 3), Err(GcodeError::IndexOutOfRange { index: 3, len: 1 }));
+    }
+
+    #[test]
+    fn a_streamed_lines_target_follows_from_the_last_one() {
+        let start = Position { x: 1.0, y: 2.0, z: 3.0, feed_rate: None };
+        let moved = line_target(start, Positioning::Absolute, "G1 X5 F300 ").unwrap();
+        assert_eq!(moved, Position { x: 5.0, y: 2.0, z: 3.0, feed_rate: Some(300.0) });
+        let relative = line_target(moved, Positioning::Relative, "G1 Y1 Z-1 ").unwrap();
+        assert_eq!(relative, Position { x: 5.0, y: 3.0, z: 2.0, feed_rate: Some(300.0) });
+        assert!(line_target(start, Positioning::Absolute, "G1 X. ").is_err());
+        assert_eq!(word("G1 Z-1.5 ", 'Z'), Ok(Some(-1.5)));
     }
 }

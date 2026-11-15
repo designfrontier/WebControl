@@ -14,7 +14,7 @@ use wc_protocol::files::UpdateDirectories;
 use wc_protocol::main::{ActivateModal, GcodePositionMessage, Units};
 use wc_protocol::{Envelope, Push};
 
-use crate::machine::{Effect, Machine, RunState, alert, broadcast};
+use crate::machine::{Effect, Machine, alert, broadcast};
 
 pub const GCODE_LOCKED: &str = "Cannot load gcode while a job is running or paused. Stop the job first.";
 const PROBING: &str = "Wait for Touch Z to finish or press Stop";
@@ -188,7 +188,7 @@ fn split_lines(text: &str) -> impl Iterator<Item = &str> {
 
 impl Machine {
     pub(crate) fn gcode_locked(&self) -> bool {
-        self.run != RunState::Idle
+        self.job.flow.in_job() || self.job.manual_z.is_some()
     }
 
     pub(crate) fn push_gcode(&self, effects: &mut Vec<Effect>) {
@@ -217,7 +217,7 @@ impl Machine {
     }
 
     /// `sendGCodePositionUpdate(recalculate=True)`: false where Python's answer was falsy.
-    fn push_gcode_position(&self, effects: &mut Vec<Effect>) -> bool {
+    pub(crate) fn push_gcode_position(&self, effects: &mut Vec<Effect>) -> bool {
         let Some(line) = self.gcode.get(self.index) else { return false };
         let Ok(at) = position::find_position_at(&self.gcode, self.index) else { return false };
         let scale = match (self.preview.file_units, self.units()) {

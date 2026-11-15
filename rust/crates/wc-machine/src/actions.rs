@@ -4,30 +4,21 @@ use std::time::Duration;
 
 use serde_json::Value;
 use wc_config::python_float_str;
-use wc_protocol::main::{ClearAlarm, HomePositionMessage, PauseButton, RequestedSetting, Units};
+use wc_protocol::main::{HomePositionMessage, PauseButton, RequestedSetting, Units};
 use wc_protocol::{Action, float};
 
 use crate::commands;
-use crate::machine::{Effect, Link, Machine, RunState, alert, broadcast};
+use crate::gates;
+use crate::job::Flow;
+use crate::machine::{Effect, Link, Machine, alert, broadcast};
 
-const SENDING: &str = "Cannot issue command while sending gcode.";
 const PROBING: &str = "Wait for Touch Z to finish or press Stop";
 const NOT_CONNECTED: &str = "The controller is not connected.";
 const Z_LIMITS_UNSUPPORTED: &str = "Z-axis limits need holey firmware 51.292 or later.";
+const JOB_LINES_HELD: &str = "The controller paused with lines of the job still in its buffer, which would run before \
+                              this move. Press Resume or STOP first.";
+const ADJUST_Z_FIRST: &str = "The controller is waiting for Z to be adjusted by hand. Adjust it, then press Resume.";
 const CLEARED_Z_LIMIT_MM: i32 = 9999;
-/// Gate `always`: these run whatever the job is doing.
-const ALWAYS: [&str; 10] = [
-    "createDirectory",
-    "stopZ",
-    "stopRun",
-    "pauseRun",
-    "resumeRun",
-    "toggleCamera",
-    "statusRequest",
-    "queryCamera",
-    "shutdown",
-    "TurnOffRPI",
-];
 const SAFE_WHILE_PROBING: [&str; 7] =
     ["stopRun", "stopZ", "pauseRun", "createDirectory", "toggleCamera", "statusRequest", "queryCamera"];
 /// Commands that reach the controller, so they need it connected.
@@ -59,11 +50,25 @@ impl Machine {
         if self.probing && !SAFE_WHILE_PROBING.contains(&command) {
             return effects.push(alert(PROBING));
         }
-        if self.run == RunState::Running && !ALWAYS.contains(&command) {
-            return effects.push(alert(SENDING));
+        let machine_command = MACHINE_COMMANDS.contains(&command);
+        if machine_command && self.job.firmware_paused && self.job.flow != Flow::Streaming {
+            if self.job.holds_job_lines {
+                return effects.push(alert(JOB_LINES_HELD));
+            }
+            // A `~` here would tell the firmware Z was adjusted by hand ($16=0) and carry on with the line.
+            if self.job.manual_z == Some(false) {
+                return effects.push(alert(ADJUST_Z_FIRST));
+            }
         }
-        if MACHINE_COMMANDS.contains(&command) && !matches!(self.link, Link::Connected { .. }) {
+        if let Some(refusal) = gates::refusal(command, self.job.flow, self.job.manual_z.is_some()) {
+            return effects.push(alert(refusal));
+        }
+        if machine_command && !matches!(self.link, Link::Connected { .. }) {
             return effects.push(alert(NOT_CONNECTED));
+        }
+        if machine_command && self.job.firmware_paused {
+            // Streaming stays held, so releasing the firmware lets the jog run now instead of on Resume.
+            self.release_firmware(now, effects);
         }
         let failure = match command {
             "stopRun" => self.stop_run(now, effects),
@@ -131,7 +136,9 @@ impl Machine {
                 effects.push(Effect::ClearLogs);
                 None
             }
-            "startRun" => self.start_run(),
+            "startRun" => self.start_run(now, effects),
+            "pauseRun" => self.pause_run(effects),
+            "resumeRun" => self.resume_run(now, effects),
             _ if crate::setup::COMMANDS.contains(&command) => self.setup_action(action, effects),
             _ if crate::pid::COMMANDS.contains(&command) => self.pid_action(action),
             _ => Some(format!("Function not currently implemented.. Sorry.[{command}]")),
@@ -141,28 +148,13 @@ impl Machine {
         }
     }
 
-    fn stopped(&mut self, now: Duration, effects: &mut Vec<Effect>) {
-        self.probing = false;
-        self.measure = None;
-        self.pid.end_tests();
-        self.realtime("!", now, effects);
-        self.drop_user_commands();
-        self.end_job();
-    }
-
-    pub(crate) fn stop_run(&mut self, now: Duration, effects: &mut Vec<Effect>) -> Option<String> {
-        self.stopped(now, effects);
-        effects.push(broadcast(&ClearAlarm::new()));
-        effects.push(broadcast(&RequestedSetting {
-            setting: "pauseButtonSetting".into(),
-            value: serde_json::to_value(PauseButton::Pause).unwrap_or(Value::Null),
-        }));
-        None
-    }
-
     /// Python left a running job streaming after stopZ's `!` flushed its lines; here it stops the job too.
     fn stop_z(&mut self, now: Duration, effects: &mut Vec<Effect>) -> Option<String> {
+        let held = self.job.flow.in_job() || self.job.manual_z.is_some();
         self.stopped(now, effects);
+        if held {
+            effects.push(crate::job::pause_button(PauseButton::Pause));
+        }
         None
     }
 
@@ -251,13 +243,8 @@ impl Machine {
         self.z_limits(|| vec![format!("${key}={z_mm:.3}")])
     }
 
-    /// A macro that would pause the controller or switch units waits for M4, which knows how to follow it.
     fn run_macro(&mut self, command: &str) -> Option<String> {
         let text = self.settings.text_or_empty("Maslow Settings", command);
-        let line = wc_gcode::sanitise::sanitise(&text);
-        if let Some(reason) = self.unsupported(&line) {
-            return Some(format!("That macro {reason}"));
-        }
         self.queue([text]);
         None
     }
@@ -279,17 +266,5 @@ impl Machine {
     pub(crate) fn push_units(&self, effects: &mut Vec<Effect>) {
         let units = self.settings.value("Computed Settings", "units").cloned().unwrap_or(Value::Null);
         effects.push(broadcast(&RequestedSetting { setting: "units".into(), value: units }));
-    }
-
-    /// Play from the start of the file; starting mid-file needs M4's restart sequence.
-    fn start_run(&mut self) -> Option<String> {
-        if self.gcode.is_empty() {
-            return Some("No GCode file loaded.".into());
-        }
-        if self.index > 0 {
-            return Some("Starting mid-file needs a later version of webcontrol-rs. Go back to line 1.".into());
-        }
-        self.run = RunState::Running;
-        None
     }
 }

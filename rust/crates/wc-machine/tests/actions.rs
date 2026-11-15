@@ -88,16 +88,20 @@ fn other_manual_commands_queue_their_lines() {
 }
 
 #[test]
-fn macros_send_their_text_unless_m4_must_follow_them() {
+fn macros_send_their_text_with_the_tool_first_and_follow_their_units() {
     let mut rig = Rig::connected_with(settings(&[
         ("Maslow Settings", "macro1", json!("G0 Z10 (lift)")),
         ("Maslow Settings", "macro2", json!("M6 T2")),
     ]));
     rig.act("macro1");
     assert_eq!(rig.run_to_quiet(), ["G0 Z10"]);
-    assert!(alerts(&rig.act("macro2"))[0].starts_with("That macro pauses the controller"));
+    rig.act("macro2");
+    assert_eq!(rig.run_to_quiet(), ["T2 M6"]);
+    assert_eq!(rig.machine.snapshot().current_tool, 2);
     let mut units = Rig::connected_with(settings(&[("Maslow Settings", "macro1", json!("G20 G0 X1"))]));
-    assert!(alerts(&units.act("macro1"))[0].contains("switches units"));
+    units.act("macro1");
+    assert_eq!(units.run_to_quiet(), ["G20 G0 X1"]);
+    assert_eq!(units.machine.snapshot().units(), wc_protocol::main::Units::Inches);
     let mut empty = Rig::connected_with(settings(&[("Maslow Settings", "macro1", json!("(nothing)"))]));
     empty.act("macro1");
     assert!(empty.run_to_quiet().is_empty());
@@ -202,7 +206,7 @@ fn an_alarm_rewinds_to_the_oldest_line_not_acknowledged() {
     let effects = rig.rx("ALARM: The sled is not keeping up");
     assert_eq!(pushed(&effects, "alarm"), [json!({"message": "Alarm: Sled Not Keeping Up"})]);
     let snapshot = rig.machine.snapshot();
-    assert_eq!((snapshot.gcode_index, snapshot.job_in_progress), (0, false));
+    assert_eq!((snapshot.gcode_index, snapshot.job_in_progress, snapshot.upload_flag), (0, true, 0));
     assert!(written(&rig.advance(300)).is_empty());
     assert!(written(&rig.rx("ok")).is_empty(), "a stale ack releases nothing");
     rig.rx("<Idle,MPos:0.00,0.00,0.00,WPos:0,0,0>");
@@ -210,7 +214,7 @@ fn an_alarm_rewinds_to_the_oldest_line_not_acknowledged() {
 }
 
 #[test]
-fn starting_mid_file_waits_for_m4() {
+fn play_after_an_overflow_returns_to_the_dropped_line_at_safe_height() {
     let mut moved = Rig::connected();
     moved.machine.load_gcode("G0 X1\nG0 X2\nG0 X3\n");
     moved.act("startRun");
@@ -219,7 +223,11 @@ fn starting_mid_file_waits_for_m4() {
     moved.advance(100);
     moved.rx("Buffer overflow!");
     assert_eq!(moved.machine.snapshot().gcode_index, 1);
-    assert!(alerts(&moved.act("startRun"))[0].starts_with("Starting mid-file"));
+    moved.advance(300);
+    moved.rx("<Idle,MPos:0.00,0.00,0.00,WPos:0,0,0>");
+    assert_eq!(written(&moved.act("startRun")), ["~"]);
+    let sent = moved.run_to_quiet();
+    assert!(sent.ends_with(&["~", "G21", "G90", "G0 Z5.0", "G0 X1.0 Y0.0", "G90", "G0 X2", "G0 X3"].map(String::from)));
 }
 
 /// Ported from test_serial_streaming: one line per ok, comments and blank lines skipped, the home shift applied.
@@ -233,12 +241,13 @@ fn a_job_streams_one_line_per_ok_and_ends() {
     assert_eq!((snapshot.job_in_progress, snapshot.gcode_index), (false, 0));
 }
 
+/// Ported from test_serial_streaming: a line the controller cannot take pauses the job before it, with an alert.
 #[test]
-fn lines_the_link_cannot_follow_yet_stop_the_job_with_an_alert() {
+fn lines_the_controller_cannot_take_pause_the_job_with_an_alert() {
+    let long = format!("G1 X1 {}", "F100 ".repeat(25));
     let cases = [
-        ("G0 X1\nM0\n", "Line Not Supported Yet", "Line 2 pauses the controller"),
-        ("G20\n", "Line Not Supported Yet", "Line 1 switches units"),
-        ("G0 (unclosed\n", "Line Unclosed Comment", "Line 1 has an unclosed comment"),
+        ("G0 X1\nG0 (unclosed\n".to_string(), "Line Unclosed Comment", "Line 2 has an unclosed comment"),
+        (format!("G0 X1\n{long}\n"), "Line Too Long", "Line 2 is 13"),
     ];
     cases.iter().for_each(|(file, title, message)| {
         let mut rig = Rig::connected();
@@ -250,12 +259,9 @@ fn lines_the_link_cannot_follow_yet_stop_the_job_with_an_alert() {
         let modal = pushed(&effects, "activateModal");
         assert_eq!(modal.last().map(|m| m["title"].clone()), Some(json!(title)), "{file}");
         assert!(modal.last().unwrap()["message"].as_str().unwrap().starts_with(message), "{file}");
-        assert!(!rig.machine.snapshot().job_in_progress);
+        let snapshot = rig.machine.snapshot();
+        assert_eq!((snapshot.upload_flag, snapshot.gcode_index, snapshot.job_in_progress), (2, 1, true));
     });
-    let mut inches = Rig::connected_with(settings(&[("Computed Settings", "units", json!("INCHES"))]));
-    inches.machine.load_gcode("G21\n");
-    let modal = pushed(&inches.act("startRun"), "activateModal");
-    assert!(modal[0]["message"].as_str().unwrap().starts_with("Line 1 switches units"));
 }
 
 /// Ported from test_ui_processor: position reports go out when the sled moves, with default power and feed.
