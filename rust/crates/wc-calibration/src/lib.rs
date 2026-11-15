@@ -26,6 +26,8 @@ pub enum CalibrationError {
     },
     NoSolution,
     NotCalibrated,
+    /// A value Accept would save or send is NaN or infinite.
+    NotFinite,
 }
 
 impl fmt::Display for CalibrationError {
@@ -39,6 +41,9 @@ impl fmt::Display for CalibrationError {
             ),
             CalibrationError::NoSolution => {
                 write!(f, "The calibration could not be calculated from these measurements.")
+            }
+            CalibrationError::NotFinite => {
+                write!(f, "The calibration result is not a finite number, so it was not saved. Calculate it again.")
             }
             CalibrationError::NotCalibrated => write!(
                 f,

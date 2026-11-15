@@ -75,3 +75,9 @@ Only regenerate after a deliberate change to the calibration maths, and review t
 
 This runs the fixture test with `REGENERATE_CALIBRATION_FIXTURES=1`, which rewrites the files before checking
 them.
+
+## The Rust backend
+
+`rust/crates/wc-calibration` checks itself against these files. Where Rust differs on purpose it says so in the test
+rather than changing the fixture: its triangular Accept raises Z to the safe height before `G0 X0 Y0 `
+(`contract/serial/README.md`, "Rust-intended deviations").

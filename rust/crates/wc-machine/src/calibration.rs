@@ -2,13 +2,14 @@
 //! answer, the one result Accept may save, and the test patterns.
 
 use serde_json::Value;
-use wc_calibration::MachineSettings;
 use wc_calibration::holey::{self, HoleyResult};
 use wc_calibration::triangular::{self, Inputs, TriangularResult};
+use wc_calibration::{Accept, CalibrationError, MachineSettings};
 use wc_config::{Settings, python_float_str};
 use wc_protocol::calibration::{
     HoleyCalculation, HoleyForm, HoleyParameters, TriangularCalculation, TriangularForm, TriangularParameters,
 };
+use wc_protocol::float;
 use wc_protocol::main::Units;
 
 use crate::edits::Response;
@@ -20,6 +21,8 @@ const NOT_CALIBRATED: &str = "The machine could not be calibrated. Check the wor
 const NO_FIT: &str = "The calibration could not be calculated from these measurements.";
 const NOTHING_TO_ACCEPT: &str =
     "There is no calculated result to accept. Enter the measurements and press Calculate first.";
+const NO_SAFE_HEIGHT: &str =
+    "Set the Z-axis safe height to a number before accepting, so the bit rises before it moves.";
 const JOB_RUNNING: &str = "Stop the job before accepting a calibration result.";
 pub(crate) const COMMANDS: [&str; 4] = [
     "cutTriangularCalibrationPattern",
@@ -32,6 +35,24 @@ pub(crate) const COMMANDS: [&str; 4] = [
 pub enum Kind {
     Triangular,
     Holey,
+}
+
+/// Why Accept saved nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NotAccepted {
+    Nothing,
+    NoSafeHeight,
+    NotFinite,
+}
+
+impl NotAccepted {
+    fn message(self, nothing: &str) -> String {
+        match self {
+            NotAccepted::Nothing => nothing.into(),
+            NotAccepted::NoSafeHeight => NO_SAFE_HEIGHT.into(),
+            NotAccepted::NotFinite => CalibrationError::NotFinite.to_string(),
+        }
+    }
 }
 
 /// Why Calculate gave no result: the HTTP status and the message the UI shows.
@@ -167,18 +188,31 @@ impl Machine {
         }
     }
 
+    /// The Accept the last result makes, without forgetting it.
+    fn pending_accept(&self, kind: Kind) -> Result<Accept, NotAccepted> {
+        match kind {
+            Kind::Triangular => {
+                let result = self.calibration.triangular.as_ref().ok_or(NotAccepted::Nothing)?;
+                let safe_height = self.settings.value(MASLOW, "zAxisSafeHeight").and_then(float);
+                Ok(result.accept(safe_height.filter(|height| height.is_finite()).ok_or(NotAccepted::NoSafeHeight)?))
+            }
+            Kind::Holey => self.calibration.holey.as_ref().map(HoleyResult::accept).ok_or(NotAccepted::Nothing),
+        }
+    }
+
     /// Saves the last result through `setValue`, so the controller gets its `$` lines, and forgets it.
-    fn accept_result(&mut self, kind: Kind) -> bool {
-        let accept = match kind {
-            Kind::Triangular => self.calibration.triangular.take().map(|result| result.accept()),
-            Kind::Holey => self.calibration.holey.take().map(|result| result.accept()),
-        };
-        let Some(accept) = accept else { return false };
+    fn accept_result(&mut self, kind: Kind) -> Result<(), NotAccepted> {
+        let accept = self.pending_accept(kind)?;
+        match kind {
+            Kind::Triangular => self.calibration.triangular = None,
+            Kind::Holey => self.calibration.holey = None,
+        }
+        accept.check().map_err(|_| NotAccepted::NotFinite)?;
         accept.writes.iter().for_each(|write| {
             self.write_setting(write.section, write.key, &Value::from(write.value.clone()));
         });
         self.queue(accept.gcode);
-        true
+        Ok(())
     }
 
     /// `POST /api/calibration/{kind}/accept`. Python took it mid-job or mid-probe; here it waits, as the action gates do.
@@ -189,8 +223,8 @@ impl Machine {
         if self.probing {
             return Response::error(409, crate::actions::PROBING);
         }
-        if !self.accept_result(kind) {
-            return Response::error(409, NOTHING_TO_ACCEPT);
+        if let Err(refused) = self.accept_result(kind) {
+            return Response::error(409, &refused.message(NOTHING_TO_ACCEPT));
         }
         match kind {
             Kind::Triangular => Response { status: 200, body: json(triangular_parameters(&self.settings)) },
@@ -206,7 +240,8 @@ impl Machine {
             _ => (Kind::Holey, "holey"),
         };
         if command.starts_with("accept") {
-            return (!self.accept_result(kind)).then(|| format!("Error with accepting {name} calibration results."));
+            let unknown = format!("Error with accepting {name} calibration results.");
+            return self.accept_result(kind).err().map(|refused| refused.message(&unknown));
         }
         let Some(settings) = machine_settings(&self.settings) else {
             return Some(format!("Error with cutting {name} calibration pattern."));
