@@ -32,6 +32,7 @@ export const TopBar = () => {
   const client = useClient();
   const updateAvailable = useUpdateAvailable();
   const locked = useMachine(selectGcodeLocked) ? GCODE_LOCKED_REASON : undefined;
+  const hasClassicUi = useMachine((state) => state.backend === "python");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [confirm, setConfirm] = useState<keyof typeof CONFIRMS | null>(null);
 
@@ -103,9 +104,11 @@ export const TopBar = () => {
       <div className="topbar-end">
         <StatusBar />
         <ThemeToggle />
-        <a className="classic-link" href="/">
-          Classic UI
-        </a>
+        {hasClassicUi && (
+          <a className="classic-link" href="/">
+            Classic UI
+          </a>
+        )}
       </div>
       {confirm && (
         <ConfirmDialog

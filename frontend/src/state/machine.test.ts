@@ -49,6 +49,20 @@ describe("machineReducer socket and startup", () => {
   });
 });
 
+describe("machineReducer backend", () => {
+  it("is unknown until /api/state loads", () => {
+    expect(initialMachineState.backend).toBeNull();
+  });
+
+  it.each([
+    ["rust", "rust"],
+    ["python", "python"],
+    [undefined, "python"],
+  ] as const)("records backend %s from /api/state as %s", (backend, expected) => {
+    expect(apply([{ type: "startup", state: startupState({ backend }) }]).backend).toBe(expected);
+  });
+});
+
 describe("machineReducer messages", () => {
   it("records the controller as disconnected without a port", () => {
     const state = apply([message("connectionStatus", { status: "disconnected", port: "none" })]);

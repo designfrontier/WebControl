@@ -8,6 +8,8 @@ export interface Point {
 
 export interface MachineState {
   socket: ConnectionStatus;
+  /** Which backend answered /api/state; null until it loads. */
+  backend: "python" | "rust" | null;
   hostAddress: string | null;
   controller: { status: "unknown" | "connected" | "disconnected"; port: string | null; fakeServo: boolean };
   health: { cpuUsage: number; bufferSize: number } | null;
@@ -67,6 +69,7 @@ const NO_COMPUTED_POSITION = -999999;
 
 export const initialMachineState: MachineState = {
   socket: "connecting",
+  backend: null,
   hostAddress: null,
   controller: { status: "unknown", port: null, fakeServo: false },
   health: null,
@@ -201,9 +204,11 @@ export const machineReducer = (state: MachineState, event: MachineEvent): Machin
         controllerFirmwareVersion,
         jobInProgress,
         manualZAxisAdjust,
+        backend,
       } = event.state;
       return {
         ...state,
+        backend: backend ?? "python",
         job: { inProgress: jobInProgress, manualZAxisAdjust },
         firmwareVersion: reportedVersion(controllerFirmwareVersion),
         units,
