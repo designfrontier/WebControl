@@ -186,7 +186,8 @@ fn holey_accept_saves_the_fit_and_writes_each_changed_setting_once() {
     let mut rig = Rig::connected();
     let measurements = [966.0, 964.5, 965.8, 964.9, 711.6, 710.9, 711.4, 1199.5, 1198.2, 1199.1, 1198.6, 254.3];
     let calculated = calculate_on(&mut rig, Kind::Holey, json!({ "measurements": measurements }));
-    assert_eq!(calculated.body["calibrationError"], 1.292957621842212);
+    // The last few digits follow the platform's libm.
+    assert!((calculated.body["calibrationError"].as_f64().unwrap() - 1.292957621842212).abs() < 1e-9);
     let accepted = accept_on(&mut rig, Kind::Holey);
     assert_eq!(
         accepted.body,
