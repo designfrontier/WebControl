@@ -27,8 +27,8 @@ describe("Open board", () => {
     const { user } = setup(recorder(500));
     await user.click(await screen.findByRole("button", { name: "Open" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Could not open shelf.brd.");
-    await user.click(screen.getByRole("link", { name: "Cancel" }));
-    await expectPath("/boards");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    await expectPath("/");
   });
 
   it("reports a library that cannot be listed", async () => {
@@ -57,7 +57,7 @@ describe("Save board as", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     expect(save.forms()).toEqual([{ selectedDirectory: ".", fileName: "shelf-2.brd" }]);
-    await expectPath("/boards");
+    await expectPath("/");
   });
 
   it("creates a board directory to save into", async () => {

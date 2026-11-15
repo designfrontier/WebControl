@@ -5,6 +5,8 @@ import {
   createMachineStore,
   initialMachineState,
   machineReducer,
+  selectGcodeLocked,
+  selectJobState,
   selectRunState,
 } from "./machine";
 import type { MachineEvent, MachineState } from "./machine";
@@ -62,6 +64,20 @@ describe("machineReducer messages", () => {
     expect(state.hostAddress).toBe("10.0.0.2:5000");
     expect(state.health).toEqual({ cpuUsage: 33.3, bufferSize: -1 });
     expect(state.status).toEqual({ uploadFlag: 1, positioningMode: 0, currentTool: 2 });
+  });
+
+  it("tracks the firmware version from startup state and health reports", () => {
+    const unknown = apply([{ type: "startup", state: startupState({ controllerFirmwareVersion: 0 }) }]);
+    expect(unknown.firmwareVersion).toBeNull();
+
+    const loaded = apply([{ type: "startup", state: startupState({ controllerFirmwareVersion: 1.26 }) }]);
+    expect(loaded.firmwareVersion).toBe(1.26);
+
+    const reported = apply([
+      message("healthMessage", { cpuUsage: 1, bufferSize: -1, controllerFirmwareVersion: 51.27 }),
+    ]);
+    expect(reported.firmwareVersion).toBe(51.27);
+    expect(apply([message("healthMessage", { cpuUsage: 1, bufferSize: -1 })], reported).firmwareVersion).toBe(51.27);
   });
 
   it("maps sled, home and gcode positions", () => {
@@ -160,6 +176,44 @@ describe("selectRunState", () => {
 
   it("is unknown before the first status message", () => {
     expect(selectRunState(initialMachineState)).toBe("unknown");
+  });
+});
+
+describe("job state", () => {
+  const status = (uploadFlag: number, job: { jobInProgress?: boolean; manualZAxisAdjust?: boolean } = {}) =>
+    message("statusMessage", { uploadFlag, positioningMode: 0, currentTool: 0, ...job });
+
+  it("counts a job paused by the controller as paused, not idle", () => {
+    const state = apply([status(0, { jobInProgress: true })]);
+    expect(selectRunState(state)).toBe("paused");
+    expect(selectJobState(state)).toBe("Paused");
+    expect(selectGcodeLocked(state)).toBe(true);
+  });
+
+  it("reads running, idle and a tool change wait", () => {
+    expect(selectJobState(apply([status(1, { jobInProgress: true })]))).toBe("Running");
+    expect(selectJobState(apply([status(0)]))).toBe("Idle");
+    expect(selectJobState(apply([status(-1, { jobInProgress: true, manualZAxisAdjust: true })]))).toBe(
+      "Waiting for tool change",
+    );
+    expect(selectJobState(initialMachineState)).toBeNull();
+  });
+
+  it("keeps the last job flags when a status message leaves them out", () => {
+    const state = apply([status(0, { jobInProgress: true, manualZAxisAdjust: true }), status(0)]);
+    expect(state.job).toEqual({ inProgress: true, manualZAxisAdjust: true });
+  });
+
+  it("locks gcode while uploading, adjusting Z or in a job, and not when idle or unknown", () => {
+    expect(selectGcodeLocked(initialMachineState)).toBe(false);
+    expect(selectGcodeLocked(apply([status(0)]))).toBe(false);
+    expect(selectGcodeLocked(apply([status(2)]))).toBe(true);
+    expect(selectGcodeLocked(apply([status(0, { manualZAxisAdjust: true })]))).toBe(true);
+  });
+
+  it("loads the job flags from /api/state", () => {
+    const state = apply([{ type: "startup", state: startupState({ jobInProgress: true, manualZAxisAdjust: true }) }]);
+    expect(state.job).toEqual({ inProgress: true, manualZAxisAdjust: true });
   });
 });
 

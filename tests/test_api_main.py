@@ -5,7 +5,7 @@ import pytest
 from api.main import main_screen_state
 
 
-def fake_data(touch_plate=0, gcode=None, gcode_index=0, upload_flag=0):
+def fake_data(touch_plate=0, gcode=None, gcode_index=0, upload_flag=0, job=False, manual_z=False):
     settings = {("Advanced Settings", "touchPlate"): touch_plate}
     return SimpleNamespace(
         config=SimpleNamespace(getValue=lambda section, key: settings.get((section, key))),
@@ -14,14 +14,18 @@ def fake_data(touch_plate=0, gcode=None, gcode_index=0, upload_flag=0):
         currentTool=3,
         gcode=gcode if gcode is not None else [],
         gcodeIndex=gcode_index,
+        jobInProgress=job,
+        manualZAxisAdjust=manual_z,
     )
 
 
 def test_reports_the_run_status_the_controls_are_gated_on():
-    assert main_screen_state(fake_data(upload_flag=2))["status"] == {
+    assert main_screen_state(fake_data(upload_flag=2, job=True))["status"] == {
         "uploadFlag": 2,
         "positioningMode": 1,
         "currentTool": 3,
+        "jobInProgress": True,
+        "manualZAxisAdjust": False,
     }
 
 

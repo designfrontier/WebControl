@@ -4,7 +4,7 @@ import { fakeFetch } from "../../test/fakeFetch";
 import { expectPath, recorder } from "../../test/filesBoards";
 import { renderApp } from "../../test/render";
 
-const page = () => within(screen.getByRole("region", { name: /gcode/ }));
+const page = () => within(screen.getByRole("dialog", { name: /G-Code/ }));
 
 describe("View or edit gcode", () => {
   const setup = (edit = recorder(), text = "G21\nG0 X1 Y1\nG1 Z-1") => {
@@ -51,6 +51,6 @@ describe("View or edit gcode", () => {
   it("counts an empty file as no lines", async () => {
     setup(recorder(), "");
     expect(await screen.findByLabelText("Loaded gcode")).toHaveAccessibleDescription(/^0 lines/);
-    expect(page().getByRole("link", { name: "Cancel" })).toHaveAttribute("href", "/files");
+    expect(page().getByRole("button", { name: "Cancel" })).toBeInTheDocument();
   });
 });

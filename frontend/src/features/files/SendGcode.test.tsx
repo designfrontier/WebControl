@@ -4,7 +4,7 @@ import { fakeFetch } from "../../test/fakeFetch";
 import { expectPath, recorder } from "../../test/filesBoards";
 import { renderApp } from "../../test/render";
 
-const page = () => within(screen.getByRole("region", { name: /gcode/ }));
+const page = () => within(screen.getByRole("dialog", { name: /G-Code/ }));
 
 describe("Send gcode", () => {
   const setup = (send = recorder(), text = "G0 X5") => {
@@ -51,7 +51,7 @@ describe("Send gcode", () => {
 
   it("finishes back on the files screen", async () => {
     const { user } = setup();
-    await user.click(await screen.findByRole("link", { name: "Done" }));
-    await expectPath("/files");
+    await user.click(await screen.findByRole("button", { name: "Done" }));
+    await expectPath("/");
   });
 });

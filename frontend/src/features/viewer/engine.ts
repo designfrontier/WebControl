@@ -2,8 +2,8 @@ import { MOUSE, OrthographicCamera, PerspectiveCamera, TOUCH, WebGLRenderer } fr
 import type { Scene } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { pickBedPoint } from "./picking";
-import { DEFAULT_MACHINE, fitOrthographic, fitPerspectiveDistance } from "./shapes";
-import type { MachineGeometry, Point } from "./shapes";
+import { DEFAULT_MACHINE, bedViewFrame, fitOrthographic, fitPerspectiveDistance } from "./shapes";
+import type { Point, ViewFrame } from "./shapes";
 
 /** The WebGL half of the viewer: renderer, cameras and orbit controls. Scene contents live in scene.ts. */
 export interface ViewerEngine {
@@ -12,9 +12,8 @@ export interface ViewerEngine {
   pick(clientX: number, clientY: number): Point | null;
   setRotate(enabled: boolean): void;
   setPerspective(enabled: boolean): void;
-  /** Frames the bed and makes that the view Reset returns to. */
-  fit(machine: MachineGeometry): void;
-  reset(): void;
+  /** Frames this area, undoing any pan, zoom or rotation. */
+  fit(frame: ViewFrame): void;
   dispose(): void;
 }
 
@@ -31,7 +30,7 @@ export const createViewerEngine = (host: HTMLElement, scene: Scene): ViewerEngin
   const ortho = new OrthographicCamera(-1, 1, 1, -1, 0.1, 2000);
   const perspective = new PerspectiveCamera(FOV, 1, 0.5, 4000);
   let camera: OrthographicCamera | PerspectiveCamera = ortho;
-  let machine = DEFAULT_MACHINE;
+  let view = bedViewFrame(DEFAULT_MACHINE);
   let rotate = false;
   let frame = 0;
 
@@ -57,7 +56,7 @@ export const createViewerEngine = (host: HTMLElement, scene: Scene): ViewerEngin
   let controls = makeControls();
 
   const frameCameras = () => {
-    const { halfWidth, halfHeight } = fitOrthographic(machine, aspect());
+    const { halfWidth, halfHeight } = fitOrthographic(view, aspect());
     Object.assign(ortho, { left: -halfWidth, right: halfWidth, top: halfHeight, bottom: -halfHeight });
     ortho.updateProjectionMatrix();
     perspective.aspect = aspect();
@@ -74,10 +73,10 @@ export const createViewerEngine = (host: HTMLElement, scene: Scene): ViewerEngin
 
   const home = () => {
     ortho.zoom = 1;
-    ortho.position.set(0, 0, CAMERA_Z);
-    perspective.position.set(0, 0, fitPerspectiveDistance(machine, aspect(), FOV));
+    ortho.position.set(view.x, view.y, CAMERA_Z);
+    perspective.position.set(view.x, view.y, fitPerspectiveDistance(view, aspect(), FOV));
     [ortho, perspective].forEach((each) => each.up.set(0, 1, 0));
-    controls.target.set(0, 0, 0);
+    controls.target.set(view.x, view.y, 0);
     frameCameras();
     controls.update();
     controls.saveState();
@@ -105,12 +104,8 @@ export const createViewerEngine = (host: HTMLElement, scene: Scene): ViewerEngin
       requestRender();
     },
     fit: (next) => {
-      machine = next;
+      view = next;
       home();
-      requestRender();
-    },
-    reset: () => {
-      controls.reset();
       requestRender();
     },
     dispose: () => {

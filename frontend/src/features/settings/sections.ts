@@ -10,7 +10,7 @@ export interface SettingsTab {
 export const settingsTabs: SettingsTab[] = [
   { id: "maslow", path: "", label: "Maslow" },
   { id: "advanced", path: "advanced", label: "Advanced" },
-  { id: "webcontrol", path: "webcontrol", label: "WebControl app" },
+  { id: "webcontrol", path: "webcontrol", label: "WebControl" },
   { id: "camera", path: "camera", label: "Camera" },
   { id: "gpio", path: "gpio", label: "GPIO" },
 ];

@@ -33,7 +33,7 @@ describe("Trim board", () => {
     await user.click(screen.getByRole("button", { name: "Trim board" }));
 
     expect(trim.forms()).toEqual([{ trimTop: "1.5", trimBottom: "0", trimLeft: "0", trimRight: "2", units: "inches" }]);
-    await expectPath("/boards");
+    await expectPath("/");
   });
 
   it("rejects blank and negative trims", async () => {

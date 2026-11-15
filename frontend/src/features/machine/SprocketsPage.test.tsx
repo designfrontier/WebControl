@@ -135,6 +135,6 @@ describe("ResetChainsPage", () => {
       ["stopRun", "", ""],
       ["setSprocketsDefault", "", ""],
     ]);
-    expect(currentPath()).toBe("/machine");
+    expect(currentPath()).toBe("/");
   });
 });

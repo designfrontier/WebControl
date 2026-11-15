@@ -185,7 +185,7 @@
   width: 100%;
   height: auto;
   border-radius: var(--radius);
-  background: #fff;
+  background: var(--paper);
 }
 
 @media (max-width: 720px) {

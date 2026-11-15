@@ -23,7 +23,7 @@ export interface ActionItem {
 }
 
 export interface ActionGroup {
-  id: "diagnostics" | "positioning" | "controller";
+  id: "diagnostics" | "setup" | "controller";
   title: string;
   items: ActionItem[];
 }
@@ -121,8 +121,8 @@ export const actionGroups: ActionGroup[] = [
     ],
   },
   {
-    id: "positioning",
-    title: "Positioning",
+    id: "setup",
+    title: "Calibration and setup",
     // Stricter than processAction, which also moves the sled while paused; that loses the paused job's position.
     items: [
       { id: "returnToCenter", label: fixed("Return to center"), command: "returnToCenter", allowed: "idle" },

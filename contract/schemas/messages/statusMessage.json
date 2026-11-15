@@ -11,6 +11,12 @@
     },
     "currentTool": {
       "type": "number"
+    },
+    "jobInProgress": {
+      "type": "boolean"
+    },
+    "manualZAxisAdjust": {
+      "type": "boolean"
     }
   },
   "required": [

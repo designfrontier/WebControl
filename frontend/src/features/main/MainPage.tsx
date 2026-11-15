@@ -7,24 +7,27 @@ import { useMainScreenState } from "./hooks";
 import { JogPanel } from "./JogPanel";
 import { Readouts } from "./Readouts";
 import { RunPanel } from "./RunPanel";
-import { ZAxisPanel } from "./ZAxisPanel";
 import "./main.css";
 
+/** The one screen: the viewer takes most of the width and the compact controls sit beside it. */
 export const MainPage = () => {
   const loaded = useMainScreenState();
   const available = controlsFor(useMachine(selectRunState));
+  const gcodePosition = useMachine((s) => s.gcodePosition);
+  const lineIndex = gcodePosition?.lineIndex ?? loaded?.gcode.lineIndex ?? null;
+  const line = gcodePosition?.line ?? loaded?.gcode.line ?? "";
 
   return (
-    <div className="main-page">
-      <h1>Control</h1>
-      <Viewer />
-      <div className="control-panels">
-        <RunPanel available={available} loadedGcode={loaded?.gcode ?? null} />
+    <div className="control-screen">
+      <h1 className="visually-hidden">Control</h1>
+      <Viewer currentLine={line} />
+      <section className="control-panel" aria-labelledby="controls-title">
+        <h2 id="controls-title">Controls</h2>
         <JogPanel available={available} />
-        <ZAxisPanel available={available} touchPlate={loaded?.touchPlate ?? false} />
-        <Readouts />
+        <RunPanel available={available} lineIndex={lineIndex ?? 0} />
+        <Readouts lineIndex={lineIndex} />
         <ControllerConsole />
-      </div>
+      </section>
     </div>
   );
 };

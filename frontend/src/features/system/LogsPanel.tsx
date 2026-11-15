@@ -73,8 +73,7 @@ const LogPane = ({ log, title, view, dispatch }: PaneProps) => {
 export const LogsPanel = ({ connect = connectLogSocket }: { connect?: () => SocketLike }) => {
   const [view, dispatch] = useLogStream(connect);
   return (
-    <section aria-labelledby="logs-title" className="system-panel">
-      <h2 id="logs-title">Logs</h2>
+    <section aria-label="Logs" className="system-panel">
       <p className="chip log-state" data-tone={stateTone(view)} role="status">
         {stateText(view)}
       </p>

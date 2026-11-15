@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import type { APIRequestContext, Locator } from "@playwright/test";
 import { io } from "socket.io-client";
 import type { Socket } from "socket.io-client";
+import { resetMachine } from "./helpers";
 
 const square = (size: number) =>
   [
@@ -56,6 +57,8 @@ const openScreenActions = async (canvas: Locator, isMobile: boolean) => {
   await canvas.page().waitForTimeout(1_700);
   await canvas.dispatchEvent("pointerup", at);
 };
+
+test.beforeEach(({ baseURL }) => resetMachine(baseURL!));
 
 test("draws uploaded gcode, follows socket broadcasts and defines home from the canvas", async ({
   page,

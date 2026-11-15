@@ -4,7 +4,7 @@ import type * as ThreeModule from "three";
 import type * as OrbitModule from "three/addons/controls/OrbitControls.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createViewerEngine } from "./engine";
-import { DEFAULT_MACHINE } from "./shapes";
+import { DEFAULT_MACHINE, bedViewFrame } from "./shapes";
 
 const renderer = vi.hoisted(() => ({
   instances: [] as {
@@ -96,7 +96,7 @@ describe("createViewerEngine", () => {
 
   it("frames the whole bed in an orthographic top view", async () => {
     const { engine, flush, lastCamera } = setup();
-    engine.fit(DEFAULT_MACHINE);
+    engine.fit(bedViewFrame(DEFAULT_MACHINE));
     await flush();
     const camera = lastCamera() as OrthographicCamera;
     expect(camera).toBeInstanceOf(OrthographicCamera);
@@ -141,14 +141,14 @@ describe("createViewerEngine", () => {
     expect(current()).toMatchObject({ enableRotate: false, touches: { ONE: TOUCH.PAN } });
   });
 
-  it("returns to the fitted view on reset", async () => {
+  it("undoes pan and zoom when fitted again", async () => {
     const { engine, flush, lastCamera } = setup();
     const camera = () => lastCamera() as OrthographicCamera;
     engine.requestRender();
     await flush();
     camera().position.set(30, 10, 100);
     camera().zoom = 3;
-    engine.reset();
+    engine.fit({ x: 0, y: 0, width: 96, height: 48 });
     await flush();
     const [x, y, z] = camera().position.toArray();
     expect([x, y, z].map((value) => Math.round(value * 1e6) / 1e6)).toEqual([0, 0, 100]);

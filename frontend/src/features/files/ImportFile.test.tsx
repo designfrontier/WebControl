@@ -1,7 +1,7 @@
 import { fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { fakeFetch } from "../../test/fakeFetch";
-import { expectPath, recorder } from "../../test/filesBoards";
+import { recorder } from "../../test/filesBoards";
 import { renderApp } from "../../test/render";
 
 const file = (name: string) => new File(["{}"], name);
@@ -15,7 +15,7 @@ describe.each([
     ...renderApp(`/files/import/${kind}`, { fetch: fakeFetch({ [`POST ${route}`]: post.respond }) }),
     post,
   });
-  const page = () => within(screen.getByRole("region", { name: title }));
+  const page = () => within(screen.getByRole("dialog", { name: title }));
 
   it(`posts the file to ${route} and confirms`, async () => {
     const { user, post } = setup();
@@ -25,7 +25,7 @@ describe.each([
 
     expect((post.forms()[0].file as File).name).toBe(fileName);
     expect(await page().findByText(`${fileName} was imported.`)).toBeInTheDocument();
-    expect(page().getByRole("link", { name: "Done" })).toHaveAttribute("href", "/files");
+    expect(page().getByRole("button", { name: "Done" })).toBeInTheDocument();
   });
 
   it("needs a file", async () => {
@@ -40,7 +40,7 @@ describe.each([
     await user.upload(screen.getByLabelText("File"), file(fileName));
     await user.click(screen.getByRole("button", { name: button }));
     expect(await screen.findByRole("alert")).toHaveTextContent(`Could not use ${fileName}.`);
-    expect(page().getByRole("link", { name: "Cancel" })).toBeInTheDocument();
+    expect(page().getByRole("button", { name: "Cancel" })).toBeInTheDocument();
   });
 });
 
@@ -67,8 +67,8 @@ describe("import", () => {
 });
 
 describe("import route", () => {
-  it.each(["nope", "toString", "constructor"])("sends /files/import/%s back to the files screen", async (kind) => {
+  it.each(["nope", "toString", "constructor"])("explains that /files/import/%s imports nothing", (kind) => {
     renderApp(`/files/import/${kind}`);
-    await expectPath("/files");
+    expect(screen.getByRole("dialog", { name: "Import" })).toHaveTextContent("There is nothing to import here.");
   });
 });

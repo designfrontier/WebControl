@@ -1,56 +1,45 @@
-import { useClient, useMachine } from "../../app/context";
-import type { MainScreenState } from "../../protocol";
+import { useState } from "react";
+import { useClient, useMachine, useServerMessage } from "../../app/context";
+import { StopButton } from "../../app/StopButton";
 import type { ControlAvailability } from "./controls";
 import { useDraft } from "./hooks";
 
 const STEPS = [
-  { command: "moveGcodeZ", delta: -1, label: "Previous Z move", arrow: "⇤" },
-  { command: "moveGcodeIndex", delta: -1, label: "Previous line", arrow: "←" },
-  { command: "moveGcodeIndex", delta: 1, label: "Next line", arrow: "→" },
-  { command: "moveGcodeZ", delta: 1, label: "Next Z move", arrow: "⇥" },
+  { command: "moveGcodeZ", delta: -1, label: "Previous Z move", text: "<Z" },
+  { command: "moveGcodeIndex", delta: -1, label: "Previous line", text: "<1" },
+  { command: "moveGcodeIndex", delta: 1, label: "Next line", text: "1>" },
+  { command: "moveGcodeZ", delta: 1, label: "Next Z move", text: "Z>" },
 ] as const;
+
+/** The camera follows updateCamera broadcasts, which the viewer asks for on connect. */
+const CameraToggle = () => {
+  const client = useClient();
+  const [on, setOn] = useState(false);
+  useServerMessage("cameraMessage", (message) => {
+    if (message.command === "updateCamera") setOn(message.data === "on");
+  });
+  return (
+    <button type="button" aria-pressed={on} onClick={() => client.sendAction("toggleCamera")}>
+      Camera
+    </button>
+  );
+};
 
 interface Props {
   available: ControlAvailability;
-  /** The gcode line from GET /api/main, used until the server pushes a gcodePositionMessage. */
-  loadedGcode: MainScreenState["gcode"] | null;
+  lineIndex: number;
 }
 
-export const RunPanel = ({ available, loadedGcode }: Props) => {
+export const RunPanel = ({ available, lineIndex }: Props) => {
   const client = useClient();
   const pauseButton = useMachine((s) => s.pauseButton);
   const alarm = useMachine((s) => s.alarm);
-  const gcodePosition = useMachine((s) => s.gcodePosition);
-  const lineIndex = gcodePosition?.lineIndex ?? loadedGcode?.lineIndex ?? 0;
-  const line = gcodePosition?.line ?? loadedGcode?.line ?? "";
   const [lineText, setLineText] = useDraft(String(lineIndex + 1));
   const target = Number(lineText);
   const validTarget = Number.isInteger(target) && target >= 1;
 
   return (
-    <section className="panel" aria-labelledby="run-title">
-      <h2 id="run-title">Run</h2>
-      <div className="run-buttons">
-        <button type="button" className="go" disabled={!available.play} onClick={() => client.sendAction("startRun")}>
-          Play
-        </button>
-        <button
-          type="button"
-          className="caution"
-          disabled={!available.pause}
-          onClick={() => client.sendAction(pauseButton === "Pause" ? "pauseRun" : "resumeRun")}
-        >
-          {pauseButton}
-        </button>
-        <button
-          type="button"
-          className="danger"
-          data-alarm={alarm !== null}
-          onClick={() => client.sendAction("stopRun")}
-        >
-          Stop
-        </button>
-      </div>
+    <section className="run" aria-label="Run">
       <div className="alarm-status" role="status" data-alarm={alarm !== null}>
         {alarm === null ? (
           <span>No alarms</span>
@@ -63,23 +52,31 @@ export const RunPanel = ({ available, loadedGcode }: Props) => {
           </>
         )}
       </div>
-      <div className="button-row" role="group" aria-label="Step through gcode">
-        {STEPS.map(({ command, delta, label, arrow }) => (
+      <div className="run-buttons">
+        <button type="button" className="go" disabled={!available.play} onClick={() => client.sendAction("startRun")}>
+          Play
+        </button>
+        <button
+          type="button"
+          className="caution"
+          disabled={!available.pause}
+          onClick={() => client.sendAction(pauseButton === "Pause" ? "pauseRun" : "resumeRun")}
+        >
+          {pauseButton}
+        </button>
+        <StopButton />
+      </div>
+      <div className="step-buttons" role="group" aria-label="Step through gcode">
+        {STEPS.map(({ command, delta, label, text }) => (
           <button
             key={label}
             type="button"
             disabled={!available.step}
             onClick={() => client.sendAction(command, delta)}
+            title={label}
           >
-            {delta < 0 ? (
-              <>
-                <span aria-hidden="true">{arrow}</span> {label}
-              </>
-            ) : (
-              <>
-                {label} <span aria-hidden="true">{arrow}</span>
-              </>
-            )}
+            <span aria-hidden="true">{text}</span>
+            <span className="visually-hidden">{label}</span>
           </button>
         ))}
       </div>
@@ -90,7 +87,7 @@ export const RunPanel = ({ available, loadedGcode }: Props) => {
           if (validTarget) client.sendAction("moveGcodeGoto", target - 1);
         }}
       >
-        <label htmlFor="gcode-line">Line number</label>
+        <label htmlFor="gcode-line">Line #</label>
         <input
           id="gcode-line"
           type="number"
@@ -103,11 +100,8 @@ export const RunPanel = ({ available, loadedGcode }: Props) => {
         <button type="submit" disabled={!available.step || !validTarget}>
           Go to line
         </button>
+        <CameraToggle />
       </form>
-      <p className="gcode-line">
-        <span className="muted">Line: </span>
-        <code>{line || "—"}</code>
-      </p>
     </section>
   );
 };

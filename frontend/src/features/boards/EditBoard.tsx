@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useNavigate } from "react-router";
 import { useFetch, useMachine } from "../../app/context";
+import { CloseButton } from "../../app/CloseButton";
+import { useCloseModal } from "../../app/modalHistory";
 import type { BoardDetails } from "../../protocol";
 import { useResource, useSubmit } from "../files/hooks";
 import { FormError, Loaded, SubPage } from "../files/ui";
@@ -45,7 +46,7 @@ const initialFields = (board: BoardDetails): BoardFields => ({
 
 const EditForm = ({ board }: { board: BoardDetails }) => {
   const fetchImpl = useFetch();
-  const navigate = useNavigate();
+  const close = useCloseModal();
   const livePosition = useMachine((s) => s.position);
   const router = livePosition ?? board.router;
   const [fields, setFields] = useState(() => initialFields(board));
@@ -74,7 +75,7 @@ const EditForm = ({ board }: { board: BoardDetails }) => {
     if (Object.keys(measureProblems(fields)).length > 0) return setError("Fix the highlighted fields.");
     return run(async () => {
       await editBoard(fetchImpl, fields, board.units);
-      navigate("/boards");
+      close();
     }, "Could not update the board.");
   };
 
@@ -113,9 +114,7 @@ const EditForm = ({ board }: { board: BoardDetails }) => {
         <button type="submit" className="primary" disabled={busy}>
           {busy ? "Saving…" : "Save board"}
         </button>
-        <Link className="button" to="/boards">
-          Cancel
-        </Link>
+        <CloseButton>Cancel</CloseButton>
       </div>
     </form>
   );
@@ -124,7 +123,7 @@ const EditForm = ({ board }: { board: BoardDetails }) => {
 export const EditBoard = () => {
   const { resource } = useResource(getBoardDetails);
   return (
-    <SubPage title="Create or edit board" back="/boards">
+    <SubPage>
       <Loaded resource={resource} what="the current board">
         {(board) => <EditForm board={board} />}
       </Loaded>

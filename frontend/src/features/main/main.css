@@ -1,155 +1,101 @@
-.main-page h1 {
-  margin: 0;
-  font-size: 1.25rem;
-}
-
-/* Viewer beside the controls on wide screens; stacked on phones. */
-@media (min-width: 1100px) {
-  .main-page {
-    grid-template-columns: minmax(0, 1fr) minmax(360px, 460px);
-    grid-template-rows: auto 1fr;
-    align-items: start;
-  }
-
-  .main-page h1 {
-    grid-column: 1 / -1;
-  }
-
-  .main-page .control-panels {
-    grid-column: 2;
-    grid-row: 2;
-  }
-}
-
-.control-panels {
+/* About 70% viewer, 30% controls; both fill the height and nothing scrolls but the message list. */
+.control-screen {
   display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(360px, 3fr);
   gap: var(--space-3);
+  height: 100%;
+  padding: var(--space-3);
 }
 
-.panel {
-  display: grid;
-  gap: var(--space-3);
+.control-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 0;
   padding: var(--space-3);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
 }
 
-.panel h2 {
+.control-panel h2 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 1.1rem;
 }
 
-.button-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
+.control-panel button,
+.control-panel .button-link {
+  min-height: var(--control);
+  padding: 0 var(--space-2);
 }
 
-.button-row > button {
-  flex: 1 1 auto;
-}
-
-.run-buttons {
+.jog {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-2);
+  gap: var(--space-1);
 }
 
-.run-buttons button {
-  font-weight: 700;
+.jog-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-1);
 }
 
-button.go:not(:disabled) {
-  border-color: var(--ok);
-  color: var(--ok);
+.jog-grid button {
+  font-size: 1.15rem;
 }
 
-button.caution:not(:disabled) {
-  border-color: var(--warn);
-  color: var(--warn);
+.jog-grid .jog-home,
+.jog-grid .side-button {
+  font-size: 0.9rem;
 }
 
-button.danger,
-button.primary {
-  font-weight: 600;
+.side-button {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-button.danger {
-  background: var(--danger);
-  border-color: var(--danger);
-  color: var(--danger-ink);
-}
-
-button.primary {
-  background: var(--accent);
+button.side-button:not(:disabled),
+.side-button.button-link {
   border-color: var(--accent);
+  background: var(--accent);
   color: var(--accent-ink);
 }
 
-button.danger[data-alarm="true"] {
-  animation: alarm-pulse 1s ease-in-out infinite alternate;
-}
-
-@keyframes alarm-pulse {
-  to {
-    box-shadow: 0 0 0 4px var(--danger);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  button.danger[data-alarm="true"] {
-    animation: none;
-    box-shadow: 0 0 0 4px var(--danger);
-  }
-}
-
-.alarm-status {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--ok);
-  border-radius: var(--radius);
-  color: var(--ok);
-}
-
-.alarm-status[data-alarm="true"] {
-  border-color: var(--danger);
-  color: var(--danger);
-  font-weight: 600;
-}
-
-.jog-pad {
+.jog-distance {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-2);
+  grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-1);
 }
 
-.jog-pad button {
-  min-height: calc(var(--tap) * 1.25);
-  padding: 0 var(--space-2);
+.jog-distance .set-home {
+  font-size: 0.85rem;
+  line-height: 1.1;
+  white-space: normal;
 }
 
 .distance-field {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-1) var(--space-2);
 }
 
 .distance-field input,
 .goto-line input {
   min-width: 0;
-  min-height: var(--tap);
+  min-height: var(--control);
   padding: 0 var(--space-2);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--bg);
   color: var(--text);
   font: inherit;
+}
+
+.z-axis .distance-field input {
+  min-height: var(--tap);
 }
 
 .distance-field input[aria-invalid="true"],
@@ -164,130 +110,197 @@ button.danger[data-alarm="true"] {
   font-size: 0.85rem;
 }
 
-.goto-line {
+.run {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-1);
 }
 
-.gcode-line {
-  margin: 0;
-  overflow-x: auto;
-  white-space: nowrap;
+.alarm-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 2px var(--space-3);
+  border: 1px solid var(--ok);
+  border-radius: var(--radius);
+  color: var(--ok);
+}
+
+.alarm-status[data-alarm="true"] {
+  border-color: var(--danger);
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.run-buttons,
+.step-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-1);
+}
+
+.step-buttons {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.run-buttons button {
+  font-weight: 700;
+}
+
+.control-panel .run-buttons button {
+  min-height: calc(var(--control) + 4px);
+}
+
+button.go:not(:disabled) {
+  border-color: var(--go);
+  background: var(--go);
+  color: var(--go-ink);
+}
+
+button.caution:not(:disabled) {
+  border-color: var(--caution);
+  background: var(--caution);
+  color: var(--caution-ink);
+}
+
+.goto-line {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.goto-line button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
 }
 
 .readouts {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: var(--space-1) var(--space-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 var(--space-3);
   margin: 0;
+  font-size: 0.9rem;
 }
 
 .readouts div {
   display: flex;
+  align-items: center;
   gap: var(--space-2);
+  min-width: 0;
+}
+
+.readouts .wide {
+  grid-column: 1 / -1;
 }
 
 .readouts dt {
+  flex: none;
+  min-width: 5.5em;
   color: var(--muted);
 }
 
 .readouts dd {
-  margin: 0;
-  font-family: var(--mono);
-  white-space: pre;
-}
-
-.meters {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  display: flex;
   gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.meters label {
-  display: grid;
+.readouts meter {
+  width: 6em;
+}
+
+.job-state[data-state="Running"] {
+  color: var(--ok);
+  font-weight: 600;
+}
+
+.job-state[data-state="Paused"],
+.job-state[data-state="Waiting for tool change"] {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.console {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   gap: var(--space-1);
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-
-.meters meter {
-  width: 100%;
+  min-height: 80px;
 }
 
 .console ol {
-  max-height: 240px;
+  flex: 1;
+  min-height: 0;
   margin: 0;
   padding: var(--space-2);
   overflow-y: auto;
   list-style: none;
-  background: var(--bg);
-  border-radius: var(--radius);
-  font-family: var(--mono);
-  font-size: 0.85rem;
-  white-space: pre-wrap;
-}
-
-.server-dialog {
-  display: grid;
-  gap: var(--space-3);
-  width: min(480px, 100%);
-  max-height: calc(100vh - 2 * var(--space-4));
-  overflow-y: auto;
-  padding: var(--space-4);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: var(--surface);
-}
-
-.server-dialog[data-kind="alert"] {
-  border-color: var(--warn);
-}
-
-.server-dialog header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-
-.server-dialog h2,
-.server-dialog header p {
-  margin: 0;
-}
-
-.server-dialog h2 {
-  font-size: 1.1rem;
-}
-
-.server-dialog-message {
-  margin: 0;
+  background: var(--bg);
+  font-family: var(--mono);
+  font-size: 0.8rem;
   white-space: pre-wrap;
 }
 
-.server-dialog footer {
+.z-axis {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.z-axis .button-row {
   display: flex;
-  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: var(--space-2);
 }
 
-.server-dialog progress {
-  width: 100%;
+.z-axis .button-row > button {
+  flex: 1 1 auto;
 }
 
-.spinner {
-  width: 32px;
-  height: 32px;
-  margin: 0 auto;
-  border: 3px solid var(--line);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.9s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
+/* Phones: the viewer above the controls, the page scrolls, and Play / Pause / Stop stay pinned to the bottom. */
+@media (max-width: 900px) {
+  .control-screen {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+    padding: var(--space-2) var(--space-2) calc(var(--tap) + 2 * var(--space-2));
   }
+
+  .control-panel button,
+  .control-panel .button-link,
+  .distance-field input,
+  .goto-line input {
+    min-height: var(--tap);
+  }
+
+  .run-buttons {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 10;
+    padding: var(--space-2);
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+  }
+
+  .console ol {
+    max-height: 240px;
+  }
+}
+
+.readouts div:not(.wide) dt {
+  min-width: auto;
+}
+
+.readouts div:not(.wide) dd {
+  white-space: normal;
 }

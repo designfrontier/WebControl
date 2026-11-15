@@ -1,4 +1,4 @@
-import type { Section } from "../../app/section";
-import { BoardsPage } from "./BoardsPage";
-
-export const boardsSection: Section = { path: "boards", label: "Boards", Component: BoardsPage };
+export { EditBoard } from "./EditBoard";
+export { OpenBoard, SaveBoard } from "./OpenSaveBoard";
+export { TrimBoard } from "./TrimBoard";
+import "../files/files.css";

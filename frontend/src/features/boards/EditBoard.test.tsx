@@ -46,7 +46,7 @@ describe("Create or edit board", () => {
         units: "inches",
       },
     ]);
-    await expectPath("/boards");
+    await expectPath("/");
   });
 
   it("flags measurements that are missing, not numbers or not positive", async () => {

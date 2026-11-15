@@ -3,7 +3,7 @@ import { useClient, useMachine } from "../../app/context";
 import type { Releases } from "../../protocol";
 import { selectRunState } from "../../state/machine";
 import { getReleases } from "./api";
-import { ConfirmDialog } from "./Dialog";
+import { ConfirmDialog } from "../../app/Dialog";
 import { LazyMarkdown as MarkdownView } from "./LazyMarkdown";
 import { errorText, useLoad } from "./useLoad";
 
@@ -56,8 +56,7 @@ export const ReleasesPanel = ({ updateAvailable }: { updateAvailable: boolean })
   };
 
   return (
-    <section aria-labelledby="releases-title" className="system-panel">
-      <h2 id="releases-title">Updates</h2>
+    <section aria-label="Updates" className="system-panel">
       {updateAvailable && (
         <p className="chip" data-tone="ok">
           An update is available

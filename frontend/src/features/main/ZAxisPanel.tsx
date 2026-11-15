@@ -1,7 +1,10 @@
 import { useClient, useMachine } from "../../app/context";
+import { selectRunState } from "../../state/machine";
+import { controlsFor } from "./controls";
 import type { ControlAvailability } from "./controls";
 import { DistanceField } from "./DistanceField";
-import { useDistanceControl } from "./hooks";
+import { useDistanceControl, useMainScreenState } from "./hooks";
+import "./main.css";
 
 const Z_DECIMALS = 5;
 
@@ -10,7 +13,7 @@ interface Props {
   touchPlate: boolean;
 }
 
-/** The classic UI's Z-Axis popup (templates/zaxis.html), inline on the control screen. */
+/** The classic UI's Z-Axis popup (templates/zaxis.html). */
 export const ZAxisPanel = ({ available, touchPlate }: Props) => {
   const client = useClient();
   const unitsZ = useMachine((s) => s.unitsZ);
@@ -27,8 +30,7 @@ export const ZAxisPanel = ({ available, touchPlate }: Props) => {
     field.run((distance) => client.sendAction("moveZ", direction, distance));
 
   return (
-    <section className="panel" aria-labelledby="z-title">
-      <h2 id="z-title">Z axis</h2>
+    <section className="z-axis" aria-label="Z axis">
       <DistanceField
         id="z-distance"
         label="Z distance"
@@ -66,4 +68,11 @@ export const ZAxisPanel = ({ available, touchPlate }: Props) => {
       </div>
     </section>
   );
+};
+
+/** The Z-Axis modal: loads whether the touch plate is enabled, which only GET /api/main reports. */
+export const ZAxisModal = () => {
+  const loaded = useMainScreenState();
+  const available = controlsFor(useMachine(selectRunState));
+  return <ZAxisPanel available={available} touchPlate={loaded?.touchPlate ?? false} />;
 };

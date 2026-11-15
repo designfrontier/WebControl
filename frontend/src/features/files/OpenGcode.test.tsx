@@ -81,8 +81,8 @@ describe("Open gcode", () => {
 
   it("cancels back to the files screen", async () => {
     const { user } = setup();
-    await user.click(await screen.findByRole("link", { name: "Cancel" }));
-    await expectPath("/files");
+    await user.click(await screen.findByRole("button", { name: "Cancel" }));
+    await expectPath("/");
   });
 
   it("reports a library that cannot be listed", async () => {

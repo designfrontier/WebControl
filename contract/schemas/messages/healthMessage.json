@@ -8,6 +8,9 @@
     },
     "bufferSize": {
       "type": "number"
+    },
+    "controllerFirmwareVersion": {
+      "type": "number"
     }
   },
   "required": [
