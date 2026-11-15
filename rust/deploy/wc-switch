@@ -43,6 +43,12 @@ case "$target" in
 esac
 other="$([ "$target" = rust ] && echo python || echo rust)"
 
+# Disabling the running backend first would leave nothing serving if the target has no unit on this disk.
+if ! "${SYSTEMCTL[@]}" cat "$(unit_for "$target")" > /dev/null 2>&1; then
+  echo "There is no $(unit_for "$target").service on this system; nothing was changed." >&2
+  exit 1
+fi
+
 body="$(state)"
 if [[ "$body" =~ \"jobInProgress\":\ *true ]] && [ "$force" = 0 ]; then
   echo "A job is running or paused; stop it first, or pass --force." >&2

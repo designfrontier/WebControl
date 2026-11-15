@@ -20,6 +20,7 @@ case "\$1" in
   enable) [ "\$3" = webcontrol-rs ] && echo '{"backend":"rust","jobInProgress":false}' > "$work/state" \
           || echo '{"jobInProgress":false}' > "$work/state" ;;
   is-active) if grep -qx "\${!#}" "$work/active" 2> /dev/null; then echo active; else echo inactive; exit 3; fi ;;
+  cat) if [ -f "$work/no-\$2" ]; then exit 1; fi ;;
   is-enabled) if grep -qx "\${!#}" "$work/enabled" 2> /dev/null; then echo enabled; else echo disabled; exit 1; fi ;;
 esac
 EOF
@@ -32,13 +33,13 @@ check() {
   if "$@"; then echo "ok   $name"; else echo "FAIL $name"; failures=$((failures + 1)); fi
 }
 
-reset() { rm -f "$work/calls" "$work/state" "$work/active" "$work/enabled"; }
+reset() { rm -f "$work/calls" "$work/state" "$work/active" "$work/enabled" "$work"/no-*; }
 
 switch_to_rust() {
   reset
   echo '{"backend":"python","jobInProgress":false}' > "$work/state"
   run rust > "$work/out" && grep -q "now the rust backend" "$work/out" &&
-    [ "$(cat "$work/calls")" = "$(printf 'systemctl disable --now webcontrol\nsystemctl enable --now webcontrol-rs')" ]
+    [ "$(grep -v ' cat ' "$work/calls")" = "$(printf 'systemctl disable --now webcontrol\nsystemctl enable --now webcontrol-rs')" ]
 }
 
 switch_to_python_without_a_backend_field() {
@@ -51,7 +52,14 @@ switch_to_python_without_a_backend_field() {
 refuse_during_a_job() {
   reset
   echo '{"backend":"python","jobInProgress": true}' > "$work/state"
-  ! run rust 2> "$work/err" && grep -q "job is running" "$work/err" && [ ! -f "$work/calls" ]
+  ! run rust 2> "$work/err" && grep -q "job is running" "$work/err" && ! grep -q able "$work/calls"
+}
+
+refuse_a_backend_without_a_unit() {
+  reset
+  touch "$work/no-webcontrol"
+  echo '{"backend":"rust","jobInProgress":false}' > "$work/state"
+  ! run python 2> "$work/err" && grep -q "no webcontrol.service" "$work/err" && ! grep -q able "$work/calls"
 }
 
 force_during_a_job() {
@@ -87,6 +95,7 @@ check "switches to rust: stops python, starts rust, waits for it" switch_to_rust
 check "switches to python, which may lack the backend field" switch_to_python_without_a_backend_field
 check "refuses while a job is in progress" refuse_during_a_job
 check "--force switches during a job" force_during_a_job
+check "refuses to switch to a backend this disk does not have" refuse_a_backend_without_a_unit
 check "fails when the backend never answers" time_out_when_nothing_answers
 check "status lists both units" status_lists_both_units
 check "refuses unknown arguments" bad_arguments
