@@ -26,6 +26,8 @@
 12.60: ok
 12.65: Sent: G90  
 12.70: ok
+40.00: Sent: G90  
+40.05: ok
 60.00: Sent: G10 Z0  
 60.06: ok
 95.20: PCB v1.6 TLE9201  Detected

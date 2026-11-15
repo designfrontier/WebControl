@@ -30,7 +30,7 @@
 12.70: ok
 13.00: <Idle,MPos:10.00,0.00,0.00,WPos:0.000,0.000,0.000>
 40.00: Logging suspended due to user idle time > 20 seconds
-95.10: Logging resumed due to user activity
+95.20: Logging resumed due to user activity
 95.20: PCB v1.6 TLE9201  Detected
 95.21: Grbl v1.00
 95.22: ready
