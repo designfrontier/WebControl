@@ -180,3 +180,39 @@ fn a_section_that_is_not_a_list_gets_the_defaults() {
     let settings = Settings::load(&Paths::new(home.path()));
     assert_eq!(settings.value("Computed Settings", "units"), Some(&json!("INCHES")));
 }
+
+#[test]
+fn numbers_parse_only_in_the_frontends_form() {
+    use wc_config::parse_number;
+    [("12", 12.0), (" -1.5 ", -1.5), ("+.5", 0.5), ("3.", 3.0), ("1e3", 1000.0), ("2E-2", 0.02)]
+        .iter()
+        .for_each(|(text, value)| assert_eq!(parse_number(text), Some(*value), "{text}"));
+    ["", ".", "nan", "inf", "1_000", "1e", "1e+", "abc", "1.2.3", "--1", "1e400"]
+        .iter()
+        .for_each(|text| assert_eq!(parse_number(text), None, "{text}"));
+}
+
+#[test]
+fn firmware_options_list_every_dollar_setting() {
+    let settings = Settings::defaults();
+    let options: Vec<_> = settings.firmware_options().collect();
+    let dist = options.iter().find(|o| o.firmware_key == 13).unwrap();
+    assert_eq!((dist.section.as_str(), dist.key.as_str()), ("Computed Settings", "distPerRot"));
+    assert_eq!(dist.value, json!("63.5"));
+    let z_rpm = options.iter().find(|o| o.key == "maxZRPM").unwrap();
+    assert_eq!((z_rpm.value.clone(), z_rpm.default.clone(), z_rpm.custom), (json!(""), json!(12.6), false));
+    assert!(options.iter().all(|o| o.firmware_key != 14));
+}
+
+#[test]
+fn set_value_changes_only_existing_options_in_memory() {
+    let home = home_with(None, None);
+    let mut settings = Settings::load(&Paths::new(home.path()));
+    assert!(settings.set_value("Advanced Settings", "homeX", json!("12.5")));
+    assert_eq!(settings.text("Advanced Settings", "homeX").as_deref(), Some("12.5"));
+    assert!(!settings.set_value("Advanced Settings", "nope", json!(1)));
+    assert!(!settings.set_value("Nope", "homeX", json!(1)));
+    assert!(!home.path().join(".WebControl/webcontrol.json").exists());
+    assert_eq!(settings.section("Nope").len(), 0);
+    assert!(settings.section("Maslow Settings").iter().any(|o| o["key"] == "COMport"));
+}

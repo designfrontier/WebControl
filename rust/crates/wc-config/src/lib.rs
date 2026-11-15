@@ -1,11 +1,11 @@
 //! `~/.WebControl` as the Python backend lays it out, and `webcontrol.json` read the way `config/config.py` reads
-//! it. Read-only for now: nothing here writes to the shared directory.
+//! it. Nothing here writes to the shared directory yet: changes live in memory until M2 adds the writer.
 
 mod python;
 mod settings;
 
-pub use python::{python_float_str, python_str};
-pub use settings::{Settings, Source};
+pub use python::{parse_number, python_float_str, python_str};
+pub use settings::{FirmwareOption, Settings, Source};
 
 use std::path::{Path, PathBuf};
 

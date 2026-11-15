@@ -1708,6 +1708,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "wc-firmware"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "wc-config",
+]
+
+[[package]]
 name = "wc-kinematics"
 version = "0.1.0"
 dependencies = [
@@ -1756,6 +1764,14 @@ dependencies = [
  "wc-machine",
  "wc-protocol",
  "wc-testkit",
+]
+
+[[package]]
+name = "wc-sim"
+version = "0.1.0"
+dependencies = [
+ "tokio",
+ "wc-firmware",
 ]
 
 [[package]]
