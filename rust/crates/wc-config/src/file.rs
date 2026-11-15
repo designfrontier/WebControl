@@ -1,0 +1,78 @@
+//! Writing `webcontrol.json` as `Config.saveSettings` does, and the startup `Config.__init__` performs, plus the
+//! one-time `.pre-rs` snapshot the Rust backend takes before it first writes the shared file.
+
+use std::fs;
+use std::io::{self, Write};
+use std::path::{Path, PathBuf};
+
+use serde_json::Value;
+
+use crate::settings::DEFAULTS;
+use crate::{Paths, Settings, Source, python_json};
+
+fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
+    let mut name = path.as_os_str().to_owned();
+    name.push(suffix);
+    PathBuf::from(name)
+}
+
+impl Paths {
+    pub fn settings_backup(&self) -> PathBuf {
+        with_suffix(&self.settings_file(), ".bak")
+    }
+
+    /// The file as it was before the Rust backend first wrote to it.
+    pub fn settings_snapshot(&self) -> PathBuf {
+        with_suffix(&self.settings_file(), ".pre-rs")
+    }
+}
+
+impl Settings {
+    /// The settings as Python's `json.dump(..., sort_keys=True, indent=4, ensure_ascii=False)` writes them.
+    pub fn to_python_json(&self) -> String {
+        python_json(&Value::Object(self.sections.clone()))
+    }
+
+    /// Atomically: a temp file flushed to disk, the old file kept as `.bak`, then the rename.
+    pub fn save(&self, paths: &Paths) -> io::Result<()> {
+        let path = paths.settings_file();
+        let tmp = with_suffix(&path, ".tmp");
+        let written = (|| {
+            let mut file = fs::File::create(&tmp)?;
+            file.write_all(self.to_python_json().as_bytes())?;
+            file.sync_all()?;
+            if path.exists() {
+                fs::rename(&path, paths.settings_backup())?;
+            }
+            fs::rename(&tmp, &path)
+        })();
+        if tmp.exists() {
+            let _ = fs::remove_file(&tmp);
+        }
+        written
+    }
+
+    /// `Config.__init__`: the directories, the defaults on a first run, the fallbacks, and a save when the file
+    /// gained defaults or had to be recovered (the unreadable one kept as `.corrupt`).
+    pub fn open(paths: &Paths) -> io::Result<Settings> {
+        [paths.dir(), paths.gcode_dir(), paths.imports_dir(), paths.boards_dir()]
+            .iter()
+            .try_for_each(fs::create_dir_all)?;
+        let file = paths.settings_file();
+        if !file.exists() && !paths.settings_backup().exists() {
+            fs::write(&file, DEFAULTS)?;
+        }
+        if file.exists() && !paths.settings_snapshot().exists() {
+            fs::copy(&file, paths.settings_snapshot())?;
+        }
+        let (mut settings, recovered) = Settings::read(paths);
+        let updated = settings.add_missing_defaults();
+        if recovered != Source::File && file.exists() {
+            fs::rename(&file, with_suffix(&file, ".corrupt"))?;
+        }
+        if updated || recovered != Source::File {
+            settings.save(paths)?;
+        }
+        Ok(settings)
+    }
+}
