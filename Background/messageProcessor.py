@@ -38,11 +38,14 @@ class MessageProcessor(MakesmithInitFuncs):
         '''
         On each controller boot, asks for the version and rewrites what the firmware only applies on a write.
         '''
+        if firmwareFacts.EEPROM_REWRITE_NOTICE in message:
+            self.data.firmwareRewriteNoticeSeen = True
         if not firmwareFacts.isBootBanner(message):
             return
         self.data.controllerBoard = firmwareFacts.boardBanner(message) or self.data.controllerBoard
         now = time.time()
         if now - self.data.lastBootBannerTime > firmwareFacts.BOOT_BANNER_WINDOW:
+            self.data.firmwareRewriteNoticeSeen = False
             self.data.gcode_queue.put("B05 ")
             [self.data.gcode_queue.put(line) for line in self.data.config.writeOnlyFirmwareSettings()]
         self.data.lastBootBannerTime = now

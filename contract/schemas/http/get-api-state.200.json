@@ -60,6 +60,20 @@
       "default": 0,
       "type": "number"
     },
+    "controllerBoard": {
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "firmwareBuild": {
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "macros": {
       "type": "array",
       "items": {

@@ -36,6 +36,7 @@ class Data:
     holeyFirmwareVersion = None
     controllerFirmwareVersion = 0
     controllerBoard = None
+    firmwareRewriteNoticeSeen = False
     lastBootBannerTime = 0.0
 
     """

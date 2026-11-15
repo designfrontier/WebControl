@@ -5,6 +5,7 @@ import types
 import pytest
 
 from Background.messageProcessor import MessageProcessor
+from Connection import firmwareFacts
 from helpers import drain
 from test_serial_streaming import serial  # noqa: F401
 
@@ -221,6 +222,34 @@ def test_a_banner_glued_to_other_text_is_still_a_boot(data, processor, clock, li
     processor.processMessage(line)
 
     assert queued(data)[0] == "B05 "
+
+
+@pytest.mark.parametrize("version,rewrite_notice,build", [
+    (0, False, None),
+    (51.27, False, "51.27"),
+    (51.29, False, "51.29x"),
+    (51.29, True, "51.292"),
+    (51.293, True, "51.293"),
+    (1.26, False, "1.26"),
+])
+def test_the_firmware_build_tells_51_292_by_its_eeprom_rewrite_notice(version, rewrite_notice, build):
+    facts = types.SimpleNamespace(controllerFirmwareVersion=version, firmwareRewriteNoticeSeen=rewrite_notice)
+
+    assert firmwareFacts.firmwareBuild(facts) == build
+
+
+def test_the_rewrite_notice_marks_51_292_until_the_next_boot(data, processor, clock, monkeypatch):
+    monkeypatch.setattr(data, "firmwareRewriteNoticeSeen", False)
+    [processor.processMessage(line) for line in BOOT + ["Firmware Version 51.29\r\n"]]
+    assert firmwareFacts.firmwareBuild(data) == "51.29x"
+
+    processor.processMessage("Change in setting, rewriting EEPROM\r\n")
+    assert firmwareFacts.firmwareBuild(data) == "51.292"
+
+    clock.now += 30
+    processor.processMessage(BOOT[0])
+    assert firmwareFacts.firmwareBuild(data) == "51.29x"
+    queued(data)
 
 
 def test_already_is_not_a_boot(data, processor, clock):
