@@ -27,7 +27,7 @@ upgrade flow are built against. Firmware paths are relative to `cnc_ctrl_v1/`.
   Unsupported G/M codes are not errors: `Command Gnn unsupported and ignored.` then `ok`.
 - **Realtime characters:** `!` stops, flushes, turns the spindle off and gets an immediate `ok` (the running and
   flushed lines get none). `~` resumes and gets an immediate `ok`. Backtick and 0x18 soft-reset (51.27+). They act as
-  realtime commands anywhere in a line.
+  realtime commands anywhere in a line, and a `\n` right after `!` or `~` is dropped (`quickCommandFlag`).
 
 ## 2. Status reports
 

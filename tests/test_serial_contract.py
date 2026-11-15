@@ -183,3 +183,17 @@ def test_an_expect_that_checks_nothing_is_not_a_valid_transcript():
         jog(lambda events: events.append({"type": "expect", "alerts": [{}]}))
     with pytest.raises(jsonschema.ValidationError):
         jog(lambda events: events.append({"type": "tx", "bytes": "G0 X1\nG0 X2\n"}))
+
+
+def test_a_forbidden_alert_that_was_emitted_fails(app):
+    transcript = load(serial_contract.CONTRACT / "transcripts" / "line_too_long_pauses_the_job.json")
+    expect = transcript["events"][-1]
+    expect["noAlerts"] = expect.pop("alerts")
+    jsonschema.validate(transcript, SCHEMA)
+
+    with pytest.raises(ContractFailure, match="emitted"):
+        replay(app, transcript)
+
+
+def test_a_forbidden_alert_that_was_not_emitted_passes(app):
+    replay(app, jog(lambda events: events.append({"type": "expect", "noAlerts": [{"title": "Line Too Long"}]})))
