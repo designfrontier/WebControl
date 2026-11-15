@@ -60,4 +60,5 @@ def toolChangeLine(line, nextTool, currentTool):
     named = toolNamedBy(line)
     nextTool = nextTool if named is None else named
     pauses = changesTool(line) and nextTool != currentTool
-    return (withToolFirst(line, nextTool) if pauses else line), nextTool, pauses
+    # Even a same-tool M6 names the tool, so the firmware cannot pause on a T the host saw differently.
+    return withToolFirst(line, nextTool), nextTool, pauses

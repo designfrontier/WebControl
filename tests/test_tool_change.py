@@ -377,3 +377,13 @@ def test_an_m0_or_m6_outside_a_job_does_not_hold_streaming(tools, serial):  # no
     thread.manageToolChange("T2 M6 ")
 
     assert tools.uploadFlag == 0
+
+
+def test_an_m6_for_the_tool_already_in_still_names_it_for_the_firmware(tools, serial):  # noqa: F811
+    tools.currentTool = 1
+    tools.nextTool = 1
+
+    sent = stream(tools, serial, ["T3 G0 X1 ", "T1 ", "M6 ", "G1 X2 "])
+
+    assert sent == ["T3 G0 X1  ", "T1  ", "T1 M6  ", "G1 X2  "]
+    assert tools.uploadFlag == 0
