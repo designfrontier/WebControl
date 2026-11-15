@@ -5,6 +5,8 @@ import inspect
 import json
 import os
 import re
+import time
+from types import SimpleNamespace
 
 import pytest
 from jsonschema import Draft202012Validator
@@ -226,7 +228,7 @@ def test_classic_routes_answer_as_listed(app, client, data, monkeypatch):
 def restored(data):
     """Puts back the gcode, board and calibration state the successful writes below change."""
     board = data.boardManager.currentBoard
-    saved_board = dict(board.__dict__)
+    saved_board = {key: list(value) if isinstance(value, list) else value for key, value in board.__dict__.items()}
     saved_gcode = (list(data.gcode), data.gcodeIndex, data.gcodeFile.filename)
     saved_config = [
         (section, key, data.config.getValue(section, key))
@@ -307,7 +309,8 @@ def ui(app, data, monkeypatch):
     monkeypatch.setattr(
         ui_processor_module.socketio, "emit", lambda event, payload=None, **kwargs: emitted.append((event, payload))
     )
-    monkeypatch.setattr(ui_processor_module.time, "sleep", lambda seconds: None)
+    # Replaces the module's `time`, not time.sleep itself, which would set every background loop spinning.
+    monkeypatch.setattr(ui_processor_module, "time", SimpleNamespace(sleep=lambda seconds: None, time=time.time))
     processor = UIProcessor()
     processor.app = app
     yield processor, emitted
@@ -369,3 +372,4 @@ def test_ui_processor_messages_match_their_schemas(ui, data, socket_client):
         validate(MESSAGES[message["command"]]["schema"], message["data"])
     unexercised = set(MESSAGES) - {m["command"] for m in sent} - set(UNEXERCISED_MESSAGES)
     assert unexercised == set()
+
