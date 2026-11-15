@@ -55,7 +55,9 @@ the raw line, re-send B05 on any boot banner (`PCB v1.`, `Grbl v1.00`, `ready`),
 - **Z limits B17–B20:** `Invalid statement` on 1.26/51.27/51.28. On 51.291 B17/B18 overwrite `$43`/`$44`. On
   51.292 B17/B18 store nothing but report success; only `$63`/`$64` (mm) work, and B20 reads them back.
 - G17 is unsupported (sent by both calibration patterns). G38.2 moves at a fixed 60 mm/min, but touchZ's `F1` still
-  sets the modal feed to 1 mm/min. In `M6 T2` the T is ignored; T must come first or on its own line.
+  sets the modal feed to 1 mm/min (without F it clamps the modal feed to zMaxFeed). G38.2 leaves the modal
+  motion mode alone. The firmware reads T only when it leads a line that also has a G or M word (`T2 M6`, `T2 G0 X1`):
+  in `M6 T2`, `N10 T2 M6`, `G0 X1 T2` and a lone `T2` line the T is ignored, and a lone `T2` runs as a modal move.
 - `$` keys: units match WebControl's assumptions. `$13` is the only path that sets R. `$37` is used only when
   `$46 ≤ 0`. `$40`/`$41` are percent. `$10`/`$11`/`$15` are unsigned ints. `$43` is unused on holey. `$86` and `$144`
   are rejected. `$18` (max Z RPM), `$9`, `$28` and `$36` were never sent before fix/firmware-sync; WebControl now adopts them from `$$` and syncs them. Firmware bug: `zKpPos` is never initialised
@@ -66,8 +68,9 @@ the raw line, re-send B05 on any boot banner (`PCB v1.`, `Grbl v1.00`, `ready`),
 
 F is per minute in current units, stored as mm/min (×25.4 under G20), clamped to [1, `$15`], and modal (G0 sets it
 too). G0 runs at `$15` and ignores F for speed. Z is clamped to `zMaxFeed = $18 × |$19|`: 39.9 mm/min on the 51.27
-defaults, 399 mm/min on the 51.292 defaults. So the restart sequence's `G0 Z… F12.8` always plunges at zMaxFeed, and
-it leaves the modal F at the XY feed instead of the file's. The boot feed rate is `$15/2` on 51.27/51.28, and 0
+defaults, 399 mm/min on the 51.292 defaults. WebControl's restart sequence rapids without F, plunges with
+`G1 Z… F<plunge>` (the file's last non-G0 Z feed, else 12.8 mm/min) and ends with `G0`/`G1 F<file F>` to restore the
+file's modal motion and feed. The boot feed rate is `$15/2` on 51.27/51.28, and 0
 (clamped to 1 mm/min) on 1.26 and 51.29x.
 
 ## 6. Kinematics
@@ -86,10 +89,11 @@ it leaves the modal F at the XY feed instead of the file's. The boot feed rate i
 
 ## 7. Pause, tool change, alarms
 
-- M0/M1: the firmware prints `Maslow Paused` and waits for `~`. WebControl sends `~` at once (timing-dependent), and
-  only detects `M0 ` with a trailing space.
-- M6 with a new tool: spindle off, `Tool Change: Please insert tool N`, pause. WebControl's UIProcessor sends `~`
-  immediately. `T2` and `M6` on separate lines keep streaming with the spindle off. `M6 T2` stalls silently.
+- M0/M1: the firmware prints `Maslow Paused` and waits for `~`. WebControl stops streaming after the line and sends
+  `~` only on Resume, or before a jog when no job lines are buffered behind the pause.
+- M6 with a new tool: spindle off, `Tool Change: Please insert tool N`, pause. `T2` and `M6` on separate lines keep
+  streaming without a tool change and `M6 T2` stalls silently, so WebControl leads every M6 with the T the file
+  selected, stops streaming after a tool-changing M6, and on Resume returns to the file's XY at safe height.
 - Manual Z (`$16=0`): `Message: Please adjust Z-Axis…` then pause; handled correctly.
 - Alarms: "Sled not keeping up" stops the firmware with no acks; "Board invalid" hangs it.
 
@@ -120,17 +124,17 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
 |---|---|---|
 | A1 | High | Lines over 126 characters are sent "alone" when idle; the firmware overflows and executes the line's tail. |
 | A2 | Fixed | `$18`, `$9`, `$28`, `$36` were never synced; now adopted from `$$` and synced, and an EEPROM reset triggers a full restore. Install WebControl before flashing 51.292, or the 51.292 default `$18=126` could be adopted. |
-| A3 | Medium | Tool change: `~` is auto-sent; `T`/`M6` on separate lines run on with the spindle off; `M6 T2` stalls; a race can make Resume a no-op. |
-| A4 | Medium | Restart/resume plunges with G0 (at zMaxFeed) and leaves the modal F at the XY feed. |
+| A3 | Fixed | Tool change: `~` was auto-sent; `T`/`M6` on separate lines ran on without a tool change; `M6 T2` stalled; a race could make Resume a no-op. |
+| A4 | Fixed | Restart/resume plunged with G0 (at zMaxFeed) and left the modal F at the XY feed. |
 | A5 | Medium | Z-limit commands do nothing on 51.27/51.28, overwrite `$43`/`$44` on 51.291, store nothing on 51.292. |
 | A6 | Medium | When the firmware stops itself (ALARM, overflow), acks are lost and streaming blocks until Stop. |
-| A7 | Medium | touchZ's `F1` leaves the modal feed at 1 mm/min; G38.2 ignores F anyway. |
+| A7 | Fixed | touchZ's `F1` left the modal feed at 1 mm/min; G38.2 ignores F anyway. Without F, G38.2 still clamps the modal feed to zMaxFeed until Resume restores it. |
 | A8 | Low | Holey calibration fits with R = distPerRot / (2 × 3.14159), but the firmware runs R = 10.1 until `$13` is written (§6); it ignores `$37` and `$7`. |
 | A9 | Low–Med | The version only reaches the console; all 51.29x builds report 51.29. |
 | A10 | Low | An unclosed `(` reaches the firmware and hangs 51.27; `!`, `~` and backtick inside a line act as realtime commands. |
 | A11 | Low | `$45` and fractional `$10`/`$11`/`$15` are rewritten on every connect; NaN parses as 1. |
 | A12 | Low | Nothing is sent if the board doesn't reset on port open (WebControl waits for the boot `ok`). |
-| A13 | Low | M0/M1 timing depends on the early `~`; M0 at end of line isn't detected. |
+| A13 | Fixed | M0/M1 timing depended on the early `~`; M0 at end of line wasn't detected. |
 | A14 | Low | `$86`, `$144` rejected; `$43` unused on holey; G17 ignored. |
 | A15 | Info | `bufferSize = 126` is right; PWR:/F: parsing is dead code; PE lines are mis-parsed until B05 is parsed. |
 

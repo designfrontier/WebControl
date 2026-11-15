@@ -1,6 +1,7 @@
 from Connection import firmwareFacts
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
 
+import re
 import threading
 import time
 
@@ -34,6 +35,10 @@ class MessageProcessor(MakesmithInitFuncs):
                     self.data.console_queue.put("Update check failed: " + str(e))
             time.sleep(60)
 
+    def holdStreaming(self):
+        self.data.firmwareHoldsJobLines = self.data.firmwareHoldsJobLines or self.data.uploadFlag > 0
+        self.data.uploadFlag = 0
+
     def watchForBoot(self, message):
         '''
         On each controller boot, asks for the version and rewrites what the firmware only applies on a write.
@@ -46,6 +51,10 @@ class MessageProcessor(MakesmithInitFuncs):
         now = time.time()
         if not self.data.bootInProgress or now - self.data.lastBootBannerTime > firmwareFacts.BOOT_BANNER_WINDOW:
             self.data.firmwareRewriteNoticeSeen = False
+            # A booted controller is not paused and starts with tool 0.
+            self.data.firmwarePaused = self.data.firmwareHoldsJobLines = False
+            self.data.currentTool = self.data.nextTool = 0
+            self.data.toolBeforeChange = None
             self.data.gcode_queue.put("B05 ")
             [self.data.gcode_queue.put(line) for line in self.data.config.writeOnlyFirmwareSettings()]
         self.data.bootInProgress = not firmwareFacts.endsBoot(message)
@@ -82,9 +91,22 @@ class MessageProcessor(MakesmithInitFuncs):
                 self.data.fakeServoStatus = True
                 self.data.console_queue.put(message)
             elif message[0:13] == "Maslow Paused":
-                # received controller-initiated pause message.  Free controller to accept moves and send
-                # message to UIProcessor to process.
-                self.data.uploadFlag = 0
+                # The firmware holds every line until "~", which only the user's Resume (or a jog) sends.
+                self.holdStreaming()
+                self.data.firmwarePaused = True
+                self.data.ui_controller_queue.put(message)
+            elif message[0:12] == "Tool Change:":
+                # This thread owns the tool-change state; the UIProcessor only shows the prompt.
+                self.data.manualZAxisAdjust = True
+                self.data.toolChangeWaits = True
+                self.data.toolBeforeChange = None
+                self.holdStreaming()
+                self.data.pausedUnits = self.data.units
+                self.data.pausedPositioningMode = self.data.positioningMode
+                tool = re.search(r"tool\s+([0-9]+)", message)
+                if tool:
+                    # A Stop can flush an M6 the host already counted, so the firmware's word wins.
+                    self.data.currentTool = self.data.nextTool = int(tool.group(1))
                 self.data.ui_controller_queue.put(message)
             elif message[0:8] == "Message:":
                 # suppress the annoying messages about invalid chain lengths during the calibration process
@@ -93,7 +115,7 @@ class MessageProcessor(MakesmithInitFuncs):
                 # track the previous uploadFlag and stop uploading.  Likely am going to receive a message
                 # that requires a pause.
                 self.data.previousUploadStatus = self.data.uploadFlag
-                self.data.uploadFlag = 0
+                self.holdStreaming()
                 if message.find("adjust Z-Axis") != -1:
                     # z-axis must not be enabled.  Send message to UIProcessor for processing.
                     # set manualZAxisAdjust, but not sure its needed if manual adjustment is being used.

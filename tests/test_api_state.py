@@ -54,6 +54,11 @@ def test_pause_button_matches_the_upload_flag(upload_flag, label):
     assert startup_state(fake_data(upload_flag))["pauseButtonSetting"] == label
 
 
+@pytest.mark.parametrize("job, manual_z", [(True, False), (True, True), (False, True)])
+def test_pause_button_offers_resume_after_a_controller_pause_or_tool_change(job, manual_z):
+    assert startup_state(fake_data(0, job=job, manual_z=manual_z))["pauseButtonSetting"] == "Resume"
+
+
 def test_unparseable_or_missing_values_fall_back():
     state = startup_state(fake_data(0, {("Computed Settings", "distToMove"): "abc", ("Advanced Settings", "homeX"): None}))
     assert state["distToMove"] == 0.0

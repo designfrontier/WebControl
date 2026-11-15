@@ -158,6 +158,20 @@ describe("PidTuning", () => {
     expect(screen.getAllByRole("button", { name: "Clockwise 10" })[0]).toBeDisabled();
   });
 
+  it("disables the tests but not motor moves while a tool change waits outside a job", async () => {
+    const { socket } = renderPid();
+    await loaded();
+    socket.serverMessage("statusMessage", {
+      uploadFlag: 0,
+      positioningMode: 0,
+      currentTool: 1,
+      jobInProgress: false,
+      manualZAxisAdjust: true,
+    });
+    expect(velocity().getByRole("button", { name: "Run velocity test" })).toBeDisabled();
+    expect(screen.getAllByRole("button", { name: "Clockwise 10" })[0]).toBeEnabled();
+  });
+
   it("offers a retry when the settings fail to load", async () => {
     let down = true;
     const respond = () => (down ? jsonResponse({}, 500) : jsonResponse(pidSettings()));

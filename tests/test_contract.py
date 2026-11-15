@@ -111,7 +111,8 @@ RUN_STATES = {
 REFUSED_IN = {
     "always": set(),
     "idleOrPaused": {"streaming"},
-    "idle": {"streaming", "paused"},
+    "idleOrControllerPaused": {"streaming", "paused"},
+    "idle": {"streaming", "paused", "controllerPaused"},
     "noJob": {"streaming", "paused", "controllerPaused", "toolChange"},
 }
 REFUSALS_TEXT = ("Cannot issue command while", GCODE_LOCKED_MESSAGE)

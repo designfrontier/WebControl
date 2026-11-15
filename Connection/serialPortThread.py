@@ -4,6 +4,7 @@ import re
 
 import serial
 
+from Connection.firmwareGcode import pausesFirmware, toolChangeLine
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
 
 
@@ -197,12 +198,12 @@ class SerialPortThread(MakesmithInitFuncs):
         if self.data.gcodeIndex < len(self.data.gcode):
             runGeneration = self.data.runGeneration
             line = self._sanitise(self.data.gcode[self.data.gcodeIndex])
-            problem = self._streamProblem(line)
+            problem = self._streamProblem(toolChangeLine(line, self.data.nextTool, self.data.currentTool)[0])
             if problem is not None:
                 return self._refuseStreamLine(problem)
             # check if command is going to be issued that pauses the controller.
             self.managePause(line)
-            self.manageToolChange(line)
+            line = self.manageToolChange(line)
             if not line.isspace(): # if all spaces, don't send.  likely a comment.
                 positioningMode = self._positioningModeOf(line)
                 line = self._shiftToHome(line)
@@ -241,44 +242,31 @@ class SerialPortThread(MakesmithInitFuncs):
         self.data.actions.sendGCodePositionUpdate(self.data.gcodeIndex)
 
     def managePause(self, line):
-        if line.find("M0 ") != -1 or line.find("M00") != -1 or line.find("M1 ") != -1 or line.find("M01") != -1:
-            print("found M command for pause")
+        '''
+        Stops streaming after an M0/M1 line; the firmware then waits for the "~" that Resume sends.
+        '''
+        if not pausesFirmware(line):
+            return
+        if self.data.uploadFlag == 1:
             self.data.uploadFlag = -1
-            self.data.pausedUnits = self.data.units
-            self.data.ui_queue1.put("Action", "setAsResume", "")
-            # clear machine out of pause mode
-            self.data.quick_queue.put("~")
+        self.data.pausedUnits = self.data.units
+        self.data.ui_queue1.put("Action", "setAsResume", "")
 
     def manageToolChange(self, line):
-        if line.find("M6 ") != -1 or line.find("M06") != -1:
-            # if this is a different tool, the controller will respond with a 'Tool Change:' and pause.
-            # if this is a the same tool as the controller is currently tracking, it will continue on.
-            # first, determine the tool being called for...
-            toolNumber = int(self.extractGcodeValue(line, 'T', 0))
-            print(toolNumber)
-            print(self.data.currentTool)
-            # so, in the first case...
-            if toolNumber != self.data.currentTool:
-                # set uploadFlag to -1 to turn off sending more lines (after this one)
-                # -1 means it was set by an M command
-                print("found M command")
+        '''
+        Tracks the tool the file selects and stops streaming after an M6 that changes it, which pauses the firmware.
+        :return: the line to send, led by the T of the tool an M6 line changes to.
+        '''
+        line, self.data.nextTool, pauses = toolChangeLine(line, self.data.nextTool, self.data.currentTool)
+        if pauses:
+            self.data.toolBeforeChange = (
+                self.data.currentTool if self.data.toolBeforeChange is None else self.data.toolBeforeChange
+            )
+            self.data.currentTool = self.data.nextTool
+            self.data.pausedUnits = self.data.units
+            if self.data.uploadFlag == 1:
                 self.data.uploadFlag = -1
-                self.data.currentTool = toolNumber
-                self.data.pausedUnits = self.data.units
-                ## new stuff
-                #self.data.quick_queue.put("~")
-                #self.data.ui_queue1.put("Action", "setAsResume", "")
-                ## end new stuff
-
-                # now, the issue is that if the controller gets reset, then the tool number will revert to 0.. so
-                # on serial port connect/reconnect, reinitialize tool number to 0
-
-            # but in the second case, just continue on..
-
-            ## new stuff
-            #self.data.quick_queue.put("~")
-            #self.data.ui_queue1.put("Action", "setAsResume", "")
-            ## end new stuff
+        return line
 
     def closeConnection(self):
         '''
@@ -347,6 +335,11 @@ class SerialPortThread(MakesmithInitFuncs):
             # The host may still hold G91 from before a lost connection; resuming relies on the two agreeing.
             self.data.gcode_queue.put("G90 ")
             self.data.currentTool = 0  # This is necessary since the controller will have reset tool to zero.
+            self.data.nextTool = 0
+            self.data.toolBeforeChange = None
+            # Opening the port resets the controller, which ends any pause.
+            self.data.firmwarePaused = False
+            self.data.firmwareHoldsJobLines = False
 
             handedToFirmwareUpgrade = False
             try:
@@ -454,9 +447,10 @@ class SerialPortThread(MakesmithInitFuncs):
             if self.weAreBufferingLines:
                 try:
                     line = self._sanitise(self.data.gcode[self.data.gcodeIndex])
+                    toSend = toolChangeLine(line, self.data.nextTool, self.data.currentTool)[0]
                     # sendNextLine refuses a problem line at once, so it needn't wait for room.
-                    fits = (line.isspace() or self._streamProblem(line) is not None
-                            or self.bufferSpace >= len(self._shiftToHome(line) + "\n"))
+                    fits = (line.isspace() or self._streamProblem(toSend) is not None
+                            or self.bufferSpace >= len(self._shiftToHome(toSend) + "\n"))
                     if fits:
                         self.sendNextLine()
                 except IndexError:
@@ -471,12 +465,12 @@ class SerialPortThread(MakesmithInitFuncs):
         if len(command) == 0:
             return
         command = command + " "
-        problem = self._problemWith(command)
+        problem = self._problemWith(toolChangeLine(command, self.data.nextTool, self.data.currentTool)[0])
         if problem is not None:
             title, reason, _advice = problem
             self.data.ui_queue1.put("Alert", "Command " + title, "That command " + reason)
             return
-        self.manageToolChange(command)
+        command = self.manageToolChange(command)
         self._write(command)
         # if units have changed, update settings and notify UI clients to stay in sync
         if command.find("G20") != -1 and self.data.units != "INCHES":

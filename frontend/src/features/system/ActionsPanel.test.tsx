@@ -116,6 +116,17 @@ describe("ActionsPanel", () => {
     expect(screen.getByRole("button", { name: "Sync settings" })).toBeDisabled();
   });
 
+  it("disables resetting home, but not other idle actions, while a tool change waits outside a job", () => {
+    renderActions({
+      machine: {
+        status: { uploadFlag: 0, positioningMode: 0, currentTool: 0 },
+        job: { inProgress: false, manualZAxisAdjust: true },
+      },
+    });
+    expect(screen.getByRole("button", { name: "Reset home to center" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Sync settings" })).toBeEnabled();
+  });
+
   it("links diagnostics and backup downloads with a fresh cache buster on click", async () => {
     const { user } = renderActions();
     const link = screen.getByRole("link", { name: "Download diagnostics file" });

@@ -110,39 +110,13 @@ class UIProcessor:
                         if message[1:4] == "PE:":
                             self.setErrorOnScreen(message)
                     elif message[0:13] == "Maslow Paused":
-                        # Maslow has been paused.  set uploadFlag to 0 and update the pause button on the
-                        # UI clients.  In reality, uploadFlag should already be set to 0 by serialPortThread
-                        # that is, the controller shouldn't be pausing without webcontrol already know it's
-                        # going to pause.
-                        self.app.data.uploadFlag = 0
-                        # Send '~' upon receiveing the "Maslow Paused" notification.  This
-                        # operation is to issue this 'un-pause' command which then lets two ok's to come back
-                        # (one for the tool change and one for the ~)  Without this, serialThread won't see
-                        # that the bufferSize = bufferSpace and therefore won't issue any commands.
-                        ## new stuff
-                        # self.app.data.quick_queue.put("~")
-                        ## end new stuff
-                        self.app.data.pausedUnits = self.app.data.units
+                        # The message processor already holds streaming; offer Resume, which sends "~".
                         data = json.dumps({"setting": "pauseButtonSetting", "value": "Resume"})
                         socketio.emit("message",
                                       {"command": "requestedSetting", "data": data, "dataFormat": "json"},
                                       namespace="/MaslowCNC", )
                     elif message[0:12] == "Tool Change:":
-                        # Tool change message detected.
-                        # not sure what manualzaxisadjust is.. ###
-                        self.app.data.manualZAxisAdjust = True
-                        # keep track of whether upload flag was set... can't remember why.
-                        self.app.data.previousUploadStatus = self.app.data.uploadFlag
-                        # remember the current z value so it can be returned to.
-                        self.app.data.pausedzval = self.app.data.zval
-                        # remember the current units because user might switch them to zero the zaxis.
-                        self.app.data.pausedUnits = self.app.data.units
-                        # Remember current positioning mode.
-                        self.app.data.pausedPositioningMode = self.app.data.positioningMode
                         self.app.data.console_queue.put("found tool change in message")
-                        # send unpause
-                        self.app.data.quick_queue.put("~")
-                        # notify user
                         self.activateModal("Notification:", message[13:], "notification", resume="resume")
                     elif message[0:8] == "Message:":
                         # message received from controller

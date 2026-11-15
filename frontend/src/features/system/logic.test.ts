@@ -19,6 +19,14 @@ describe("isAllowed mirrors processAction's run-state gates", () => {
   ])("%s during %s is %s", (allowed, runState, expected) => {
     expect(isAllowed(allowed, runState)).toBe(expected);
   });
+
+  it.each<[RunState, boolean, boolean]>([
+    ["idle", false, true],
+    ["idle", true, false],
+    ["paused", false, false],
+  ])("noJob during %s with gcode locked %s is %s", (runState, gcodeLocked, expected) => {
+    expect(isAllowed("noJob", runState, gcodeLocked)).toBe(expected);
+  });
 });
 
 describe("toChart", () => {

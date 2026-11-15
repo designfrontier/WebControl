@@ -1,5 +1,5 @@
 import { useMachine } from "../../app/context";
-import { selectRunState } from "../../state/machine";
+import { selectGcodeLocked, selectRunState } from "../../state/machine";
 import { Viewer } from "../viewer";
 import { ControllerConsole } from "./ControllerConsole";
 import { controlsFor } from "./controls";
@@ -12,7 +12,7 @@ import "./main.css";
 /** The one screen: the viewer takes most of the width and the compact controls sit beside it. */
 export const MainPage = () => {
   const loaded = useMainScreenState();
-  const available = controlsFor(useMachine(selectRunState));
+  const available = controlsFor(useMachine(selectRunState), useMachine(selectGcodeLocked));
   const gcodePosition = useMachine((s) => s.gcodePosition);
   const lineIndex = gcodePosition?.lineIndex ?? loaded?.gcode.lineIndex ?? null;
   const line = gcodePosition?.line ?? loaded?.gcode.line ?? "";

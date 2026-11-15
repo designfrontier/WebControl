@@ -1,5 +1,6 @@
 from flask import Blueprint, current_app, jsonify
 
+from DataStructures.data import pauseButtonLabel
 from Connection import firmwareFacts
 
 blueprint = Blueprint("state", __name__)
@@ -33,7 +34,7 @@ def startup_state(data):
             "x": _number(config.getValue("Advanced Settings", "homeX")),
             "y": _number(config.getValue("Advanced Settings", "homeY")),
         },
-        "pauseButtonSetting": "Pause" if data.uploadFlag in (0, 1) else "Resume",
+        "pauseButtonSetting": pauseButtonLabel(data),
         **job_status(data),
         "hostAddress": data.hostAddress,
         "controllerFirmwareVersion": _number(data.controllerFirmwareVersion),

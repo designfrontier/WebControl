@@ -1,7 +1,8 @@
-from DataStructures.data import GCODE_LOCKED_MESSAGE
+from DataStructures.data import GCODE_LOCKED_MESSAGE, pauseButtonLabel
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
 from File.safePaths import libraryRoot, resolveInside
 from Actions import firmware
+from Connection.firmwareGcode import changesTool, toolNamedBy
 from Connection import firmwareFacts
 from File.retention import keepNewest
 
@@ -26,6 +27,24 @@ def gcodeNumbers(letter, line):
 
 
 KEEP_ARCHIVES = 5
+# A restart lowers the bit at this feed when the file has not set a Z feed.
+DEFAULT_PLUNGE_FEED_MM_PER_MIN = 12.8
+
+# Manual commands that reach the controller, which runs none of them while the firmware is paused.
+MACHINE_COMMANDS = {
+    "move", "moveTo", "moveZ", "setMaxZ", "setMinZ", "clearZ", "getZlimits", "reportSettings", "home", "defineZ0",
+    "touchZ", "moveToDefault", "returnToCenter", "macro1", "macro2",
+}
+
+HOME_AND_PID_COMMANDS = {"defineHome", "resetHomeToCenter", "executeVelocityPIDTest", "executePositionPIDTest"}
+JOB_LINES_HELD_MESSAGE = (
+    "The controller paused with lines of the job still in its buffer, which would run before this move. "
+    "Press Resume or STOP first."
+)
+ADJUST_Z_FIRST_MESSAGE = "The controller is waiting for Z to be adjusted by hand. Adjust it, then press Resume."
+TOOL_CHANGE_WAITS_MESSAGE = (
+    "Cannot issue command while a tool change waits. Press Resume or STOP before setting home or running a PID test."
+)
 
 
 Z_LIMITS_UNSUPPORTED = "Z-axis limits need holey firmware 51.292 or later."
@@ -49,6 +68,16 @@ class Actions(MakesmithInitFuncs):
         :return:
         '''
         try:
+            if self.data.firmwarePaused and self.data.uploadFlag != 1 and msg["data"]["command"] in MACHINE_COMMANDS:
+                if self.data.firmwareHoldsJobLines:
+                    self.data.ui_queue1.put("Alert", "Alert", JOB_LINES_HELD_MESSAGE)
+                    return
+                # "~" here would tell the firmware Z was adjusted by hand ($16=0) and carry on with the line.
+                if self.data.manualZAxisAdjust and not self.data.toolChangeWaits:
+                    self.data.ui_queue1.put("Alert", "Alert", ADJUST_Z_FIRST_MESSAGE)
+                    return
+                # Streaming stays held, so releasing the firmware lets the jog run now instead of on Resume.
+                self.releaseFirmwarePause()
             # Commands allowed during sending gcode.  These commands won't screw something up.
             if msg["data"]["command"] == "createDirectory":
                 if not self.createDirectory(msg["data"]["arg"]):
@@ -143,16 +172,27 @@ class Actions(MakesmithInitFuncs):
                 if not self.clearLogs():
                     self.data.ui_queue1.put("Alert", "Alert", "Error clearing log files.")
 
-            elif self.data.uploadFlag > 1 or self.data.uploadFlag < 0 :
-                self.data.ui_queue1.put("Alert", "Alert", "Cannot issue command while paused sending gcode. You must press STOP before performing this action.")
-            # Commands not allowed while paused.. if you did these commands, something could screw up.
-
-            elif msg["data"]["command"] == "startRun":
+            elif msg["data"]["command"] == "clearGCode":
+                if self.data.gcodeLocked():
+                    self.data.ui_queue1.put("Alert", "Alert", GCODE_LOCKED_MESSAGE)
+                elif self.clearGCode():
+                    # send blank gcode to UI
+                    self.data.ui_queue1.put("Action", "gcodeUpdate", "")
+                else:
+                    self.data.ui_queue1.put("Alert", "Alert", "Error with clearing gcode")
+            # Play resumes a job the controller paused, so it passes the gate below while uploadFlag is 0.
+            elif msg["data"]["command"] == "startRun" and self.data.uploadFlag == 0:
                 if not self.startRun():
                     if len(self.data.gcode) > 0:
                         self.data.ui_queue1.put("Alert", "Alert", "Error with starting run.")
                     else:
                         self.data.ui_queue1.put("Alert", "Alert", "No GCode file loaded.")
+            # A controller pause (M0/M1, Message:, ALARM) drops uploadFlag to 0 but holds the job like a user Pause.
+            elif self.data.uploadFlag != 0 or self.data.jobInProgress:
+                self.data.ui_queue1.put("Alert", "Alert", "Cannot issue command while paused sending gcode. You must press STOP before performing this action.")
+            # Commands not allowed while paused.. if you did these commands, something could screw up.
+            elif self.data.manualZAxisAdjust and msg["data"]["command"] in HOME_AND_PID_COMMANDS:
+                self.data.ui_queue1.put("Alert", "Alert", TOOL_CHANGE_WAITS_MESSAGE)
             elif msg["data"]["command"] == "update":
                 if not self.data.releaseManager.update(msg["data"]["arg"]):
                     self.data.ui_queue1.put("Alert", "Alert", "Error with updating webcontrol.")
@@ -173,7 +213,6 @@ class Actions(MakesmithInitFuncs):
                 if not self.resetChainLengths():
                     self.data.ui_queue1.put("Alert", "Alert", "Error with resetting chain lengths.")
             elif msg["data"]["command"] == "defineHome":
-                print(self.data.uploadFlag)
                 posX= msg["data"]["arg"]
                 posY= msg["data"]["arg1"]
                 if self.defineHome(posX, posY):
@@ -188,14 +227,6 @@ class Actions(MakesmithInitFuncs):
             elif msg["data"]["command"] == "wipeEEPROM":
                 if not self.wipeEEPROM(msg["data"]["arg"]):
                     self.data.ui_queue1.put("Alert", "Alert", "Error with wiping EEPROM")
-            elif msg["data"]["command"] == "clearGCode":
-                if self.data.gcodeLocked():
-                    self.data.ui_queue1.put("Alert", "Alert", GCODE_LOCKED_MESSAGE)
-                elif self.clearGCode():
-                    # send blank gcode to UI
-                    self.data.ui_queue1.put("Action", "gcodeUpdate", "")
-                else:
-                    self.data.ui_queue1.put("Alert", "Alert", "Error with clearing gcode")
             elif msg["data"]["command"] == "setSprockets":
                 if not self.setSprockets(msg["data"]["arg"], msg["data"]["arg1"]):
                     self.data.ui_queue1.put("Alert", "Alert", "Error with setting sprocket")
@@ -499,7 +530,7 @@ class Actions(MakesmithInitFuncs):
         '''
         try:
             # Play while a tool change waits is a resume; a restart would lower the new bit to the old tool's Z.
-            if self.data.manualZAxisAdjust:
+            if self.data.manualZAxisAdjust or self.data.jobInProgress:
                 return self.resumeRun()
             if len(self.data.gcode) > 0:
                 # set current Z target to the current z height in case gcode doesn't include a z move before an xy move.
@@ -510,11 +541,12 @@ class Actions(MakesmithInitFuncs):
                 # the gcode.
                 if self.data.gcodeIndex > 0:
                     # get machine into proper state by sending appropriate commands
-                    self.processGCode()
+                    changingTool = self.processGCode()
                     # update the gcode position on the UI client.. Have to recalculate it from the gcode because
                     # starting at some place other than 0
                     self.sendGCodePositionUpdate(recalculate=True)
-                    self.data.uploadFlag = 1
+                    # The firmware pauses on the restart's M6; Resume after the change returns and streams.
+                    self.data.uploadFlag = -1 if changingTool else 1
                 else:
                     self.data.uploadFlag = 1
                 self.data.jobInProgress = True
@@ -546,6 +578,16 @@ class Actions(MakesmithInitFuncs):
             self.data.gcodeIndex = 0
             self.data.runGeneration += 1
             self.data.manualZAxisAdjust = False
+            self.data.toolChangeWaits = False
+            self.data.firmwarePaused = False
+            self.data.firmwareHoldsJobLines = False
+            # The "!" flushes an M6 the firmware never ran, so it still has the tool from before it.
+            if self.data.toolBeforeChange is not None:
+                self.data.currentTool = self.data.nextTool = self.data.toolBeforeChange
+                self.data.toolBeforeChange = None
+            # A later Resume at the same index must not lower the bit to this job's paused Z.
+            self.data.pausedGcodeIndex = None
+            self.data.pausedzval = None
             self.data.quick_queue.put("!")
             with self.data.gcode_queue.mutex:
                 self.data.gcode_queue.queue.clear()
@@ -661,38 +703,35 @@ class Actions(MakesmithInitFuncs):
 
     def resumeRun(self):
         '''
-        Resumes sending the gcode.  If a tool change command was received, then the manualZAxisAdjust is enabled and
-        the machine will be returned to the z-axis height it was when the tool change command was processed.  It also
-        makes sure the units are what they were prior to the tool change (user might have switched them up while
-        setting z-axis to zero).
+        Releases the firmware and resumes the job. Unless the firmware only asked for Z by hand, it first restores the
+        units the job paused in and returns to the file's position at safe height, lowering the bit only if it is
+        still the bit that paused.
         :return:
         '''
         try:
-            # Restore self.data.upladFlag properly
-            if self.data.manualZAxisAdjust:
-                # Z-axis is disabled and requires manual adjustment.
-                print("Resume run with manual z-axis adjust.")
-                # Clear the flag.
-                self.data.manualZAxisAdjust = False
-                # Reenable the uploadFlag if it was previous set.
-                if self.data.previousUploadStatus == -1:
-                    # If this was M command pause, then set to 1.
-                    self.data.uploadFlag = 1
-                else:
-                    self.data.uploadFlag = self.data.previousUploadStatus ### just moved this here from after if statement
-            elif self.data.uploadFlag == 1:
+            toolChange = self.data.toolChangeWaits
+            manualZ = self.data.manualZAxisAdjust and not toolChange
+            if self.data.uploadFlag == 1 and not manualZ:
                 # A second Resume (double click, another client) must not lift and replunge mid-cut.
                 return True
-            else:
-                # The user may have jogged, homed or moved the gcode index while paused, so return to the file's
-                # position at the current index at safe height before lowering the bit.
-                print("Resume run without manual z-axis adjust.")
+            self.data.manualZAxisAdjust = False
+            self.data.toolChangeWaits = False
+            # First, so the firmware finishes the line it paused on before the restart moves below reach it.
+            self.releaseFirmwarePause()
+            if manualZ:
+                # The firmware asked for Z by hand ($16=0) and carries on with the line it paused in.
+                self.data.uploadFlag = 1 if self.data.jobInProgress else 0
+            elif self.data.jobInProgress or self.data.uploadFlag != 0:
+                # The user may have jogged, homed, changed the bit or moved the gcode index while paused, so return
+                # to the file's position at the current index at safe height before lowering the bit.
                 if self.data.pausedUnits is not None and self.data.pausedUnits != self.data.units:
                     print("Restoring units to:" + str(self.data.pausedUnits))
                     self.updateSetting("toInches" if self.data.pausedUnits == "INCHES" else "toMM", 0, True)
                 zTarget = None
                 # currentZTarget is the last Z sent, which only matches the file's Z if the index has not moved.
-                if self.data.pausedGcodeIndex == self.data.gcodeIndex and self.data.pausedzval is not None:
+                # A new bit has no Z until the file sets one.
+                samePlace = self.data.pausedGcodeIndex == self.data.gcodeIndex and self.data.pausedzval is not None
+                if samePlace and not toolChange:
                     zTarget = self.data.pausedzval
                 self.queueRestartSequence(self.gcodeStateAt(self.data.gcodeIndex), zTarget, changeTool=False)
                 self.data.pausedUnits = None
@@ -703,15 +742,17 @@ class Actions(MakesmithInitFuncs):
                 self.sendGCodePositionUpdate(self.data.gcodeIndex, recalculate=True)
                 self.data.uploadFlag = 1
 
-            # Send cycle resume command to unpause the machine.
-            # Only needed if user initiated pause; but doesn't actually cause harm to controller.
-            self.data.quick_queue.put("~")
             self.data.ui_queue1.put("Action", "setAsPause", "")
             self.data.gpioActions.causeAction("PauseLED", "off")
             return True
         except Exception as e:
             self.data.console_queue.put(str(e))
             return False
+
+    def releaseFirmwarePause(self):
+        self.data.firmwarePaused = False
+        self.data.firmwareHoldsJobLines = False
+        self.data.quick_queue.put("~")
 
     def returnToCenter(self):
         '''
@@ -905,7 +946,8 @@ class Actions(MakesmithInitFuncs):
             if self.data.units == "INCHES":
                 revertToInches = True
                 self.data.gcode_queue.put("G21")
-            self.data.gcode_queue.put("G90 G38.2 Z-" + plungeDepth + " F1 M02")
+            # The firmware probes at a fixed 60 mm/min; an F here would only become the job's modal feed.
+            self.data.gcode_queue.put("G90 G38.2 Z-" + plungeDepth + " M02")
             if revertToInches:
                 self.data.gcode_queue.put("G20")
             # don't think this line is needed
@@ -1369,10 +1411,7 @@ class Actions(MakesmithInitFuncs):
             elif setting == "pauseButtonSetting":
                 # send current pause button state
                 try:
-                    if self.data.uploadFlag == 0 or self.data.uploadFlag == 1:
-                        return setting, "Pause"
-                    else:
-                        return setting, "Resume"
+                    return setting, pauseButtonLabel(self.data)
                 except Exception as e:
                     self.data.console_queue.put(str(e))
             else:
@@ -1559,13 +1598,14 @@ class Actions(MakesmithInitFuncs):
         '''
         Queues the gcode that puts the sled, bit and controller where the file expects them at the current gcode
         index, so a run can start there.
+        :return: True if it stopped at a tool change, where the firmware will pause.
         '''
-        self.queueRestartSequence(self.gcodeStateAt(self.data.gcodeIndex))
+        return self.queueRestartSequence(self.gcodeStateAt(self.data.gcodeIndex))
 
     def gcodeStateAt(self, index):
         '''
-        Parses the file up to index for the units, positioning, XYZ target (XY include home), feed rates, tool,
-        spindle, laser and dwell in effect there, all in the units in effect there.
+        Parses the file up to index for the units, positioning, XYZ target (XY include home), modal feed, plunge
+        feed, tool, spindle, laser and dwell in effect there, all in the units in effect there.
         '''
         positioning = "G90 "
         homeX = float(self.data.config.getValue("Advanced Settings", "homeX"))
@@ -1573,14 +1613,16 @@ class Actions(MakesmithInitFuncs):
         # homeX/homeY are stored in machine units, so a file without G20/G21 runs in them too.
         units = "G20 " if self.data.units == "INCHES" else "G21 "
         defaultFeedScale = 1 / 25.4 if units == "G20 " else 1
-        zAxisFeedRate = 12.8 * defaultFeedScale  # mm/min, currently hardcoded, but Todo: Add setting
-        xyAxisFeedRate = float(self.data.config.getValue("Advanced Settings", "maxFeedrate")) * defaultFeedScale
+        zAxisFeedRate = DEFAULT_PLUNGE_FEED_MM_PER_MIN * defaultFeedScale
+        feedRate = float(self.data.config.getValue("Advanced Settings", "maxFeedrate")) * defaultFeedScale
         previousUnits = units
         xpos = homeX
         ypos = homeY
         # None until the file sets Z for the current tool; a restart must not lower the bit to a guess.
         zpos = None
         tool = None
+        nextTool = None
+        motion = None
         spindle = None
         laser = None
         dwell = None
@@ -1589,6 +1631,9 @@ class Actions(MakesmithInitFuncs):
             filtersparsed = re.sub(r';([^\n]*)?', '\n', filtersparsed)  # replace standard ; initiated gcode comments with nothing
             if not filtersparsed.isspace():  # if all spaces, don't send.  likely a comment. #self.data.gcode[x][0] != "(":
                 #lines = self.data.gcode[x].split(" ")
+                namedTool = toolNamedBy(filtersparsed)
+                nextTool = nextTool if namedTool is None else namedTool
+                tool = str(nextTool) if changesTool(filtersparsed) and nextTool is not None else tool
                 lines = re.sub(r"^\s*N[0-9]+", "", filtersparsed).split(" ")
                 if lines:
                     finalLines = []
@@ -1605,6 +1650,7 @@ class Actions(MakesmithInitFuncs):
                         # A line of bare axis words (X10 Y5) continues the modal move.
                         if line[0] in "GXYZF":
                             gCodes = gcodeNumbers("G", line)
+                            motion = next((code for code in (0, 1, 2, 3) if code in gCodes), motion)
                             if 90 in gCodes:
                                 positioning = "G90 "
                             if 91 in gCodes:
@@ -1615,9 +1661,9 @@ class Actions(MakesmithInitFuncs):
                                 units = "G21 "
                             if units != previousUnits:
                                 scale = 1 / 25.4 if units == "G20 " else 25.4
-                                homeX, homeY, xpos, ypos, zpos, xyAxisFeedRate, zAxisFeedRate = [
+                                homeX, homeY, xpos, ypos, zpos, feedRate, zAxisFeedRate = [
                                     None if value is None else value * scale
-                                    for value in (homeX, homeY, xpos, ypos, zpos, xyAxisFeedRate, zAxisFeedRate)
+                                    for value in (homeX, homeY, xpos, ypos, zpos, feedRate, zAxisFeedRate)
                                 ]
                                 previousUnits = units
                             if line.find("X") != -1:
@@ -1642,42 +1688,41 @@ class Actions(MakesmithInitFuncs):
                                 dwell = re.sub(r"^G0*4", "", line).strip()
                             if line.find("F") != -1:
                                 _feedRate = re.search("F(?=.)(([ ]*)?[+-]?([0-9]*)(\.([0-9]+))?)", line)
-                                _feedRateFloat = float(_feedRate.groups()[0])
-                                if line.find("X") != -1 or line.find("Y") != -1 or line.find("Z") == -1:
-                                    xyAxisFeedRate = _feedRateFloat
-                                if line.find("Z") != -1:
-                                    zAxisFeedRate = _feedRateFloat
+                                feedRate = float(_feedRate.groups()[0])
+                                # A rapid's F is not a plunge feed, though the firmware keeps it as the modal F.
+                                if line.find("Z") != -1 and 0 not in gCodes:
+                                    zAxisFeedRate = feedRate
                         if line[0] == 'M':
                             mCodes = gcodeNumbers("M", line)
                             spindle = next((f"M{code} " for code in (3, 4, 5) if code in mCodes), spindle)
                             laser = "M106 " if 106 in mCodes else laser
                             laser = "M107 " if 107 in mCodes or 16 in mCodes else laser
                             zpos = None if 6 in mCodes else zpos
-                        if line[0] == 'T':
-                            tool = line[1:] #slice off the T
         return {
             "units": units, "positioning": positioning, "x": xpos, "y": ypos, "z": zpos,
-            "xyFeedRate": xyAxisFeedRate, "zFeedRate": zAxisFeedRate,
+            "feedRate": feedRate, "zFeedRate": zAxisFeedRate, "motion": motion,
             "tool": tool, "spindle": spindle, "laser": laser, "dwell": dwell,
         }
 
     def queueRestartSequence(self, state, zTarget=None, changeTool=True):
         '''
         Raises the bit to safe height, moves to the state's XY, restores tool, spindle, laser and dwell, lowers the bit
-        to zTarget (the state's Z by default) and leaves the controller in the state's positioning mode.
+        to zTarget (the state's Z by default) at the plunge feed, then restores the file's modal G0/G1, feed and
+        positioning. It stops after an M6 that changes tool and returns True.
         '''
         zAxisSafeHeight = float(self.data.config.getValue("Maslow Settings", "zAxisSafeHeight"))
         if state["units"] == "G20 ":
             zAxisSafeHeight = zAxisSafeHeight / 25.4
         self.data.gcode_queue.put(state["units"])
         self.data.gcode_queue.put("G90 ")
-        self.data.gcode_queue.put("G0 Z" + str(round(zAxisSafeHeight, 4)) + " F" + str(round(state["zFeedRate"], 4)))
-        self.data.gcode_queue.put(
-            "G0 X" + str(round(state["x"], 4)) + " Y" + str(round(state["y"], 4))
-            + " F" + str(round(state["xyFeedRate"], 4))
-        )
+        # G0 runs at the firmware's maximum and ignores F, but would still set the modal F.
+        self.data.gcode_queue.put("G0 Z" + str(round(zAxisSafeHeight, 4)) + " ")
+        self.data.gcode_queue.put("G0 X" + str(round(state["x"], 4)) + " Y" + str(round(state["y"], 4)) + " ")
         if changeTool and state["tool"] is not None:
             self.data.gcode_queue.put("T" + state["tool"] + " M6 ")
+            # Anything queued behind a pausing M6 would run, plunge included, as soon as a jog releases the firmware.
+            if int(state["tool"]) != self.data.currentTool:
+                return True
         if state["spindle"] is not None:
             self.data.gcode_queue.put(state["spindle"])
         if state["laser"] is not None:
@@ -1686,8 +1731,12 @@ class Actions(MakesmithInitFuncs):
             self.data.gcode_queue.put("G4 " + state["dwell"])
         zpos = state["z"] if zTarget is None else zTarget
         if zpos is not None:
-            self.data.gcode_queue.put("G0 Z" + str(round(zpos, 4)) + " ")
+            self.data.gcode_queue.put("G1 Z" + str(round(zpos, 4)) + " F" + str(round(state["zFeedRate"], 4)) + " ")
+        # Bare axis words in the file continue its G0 or G1, not the restart's last move; an arc needs its own words.
+        motion = f"G{state['motion']} " if state["motion"] in (0, 1) else ""
+        self.data.gcode_queue.put(motion + "F" + str(round(state["feedRate"], 4)) + " ")
         self.data.gcode_queue.put(state["positioning"])
+        return False
 
     def findPositionAt(self, index):
         '''
