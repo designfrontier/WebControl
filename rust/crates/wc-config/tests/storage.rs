@@ -167,3 +167,26 @@ fn saving_writes_every_section_and_unknown_field_back() {
     assert_eq!(saved["Odd"], "text");
     assert_eq!(saved["Maslow Settings"].as_array().unwrap().len(), 19);
 }
+
+fn computed(settings: &Value, key: &str) -> Value {
+    let section = settings["Computed Settings"].as_array().unwrap();
+    section.iter().find(|o| o["key"] == key).unwrap()["value"].clone()
+}
+
+#[test]
+fn opening_derives_the_computed_settings_and_saves_them_as_main_py_does_at_startup() {
+    let home = tempfile::tempdir().unwrap();
+    let paths = Paths::new(home.path());
+    let mut file: Value = serde_json::from_str(include_str!("../../../../defaultwebcontrol.json")).unwrap();
+    file["Advanced Settings"].as_array_mut().unwrap().iter_mut().for_each(|option| {
+        if option["key"] == "gearTeeth" {
+            option["value"] = json!("9");
+        }
+    });
+    fs::create_dir_all(paths.dir()).unwrap();
+    fs::write(paths.settings_file(), file.to_string()).unwrap();
+    let settings = Settings::open(&paths).unwrap();
+    assert_eq!(settings.value("Computed Settings", "distPerRot"), Some(&json!("57.15")));
+    assert_eq!(computed(&read(&paths.settings_file()), "distPerRot"), "57.15");
+    assert_eq!(computed(&read(&paths.settings_snapshot()), "distPerRot"), "63.5", "the snapshot is the file as found");
+}

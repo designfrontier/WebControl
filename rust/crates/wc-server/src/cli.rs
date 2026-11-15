@@ -97,7 +97,9 @@ pub async fn serve(options: Options, shutdown: impl Future<Output = ()> + Send +
     let paths = Paths::new(&options.home);
     let (settings, saving) = Settings::open(&paths).map(|settings| (settings, true)).unwrap_or_else(|error| {
         tracing::error!(%error, "could not prepare ~/.WebControl; settings will not be saved");
-        (Settings::load(&paths), false)
+        let mut settings = Settings::load(&paths);
+        settings.compute();
+        (settings, false)
     });
     tracing::info!(source = ?settings.source(), home = %options.home.display(), "settings loaded");
     let port = options.port.unwrap_or_else(|| settings.web_port());

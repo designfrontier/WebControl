@@ -52,8 +52,9 @@ impl Settings {
         written
     }
 
-    /// `Config.__init__`: the directories, the defaults on a first run, the fallbacks, and a save when the file
-    /// gained defaults or had to be recovered (the unreadable one kept as `.corrupt`).
+    /// `Config.__init__` then `main.py`'s `computeSettings`: the directories, the defaults on a first run, the
+    /// fallbacks, the derived settings, and a save when any of those changed the file (an unreadable one kept as
+    /// `.corrupt`).
     pub fn open(paths: &Paths) -> io::Result<Settings> {
         [paths.dir(), paths.gcode_dir(), paths.imports_dir(), paths.boards_dir()]
             .iter()
@@ -66,7 +67,8 @@ impl Settings {
             fs::copy(&file, paths.settings_snapshot())?;
         }
         let (mut settings, recovered) = Settings::read(paths);
-        let updated = settings.add_missing_defaults();
+        let added = settings.add_missing_defaults();
+        let updated = !settings.compute().is_empty() || added;
         if recovered != Source::File && file.exists() {
             fs::rename(&file, with_suffix(&file, ".corrupt"))?;
         }
