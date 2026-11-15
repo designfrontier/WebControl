@@ -1,8 +1,7 @@
 """Builds the golden calibration fixtures in tests/fixtures/calibration from the running code."""
-import math
 import random
 
-from Actions.HoleySimulationKinematics import Kinematics
+from Actions.HoleySimulationKinematics import FIRMWARE_PI, Kinematics
 from calibration_helpers import holey_form
 from helpers import drain
 
@@ -120,7 +119,7 @@ def holey_cases(data):
 def simulator(quadrilateral):
     kinematics = Kinematics()
     kinematics.D = 2978.4
-    kinematics.R = 10 * 6.35 / math.pi / 2
+    kinematics.R = 10 * 6.35 / (2 * FIRMWARE_PI)
     kinematics.machineWidth = 2438.4
     kinematics.machineHeight = 1219.2
     kinematics.motorOffsetY = 463.0
