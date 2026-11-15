@@ -1,5 +1,7 @@
 use wc_kinematics::python_float;
 
+use crate::CalibrationError;
+
 /// One `config.setValue(section, key, value)` an Accept makes, with the value as Python's `str()` prints it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SettingWrite {
@@ -43,11 +45,25 @@ fn values_match(new: &str, previous: Option<&str>) -> bool {
     }
 }
 
+fn word_is_finite(word: &str) -> bool {
+    word.get(1..).and_then(|number| number.parse::<f64>().ok()).is_none_or(f64::is_finite)
+}
+
 impl Accept {
+    /// Defence in depth: the calculations already refuse NaN and infinity, but nothing here may save or send one.
+    pub fn check(&self) -> Result<(), CalibrationError> {
+        let finite = |value: &str| value.is_empty() || python_float(value).is_some_and(f64::is_finite);
+        let values = self.writes.iter().all(|write| finite(&write.value));
+        let gcode = self.gcode.iter().flat_map(|line| line.split_whitespace()).all(word_is_finite);
+        if values && gcode { Ok(()) } else { Err(CalibrationError::NotFinite) }
+    }
+
     /// Every line the Accept puts on the G-code queue: a `$key=value` for each firmware setting whose value
     /// changes from what `previous(section, key)` holds, then the trailing G-code.
-    pub fn queued(&self, previous: impl Fn(&str, &str) -> Option<String>) -> Vec<String> {
-        self.writes
+    pub fn queued(&self, previous: impl Fn(&str, &str) -> Option<String>) -> Result<Vec<String>, CalibrationError> {
+        self.check()?;
+        Ok(self
+            .writes
             .iter()
             .filter_map(|write| {
                 let key = firmware_key(write.key)?;
@@ -55,7 +71,7 @@ impl Accept {
                 (!unchanged).then(|| format!("${key}={}", write.value))
             })
             .chain(self.gcode.iter().cloned())
-            .collect()
+            .collect())
     }
 }
 
@@ -86,7 +102,34 @@ mod tests {
             "rightChainTolerance" => Some("".to_string()),
             _ => None,
         };
-        assert_eq!(accept.queued(previous), ["$2=2990.0", "$41=0.1", "$8=139", "G21 "]);
+        assert_eq!(
+            accept.queued(previous),
+            Ok(vec!["$2=2990.0".into(), "$41=0.1".into(), "$8=139".into(), "G21 ".into()])
+        );
+    }
+
+    #[test]
+    fn a_value_that_is_not_finite_refuses_the_whole_accept() {
+        let refused = |writes: Vec<SettingWrite>, gcode: &[&str]| {
+            let accept = Accept { writes, gcode: gcode.iter().map(|line| line.to_string()).collect() };
+            (accept.check(), accept.queued(|_, _| None))
+        };
+        let expected = (Err(CalibrationError::NotFinite), Err(CalibrationError::NotFinite));
+        assert_eq!(refused(vec![write("motorOffsetY", "nan")], &[]), expected);
+        assert_eq!(
+            refused(vec![write("sledWeight", "-inf")], &[]),
+            expected,
+            "even a setting the controller never gets"
+        );
+        assert_eq!(refused(vec![write("motorOffsetY", "470.0")], &["G0 Zinf "]), expected);
+        assert_eq!(refused(vec![write("motorOffsetY", "1e999")], &[]), expected);
+        let fine =
+            Accept { writes: vec![write("leftChainTolerance", "")], gcode: vec!["G0 Z5.0 ".into(), "G21".into()] };
+        assert_eq!(fine.check(), Ok(()));
+        assert_eq!(
+            CalibrationError::NotFinite.to_string(),
+            "The calibration result is not a finite number, so it was not saved. Calculate it again."
+        );
     }
 
     #[test]

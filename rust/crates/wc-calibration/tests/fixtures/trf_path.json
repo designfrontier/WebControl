@@ -1,0 +1,577 @@
+{
+  "geometry": {
+    "Maslow Settings": {
+      "bedWidth": "2438.4",
+      "bedHeight": "1219.2",
+      "motorSpacingX": "2978.4",
+      "motorOffsetY": "463",
+      "sledWeight": "97.9"
+    },
+    "Advanced Settings": {
+      "rotationRadius": "139.1",
+      "chainSagCorrection": "33",
+      "leftChainTolerance": "0",
+      "rightChainTolerance": "0",
+      "chainOverSprocket": "Bottom",
+      "gearTeeth": "10",
+      "chainPitch": "6.35",
+      "chainElasticity": "5.1685e-6",
+      "kinematicsType": "Triangular"
+    }
+  },
+  "source": "scipy 1.9.3 least_squares(method='trf'), verbose=2's columns",
+  "cases": [
+    {
+      "name": "ideal measurements of the configured geometry",
+      "measurements": [
+        965.2,
+        965.2,
+        965.2,
+        965.2,
+        711.2,
+        711.2,
+        711.2,
+        1198.923050074524,
+        1198.923050074524,
+        1198.923050074524,
+        1198.923050074524,
+        254.0
+      ],
+      "iterations": [
+        {
+          "iteration": 0,
+          "nfev": 1,
+          "cost": 1.2865959203641453e-17,
+          "costReduction": null,
+          "stepNorm": null,
+          "optimality": 8.907156399170363e-08
+        },
+        {
+          "iteration": 1,
+          "nfev": 2,
+          "cost": 2.421631422254139e-18,
+          "costReduction": 1.0444327781387314e-17,
+          "stepNorm": 5.319942145601754e-09,
+          "optimality": 2.2750524750934378e-10
+        }
+      ]
+    },
+    {
+      "name": "exact measurements of a machine that differs from the configuration",
+      "measurements": [
+        960.9256601373492,
+        964.0188881277147,
+        960.9637602757331,
+        963.9873077334407,
+        717.3746467881768,
+        716.9450744622756,
+        712.043229390828,
+        1198.7042815577784,
+        1199.4056677766953,
+        1195.5806475841935,
+        1204.235289909488,
+        236.62700206270944
+      ],
+      "iterations": [
+        {
+          "iteration": 0,
+          "nfev": 1,
+          "cost": 226.20895943139504,
+          "costReduction": null,
+          "stepNorm": null,
+          "optimality": 571.6142622133355
+        },
+        {
+          "iteration": 1,
+          "nfev": 2,
+          "cost": 69.48347680015617,
+          "costReduction": 156.7254826312389,
+          "stepNorm": 1.0000000000000002,
+          "optimality": 11.609382575573335
+        },
+        {
+          "iteration": 2,
+          "nfev": 3,
+          "cost": 49.0995733455938,
+          "costReduction": 20.383903454562372,
+          "stepNorm": 2.0,
+          "optimality": 7.3163187072755775
+        },
+        {
+          "iteration": 3,
+          "nfev": 4,
+          "cost": 19.05730249178631,
+          "costReduction": 30.042270853807487,
+          "stepNorm": 4.000000000000001,
+          "optimality": 4.648542644859064
+        },
+        {
+          "iteration": 4,
+          "nfev": 5,
+          "cost": 5.887669803907344e-07,
+          "costReduction": 19.05730190301933,
+          "stepNorm": 6.753608764971343,
+          "optimality": 0.02042104446675409
+        },
+        {
+          "iteration": 5,
+          "nfev": 6,
+          "cost": 5.2002705812958566e-14,
+          "costReduction": 5.887669283880286e-07,
+          "stepNorm": 0.0005128619261484094,
+          "optimality": 4.016912594640799e-06
+        },
+        {
+          "iteration": 6,
+          "nfev": 7,
+          "cost": 3.863275512730627e-19,
+          "costReduction": 5.200231948540729e-14,
+          "stepNorm": 3.795430485738197e-07,
+          "optimality": 2.9008675332540294e-09
+        }
+      ]
+    },
+    {
+      "name": "configured geometry, uniform noise +-0.5 mm, seed 1",
+      "measurements": [
+        964.83,
+        965.55,
+        965.46,
+        964.96,
+        711.2,
+        711.15,
+        711.35,
+        1199.21,
+        1198.52,
+        1198.45,
+        1199.26,
+        253.93
+      ],
+      "iterations": [
+        {
+          "iteration": 0,
+          "nfev": 1,
+          "cost": 0.49830062377068696,
+          "costReduction": null,
+          "stepNorm": null,
+          "optimality": 7.6637814915803055
+        },
+        {
+          "iteration": 1,
+          "nfev": 2,
+          "cost": 0.44638199381831023,
+          "costReduction": 0.05191862995237673,
+          "stepNorm": 0.37877739341734723,
+          "optimality": 0.00021843671177025625
+        },
+        {
+          "iteration": 2,
+          "nfev": 3,
+          "cost": 0.44638197927165185,
+          "costReduction": 1.4546658377856403e-08,
+          "stepNorm": 0.00018611125193123966,
+          "optimality": 1.0590162258239388e-07
+        },
+        {
+          "iteration": 3,
+          "nfev": 4,
+          "cost": 0.4463819792714132,
+          "costReduction": 2.386424391431774e-13,
+          "stepNorm": 1.1814412657404432e-08,
+          "optimality": 2.042039967675713e-09
+        }
+      ]
+    },
+    {
+      "name": "configured geometry, uniform noise +-1 mm, seed 2",
+      "measurements": [
+        966.11,
+        966.1,
+        964.31,
+        964.37,
+        711.87,
+        711.67,
+        711.54,
+        1198.54,
+        1199.13,
+        1199.14,
+        1199.09,
+        253.32
+      ],
+      "iterations": [
+        {
+          "iteration": 0,
+          "nfev": 1,
+          "cost": 2.315697594725605,
+          "costReduction": null,
+          "stepNorm": null,
+          "optimality": 16.961856137576927
+        },
+        {
+          "iteration": 1,
+          "nfev": 2,
+          "cost": 1.8260593570908341,
+          "costReduction": 0.48963823763477077,
+          "stepNorm": 0.9431541868548358,
+          "optimality": 0.0006941723988911352
+        },
+        {
+          "iteration": 2,
+          "nfev": 3,
+          "cost": 1.826059264943928,
+          "costReduction": 9.21469061054836e-08,
+          "stepNorm": 0.0004892348366540011,
+          "optimality": 8.6055428716314e-07
+        },
+        {
+          "iteration": 3,
+          "nfev": 4,
+          "cost": 1.826059264943822,
+          "costReduction": 1.0591527654923993e-13,
+          "stepNorm": 1.1952466946691854e-07,
+          "optimality": 1.4944032677988162e-09
+        }
+      ]
+    },
+    {
+      "name": "differing machine, uniform noise +-0.5 mm, seed 3",
+      "measurements": [
+        960.66,
+        964.06,
+        960.83,
+        964.09,
+        717.5,
+        716.51,
+        711.56,
+        1199.04,
+        1199.17,
+        1195.31,
+        1204.73,
+        236.6
+      ],
+      "iterations": [
+        {
+          "iteration": 0,
+          "nfev": 1,
+          "cost": 229.9326799925824,
+          "costReduction": null,
+          "stepNorm": null,
+          "optimality": 580.1495629704649
+        },
+        {
+          "iteration": 1,
+          "nfev": 2,
+          "cost": 68.95720304212944,
+          "costReduction": 160.97547695045296,
+          "stepNorm": 1.0,
+          "optimality": 11.900858634947333
+        },
+        {
+          "iteration": 2,
+          "nfev": 3,
+          "cost": 48.712150958726866,
+          "costReduction": 20.24505208340257,
+          "stepNorm": 1.9999999999999998,
+          "optimality": 7.245110976100413
+        },
+        {
+          "iteration": 3,
+          "nfev": 4,
+          "cost": 18.96038349125005,
+          "costReduction": 29.751767467476817,
+          "stepNorm": 4.0,
+          "optimality": 4.578732889445677
+        },
+        {
+          "iteration": 4,
+          "nfev": 5,
+          "cost": 0.41078494964301093,
+          "costReduction": 18.54959854160704,
+          "stepNorm": 6.6530200801619035,
+          "optimality": 0.02532134420940553
+        },
+        {
+          "iteration": 5,
+          "nfev": 6,
+          "cost": 0.41078425730606416,
+          "costReduction": 6.923369467726204e-07,
+          "stepNorm": 0.0011143934036432067,
+          "optimality": 1.4605826273772493e-05
+        },
+        {
+          "iteration": 6,
+          "nfev": 9,
+          "cost": 0.4107842573045872,
+          "costReduction": 1.476985200810077e-12,
+          "stepNorm": 1.1314618101052996e-07,
+          "optimality": 1.1094488264751234e-06
+        }
+      ]
+    },
+    {
+      "name": "differing machine, uniform noise +-1 mm, seed 4",
+      "measurements": [
+        960.4,
+        963.23,
+        960.76,
+        963.3,
+        716.51,
+        716.75,
+        712.88,
+        1199.31,
+        1199.94,
+        1195.02,
+        1204.31,
+        236.18
+      ],
+      "iterations": [
+        {
+          "iteration": 0,
+          "nfev": 1,
+          "cost": 237.52742347217765,
+          "costReduction": null,
+          "stepNorm": null,
+          "optimality": 588.4486795628718
+        },
+        {
+          "iteration": 1,
+          "nfev": 2,
+          "cost": 71.2682562137263,
+          "costReduction": 166.25916725845133,
+          "stepNorm": 1.0,
+          "optimality": 11.667180431799487
+        },
+        {
+          "iteration": 2,
+          "nfev": 3,
+          "cost": 50.85269524016657,
+          "costReduction": 20.415560973559735,
+          "stepNorm": 2.0000000000000004,
+          "optimality": 7.420052565143643
+        },
+        {
+          "iteration": 3,
+          "nfev": 4,
+          "cost": 20.721013749625424,
+          "costReduction": 30.131681490541144,
+          "stepNorm": 4.0,
+          "optimality": 4.738396090619211
+        },
+        {
+          "iteration": 4,
+          "nfev": 5,
+          "cost": 1.336398951943956,
+          "costReduction": 19.38461479768147,
+          "stepNorm": 6.873459460141302,
+          "optimality": 0.014134748876614367
+        },
+        {
+          "iteration": 5,
+          "nfev": 6,
+          "cost": 1.336398754864334,
+          "costReduction": 1.9707962217729857e-07,
+          "stepNorm": 0.0006290801953181882,
+          "optimality": 4.805207321822991e-06
+        },
+        {
+          "iteration": 6,
+          "nfev": 7,
+          "cost": 1.3363987548423104,
+          "costReduction": 2.202349413948923e-11,
+          "stepNorm": 5.531291829881599e-07,
+          "optimality": 3.745359578033458e-09
+        }
+      ]
+    },
+    {
+      "name": "differing machine, uniform noise +-25 mm, seed 5",
+      "measurements": [
+        967.07,
+        976.11,
+        975.72,
+        986.11,
+        729.37,
+        738.06,
+        688.49,
+        1196.99,
+        1221.57,
+        1203.03,
+        1224.28,
+        217.29
+      ],
+      "iterations": [
+        {
+          "iteration": 0,
+          "nfev": 1,
+          "cost": 2380.9315855168643,
+          "costReduction": null,
+          "stepNorm": null,
+          "optimality": 570.3371114171185
+        },
+        {
+          "iteration": 1,
+          "nfev": 2,
+          "cost": 1851.6388302051885,
+          "costReduction": 529.2927553116758,
+          "stepNorm": 1.0,
+          "optimality": 270.2178140682737
+        },
+        {
+          "iteration": 2,
+          "nfev": 3,
+          "cost": 1596.7672872441103,
+          "costReduction": 254.87154296107815,
+          "stepNorm": 1.9999999999999998,
+          "optimality": 33.59397466741418
+        },
+        {
+          "iteration": 3,
+          "nfev": 4,
+          "cost": 1418.1963909939102,
+          "costReduction": 178.57089625020012,
+          "stepNorm": 3.9999999999999996,
+          "optimality": 30.94321858240334
+        },
+        {
+          "iteration": 4,
+          "nfev": 5,
+          "cost": 1105.930976688759,
+          "costReduction": 312.2654143051511,
+          "stepNorm": 8.0,
+          "optimality": 25.884366459040653
+        },
+        {
+          "iteration": 5,
+          "nfev": 6,
+          "cost": 651.2306645194465,
+          "costReduction": 454.7003121693126,
+          "stepNorm": 15.999999999999998,
+          "optimality": 15.75091050911056
+        },
+        {
+          "iteration": 6,
+          "nfev": 7,
+          "cost": 393.0076899853764,
+          "costReduction": 258.2229745340701,
+          "stepNorm": 24.222209825794344,
+          "optimality": 0.2159862080030166
+        },
+        {
+          "iteration": 7,
+          "nfev": 8,
+          "cost": 393.0048196413572,
+          "costReduction": 0.0028703440191861773,
+          "stepNorm": 0.09207483352379178,
+          "optimality": 0.00447766513828185
+        },
+        {
+          "iteration": 8,
+          "nfev": 11,
+          "cost": 393.0048192132762,
+          "costReduction": 4.2808096623048186e-07,
+          "stepNorm": 5.6786428917424427e-05,
+          "optimality": 0.0005578018665293172
+        },
+        {
+          "iteration": 9,
+          "nfev": 15,
+          "cost": 393.0048192095974,
+          "costReduction": 3.678849225252634e-09,
+          "stepNorm": 1.7745759036695135e-06,
+          "optimality": 0.0005556338596459653
+        }
+      ]
+    },
+    {
+      "name": "M1 and M12 60 mm long",
+      "measurements": [
+        1020.9256601373492,
+        964.0188881277147,
+        960.9637602757331,
+        963.9873077334407,
+        717.3746467881768,
+        716.9450744622756,
+        712.043229390828,
+        1198.7042815577784,
+        1199.4056677766953,
+        1195.5806475841935,
+        1204.235289909488,
+        296.62700206270944
+      ],
+      "iterations": [
+        {
+          "iteration": 0,
+          "nfev": 1,
+          "cost": 2527.368691255418,
+          "costReduction": null,
+          "stepNorm": null,
+          "optimality": 1343.6547502378367
+        },
+        {
+          "iteration": 1,
+          "nfev": 2,
+          "cost": 1675.2998145915965,
+          "costReduction": 852.0688766638216,
+          "stepNorm": 0.9999999999999999,
+          "optimality": 46.589386565216614
+        },
+        {
+          "iteration": 2,
+          "nfev": 3,
+          "cost": 1640.0102080514137,
+          "costReduction": 35.28960654018283,
+          "stepNorm": 1.9999999999999998,
+          "optimality": 16.07091217470948
+        },
+        {
+          "iteration": 3,
+          "nfev": 4,
+          "cost": 1580.30845732264,
+          "costReduction": 59.70175072877373,
+          "stepNorm": 4.0,
+          "optimality": 13.443389832715955
+        },
+        {
+          "iteration": 4,
+          "nfev": 5,
+          "cost": 1492.7350381302917,
+          "costReduction": 87.57341919234818,
+          "stepNorm": 8.0,
+          "optimality": 8.543235750455294
+        },
+        {
+          "iteration": 5,
+          "nfev": 6,
+          "cost": 1417.5649643363718,
+          "costReduction": 75.17007379391998,
+          "stepNorm": 16.0,
+          "optimality": 1.3794406666559982
+        },
+        {
+          "iteration": 6,
+          "nfev": 7,
+          "cost": 1414.5025652900977,
+          "costReduction": 3.062399046274095,
+          "stepNorm": 4.247412467111636,
+          "optimality": 0.2205175690227179
+        },
+        {
+          "iteration": 7,
+          "nfev": 8,
+          "cost": 1414.5024206798034,
+          "costReduction": 0.00014461029422818683,
+          "stepNorm": 0.006190262245822912,
+          "optimality": 0.001401428728627252
+        },
+        {
+          "iteration": 8,
+          "nfev": 9,
+          "cost": 1414.5024206731166,
+          "costReduction": 6.686832421110012e-09,
+          "stepNorm": 0.00010908956924389174,
+          "optimality": 9.439003690658865e-06
+        }
+      ]
+    }
+  ]
+}

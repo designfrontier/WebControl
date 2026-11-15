@@ -192,7 +192,7 @@ fn holey_accept_saves_the_four_values_as_python_prints_them() {
     assert!(accept.gcode.is_empty());
     let unchanged =
         store(&[("Maslow Settings", "motorOffsetY", "470"), ("Maslow Settings", "motorSpacingX", "2990.0")]);
-    assert_eq!(accept.queued(lookup(&unchanged)), ["$40=0.3", "$41=-0.2"]);
+    assert_eq!(accept.queued(lookup(&unchanged)).unwrap(), ["$40=0.3", "$41=-0.2"]);
 }
 
 fn holey_pattern(units: &str) -> Vec<String> {
@@ -261,16 +261,17 @@ fn triangular_refuses_a_measurement_out_of_range() {
 }
 
 #[test]
-fn triangular_accept_saves_three_values_then_returns_to_the_centre() {
+fn triangular_accept_saves_three_values_then_rises_and_returns_to_the_centre() {
     let result = triangular::calculate(&settings(&[]), &triangular_form()).expect("calculated");
-    let accept = result.accept();
+    let accept = result.accept(5.0);
     let values: Vec<&str> = accept.writes.iter().map(|write| write.value.as_str()).collect();
     assert_eq!(values, ["400.6", "138.8", "33.443549"]);
-    assert_eq!(accept.gcode, ["G21 ", "G90 ", "G40 ", "G0 X0 Y0 "]);
+    assert_eq!(accept.gcode, ["G21 ", "G90 ", "G40 ", "G0 Z5.0 ", "G0 X0 Y0 "]);
     assert_eq!(
-        accept.queued(lookup(&store(&[]))),
-        ["$3=400.6", "$8=138.8", "$37=33.443549", "G21 ", "G90 ", "G40 ", "G0 X0 Y0 "]
+        accept.queued(lookup(&store(&[]))).unwrap(),
+        ["$3=400.6", "$8=138.8", "$37=33.443549", "G21 ", "G90 ", "G40 ", "G0 Z5.0 ", "G0 X0 Y0 "]
     );
+    assert_eq!(result.accept(f64::NAN).queued(lookup(&store(&[]))), Err(CalibrationError::NotFinite));
 }
 
 #[test]

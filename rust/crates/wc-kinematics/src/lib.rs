@@ -1,12 +1,15 @@
 //! The kinematics of the holey firmware (spec/firmware.md B14), ported from `Actions/HoleySimulationKinematics.py`:
 //! chain lengths for a position (`inverse`) and the position for chain lengths (`forward`), in both modes.
-//! Everything is `f64` in Python's operation order, so results match `tests/fixtures/calibration/kinematics.json`.
+//! Everything is `f64` in Python's operation order, so results match `tests/fixtures/calibration/kinematics.json`,
+//! except `Firmware32`, the controller's own float32 maths for the live computed sled position.
 
 mod checked;
+mod firmware32;
 mod quadrilateral;
 mod triangular;
 
 pub use checked::MathError;
+pub use firmware32::Firmware32;
 
 /// The firmware's literal for pi in its sprocket radius and chain-wrap maths.
 #[allow(clippy::approx_constant)]
@@ -183,6 +186,18 @@ impl Kinematics {
             x = x + 0.1 * a - 0.1 * b;
             y = y - 0.1 * a - 0.1 * b;
             count += 1;
+        }
+    }
+
+    /// The live computed sled position: in triangular mode the firmware's float32 inverse (owner decision 6),
+    /// otherwise the `f64` quadrilateral model, which has no float32 port.
+    pub fn forward_as_firmware(&mut self, left: f64, right: f64, guess: (f64, f64)) -> Option<(f64, f64)> {
+        let (guess_x, guess_y) = (guess.0 as f32, guess.1 as f32);
+        match self.geometry.mode {
+            Mode::Triangular => Firmware32::from(&self.geometry)
+                .forward(left as f32, right as f32, (guess_x, guess_y))
+                .map(|(x, y)| (f64::from(x), f64::from(y))),
+            Mode::Quadrilateral => self.forward_from(left, right, guess),
         }
     }
 

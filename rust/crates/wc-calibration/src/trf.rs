@@ -11,16 +11,27 @@ pub(crate) type Residuals = SVector<f64, M>;
 type Jacobian = SMatrix<f64, M, N>;
 
 const DIFF_STEP: f64 = 0.1;
-const FTOL: f64 = 1e-11;
+pub(crate) const FTOL: f64 = 1e-11;
 const XTOL: f64 = 1e-8;
-const GTOL: f64 = 1e-8;
+pub(crate) const GTOL: f64 = 1e-8;
 const MAX_NFEV: usize = 100 * N;
 
-/// Where the fit stopped and its residuals there.
+/// One row of scipy's `verbose=2` table: the state at the top of each outer iteration.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Iteration {
+    pub nfev: usize,
+    pub cost: f64,
+    pub reduction: Option<f64>,
+    pub step_norm: Option<f64>,
+    pub optimality: f64,
+}
+
+/// Where the fit stopped, its residuals there, and the path it took.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Fitted {
     pub x: Params,
     pub f: Residuals,
+    pub iterations: Vec<Iteration>,
 }
 
 /// `_compute_absolute_step` with a relative step: a tenth of the value, or sqrt(eps) where that would not move it.
@@ -117,7 +128,13 @@ pub(crate) fn least_squares(fun: impl Fn(&Params) -> Option<Residuals>, x0: Para
     let mut g = j.transpose() * f;
     let mut delta = if x0.norm() == 0.0 { 1.0 } else { x0.norm() };
     let (mut alpha, mut nfev, mut done) = (0.0, 1, false);
-    while g.amax() >= GTOL && !done && nfev < MAX_NFEV {
+    let (mut iterations, mut reduction, mut last_step) = (Vec::new(), None, None);
+    loop {
+        let optimality = g.amax();
+        iterations.push(Iteration { nfev, cost, reduction, step_norm: last_step, optimality });
+        if optimality < GTOL || done || nfev == MAX_NFEV {
+            break;
+        }
         let svd = j.svd(true, true);
         let (u, v) = (svd.u?, svd.v_t?.transpose());
         let (s, uf) = (svd.singular_values, u.transpose() * f);
@@ -134,6 +151,7 @@ pub(crate) fn least_squares(fun: impl Fn(&Params) -> Option<Residuals>, x0: Para
             let cost_new = 0.5 * f_new.dot(&f_new);
             actual = cost - cost_new;
             trial = (x_new, f_new, cost_new);
+            last_step = Some(step_norm);
             let (delta_new, ratio) = update_radius(delta, actual, predicted, step_norm, step_norm > 0.95 * delta);
             done = terminated(actual, cost, step_norm, x.norm(), ratio);
             if done {
@@ -146,9 +164,12 @@ pub(crate) fn least_squares(fun: impl Fn(&Params) -> Option<Residuals>, x0: Para
             (x, f, cost) = trial;
             j = jacobian(&fun, &x, &f)?;
             g = j.transpose() * f;
+        } else {
+            (actual, last_step) = (0.0, Some(0.0));
         }
+        reduction = Some(actual);
     }
-    Some(Fitted { x, f })
+    Some(Fitted { x, f, iterations })
 }
 
 #[cfg(test)]

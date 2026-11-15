@@ -1,0 +1,40 @@
+{
+  "machines": [
+    {"machine": {"d": 2978.3999, "machineWidth": 2438.3999, "machineHeight": 1219.19995, "motorOffsetY": 463, "r": 10.1063471, "sledWeight": 97.9000015, "chainElasticity": 5.16850014e-06, "leftChainTolerance": 0, "rightChainTolerance": 0, "rotationDiskRadius": 139.100006, "chainSagCorrection": 0, "chainOverSprocket": 2},
+     "inverse": [
+       {"x": 0, "y": 0, "left": 1720.854, "right": 1720.854},
+       {"x": -965.200012, "y": 355.600006, "left": 770.808105, "right": 2446.22656},
+       {"x": 965.200012, "y": -355.600006, "left": 2727.552, "right": 1400.96301},
+       {"x": -1219.19995, "y": -609.599976, "left": 1581.32556, "right": 3080.75513},
+       {"x": 12.3400002, "y": 567.799988, "left": 1472.24023, "right": 1448.83264},
+       {"x": -1500, "y": 700, "left": 249.183228, "right": 6462065.5}],
+     "forward": [
+       {"left": 1650, "right": 1651, "guess": [0, 0], "position": [-0.59036994, 126.408745]},
+       {"left": 1500.25, "right": 2100.75, "guess": [-10, 10], "position": [-384.523956, -107.618813]},
+       {"left": 2400.5, "right": 1350, "guess": [300, -200], "position": [698.698608, -164.504532]}]},
+    {"machine": {"d": 3011.16235, "machineWidth": 2438.3999, "machineHeight": 1219.19995, "motorOffsetY": 433.681854, "r": 10.1063471, "sledWeight": 97.9000015, "chainElasticity": 5.16850014e-06, "leftChainTolerance": -0.0649499968, "rightChainTolerance": -0.0211100001, "rotationDiskRadius": 138.399994, "chainSagCorrection": 0, "chainOverSprocket": 1},
+     "inverse": [
+       {"x": 0, "y": 0, "left": 1699.88049, "right": 1699.07703},
+       {"x": -965.200012, "y": 355.600006, "left": 745.499146, "right": 2429.01465},
+       {"x": 965.200012, "y": -355.600006, "left": 2708.47607, "right": 1373.04456},
+       {"x": -1219.19995, "y": -609.599976, "left": 1553.56311, "right": 3060.14453},
+       {"x": 12.3400002, "y": 567.799988, "left": 1455.05737, "right": 1430.88623},
+       {"x": -1500, "y": 700, "left": 220.831696, "right": 4253.18262}],
+     "forward": [
+       {"left": 1650, "right": 1651, "guess": [0, 0], "position": [-1.05887568, 87.742157]},
+       {"left": 1500.25, "right": 2100.75, "guess": [-10, 10], "position": [-387.275238, -142.636124]},
+       {"left": 2400.5, "right": 1350, "guess": [300, -200], "position": [701.865234, -197.859619]}]},
+    {"machine": {"d": 2978.3999, "machineWidth": 2438.3999, "machineHeight": 1219.19995, "motorOffsetY": 463, "r": 10.1063471, "sledWeight": 0, "chainElasticity": 5.16850014e-06, "leftChainTolerance": 0.300000012, "rightChainTolerance": -0.200000003, "rotationDiskRadius": 139.100006, "chainSagCorrection": 33, "chainOverSprocket": 2},
+     "inverse": [
+       {"x": 0, "y": 0, "left": 1716.32397, "right": 1725.49194},
+       {"x": -965.200012, "y": 355.600006, "left": 768.630615, "right": 2453.14917},
+       {"x": 965.200012, "y": -355.600006, "left": 2723.00879, "right": 1404.72217},
+       {"x": -1219.19995, "y": -609.599976, "left": 1577.05298, "right": 3106.37695},
+       {"x": 12.3400002, "y": 567.799988, "left": 1468.83606, "right": 1453.27588},
+       {"x": -1500, "y": 700, "left": 416.57901, "right": 2646.28003}],
+     "forward": [
+       {"left": 1650, "right": 1651, "guess": [0, 0], "position": [4.61197662, 126.584656]},
+       {"left": 1500.25, "right": 2100.75, "guess": [-10, 10], "position": [-378.170471, -107.16922]},
+       {"left": 2400.5, "right": 1350, "guess": [300, -200], "position": [705.333801, -164.466721]}]}
+  ]
+}

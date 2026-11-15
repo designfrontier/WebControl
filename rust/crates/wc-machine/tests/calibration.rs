@@ -209,8 +209,54 @@ fn triangular_accept_saves_then_returns_to_the_centre_in_mm() {
         .for_each(|key| assert_eq!(accepted.body[key], calculated[key], "{key}"));
     let sent = rig.run_to_quiet();
     assert!(sent[0].starts_with("$3="), "{sent:?}");
-    assert_eq!(sent[sent.len() - 4..], ["G21", "G90", "G40", "G0 X0 Y0"]);
+    assert_eq!(sent[sent.len() - 5..], ["G21", "G90", "G40", "G0 Z5.0", "G0 X0 Y0"], "Z rises before the move");
     assert_eq!(accept_on(&mut rig, Kind::Triangular).status, 409);
+}
+
+#[test]
+fn triangular_accept_rises_to_the_configured_safe_height() {
+    let mut rig = Rig::connected_with(settings(&[("Maslow Settings", "zAxisSafeHeight", json!("12.5"))]));
+    calculate_on(&mut rig, Kind::Triangular, triangular_body());
+    assert_eq!(accept_on(&mut rig, Kind::Triangular).status, 200);
+    assert_eq!(rig.run_to_quiet()[3..], ["G21", "G90", "G40", "G0 Z12.5", "G0 X0 Y0"]);
+}
+
+/// Without a safe height the bit could drag to the centre, so nothing is saved and the result is kept.
+#[test]
+fn triangular_accept_refuses_without_a_safe_height() {
+    ["high", "nan", "inf"].into_iter().for_each(|height| {
+        let mut rig = Rig::connected_with(settings(&[("Maslow Settings", "zAxisSafeHeight", json!(height))]));
+        calculate_on(&mut rig, Kind::Triangular, triangular_body());
+        let refused = accept_on(&mut rig, Kind::Triangular);
+        let message = "Set the Z-axis safe height to a number before accepting, so the bit rises before it moves.";
+        assert_eq!((refused.status, refused.body), (409, json!({"error": message})), "{height}");
+        assert_eq!(alerts(&rig.act("acceptTriangularCalibrationResults")), [message], "{height}");
+        assert_eq!(rig.run_to_quiet(), Vec::<String>::new(), "{height}");
+        assert_eq!(text(&rig, "Maslow Settings", "motorOffsetY"), "463", "{height}");
+    });
+}
+
+/// Defence in depth: a result that is not finite is never saved or sent, however it got here.
+#[test]
+fn accept_refuses_a_result_that_is_not_finite() {
+    let mut rig = Rig::connected();
+    let result = wc_calibration::holey::HoleyResult {
+        motor_y_offset: f64::NAN,
+        distance_between_motors: 2990.0,
+        left_chain_tolerance: 0.0,
+        right_chain_tolerance: 0.0,
+        total_error: 0.0,
+    };
+    let calculated = wc_machine::calibration::Calculated::Holey(Ok(result));
+    rig.send(Event::Edit { id: 1, request: Request::Calibrated(calculated.clone()) });
+    let refused = accept_on(&mut rig, Kind::Holey);
+    let message = "The calibration result is not a finite number, so it was not saved. Calculate it again.";
+    assert_eq!((refused.status, refused.body), (409, json!({"error": message})));
+    assert_eq!(accept_on(&mut rig, Kind::Holey).status, 409, "the result is withdrawn");
+    rig.send(Event::Edit { id: 1, request: Request::Calibrated(calculated) });
+    assert_eq!(alerts(&rig.act("acceptHoleyCalibrationResults")), [message]);
+    assert_eq!(rig.run_to_quiet(), Vec::<String>::new());
+    assert_eq!(text(&rig, "Maslow Settings", "motorSpacingX"), "2978.4");
 }
 
 #[test]
