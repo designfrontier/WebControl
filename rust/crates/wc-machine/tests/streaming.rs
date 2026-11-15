@@ -137,6 +137,16 @@ fn a_controller_restart_mid_stream_ends_the_job() {
 }
 
 #[test]
+fn a_controller_restart_before_it_reaches_a_sent_m0_ends_the_job() {
+    let mut rig = Rig::connected();
+    stream(&mut rig, &["G0 X1", "M0", "G0 X2"]);
+    assert_eq!(rig.machine.snapshot().upload_flag, -1, "draining towards the M0");
+    let effects = rig.rx("PCB v1.6 TLE9201  Detected");
+    assert!(alerts(&effects)[0].contains("restarted"));
+    assert!(!rig.machine.snapshot().job_in_progress);
+}
+
+#[test]
 fn a_file_switching_units_switches_webcontrols_units_and_home_with_it() {
     let mut rig = Rig::connected_with(settings(&[("Advanced Settings", "homeX", json!("25.4"))]));
     let effects = {
