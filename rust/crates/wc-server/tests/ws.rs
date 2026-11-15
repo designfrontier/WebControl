@@ -288,3 +288,26 @@ async fn stop_reaches_the_machine_while_the_client_is_not_reading_its_pushes() {
     let heard = tokio::time::timeout(Duration::from_secs(3), stopped.notified()).await;
     assert!(heard.is_ok(), "Stop waited behind pushes the client had not read");
 }
+
+async fn upgrade_status(address: &str, origin: Option<&str>) -> String {
+    let mut raw = TcpStream::connect(address).await.unwrap();
+    let origin = origin.map(|o| format!("Origin: {o}\r\n")).unwrap_or_default();
+    let upgrade = format!(
+        "GET /ws?ns=%2FMaslowCNC HTTP/1.1\r\nHost: {address}\r\n{origin}Upgrade: websocket\r\nConnection: Upgrade\r\n\
+        Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n"
+    );
+    raw.write_all(upgrade.as_bytes()).await.unwrap();
+    let mut head = [0u8; 12];
+    raw.read_exact(&mut head).await.unwrap();
+    String::from_utf8_lossy(&head).into_owned()
+}
+
+#[tokio::test]
+async fn another_site_cannot_open_a_socket_like_socket_io_refuses_it() {
+    let address = serve().await;
+    assert_eq!(upgrade_status(&address, Some("http://evil.example")).await, "HTTP/1.1 403");
+    assert_eq!(upgrade_status(&address, Some(&format!("http://{address}.evil.example"))).await, "HTTP/1.1 403");
+    assert_eq!(upgrade_status(&address, Some(&format!("http://{address}"))).await, "HTTP/1.1 101");
+    assert_eq!(upgrade_status(&address, Some(&format!("https://{address}"))).await, "HTTP/1.1 101");
+    assert_eq!(upgrade_status(&address, None).await, "HTTP/1.1 101");
+}

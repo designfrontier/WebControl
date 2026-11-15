@@ -107,6 +107,8 @@ the page if the backend changed.
 
 - **Endpoint**: `ws://<host>/ws?ns=<url-encoded namespace>` (`wss:` under https), one WebSocket per namespace. The UI
   opens `/MaslowCNC` and, while the log viewer is open, a second one for `/MaslowCNCLogs`.
+- **Origin**: the server answers 403 to an upgrade whose `Origin` header is not `http(s)://<Host>`, as socket.io's
+  same-origin default does, so another site's page cannot drive the machine.
 - **Frames**: UTF-8 text frames only, one JSON object per frame, `{"ns": "/MaslowCNC", "event": "...", "data": ...}`
   (`schemas/websocket/frame.json`). `data` is exactly the single argument socket.io would carry: the envelope for
   `message`, `{"data": {...}}` for client events. No acks, no batching, no binary frames.
