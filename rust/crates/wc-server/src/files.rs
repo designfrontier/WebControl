@@ -297,10 +297,10 @@ pub(crate) async fn send(State(state): State<AppState>, request: Request) -> Res
         Err(refusal) => return refusal,
     };
     match form.field("gcode") {
-        Ok(text) => {
-            let reply = state.machine.request(Ask::SendGcode(text.trim_end().to_string())).await;
-            forms::result(reply == Reply::Done)
-        }
+        Ok(text) => match state.machine.request(Ask::SendGcode(text.trim_end().to_string())).await {
+            Reply::Refused(error) => forms::refused(409, &error),
+            reply => forms::result(reply == Reply::Done),
+        },
         Err(refusal) => refusal,
     }
 }

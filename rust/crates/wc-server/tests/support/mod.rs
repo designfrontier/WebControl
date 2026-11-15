@@ -156,12 +156,13 @@ impl Server {
     }
 
     pub async fn post_json(&self, path: &str, body: Value) -> Reply {
-        Contract::shared().validate_request("POST", path, &body).unwrap();
-        Server::checked(
-            "POST",
-            path,
-            self.call("POST", path, Some("application/json"), body.to_string().into_bytes()).await,
-        )
+        self.send_json("POST", path, body).await
+    }
+
+    pub async fn send_json(&self, method: &str, path: &str, body: Value) -> Reply {
+        Contract::shared().validate_request(method, path, &body).unwrap();
+        let body = body.to_string().into_bytes();
+        Server::checked(method, path, self.call(method, path, Some("application/json"), body).await)
     }
 
     pub async fn post_raw(&self, path: &str, content_type: &str, body: &[u8]) -> Reply {

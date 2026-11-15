@@ -276,9 +276,10 @@ fn resume_restores_an_absolute_z_and_relative_mode_in_a_g91_file() {
 fn resume_restores_the_units_the_job_was_paused_in() {
     let mut rig = Rig::connected();
     pause_at(&mut rig, &["G90", "G0 X10 Y20", "G1 Z-3", "G1 X30 Y40", "G1 X1"], 3);
-    rig.send(Event::UpdateSetting { setting: "toInches".into(), value: json!(1) });
-    rig.run_to_quiet();
-    assert_eq!(rig.machine.snapshot().units(), wc_protocol::main::Units::Inches);
+    let refused = rig.send(Event::UpdateSetting { setting: "toInches".into(), value: json!(1) });
+    assert_eq!(alerts(&refused), [wc_machine::files::SETTINGS_LOCKED], "decision 2: no unit switch mid-job");
+    assert!(written(&refused).is_empty());
+    assert_eq!(rig.machine.snapshot().units(), wc_protocol::main::Units::Mm);
     let sent = resume(&mut rig);
     assert_eq!(sent[..5], ["~", "G21", "G90", SAFE_Z, "G0 X10.0 Y20.0"]);
     assert_eq!(rig.machine.snapshot().units(), wc_protocol::main::Units::Mm);
