@@ -183,11 +183,15 @@ until a `VERSION` bump changes them.
     a load that finishes after a job has started is dropped with a 500 and the job keeps its gcode. The board resend
     after any `action` (wart 12) ends the spinner early too.
 
-## Rust-intended deviations
+## Rust-intended differences
 
-Where the Rust backend answers differently from Python by owner decision. The shapes are the same, so the schemas and
-`tests/test_contract.py` hold for both.
+Where the Rust backend deliberately does not copy Python, as the owner decided (`spec/RUST-PLAN.md`). The shapes are
+the same, so the schemas and `tests/test_contract.py` hold for both.
 
+- **Every settings import recomputes.** After `/importFileWCJSON` changes anything, Rust runs `computeSettings`
+  (`kinematicsTypeComputed`, `distPerRot`, the PID gains, `chainOverSprocketComputed`, `fPWMComputed`), writes the
+  derived values that changed to the controller, then sends `$$`, as both backends already do after `/importFile`
+  and `/importRestoreWebControl`. Python's `importWebControlJSON` keeps the imported computed values as they are.
 - **Computed sled position in float32** (decision 6, 2026-11-15). `errorValueMessage.computedX/Y` solve the chain
   lengths of a `[PE:` report with the firmware's own float32 triangular kinematics (including its pre-catenary model
   when `sledWeight` is 0 or less), stopping at 0.001 mm of chain, where Python solves in `f64` to 1e-9 mm. The two

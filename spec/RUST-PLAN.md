@@ -35,7 +35,7 @@ Calibration, from the follow-up round (Rust only; Python's behaviour is not chan
   safe height. A Rust-intended deviation (`contract/serial/README.md`).
 - **5. Holey calibration uses `wc-calibration/src/trf.rs`**, the scipy TRF port, not the `levenberg-marquardt` crate.
 - **6. Accept refuses non-finite values** (defence in depth), and the live computed X/Y uses the firmware's float32
-  kinematics (`contract/README.md`, "Rust-intended deviations").
+  kinematics (`contract/README.md`, "Rust-intended differences").
 
 ## 0. Recommendations up front
 
@@ -69,7 +69,7 @@ The workspace goes in `rust/` at the repo root (`rust/Cargo.toml`, crates in `ru
 | Crate | Contents | Replaces (Python) | Depends on |
 |---|---|---|---|
 | `wc-protocol` | Envelope, WebSocket frame, every message/event/action/HTTP body as serde types; the run-state gates; `CONTRACT_VERSION` read from `contract/VERSION` by `build.rs` | `frontend/src/protocol` (as the wire), `api/client_emit.py` | serde |
-| `wc-config` | Reads and writes `~/.WebControl/webcontrol.json` compatibly; the settings table from `defaultwebcontrol.json` (embedded); computed settings; the directory layout (`gcode/`, `boards/`, `imports/`, `downloads/`); `safePaths` | `config/config.py` minus firmware sync, `File/safePaths.py`, `File/retention.py` | wc-protocol |
+| `wc-config` | Reads and writes `~/.WebControl/webcontrol.json` compatibly; the settings table from `defaultwebcontrol.json` (embedded); computed settings (`computeSettings`, run at startup, on every settings write, after both imports and after a restore, and checked against Python by `tests/fixtures/compute/`); the directory layout (`gcode/`, `boards/`, `imports/`, `downloads/`); `safePaths` | `config/config.py` minus firmware sync, `File/safePaths.py`, `File/retention.py` | wc-protocol |
 | `wc-gcode` | Load filter (spacing, truncate), comment stripping, sanitiser (B5), home shift (`rust_decimal`), the T rule (`firmwareGcode.py`), `gcodeStateAt` and the restart sequence, zMoves, `findPositionAt`, the 3D line model and its gzip payload, board model, cut grid and board file format | `File/gcodeFile.py`, `Connection/firmwareGcode.py`, restart half of `Actions/actions.py`, `Boards/` | wc-protocol |
 | `wc-kinematics` | Firmware-exact triangular and quadrilateral inverse/forward (B14), float32 where the firmware is | `Actions/HoleySimulationKinematics.py` | nalgebra |
 | `wc-calibration` | Holey `Calibrate` (scipy TRF port, `trf.rs`), test pattern, accept commands; triangular `calculate`, pattern, accept | `Actions/holeyCalibration.py`, `Actions/triangularCalibration.py` | wc-kinematics, nalgebra |
