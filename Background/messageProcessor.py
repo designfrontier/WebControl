@@ -1,3 +1,4 @@
+from Connection import firmwareFacts
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
 
 import threading
@@ -100,9 +101,11 @@ class MessageProcessor(MakesmithInitFuncs):
 
                 self.data.logger.writeToLog("Ground Control Version " + str(self.data.version) + "\n")
                 self.data.console_queue.put("WebControl " + str(self.data.version) + "\r\n" + message + "\r\n")
-                # Check that version numbers match
-                self.data.controllerFirmwareVersion = float(message[16-len(message):])
-                tmpVersion = self.data.controllerFirmwareVersion
+                self.data.ui_controller_queue.put(message)
+                tmpVersion = firmwareFacts.parseFirmwareVersion(message)
+                if tmpVersion is None:
+                    return
+                self.data.controllerFirmwareVersion = tmpVersion
                 # <50 implies a stock firmware
                 if tmpVersion <50:
                     if self.data.stockFirmwareVersion is not None:

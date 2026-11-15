@@ -157,3 +157,27 @@ def test_an_eeprom_read_fail_restores_every_setting_and_tells_the_user(data, con
     assert option(config, "maxZRPM")["value"] == "12.6"
     assert len([message for message in drain(data.ui_queue1) if "lost its settings" in message]) == 1
     drain(data.ui_controller_queue)
+
+
+@pytest.fixture
+def processor(data, config):
+    processor = MessageProcessor()
+    processor.data = data
+    drain(data.ui_controller_queue)
+    yield processor
+    drain(data.ui_controller_queue)
+    drain(data.ui_queue1)
+
+
+def test_the_firmware_version_reaches_the_controller_messages_pane_and_is_parsed(data, processor):
+    processor.processMessage("Firmware Version 51.29\r\n")
+
+    assert data.controllerFirmwareVersion == 51.29
+    assert drain(data.ui_controller_queue) == ["Firmware Version 51.29\r\n"]
+
+
+@pytest.mark.parametrize("line", ["Firmware Version ?\r\n", "Firmware update needed\r\n"])
+def test_a_firmware_line_without_a_version_leaves_the_version_alone(data, processor, line):
+    processor.processMessage(line)
+
+    assert data.controllerFirmwareVersion == 51.27
