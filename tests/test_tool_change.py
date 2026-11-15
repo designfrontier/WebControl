@@ -12,11 +12,12 @@ TOOL_CHANGE = ["Tool Change: Please insert tool 2\r\n", "Maslow Paused\r\n"]
 
 @pytest.fixture
 def tools(job, serial):  # noqa: F811
-    saved = {key: getattr(job, key) for key in ("nextTool", "firmwarePaused", "toolChangeWaits", "units")}
+    saved = {key: getattr(job, key) for key in ("nextTool", "firmwarePaused", "firmwareHoldsJobLines", "toolChangeWaits", "units")}
     job.currentTool = 0
     job.nextTool = 0
     job.firmwarePaused = False
     job.toolChangeWaits = False
+    job.firmwareHoldsJobLines = False
     job.manualZAxisAdjust = False
     yield job
     for key, value in saved.items():
@@ -270,3 +271,35 @@ def test_resume_after_a_tool_change_never_lowers_the_new_bit_to_a_z_from_an_old_
     sent = run_tool_change_job(app, tools, serial, lambda: action(tools, "resumeRun"))
 
     assert not any(line.startswith(("G1 Z-3", "G0 Z-3")) for line in sent)
+
+
+def test_a_jog_never_releases_job_lines_the_firmware_holds_behind_an_unexpected_pause(app, tools, serial):  # noqa: F811
+    tools.gcode = ["G1 X1 ", "G1 Z-3 ", "G1 X2 ", "G1 X3 "]
+    tools.gcodeIndex = 0
+    action(tools, "startRun")
+    thread = serial.thread()
+    [thread.sendNextLine() for _ in range(3)]
+    drain(tools.ui_queue1)
+
+    controller_says(app, tools, ["Message: Please adjust Z-Axis to a depth of -3.00 mm\r\n", "Maslow Paused\r\n"])
+    tools.actions.processAction({"data": {"command": "move", "arg": "right", "arg1": "10"}})
+
+    assert drain(tools.quick_queue) == []
+    assert drain(tools.gcode_queue) == []
+    assert tools.firmwarePaused is True
+
+
+def test_resume_releases_the_held_job_lines_and_lets_jogs_release_the_next_pause(app, tools, serial):  # noqa: F811
+    tools.gcode = ["G1 X1 ", "G1 Z-3 ", "G1 X2 "]
+    tools.gcodeIndex = 0
+    action(tools, "startRun")
+    serial.thread().sendNextLine()
+    controller_says(app, tools, ["Message: Please adjust Z-Axis to a depth of -3.00 mm\r\n", "Maslow Paused\r\n"])
+    action(tools, "resumeRun")
+    drain(tools.quick_queue)
+
+    tools.uploadFlag = 0
+    controller_says(app, tools, ["Maslow Paused\r\n"])
+    tools.actions.processAction({"data": {"command": "move", "arg": "right", "arg1": "10"}})
+
+    assert drain(tools.quick_queue) == ["~"]

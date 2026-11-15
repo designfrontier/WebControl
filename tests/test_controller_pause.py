@@ -2,16 +2,22 @@
 import pytest
 
 from helpers import decode_ui_message, drain
-from test_job_in_progress import action, alarm, controller_pause, job, start  # noqa: F401
+from test_job_in_progress import action, alarm, from_controller, job, start  # noqa: F401
 from test_serial_streaming import serial  # noqa: F401
 
-PAUSES = [controller_pause, alarm]
+
+def program_pause(app, data, serial):  # noqa: F811
+    serial.thread().managePause("M0 ")
+    from_controller(app, data, "Maslow Paused\r\n")
+
+
+PAUSES = [program_pause, alarm]
 PID_BODY = {"kind": "velocity", "motor": "L", "start": 0, "stop": 1, "steps": 1, "version": 1, "kp": 1, "ki": 1, "kd": 1}
 
 
 @pytest.fixture
 def paused(app, job, serial, request):  # noqa: F811
-    saved = (job.firmwarePaused, job.config.getValue("Advanced Settings", "homeX"))
+    saved = (job.firmwarePaused, job.config.getValue("Advanced Settings", "homeX"), job.firmwareHoldsJobLines)
     start(job)
     job.gcodeIndex = 5
     request.param(app, job, serial)
@@ -19,6 +25,7 @@ def paused(app, job, serial, request):  # noqa: F811
     [drain(queue) for queue in (job.ui_queue1, job.gcode_queue, job.quick_queue)]
     yield job
     job.firmwarePaused = saved[0]
+    job.firmwareHoldsJobLines = saved[2]
     job.config.setValue("Advanced Settings", "homeX", saved[1], recursionBreaker=True)
 
 

@@ -36,6 +36,10 @@ MACHINE_COMMANDS = {
 }
 
 HOME_AND_PID_COMMANDS = {"defineHome", "resetHomeToCenter", "executeVelocityPIDTest", "executePositionPIDTest"}
+JOB_LINES_HELD_MESSAGE = (
+    "The controller paused with lines of the job still in its buffer, which would run before this move. "
+    "Press Resume or STOP first."
+)
 TOOL_CHANGE_WAITS_MESSAGE = (
     "Cannot issue command while a tool change waits. Press Resume or STOP before setting home or running a PID test."
 )
@@ -58,6 +62,9 @@ class Actions(MakesmithInitFuncs):
         '''
         try:
             if self.data.firmwarePaused and self.data.uploadFlag != 1 and msg["data"]["command"] in MACHINE_COMMANDS:
+                if self.data.firmwareHoldsJobLines:
+                    self.data.ui_queue1.put("Alert", "Alert", JOB_LINES_HELD_MESSAGE)
+                    return
                 # Streaming stays held, so releasing the firmware lets the jog run now instead of on Resume.
                 self.releaseFirmwarePause()
             # Commands allowed during sending gcode.  These commands won't screw something up.
@@ -574,6 +581,7 @@ class Actions(MakesmithInitFuncs):
             self.data.manualZAxisAdjust = False
             self.data.toolChangeWaits = False
             self.data.firmwarePaused = False
+            self.data.firmwareHoldsJobLines = False
             self.data.quick_queue.put("!")
             with self.data.gcode_queue.mutex:
                 self.data.gcode_queue.queue.clear()
@@ -737,6 +745,7 @@ class Actions(MakesmithInitFuncs):
 
     def releaseFirmwarePause(self):
         self.data.firmwarePaused = False
+        self.data.firmwareHoldsJobLines = False
         self.data.quick_queue.put("~")
 
     def returnToCenter(self):

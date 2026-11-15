@@ -34,6 +34,10 @@ class MessageProcessor(MakesmithInitFuncs):
                     self.data.console_queue.put("Update check failed: " + str(e))
             time.sleep(60)
 
+    def holdStreaming(self):
+        self.data.firmwareHoldsJobLines = self.data.firmwareHoldsJobLines or self.data.uploadFlag > 0
+        self.data.uploadFlag = 0
+
     def processMessage(self, message):
         if message != "":
             if message[0] == "<":
@@ -63,14 +67,14 @@ class MessageProcessor(MakesmithInitFuncs):
                 self.data.console_queue.put(message)
             elif message[0:13] == "Maslow Paused":
                 # The firmware holds every line until "~", which only the user's Resume (or a jog) sends.
-                self.data.uploadFlag = 0
+                self.holdStreaming()
                 self.data.firmwarePaused = True
                 self.data.ui_controller_queue.put(message)
             elif message[0:12] == "Tool Change:":
                 # This thread owns the tool-change state; the UIProcessor only shows the prompt.
                 self.data.manualZAxisAdjust = True
                 self.data.toolChangeWaits = True
-                self.data.uploadFlag = 0
+                self.holdStreaming()
                 self.data.pausedUnits = self.data.units
                 self.data.pausedPositioningMode = self.data.positioningMode
                 tool = re.search(r"tool\s+([0-9]+)", message)
@@ -85,7 +89,7 @@ class MessageProcessor(MakesmithInitFuncs):
                 # track the previous uploadFlag and stop uploading.  Likely am going to receive a message
                 # that requires a pause.
                 self.data.previousUploadStatus = self.data.uploadFlag
-                self.data.uploadFlag = 0
+                self.holdStreaming()
                 if message.find("adjust Z-Axis") != -1:
                     # z-axis must not be enabled.  Send message to UIProcessor for processing.
                     # set manualZAxisAdjust, but not sure its needed if manual adjustment is being used.

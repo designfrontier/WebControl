@@ -102,6 +102,8 @@ class Data:
     toolChangeWaits = False
     # The firmware printed "Maslow Paused" and holds every line until it gets "~".
     firmwarePaused = False
+    # It paused while job lines were still streaming, so some may sit behind the line it paused on.
+    firmwareHoldsJobLines = False
     # this is used to determine the first time the position is received from the machine
     firstTimePosFlag = 0
     # report if the serial connection is open
