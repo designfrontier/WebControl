@@ -424,3 +424,18 @@ fn a_report_from_before_a_line_it_cannot_follow_is_stale() {
     rig.rx("<Idle,MPos:0.00,0.00,30.00,WPos:0.000,0.000,0.000>");
     assert_eq!(rig.run_to_quiet(), ["G00 Z30.01", "G00 X0.0 Y0.0"]);
 }
+
+#[test]
+fn a_resume_refused_and_pressed_again_still_lowers_to_the_paused_z() {
+    let mut rig = Rig::connected();
+    let lines = ["G21", "G91", "G0 Z5", "G0 X10 Y10", "G1 Z-6 F100", "G1 X10", "G1 X10"];
+    pause_at(&mut rig, &lines, 6);
+    rig.act("touchZ");
+    rig.run_to_quiet();
+    rig.act("resumeRun");
+    rig.run_to_quiet();
+    assert_eq!(alerts(&rig.advance(HEIGHT_WAIT_MS + 50)).len(), 1);
+    rig.rx(REPORT_AT_10);
+    let sent = resume(&mut rig);
+    assert!(sent.contains(&"G1 Z-1.0 F100.0".to_string()), "{sent:?}");
+}

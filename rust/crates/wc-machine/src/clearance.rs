@@ -149,11 +149,15 @@ impl Machine {
         let Raise::Restart(restart) = raise else { return };
         if restart.1.change_tool {
             self.job.flow = Flow::Idle;
+            self.job.paused_at = None;
+            self.job.paused_units = None;
+            effects.push(pause_button(PauseButton::Pause));
             self.leds.light(Led::Stop);
             return;
         }
         self.job.flow = Flow::Paused;
         self.job.paused_units = Some(self.units());
+        self.job.paused_at = restart.1.z_target.map(|z| (self.index, z));
         effects.push(pause_button(PauseButton::Resume));
         self.leds.light(Led::Pause);
     }
