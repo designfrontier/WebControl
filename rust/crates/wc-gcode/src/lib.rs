@@ -3,8 +3,10 @@
 //! that reaches the controller or a shared file matches Python's byte for byte (tests/fixtures/gcode).
 
 mod decimal;
+pub mod firmware_gcode;
 pub mod load;
 pub mod py;
+pub mod sanitise;
 pub mod shift;
 mod words;
 
