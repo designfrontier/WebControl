@@ -208,7 +208,8 @@ def test_the_backend_records_every_line_it_writes_and_reads_and_each_action(app,
         {"type": "tx", "bytes": "G00 X10.0  \n"}, {"type": "rx", "line": "ok"},
         {"type": "tx", "bytes": "G90  \n"}, {"type": "rx", "line": "ok"},
     ]
-    setup = {**transcript["setup"], "settings": {"WebControl Settings": {"recordSerial": 1}}}
+    settings = {**transcript["setup"].get("settings", {}), "WebControl Settings": {"recordSerial": 1}}
+    setup = {**transcript["setup"], "settings": settings}
     with serial_contract.Engine(app, setup, None, "replay", transcript["meta"]["firmware"]) as engine:
         made = recording(engine)
         engine.run(events)

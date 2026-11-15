@@ -53,7 +53,8 @@
 - `templates/archive/` — retired 2D frontpage templates
 - `tests/` — backend pytest suite (`conftest.py` boots `main.py` with serial port, camera and network checks faked)
 - `tools/` — install/upgrade/repair scripts and OpenCV build helper; serial contract tools (`serial_scenarios.py`,
-  `record_serial_transcript.py`, `convert_recording.py`, `import_v094_log.py`)
+  `record_serial_transcript.py`, `convert_recording.py`, `import_v094_log.py`, `index_recordings.py`, `owner_machine.py`,
+  and for the owner's real jobs `extract_real_job.py`, `real_job_scenarios.py`, `compare_real_jobs.py`)
 - `WebPageProcessor/` — renders modal HTML for each `requestPage` socket event
 
 ### Key files

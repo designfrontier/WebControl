@@ -7,7 +7,7 @@
       "variant": "holey",
       "version": "51.27"
     },
-    "webcontrolCommit": "69d6968"
+    "webcontrolCommit": "81ff3d4"
   },
   "setup": {
     "units": "MM",
@@ -22,7 +22,17 @@
       "Maslow Settings": {
         "bufferOn": 1
       }
-    }
+    },
+    "bootBanner": [
+      "PCB v1.1 Detected",
+      "Grbl v1.00",
+      "ready",
+      "ok",
+      "[Forward Calculating Position]",
+      "position loaded at:",
+      "247.79",
+      "-5.88"
+    ]
   },
   "events": [
     {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
@@ -36,19 +46,27 @@
     {"type": "tx", "bytes": "G1 X20 Y10  \n"},
     {"type": "tx", "bytes": "G1 X20 Y20  \n"},
     {"type": "tx", "bytes": "G1 X30 Y20  \n"},
+    {"type": "rx", "line": "G21"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G1 X30 Y30  \n"},
+    {"type": "rx", "line": "G90"},
     {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "G0 Z5"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G1 X40 Y30  \n"},
+    {"type": "rx", "line": "G0 X0 Y0"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G1 X40 Y40  \n"},
+    {"type": "rx", "line": "G1 Z-2 F120"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G1 X50 Y40  \n"},
+    {"type": "rx", "line": "G1 X10 Y0 F800"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G1 X50 Y50  \n"},
+    {"type": "rx", "line": "G1 X10 Y10"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G1 X60 Y50  \n"},
+    {"type": "rx", "line": "G1 X20 Y10"},
     {"type": "rx", "line": "Buffer overflow!"},
     {"type": "rx", "line": "Buffer Used: 127"},
     {"type": "rx", "line": "Buffer Number of Lines: 9"},
@@ -62,6 +80,10 @@
     {"type": "ui", "action": {"command": "stopRun", "arg": "", "arg1": ""}},
     {"type": "tx", "bytes": "!\n", "realtime": true},
     {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "[Forward Calculating Position]"},
+    {"type": "rx", "line": "position loaded at:"},
+    {"type": "rx", "line": "20.00"},
+    {"type": "rx", "line": "10.00"},
     {"type": "tick", "seconds": 0.3, "comment": "the backend ignores acks until a status report after 0.25 s"},
     {"type": "rx", "line": "<Idle,MPos:20.00,10.00,-2.00,WPos:0.000,0.000,0.000>"},
     {"type": "expect", "state": {"uploadFlag": 0, "jobInProgress": false, "gcodeIndex": 0}}

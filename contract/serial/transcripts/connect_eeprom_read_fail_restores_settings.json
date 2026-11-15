@@ -7,7 +7,7 @@
       "variant": "holey",
       "version": "51.27"
     },
-    "webcontrolCommit": "c859cea"
+    "webcontrolCommit": "81ff3d4"
   },
   "setup": {
     "units": "MM",
@@ -18,20 +18,22 @@
     "start": "boot"
   },
   "events": [
-    {"type": "rx", "line": "PCB v1.6 TLE9201  Detected"},
-    {"type": "rx", "line": "FAKE_SERVO off"},
+    {"type": "rx", "line": "PCB v1.1 Detected"},
     {"type": "rx", "line": "error: EEPROM read fail. Using default settings."},
     {"type": "tx", "bytes": "G21  \n"},
     {"type": "rx", "line": "Grbl v1.00"},
     {"type": "rx", "line": "ready"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "$$ \n"},
+    {"type": "rx", "line": "G21"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G90  \n"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "B05  \n"},
+    {"type": "rx", "line": "G90"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "$13=63.5000 \n"},
+    {"type": "rx", "line": "B05"},
     {"type": "rx", "line": "Firmware Version 51.27"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "$0=2438.4 \n"},

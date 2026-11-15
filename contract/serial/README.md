@@ -16,6 +16,9 @@ which is not always what the firmware needs; the known gaps are listed under "Kn
 | `transcripts/<name>.json`   | The corpus, one behaviour per file, named by behaviour                                 |
 | `transcripts-rust/<name>.json` | Where Rust must differ (known warts): replaces the transcript of the same name for Rust; a new name is a Rust-only behaviour, its description starting "Rust only" |
 | `gcode/<name>.nc`           | G-code files transcripts load by path                                                  |
+| `gcode/real/<name>.nc`      | Trimmed G-code from the owner's real jobs ("Real jobs" below)                          |
+| `real-jobs/<name>.json`     | What v0.94 sent and read for those lines on the owner's machine                        |
+| `real-jobs.md`              | The backend's writes for the real jobs against v0.94's, differences classified         |
 | `recording.schema.json`     | One line of a serial recording (`~/.WebControl/serial-recordings/*.jsonl`)             |
 
 Tools, in the repository root:
@@ -26,6 +29,8 @@ Tools, in the repository root:
 | `tools/record_serial_transcript.py`   | Runs scenarios against the real backend and writes `transcripts/`             |
 | `tools/convert_recording.py`          | Turns a real-machine recording (and its G-code) into a transcript skeleton    |
 | `tools/import_v094_log.py`            | Splits a v0.94 `log.txt`/`alog.txt` into recordings, one per connect          |
+| `tools/index_recordings.py`           | Streams recordings and prints one summary line per file (counts, features)    |
+| `tools/owner_machine.py`              | The owner's controller lines and settings, copied from its recordings         |
 | `tests/serial_contract.py`            | The Python replay engine (also used by the recorder)                          |
 
 ## A transcript
@@ -69,8 +74,8 @@ Applied before the backend starts, in this order:
    without side effects (nothing is sent to the controller for them).
 2. `units` (`MM` default, `INCHES`) and `unitsZ` (the Z panel's units, default `units`).
 3. `home` `{x, y}` in machine units: `homeX`/`homeY`, the shift added to every absolute X and Y streamed from the file.
-4. `gcode`: the loaded file, either `{"path": "gcode/x.nc"}` (relative to this directory) or `{"lines": [...]}`
-   (joined with `\n`, ending with one, as a real file). It is loaded the way `/openGCode` loads a file, so the tx
+4. `gcode`: the loaded file, either `{"path": "gcode/x.nc"}` (relative to this directory; one subdirectory deep at
+   most) or `{"lines": [...]}` (joined with `\n`, ending with one, as a real file). It is loaded the way `/openGCode` loads a file, so the tx
    bytes include the loader's normalisation: every line gains a trailing space, runs of spaces collapse, a space is
    put between a number and the next word.
 5. `start`:
@@ -200,13 +205,16 @@ the backend has been quiet for `quiet` seconds, one line per settle.
 | `z_limits_refused_on_51_27` | Z-limit actions alert and send nothing below 51.292 |
 | `z_limits_on_51_292` | `$63`/`$64` in mm, clear, `B20`, with 51.292's replies to each |
 | `holey_calibration_accept_writes_settings` | Calculate sends nothing; Accept writes `$3`, `$2`, `$40`, `$41` |
+| `real_*` | the owner's real jobs, with the controller's recorded replies ("Real jobs" below) |
 
 ## Adding or changing a transcript
 
 1. Add or edit a scenario in `tools/serial_scenarios.py`. Steps are events without tx, plus recorder-only steps:
    `idle()` (the controller model answers until the backend goes quiet), `wait_tx(regex)` (answer until the backend
-   writes a matching line, which stays unanswered), `firmware(ack=, flush=, forget=, rule=)` and
-   `pauses_on(regex, *replies)` (a line the firmware holds until `~`, after printing `replies`).
+   writes a matching line, which stays unanswered), `firmware(ack=, flush=, forget=, rule=, echo=)` and
+   `pauses_on(regex, *replies)` (a line the firmware holds until `~`, after printing `replies`). A 51.27 scenario
+   starts with `firmware(echo=True)` and the owner's boot banner, so the model prints what 51.27 prints before each
+   line runs.
 2. `.venv/bin/python tools/record_serial_transcript.py <name>` (no name: all of them).
 3. Read the result against `spec/firmware.md` before committing. The recorder records whatever the backend does.
 4. `.venv/bin/python -m pytest tests/test_serial_contract.py`.
@@ -362,6 +370,70 @@ that shows the behaviour (usually a job), restart it from `start: connected`, an
 `tests/fixtures/v094/` holds a synthetic log and alog in this format; `tests/test_import_v094_log.py` checks the
 importer against it.
 
+## Real replies
+
+The owner's v0.94 logs (December 2025 to November 2026; holey 51.27 on a PCB v1.1 board, buffering off) were
+imported into 366 recordings (13 GB, 1.78 M lines written, 158 M read) and indexed with `tools/index_recordings.py`.
+They stay on the owner's machine; only the lines in `tools/owner_machine.py` and the trimmed G-code under
+`gcode/real/` are in the repository. What they hold, by recording file:
+
+| Feature | Files | Count |
+| --- | --- | --- |
+| Boot banner / `B05` reply / `$$` report | 33 / 31 / 31 | 100 lines / 31 / 31 |
+| Jobs streamed (`G1` with X or Y written) | 40 | 1.63 M lines, 133 k arcs |
+| `Tool Change:` / `Maslow Paused` | 25 / 25 | 34 / 35 |
+| `~` / `!` written | 26 / 13 | 65 / 24 |
+| Jogs (`G91`) / `G10 Z0` | 36 / 26 | 393 / 41 |
+| `Command G17 unsupported and ignored.` | 34 | 109 |
+| `ALARM:`, `error:`, `Message:`, `Buffer overflow!`, `z axis zeroed`, `G38.2`, B13-B15, `M0` | 0 | 0 |
+
+What 51.27 says, as recorded:
+
+- **Boot:** `PCB v1.1 Detected`, `Grbl v1.00`, `ready`, `ok`, then on its own `[Forward Calculating Position]`,
+  `position loaded at:` and the X and Y it loaded, one per line. No `FAKE_SERVO` line.
+- **Every G, M or T line is echoed** before it runs, one line per G/M/T word with its arguments (`G0 G40 G90 G17` →
+  `G0 `, `G40 `, `G90 `, `G17`), without the trailing spaces; `B05` too; `$` commands, `~` and `!` are not. A `T`
+  word adds `Tool change to tool N`; `G17` adds `Command G17 unsupported and ignored.`. The `ok` follows when the
+  line finishes, so the echo of a long move comes at once and its `ok` seconds later.
+- **`$$`:** every key from `$0` (two decimals) to `$46` (eight), with its description, an empty line, then `ok`. A
+  `$45=` write is answered with the position reload lines and `ok`.
+- **Status:** `<Idle,MPos:…>` and `[PE:lErr,rErr,space,lChain,rChain]` together about every 0.2 s, idle or cutting;
+  `space` is 127 except just after a line arrives.
+- **Tool change:** `T2 `, `Tool change to tool 2`, `M6`, `Tool Change: Please insert tool 2`, `Maslow Paused`; a
+  `~` then gets two `ok`s (its own and the M6 line's). An M6 for the tool already in gets `T1 `, `Tool change to tool
+  1`, `M6`, `ok` and no pause.
+- **`!`:** `ok` (two when the line in flight had just finished), then the position reload lines.
+- Once (20251221-000533, t=36-53) a lone `M3` got no echo and no `ok`: nothing, not even a status report, came
+  for 16 s, then a cut-off `[PE:` line and the boot banner. With `$17=0` (every `$$` in the logs) 51.27's `M3` does
+  nothing, so the `M3` itself does not explain the reboot.
+
+## Real jobs
+
+The `real_*` transcripts stream jobs the owner really cut, chosen from the recordings: the trimmed G-code is in
+`gcode/real/` (the first lines of each file and the region around its tool change, pause or stop, back to back, never
+a whole file), and `real-jobs/<name>.json` holds what v0.94 wrote for those lines and what the controller answered,
+status reports thinned. **Both come from the owner's machine**: its files, its home and its controller. Setup uses the
+owner's settings (`tools/owner_machine.py`) and the home v0.94 streamed with. The controller answers each line with
+51.27's echo, then the status reports the same line got on the machine (ticks of at most 1 s between them), then `ok`.
+
+| Transcript | Job |
+| --- | --- |
+| `real_mancala_outside_tool_change` | a 137-line contour with arcs, its first pass and last: tool change, Resume, M30 |
+| `real_mancala_roughing_tool_change` | the first 150 lines of a 45,000-line adaptive roughing |
+| `real_mancala_finishing_large_job` | a 120,000-line finishing job: its first 150 lines and last 40 |
+| `real_katie_neck_back_pause_jog_resume` | the logs' only Pause: Z jogged, Define Z zero, Z up, Resume |
+| `real_katie_body_top_pause_stop` | tool change answered with Play, helical arcs, Pause in a retract, Stop |
+| `real_maypole_tool_change_play` | tool change answered with Play, then the first 150 lines |
+
+`real_katie_neck_back_pause_jog_resume` raises every Z in today's file by 25 mm: the owner regenerated
+`1-neck-back-25-endmill.nc` after cutting it, and the logs show the Z values it was cut with.
+
+`tools/extract_real_job.py` cuts both files from the recordings (its `JOBS` table names each job's recording, time
+windows and line ranges), `tools/real_job_scenarios.py` holds the scenarios, and `tools/compare_real_jobs.py` writes
+`real-jobs.md`: every write the backend makes for these lines against what v0.94 made, each difference either an
+intended change with its finding or commit, or UNEXPLAINED. Re-recording a real job needs only the files here; cutting
+a new one needs the owner's recordings.
+
 ## Known warts
 
 Behaviour the transcripts pin today that `spec/firmware.md` or plain sense says is off. A Rust backend matches it
@@ -382,11 +454,18 @@ until a transcript and this list change together.
 5. **Number formats vary.** A restore writes `$16=0.000000`, `$21=1300.00`, `$45=0.00000516850`: whatever each
    setting's formatter produces. Moves the backend builds print Python's `str(float)` (`G00 X254.0`, `G0 Z5.0`), and
    home-shifted file coordinates keep the longer operand's decimals (`X22.8456 Y3.00`).
-6. **Simplified controller replies.** Outside `z_limits_on_51_292` and `buffer_overflow_halts_streaming`, the
-   controller lines are the minimum the backend reacts to: the boot handshake's `$$` is answered with a bare `ok`
-   (a real 51.27 prints every `$n=` line first; `connect_settings_sync_adopts_unknown_keys` covers that), and the
-   prelude's 51.292 answers are generated by `tests/serial_contract.py`. A Rust parser must also tolerate the full
-   replies in `spec/firmware.md` §1, §9.
+6. **Controller replies are real only where the owner's recordings show them.** The 51.27 transcripts answer as the
+   owner's controller (holey 51.27, PCB v1.1) did in 13 GB of v0.94 logs (`tools/owner_machine.py`, "Real replies"
+   below): its banner (`PCB v1.1 Detected`, `Grbl v1.00`, `ready`; no `FAKE_SERVO` line), the echo of every
+   G/M/T word before a line runs, `Tool change to tool N`, `Command G17 unsupported and ignored.`, the position
+   reload after a boot and after `!`, the full `$$` report in `connect_boot_handshake`, and recorded status streams in
+   the `*_waits_for_a_slow_ok` pair. Still simplified: the prelude (the runner's own: `$$` gets a bare `ok`, `B05`
+   no echo); status reports a scenario places at chosen positions, which have no `[PE:]` line; the coordinates in
+   `position loaded at:` (the last status report's, or 0); and every reply the owner's machine never produced in the
+   logs: `M0`'s pause, ALARM, `error:`, `Buffer overflow!`, the probe's lines, `Message:`, the `$` write replies
+   and all of 51.292. The default `bootBanner` (TLE9201 with `FAKE_SERVO off`) is not what 51.27 prints; it stays
+   the runners' default, and the 51.27 transcripts set the owner's banner explicitly. A Rust parser must also
+   tolerate the full replies in `spec/firmware.md` §1, §9.
 7. **The line limit counts bytes in Rust (Rust-intended).** A line is refused when, as written with its `\n`, it is
    over 126. Python counts characters; Rust counts bytes, as the firmware's buffer does. The two agree on every
    transcript, which is ASCII; they differ only for non-ASCII text, which Rust refuses sooner.

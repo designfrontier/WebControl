@@ -7,7 +7,7 @@
       "variant": "holey",
       "version": "51.27"
     },
-    "webcontrolCommit": "c859cea"
+    "webcontrolCommit": "81ff3d4"
   },
   "setup": {
     "units": "MM",
@@ -20,13 +20,25 @@
         "G1 X1! Y2~ Z`3? F4\u0018",
         "G0 X5 (note) ; trailing"
       ]
-    }
+    },
+    "bootBanner": [
+      "PCB v1.1 Detected",
+      "Grbl v1.00",
+      "ready",
+      "ok",
+      "[Forward Calculating Position]",
+      "position loaded at:",
+      "247.79",
+      "-5.88"
+    ]
   },
   "events": [
     {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
     {"type": "tx", "bytes": "G1 X1 Y2 Z3 F4  \n"},
+    {"type": "rx", "line": "G1 X1 Y2 Z3 F4"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G0 X5   \n"},
+    {"type": "rx", "line": "G0 X5"},
     {"type": "rx", "line": "ok"},
     {"type": "expect", "state": {"uploadFlag": 0, "jobInProgress": false, "gcodeIndex": 0}}
   ]

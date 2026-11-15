@@ -7,18 +7,30 @@
       "variant": "holey",
       "version": "51.27"
     },
-    "webcontrolCommit": "5e01a38"
+    "webcontrolCommit": "81ff3d4"
   },
   "setup": {
     "units": "INCHES",
     "home": {
       "x": 3.9488,
       "y": 0
-    }
+    },
+    "bootBanner": [
+      "PCB v1.1 Detected",
+      "Grbl v1.00",
+      "ready",
+      "ok",
+      "[Forward Calculating Position]",
+      "position loaded at:",
+      "247.79",
+      "-5.88"
+    ]
   },
   "events": [
     {"type": "ui", "action": {"command": "touchZ", "arg": "", "arg1": ""}},
     {"type": "tx", "bytes": "G90 G38.2 Z-0.3937 \n"},
+    {"type": "rx", "line": "G90 "},
+    {"type": "rx", "line": "G38.2 Z-0.3937"},
     {"type": "rx", "line": "probing for z axis zero"},
     {"type": "rx", "line": "max depth -10.00 mm."},
     {"type": "rx", "line": "feedrate 39.94 mm per min."},

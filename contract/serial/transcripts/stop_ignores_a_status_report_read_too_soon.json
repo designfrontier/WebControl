@@ -7,7 +7,7 @@
       "variant": "holey",
       "version": "51.27"
     },
-    "webcontrolCommit": "69d6968"
+    "webcontrolCommit": "81ff3d4"
   },
   "setup": {
     "units": "MM",
@@ -17,7 +17,17 @@
     },
     "gcode": {
       "path": "gcode/square_mm.nc"
-    }
+    },
+    "bootBanner": [
+      "PCB v1.1 Detected",
+      "Grbl v1.00",
+      "ready",
+      "ok",
+      "[Forward Calculating Position]",
+      "position loaded at:",
+      "247.79",
+      "-5.88"
+    ]
   },
   "timing": {
     "quiet": 0.05
@@ -25,29 +35,42 @@
   "events": [
     {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
     {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "G21"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "G90"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G0 Z5  \n"},
+    {"type": "rx", "line": "G0 Z5"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G0 X22.8456 Y3.00  \n"},
+    {"type": "rx", "line": "G0 X22.8456 Y3.00"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G1 Z-1.5 F127  \n"},
+    {"type": "rx", "line": "G1 Z-1.5 F127"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G1 X42.8456 F600  \n"},
+    {"type": "rx", "line": "G1 X42.8456 F600"},
     {"type": "ui", "action": {"command": "stopRun", "arg": "", "arg1": ""}},
     {"type": "tx", "bytes": "!\n", "realtime": true},
     {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "[Forward Calculating Position]"},
+    {"type": "rx", "line": "position loaded at:"},
+    {"type": "rx", "line": "0.00"},
+    {"type": "rx", "line": "0.00"},
     {"type": "rx", "line": "<Idle,MPos:42.85,3.00,-1.50,WPos:0.000,0.000,0.000>"},
     {"type": "ui", "action": {"command": "move", "arg": "up", "arg1": "1"}, "comment": "held: the report above came within 0.25 s of the !"},
+    {"type": "tx", "bytes": "G91  \n"},
     {"type": "expect", "state": {"uploadFlag": 0, "jobInProgress": false, "gcodeIndex": 0}},
     {"type": "tick", "seconds": 0.3, "comment": "the backend ignores acks until a status report after 0.25 s"},
     {"type": "rx", "line": "<Idle,MPos:42.85,3.00,-1.50,WPos:0.000,0.000,0.000>"},
-    {"type": "tx", "bytes": "G91  \n"},
+    {"type": "rx", "line": "G91"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G00 Y1.0  \n"},
+    {"type": "rx", "line": "G00 Y1.0"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "G90"},
     {"type": "rx", "line": "ok"}
   ]
 }

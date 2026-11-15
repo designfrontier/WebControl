@@ -2,12 +2,12 @@
   "formatVersion": 1,
   "meta": {
     "name": "connect_boot_handshake",
-    "description": "The port opens and the controller boots: WebControl sends units, $$ and G90 once the boot ok arrives, then the B05 version query and the $13 write the banner queued. The B05 reply is parsed.",
+    "description": "The port opens and the controller boots: WebControl sends units, $$ and G90 once the boot ok arrives, then the B05 version query and the $13 write the banner queued. The B05 reply is parsed. The controller's lines are the owner's 51.27 on a PCB v1.1 board, its full $$ report included, so nothing differs and nothing more is written.",
     "firmware": {
       "variant": "holey",
       "version": "51.27"
     },
-    "webcontrolCommit": "c859cea"
+    "webcontrolCommit": "81ff3d4"
   },
   "setup": {
     "units": "MM",
@@ -15,25 +15,94 @@
       "x": 0,
       "y": 0
     },
-    "start": "boot"
+    "start": "boot",
+    "settings": {
+      "Maslow Settings": {
+        "motorSpacingX": "3011.16237",
+        "motorOffsetY": "433.68186",
+        "zAxis": 1,
+        "zDistPerRot": "-24",
+        "bufferOn": 0,
+        "zAxisSafeHeight": "5"
+      },
+      "Advanced Settings": {
+        "leftChainTolerance": "-0.06495",
+        "rightChainTolerance": "-0.02111",
+        "rotationRadius": "138.4",
+        "chainSagCorrection": "33"
+      }
+    }
   },
   "events": [
-    {"type": "rx", "line": "PCB v1.6 TLE9201  Detected"},
-    {"type": "rx", "line": "FAKE_SERVO off"},
+    {"type": "rx", "line": "PCB v1.1 Detected"},
     {"type": "rx", "line": "Grbl v1.00"},
     {"type": "rx", "line": "ready"},
     {"type": "rx", "line": "ok", "comment": "the boot ok releases the queued commands"},
     {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "[Forward Calculating Position]"},
+    {"type": "rx", "line": "position loaded at:"},
+    {"type": "rx", "line": "247.79"},
+    {"type": "rx", "line": "-5.88"},
+    {"type": "rx", "line": "G21"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "$$ \n"},
+    {"type": "rx", "line": "$0=2438.40 (machine width, mm)"},
+    {"type": "rx", "line": "$1=1219.19995117 (machine height, mm)"},
+    {"type": "rx", "line": "$2=3011.16235351 (motor distance, mm)"},
+    {"type": "rx", "line": "$3=433.68185424 (motor height, mm)"},
+    {"type": "rx", "line": "$4=310.00000000 (sled width, mm)"},
+    {"type": "rx", "line": "$5=139.00000000 (sled height, mm)"},
+    {"type": "rx", "line": "$6=79.00000000 (sled cg, mm)"},
+    {"type": "rx", "line": "$7=2 (Kinematics Type 1=Quadrilateral, 2=Triangular)"},
+    {"type": "rx", "line": "$8=138.40000915 (rotation radius, mm)"},
+    {"type": "rx", "line": "$9=2000 (axis idle before detach, ms)"},
+    {"type": "rx", "line": "$10=3360 (full length of chain, mm)"},
+    {"type": "rx", "line": "$11=1651 (calibration chain length, mm)"},
+    {"type": "rx", "line": "$12=8113.72998046 (main steps per revolution)"},
+    {"type": "rx", "line": "$13=63.50000000 (distance / rotation, mm)"},
+    {"type": "rx", "line": "$15=800 (max feed, mm/min)"},
+    {"type": "rx", "line": "$16=1 (Auto Z Axis, 1 = Yes)"},
+    {"type": "rx", "line": "$17=0 (auto spindle enable 1=servo, 2=relay_h, 3=relay_l)"},
+    {"type": "rx", "line": "$18=12.60000038 (max z axis RPM)"},
+    {"type": "rx", "line": "$19=-24.00000000 (z axis distance / rotation)"},
+    {"type": "rx", "line": "$20=7560.00000000 (z axis steps per revolution)"},
+    {"type": "rx", "line": "$21=1300.00000000 (main Kp Pos)"},
+    {"type": "rx", "line": "$22=0.00000000 (main Ki Pos)"},
+    {"type": "rx", "line": "$23=34.00000000 (main Kd Pos)"},
+    {"type": "rx", "line": "$24=1.00000000 (main Pos proportional weight)"},
+    {"type": "rx", "line": "$25=5.00000000 (main Kp Velocity)"},
+    {"type": "rx", "line": "$26=0.00000000 (main Ki Velocity)"},
+    {"type": "rx", "line": "$27=0.27999999 (main Kd Velocity)"},
+    {"type": "rx", "line": "$28=1.00000000 (main Velocity proportional weight)"},
+    {"type": "rx", "line": "$29=1300.00012207 (z axis Kp Pos)"},
+    {"type": "rx", "line": "$30=0.00000000 (z axis Ki Pos)"},
+    {"type": "rx", "line": "$31=34.00000000 (z axis Kd Pos)"},
+    {"type": "rx", "line": "$32=1.00000000 (z axis Pos proportional weight)"},
+    {"type": "rx", "line": "$33=5.00000000 (z axis Kp Velocity)"},
+    {"type": "rx", "line": "$34=0.00000000 (z axis Ki Velocity)"},
+    {"type": "rx", "line": "$35=0.27999999 (z axis Kd Velocity)"},
+    {"type": "rx", "line": "$36=1.00000000 (z axis Velocity proportional weight)"},
+    {"type": "rx", "line": "$37=33.00000000 (chain sag correction value)"},
+    {"type": "rx", "line": "$38=2 (chain over sprocket)"},
+    {"type": "rx", "line": "$39=3 (PWM frequency value 1=39,000Hz, 2=4,100Hz, 3=490Hz)"},
+    {"type": "rx", "line": "$40=-0.06495001 (chain tolerance, left chain, mm)"},
+    {"type": "rx", "line": "$41=-0.02111000 (chain tolerance, right chain, mm)"},
+    {"type": "rx", "line": "$42=2.00000000 (position error alarm limit, mm)"},
+    {"type": "rx", "line": "$43=0.00000000 (reserved1, deg)"},
+    {"type": "rx", "line": "$44=0.00000000 (reserved2, mm)"},
+    {"type": "rx", "line": "$45=0.00000517 (chain stretch factor, m/m/N)"},
+    {"type": "rx", "line": "$46=97.90000152 (Sled Weight, N)"},
+    {"type": "rx", "line": ""},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "G90"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "B05  \n"},
+    {"type": "rx", "line": "B05"},
     {"type": "rx", "line": "Firmware Version 51.27"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "$13=63.5000 \n"},
     {"type": "rx", "line": "ok"},
-    {"type": "expect", "state": {"firmwareBuild": "51.27", "controllerBoard": "PCB v1.6 TLE9201  Detected"}, "emitted": [{"command": "controllerMessage", "data": "Firmware Version 51.27"}]}
+    {"type": "expect", "state": {"firmwareBuild": "51.27", "controllerBoard": "PCB v1.1 Detected"}, "emitted": [{"command": "controllerMessage", "data": "Firmware Version 51.27"}]}
   ]
 }

@@ -7,22 +7,35 @@
       "variant": "holey",
       "version": "51.27"
     },
-    "webcontrolCommit": "c859cea"
+    "webcontrolCommit": "81ff3d4"
   },
   "setup": {
     "units": "INCHES",
     "home": {
       "x": 0,
       "y": 0
-    }
+    },
+    "bootBanner": [
+      "PCB v1.1 Detected",
+      "Grbl v1.00",
+      "ready",
+      "ok",
+      "[Forward Calculating Position]",
+      "position loaded at:",
+      "247.79",
+      "-5.88"
+    ]
   },
   "events": [
     {"type": "ui", "action": {"command": "returnToCenter", "arg": "", "arg1": ""}},
     {"type": "tx", "bytes": "G90   \n"},
+    {"type": "rx", "line": "G90"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G00 Z0.197 \n"},
+    {"type": "rx", "line": "G00 Z0.197"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G00 X0.0 Y0.0  \n"},
+    {"type": "rx", "line": "G00 X0.0 Y0.0"},
     {"type": "rx", "line": "ok"}
   ]
 }
