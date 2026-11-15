@@ -75,7 +75,8 @@ the raw line, re-send B05 on any boot banner (`PCB v1.`, `Grbl v1.00`, `ready`),
 
 F is per minute in current units, stored as mm/min (×25.4 under G20), clamped to [1, `$15`], and modal (G0 sets it
 too). G0 runs at `$15` and ignores F for speed. Z is clamped to `zMaxFeed = $18 × |$19|`: 39.9 mm/min on the 51.27
-defaults, 399 mm/min on the 51.292 defaults. WebControl's restart sequence rapids without F, plunges with
+defaults, 399 mm/min on the 51.292 defaults. WebControl's restart sequence rapids without F (Rust: first to the higher of the safe height and the bit's
+height, never lower, before any XY move), plunges with
 `G1 Z… F<plunge>` (the file's last non-G0 Z feed, else 12.8 mm/min) and ends with `G0`/`G1 F<file F>` to restore the
 file's modal motion and feed. If the file set no F before that point it restores no F (only `G0`/`G1` where the
 file's motion differs from the restart's last move). With no plunge that leaves the firmware's modal feed alone; after
@@ -102,7 +103,8 @@ a plunge the plunge's 12.8 mm/min stays the modal feed, so the file's next F-les
   `~` only on Resume, or before a jog when no job lines are buffered behind the pause.
 - M6 with a new tool: spindle off, `Tool Change: Please insert tool N`, pause. `T2` and `M6` on separate lines keep
   streaming without a tool change and `M6 T2` stalls silently, so WebControl leads every M6 with the T the file
-  selected, stops streaming after a tool-changing M6, and on Resume returns to the file's XY at safe height.
+  selected, stops streaming after a tool-changing M6, and on Resume returns to the file's XY at safe height (Rust: or at the bit's
+height when that is higher).
 - Manual Z (`$16=0`): `Message: Please adjust Z-Axis…` then pause; handled correctly.
 - Alarms: "Sled not keeping up" stops the firmware with no acks; "Board invalid" hangs it.
 
@@ -167,13 +169,20 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
    including `$13` (sets R) and `$18`, `$9`, `$28`, `$36`; treat `EEPROM read fail` as a factory reset.
 10. Feed model: modal F clamped to [1, `$15`]; G0 at `$15`; Z clamped to `$18 × |$19|`; G38.2 at 60 mm/min. Emit F
     on the first motion line; restart with a G1 Z plunge at an explicit feed, then restore the file's last F, if it set one
-    (without one the plunge feed stays modal).
+    (without one the plunge feed stays modal). Never lower before travel (owner decision, 2026-11-15): before the XY
+    travel of any resume or restart, and of Home, Return to Center and triangular Accept, Z goes to max(safe height,
+    the bit's Z) in the active units, and no Z move before that travel lowers the bit. The bit's Z is the Z
+    WebControl last commanded, or, when a Stop, alarm, probe or reboot left it unknown, the last status report's MPos
+    z plus one display step (0.01 in the report's units): MPos is only a lower bound for clearance here, so it is
+    rounded up, never used to restore an exact Z (B15).
 11. Never auto-send `~`; stop streaming before any line the firmware will pause on (using its T semantics); emit
     `T<n> M6`. After an ALARM or `Buffer overflow!`, Play resumes from the oldest unacknowledged line, returning at
     safe height (`alarm_mid_cut_rewinds_and_resumes`); Stop also clears it (owner decision, 2026-11-15).
 12. Z limits: hide below 51.292 and never send B17/B18/B19; on 51.292+ use `$63`/`$64` (mm, shifted by zeroing)
     and B20 to read them.
-13. Spindle on 51.29x: send `S` on its own line after M3.
+13. Spindle on 51.29x: send `S` on its own line after M3. A resume or restart that restores `M3`/`M4` on 51.29x
+    follows it with the file's last `S` (if it set one); 51.27 and stock get the bare `M3`, which does nothing with
+    `$17=0`.
 14. Kinematics: reproduce the firmware exactly (R rule, density, trig, tolerances, old-triangular branch, clamps,
     forward-solve limits). The live computed sled position uses the float32 triangular inverse
     (`wc-kinematics` `Firmware32`, checked against the same C built for float); holey calibration keeps Python's

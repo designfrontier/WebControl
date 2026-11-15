@@ -46,6 +46,11 @@ These also override anything below; `contract/README.md` ("Rust-intended differe
 - **3. Triangular Accept raises Z** to the Z-axis safe height before its `G0 X0 Y0`, and is refused without a finite
   safe height. A Rust-intended deviation (`contract/serial/README.md`).
 - **5. Holey calibration uses `wc-calibration/src/trf.rs`**, the scipy TRF port, not the `levenberg-marquardt` crate.
+- **Never lower before travel.** Before the XY travel of every resume and restart (Pause, M0, tool change, Play
+  mid-file, Play after an alarm), and of Home, Return to Center and triangular Accept, Z goes to max(safe height, the
+  bit's Z); no Z move before that travel lowers the bit (`spec/firmware.md` B10). A Rust-intended deviation.
+- **51.29x spindle speed.** A restart that restores `M3`/`M4` on 51.29x follows it with the file's last `S` on its own
+  line (B13); 51.27 and stock are unchanged. A Rust-intended deviation.
 
 ## 0. Recommendations up front
 

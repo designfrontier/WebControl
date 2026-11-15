@@ -13,7 +13,7 @@ which is not always what the firmware needs; the known gaps are listed under "Kn
 | Path                        | What                                                                                   |
 | --------------------------- | -------------------------------------------------------------------------------------- |
 | `transcript.schema.json`    | JSON Schema (draft 2020-12) for one transcript                                         |
-| `transcripts/<name>.json`   | The corpus, one behaviour per file, named by behaviour                                 |
+| `transcripts/<name>.json`   | The corpus, one behaviour per file, named by behaviour; those in `RUST_ONLY` (`tests/serial_contract.py`) pin a Rust-intended deviation and only the Rust runner replays them |
 | `transcripts-rust/<name>.json` | Where Rust must differ (known warts): replaces the transcript of the same name for Rust; a new name is a Rust-only behaviour, its description starting "Rust only" |
 | `gcode/<name>.nc`           | G-code files transcripts load by path                                                  |
 | `gcode/real/<name>.nc`      | Trimmed G-code from the owner's real jobs ("Real jobs" below)                          |
@@ -188,6 +188,8 @@ the backend has been quiet for `quiet` seconds, one line per settle.
 | `stream_buffered_with_home_shift` | 126-byte character counting, refilled by each ok |
 | `stream_unbuffered_waits_for_a_slow_ok`, `stream_buffered_waits_for_a_slow_ok` | an ok 4 s late (status reports in between) releases nothing early |
 | `start_mid_file_restores_modal_state` | restart sequence: safe height, XY, `G1` plunge at the plunge feed, `G1 F<file F>` |
+| `resume_above_safe_height_never_lowers_before_travel` | Rust only: Resume with the bit above the safe height travels at the bit's Z; so does Return to Center |
+| `resume_on_51_292_sets_the_spindle_speed_after_m3` | Rust only: on 51.29x Resume restores the spindle with `M3` then the file's last `S` on its own line |
 | `pause_jog_resume_returns_to_file_position` | Pause with a line in flight, jog while paused, Resume returns and replunges |
 | `m0_in_file_then_resume` | M0 stops streaming; Resume sends `~` and returns |
 | `tool_change_t_and_m6_on_one_line` | `T2 M6`: stop after it, prompt, Resume returns at safe height without plunging |
@@ -218,6 +220,9 @@ the backend has been quiet for `quiet` seconds, one line per settle.
 2. `.venv/bin/python tools/record_serial_transcript.py <name>` (no name: all of them).
 3. Read the result against `spec/firmware.md` before committing. The recorder records whatever the backend does.
 4. `.venv/bin/python -m pytest tests/test_serial_contract.py`.
+
+A transcript in `RUST_ONLY` is edited by hand, as the spec: Python is not its reference, the recorder skips it unless
+named, and the Python test checks only its schema and layout. Keep the 51.27 echo (`rx`) after each changed `tx`.
 
 Transcripts are written one event per line; the test fails on any other layout, so always write them with the
 recorder or `serial_contract.dumps`.
@@ -428,6 +433,10 @@ owner's settings (`tools/owner_machine.py`) and the home v0.94 streamed with. Th
 `real_katie_neck_back_pause_jog_resume` raises every Z in today's file by 25 mm: the owner regenerated
 `1-neck-back-25-endmill.nc` after cutting it, and the logs show the Z values it was cut with.
 
+`real_katie_neck_back_pause_jog_resume`, `real_mancala_outside_tool_change` and `real_maypole_tool_change_play` are
+`RUST_ONLY` since "Never lower before travel" (Rust-intended deviation 2): their resumes travel at the bit's height,
+which Python never did, so they are hand-edited and the Python recorder no longer rewrites them.
+
 `tools/extract_real_job.py` cuts both files from the recordings (its `JOBS` table names each job's recording, time
 windows and line ranges), `tools/real_job_scenarios.py` holds the scenarios, and `tools/compare_real_jobs.py` writes
 `real-jobs.md`: every write the backend makes for these lines against what v0.94 made, each difference either an
@@ -472,10 +481,30 @@ until a transcript and this list change together.
 
 ## Rust-intended deviations
 
-Where the Rust backend writes something different from Python by owner decision, with no transcript to pin it.
+Where the Rust backend writes something different from Python by owner decision. Those with transcripts are in
+`RUST_ONLY`.
 
 1. **Triangular Accept raises Z first** (decision 3, 2026-11-15). Python's Accept queues `G21 `, `G90 `, `G40 `,
    `G0 X0 Y0 ` after the `$` lines, so the sled travels to the centre at whatever height the bit is. Rust queues
    `G0 Z<zAxisSafeHeight in mm> ` before `G0 X0 Y0 ` (after `G21`, so in millimetres), and refuses the Accept with a
    409 or an alert, saving nothing, when the safe height is not a finite number. `tests/fixtures/calibration/
    accept_commands.json` stays Python's record; `wc-calibration`'s fixture test inserts the raise.
+2. **Never lower before travel** (2026-11-15). Before the XY travel of every resume and restart (Resume after Pause, an
+   M0 or a tool change; Play mid-file; Play after an ALARM or overflow) and of Home, Return to Center and triangular
+   Accept, Python sent `G0 Z<zAxisSafeHeight>` (`G00 Z…` for Home and Return to Center) even when the bit was higher,
+   so a bit 10 mm up was lowered to 5 mm and then travelled. Rust sends the same one line, at max(safe height, the
+   bit's Z) in the active units, and no Z move before the travel lowers the bit. Keeping the line when the bit is
+   already higher (a move to where it is) keeps every sequence the same shape, so a transcript changes only in that
+   line's value. The bit's Z is the Z WebControl last commanded, followed through every line it wrote (relative
+   moves, units, `G10 Z0`, a touching probe's zero); when a Stop, an ALARM, a missed probe, a line it cannot follow
+   or a reboot leaves that unknown, it is the last status report's MPos z plus one display step (0.01 in the
+   report's units), since MPos has two decimals and is only a lower bound here (`spec/firmware.md` B10, B15). With
+   neither known, the line is the safe height, as before. The height is settled when the line reaches the
+   controller, after every line queued before it (a Z jog pressed just before Resume counts). Transcripts:
+   `resume_above_safe_height_never_lowers_before_travel`; and `real_katie_neck_back_pause_jog_resume`,
+   `real_mancala_outside_tool_change` and `real_maypole_tool_change_play`, whose resumes now travel at the bit's
+   10 mm (or the reported 10.03 mm, sent as `Z10.04`) instead of 5 mm.
+3. **The spindle's speed after `M3` on 51.29x** (2026-11-15). 51.29x leaves the PWM at 0 after `M3` until an `S` line
+   (`spec/firmware.md` §9, B13), so a resume or restart that restores `M3` or `M4` on a controller reporting 51.29
+   follows it with the file's last `S` on its own line (`S12000.0`), if the file set one. On 51.27 and stock the
+   restart sends the bare `M3`, as before. Transcript: `resume_on_51_292_sets_the_spindle_speed_after_m3`.
