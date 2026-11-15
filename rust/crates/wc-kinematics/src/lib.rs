@@ -122,7 +122,7 @@ fn clamp_like_python(value: f64, limit: f64) -> f64 {
 
 /// A kinematics model. Quadrilateral solves start from the sled tilt the previous one found, so one model gives
 /// the same answers as Python only when it sees the same calls in the same order.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Kinematics {
     geometry: Geometry,
     solver: quadrilateral::Solver,

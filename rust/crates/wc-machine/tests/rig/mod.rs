@@ -87,7 +87,7 @@ impl Rig {
     }
 
     pub fn send(&mut self, event: Event) -> Vec<Effect> {
-        let effects = self.machine.handle(event, self.now);
+        let effects = self.machine.handle_inline(event, self.now);
         self.outbox.extend(written(&effects));
         effects
     }

@@ -25,6 +25,7 @@ use crate::pid::Pid;
 use crate::setup::Measure;
 use crate::ui::{ErrorTracker, PositionTracker};
 use crate::upgrade::{FirmwareJob, JobResult, Mark, Upgrade};
+use crate::work::{Done, Lanes, Work};
 
 /// Everything that can happen to the machine.
 #[derive(Debug, Clone, PartialEq)]
@@ -85,6 +86,8 @@ pub enum Event {
     },
     /// A GPIO button, debounced.
     Button(Button),
+    /// A [`Work`] the shell ran.
+    Computed(Done),
 }
 
 /// What the shell must do after an event, in order.
@@ -119,6 +122,8 @@ pub enum Effect {
     },
     /// The GPIO status LEDs, whenever they change.
     Leds(Leds),
+    /// Run off the machine task, then report `Event::Computed`.
+    Compute(Work),
 }
 
 /// An `Arc` whose equality is identity, so comparing snapshots never walks the settings.
@@ -341,6 +346,7 @@ pub struct Machine {
     /// The forward-kinematics model for the computed sled position, kept current by every `$` write.
     pub(crate) kinematics: wc_kinematics::Kinematics,
     pub(crate) upgrade: Upgrade,
+    pub(crate) lanes: Lanes,
 }
 
 pub(crate) fn broadcast<M: Message>(message: &M) -> Effect {
@@ -393,6 +399,7 @@ impl Machine {
             calibration: crate::calibration::Results::default(),
             kinematics,
             upgrade: Upgrade::new(Image::embedded()),
+            lanes: Lanes::default(),
         }
     }
 
@@ -430,6 +437,10 @@ impl Machine {
             }
             Event::ControllerLine(line) => self.controller_line(&line, now, &mut effects),
             Event::Tick => self.tick(now, &mut effects),
+            Event::PortOpened { .. } | Event::PortFailed { .. } if self.link == Link::HandedOff => {
+                // An open still on its way when a rollback took the link; avrdude needs the port.
+                effects.extend(matches!(event, Event::PortOpened { .. }).then_some(Effect::ClosePort));
+            }
             Event::PortOpened { port } => self.port_opened(port, now, &mut effects),
             Event::PortFailed { port, error } => {
                 tracing::debug!(port, error, "could not open the controller's port");
@@ -451,6 +462,7 @@ impl Machine {
                 let action = Action::new(button.command(resumes), Value::from(""), Value::from(""));
                 self.action(&action, now, &mut effects);
             }
+            Event::Computed(done) => self.computed(done, &mut effects),
         }
         self.pump(now, &mut effects);
         self.status_if_changed(&mut effects);
@@ -464,6 +476,18 @@ impl Machine {
             effects.push(Effect::Leds(self.leds));
         }
         effects
+    }
+
+    /// `handle`, with each [`Effect::Compute`] run at once and its effects in its place, for tests and tools.
+    pub fn handle_inline(&mut self, event: Event, now: Duration) -> Vec<Effect> {
+        let effects = self.handle(event, now);
+        effects
+            .into_iter()
+            .flat_map(|effect| match effect {
+                Effect::Compute(work) => self.handle_inline(work.run(), now),
+                other => vec![other],
+            })
+            .collect()
     }
 
     pub(crate) fn connection_status(&self) -> ConnectionStatus {

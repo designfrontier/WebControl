@@ -36,7 +36,7 @@ impl MachineBackend {
     }
 
     fn apply(&mut self, event: Event) {
-        let effects = self.machine.handle(event, self.now);
+        let effects = self.machine.handle_inline(event, self.now);
         self.collect(effects);
     }
 
@@ -107,7 +107,7 @@ impl SerialBackend for MachineBackend {
             },
             _ => return 404,
         };
-        let effects = self.machine.handle(Event::Edit { id: 1, request }, self.now);
+        let effects = self.machine.handle_inline(Event::Edit { id: 1, request }, self.now);
         let status = effects.iter().find_map(|effect| match effect {
             Effect::Respond { response, .. } => Some(response.status),
             _ => None,

@@ -9,7 +9,7 @@ const MAX_TRIES: u32 = 10;
 const DELTA_PHI: f64 = 0.01;
 const DELTA_Y: f64 = 0.01;
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 struct Trig {
     sin_phi: f64,
     sin_phi_delta: f64,
@@ -24,7 +24,7 @@ struct Trig {
 }
 
 /// The solver's state, carried from one call to the next.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Solver {
     pub phi: f64,
     x: f64,

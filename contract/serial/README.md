@@ -258,6 +258,13 @@ The runner needs these seams in the backend:
 
 `expect.state` may also name `probing`, which only the Rust-only transcripts use.
 
+The Rust runner replays the sans-IO machine (`Machine::handle_inline`, which also runs the CPU work the shell would
+run off the machine task), so it pins the bytes and their order, not how the shell writes them. The shell writes from
+a task of its own: a realtime `!` or `~` goes before every line still queued there, and a `!` also drops those lines
+and cuts short a line half-written, which the firmware flushes on `!` anyway (`spec/firmware.md` §1). Python's serial
+thread also sent its quick queue first and cleared the gcode queue on Stop, but never cut a line short. No transcript
+changes: the machine writes nothing between a `!` and the controller's resync.
+
 Rust does not need to reproduce the prelude's tx: it only has to reach the same state from the same rx lines. It
 must reproduce every byte after it. Where this contract pins something `spec/firmware.md` says is wrong (below), the
 Rust backend may fix it only together with a re-recorded transcript and a note here.

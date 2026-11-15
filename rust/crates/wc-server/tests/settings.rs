@@ -103,10 +103,10 @@ async fn a_pid_test_is_accepted_and_a_bad_one_refused() {
 async fn a_pid_test_is_refused_while_a_job_runs() {
     let mut machine = Machine::new("h", Settings::defaults());
     let now = std::time::Duration::ZERO;
-    machine.handle(Event::PortOpened { port: "p".into() }, now);
-    machine.handle(Event::ControllerLine("ok".into()), now);
+    machine.handle_inline(Event::PortOpened { port: "p".into() }, now);
+    machine.handle_inline(Event::ControllerLine("ok".into()), now);
     machine.load_gcode("G0 X1\nG0 X2\n");
-    machine.handle(Event::Action(wc_protocol::Action::new("startRun", json!(""), json!(""))), now);
+    machine.handle_inline(Event::Action(wc_protocol::Action::new("startRun", json!(""), json!(""))), now);
     let body = r#"{"kind": "velocity", "motor": "L", "start": "0", "stop": "1", "steps": "1", "version": "1",
         "kp": "1", "ki": "0", "kd": "0"}"#;
     let (status, _) = call(machine, Arc::new(NoHost), "POST", "/api/system/pid-test", Some(body)).await;

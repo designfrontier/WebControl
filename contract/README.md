@@ -255,3 +255,8 @@ allow both; `tests/test_contract.py` checks Python only.
 - **Calibration Accept refusals.** `POST /api/calibration/{triangular,holey}/accept` also answers its 409 when the
   triangular Accept has no finite Z-axis safe height to rise to before it moves (decision 3; see
   `serial/README.md`, "Rust-intended deviations") and when a value it would save or send is not finite.
+- **Slow answers come after the push they used to precede.** Rust solves `errorValueMessage.computedX/Y` and works
+  out `gcodePositionMessage` off the machine task, so neither delays Stop. Each push goes out when its work finishes,
+  after pushes the same event made at once. While a solve runs, only the newest report waits and the others are
+  dropped, and a client that falls behind gets its `gcodePositionMessage` the same way. Rust solves only for reports
+  that go out. Python solved on every status line, so in quadrilateral mode the solver starts from a different tilt.

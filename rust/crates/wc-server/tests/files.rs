@@ -232,9 +232,9 @@ async fn an_edit_python_cannot_load_alerts_but_answers_success() {
 fn streaming() -> Machine {
     let mut machine = machine_with(Settings::defaults());
     let now = Duration::ZERO;
-    machine.handle(Event::PortOpened { port: "/dev/ttyACM0".into() }, now);
+    machine.handle_inline(Event::PortOpened { port: "/dev/ttyACM0".into() }, now);
     machine.load_gcode("G0 X1\nG1 Z-1\n");
-    machine.handle(Event::Action(Action::new("startRun", json!(""), json!(""))), now);
+    machine.handle_inline(Event::Action(Action::new("startRun", json!(""), json!(""))), now);
     machine
 }
 
@@ -262,10 +262,10 @@ async fn the_gcode_cannot_be_replaced_during_a_job() {
 #[tokio::test]
 async fn the_gcode_stays_locked_while_a_job_is_paused_or_a_tool_change_waits() {
     let mut paused = streaming();
-    paused.handle(Event::Action(Action::new("pauseRun", json!(""), json!(""))), Duration::ZERO);
+    paused.handle_inline(Event::Action(Action::new("pauseRun", json!(""), json!(""))), Duration::ZERO);
     let mut tool_change = machine_with(Settings::defaults());
-    tool_change.handle(Event::PortOpened { port: "/dev/ttyACM0".into() }, Duration::ZERO);
-    tool_change.handle(Event::ControllerLine("Tool Change: Please insert tool 2".into()), Duration::ZERO);
+    tool_change.handle_inline(Event::PortOpened { port: "/dev/ttyACM0".into() }, Duration::ZERO);
+    tool_change.handle_inline(Event::ControllerLine("Tool Change: Please insert tool 2".into()), Duration::ZERO);
     for machine in [paused, tool_change] {
         let server = Server::with(machine);
         let reply = server.post_form("/editGCode", &[Part::Field("gcode", "G0 X9")]).await;
@@ -282,8 +282,8 @@ async fn sent_gcode_is_remembered_and_refused_while_probing() {
     assert_eq!(server.get("/api/files/gcode/custom").await.json(), json!({"text": "G0 X5\nG0 Y5"}));
     assert_eq!(server.post_unchecked("/sendGCode", &[]).await.status, StatusCode::BAD_REQUEST);
     let mut probing = machine_with(Settings::defaults());
-    probing.handle(Event::PortOpened { port: "p".into() }, Duration::ZERO);
-    probing.handle(Event::Action(Action::new("touchZ", json!(""), json!(""))), Duration::ZERO);
+    probing.handle_inline(Event::PortOpened { port: "p".into() }, Duration::ZERO);
+    probing.handle_inline(Event::Action(Action::new("touchZ", json!(""), json!(""))), Duration::ZERO);
     let server = Server::with(probing);
     let reply = server.post_form("/sendGCode", &[Part::Field("gcode", "G0 X1")]).await;
     assert_eq!((reply.status, reply.json()), (StatusCode::INTERNAL_SERVER_ERROR, json!("failed")));

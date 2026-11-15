@@ -8,13 +8,14 @@ use serde_json::Value;
 use wc_config::Settings;
 use wc_gcode::board::{Board, BoardEdit, BoardTrim};
 use wc_gcode::preview::{self, Move};
-use wc_gcode::{GcodeError, load, position, py};
+use wc_gcode::{GcodeError, load, py};
 use wc_protocol::boards::BoardDataUpdate;
 use wc_protocol::files::UpdateDirectories;
-use wc_protocol::main::{ActivateModal, GcodePositionMessage, Units};
+use wc_protocol::main::{ActivateModal, Units};
 use wc_protocol::{Envelope, Push};
 
 use crate::machine::{Effect, Machine, alert, broadcast};
+use crate::work::Work;
 
 pub const GCODE_LOCKED: &str = "Cannot load gcode while a job is running or paused. Stop the job first.";
 pub const SETTINGS_LOCKED: &str = "Cannot change settings while a job is running or paused. Stop the job first.";
@@ -220,23 +221,35 @@ impl Machine {
         effects.push(broadcast(&UpdateDirectories { directory: name }));
     }
 
-    /// `sendGCodePositionUpdate(recalculate=True)`: false where Python's answer was falsy.
-    pub(crate) fn push_gcode_position(&self, effects: &mut Vec<Effect>) -> bool {
-        let Some(line) = self.gcode.get(self.index) else { return false };
-        let Ok(at) = position::find_position_at(&self.gcode, self.index) else { return false };
-        let scale = match (self.preview.file_units, self.units()) {
+    /// `sendGCodePositionUpdate(recalculate=True)`, read off the machine task.
+    pub(crate) fn push_gcode_position(&mut self, effects: &mut Vec<Effect>) {
+        self.gcode_position(None, effects);
+    }
+
+    /// The same for one client, outside the lane, since it changes nothing.
+    pub(crate) fn push_gcode_position_to(&mut self, sid: &str, effects: &mut Vec<Effect>) {
+        if self.index < self.gcode.len() {
+            let (gcode, index, scale) = (self.gcode.clone(), self.index, self.gcode_scale());
+            self.compute(Work::GcodePositionFor { sid: sid.into(), gcode, index, scale }, effects);
+        }
+    }
+
+    /// False when there is no line at the index; `failure` is alerted if the file cannot be read up to it.
+    fn gcode_position(&mut self, failure: Option<String>, effects: &mut Vec<Effect>) -> bool {
+        if self.index >= self.gcode.len() {
+            return false;
+        }
+        let (gcode, index, scale) = (self.gcode.clone(), self.index, self.gcode_scale());
+        self.compute(Work::GcodePosition { gcode, index, scale, failure }, effects);
+        true
+    }
+
+    fn gcode_scale(&self) -> f64 {
+        match (self.preview.file_units, self.units()) {
             (Units::Mm, Units::Inches) => 1.0 / 25.4,
             (Units::Inches, Units::Mm) => 25.4,
             _ => 1.0,
-        };
-        effects.push(broadcast(&GcodePositionMessage {
-            xval: at.x * scale,
-            yval: at.y * scale,
-            zval: at.z * scale,
-            gcode_line: line.clone(),
-            gcode_line_index: self.index,
-        }));
-        true
+        }
     }
 
     fn install(&mut self, gcode: Gcode) {
@@ -283,11 +296,11 @@ impl Machine {
         None
     }
 
-    /// `moveGcodeIndex`; `None` (no gcode) and a position Python could not work out both alert.
-    fn move_gcode_index(&mut self, target: i64, effects: &mut Vec<Effect>) -> bool {
+    /// `moveGcodeIndex`; no gcode, or a position Python could not work out, alerts `failure`.
+    fn move_gcode_index(&mut self, target: i64, failure: &str, effects: &mut Vec<Effect>) -> bool {
         let Some(last) = self.gcode.len().checked_sub(1) else { return false };
         self.index = usize::try_from(target).unwrap_or(0).min(last);
-        self.push_gcode_position(effects)
+        self.gcode_position(Some(failure.into()), effects)
     }
 
     pub(crate) fn move_gcode(&mut self, command: &str, arg: &Value, effects: &mut Vec<Effect>) -> Option<String> {
@@ -300,7 +313,7 @@ impl Machine {
             "moveGcodeIndex" => (Some(self.index as i64 + arg), "Error with moving to index"),
             _ => (self.z_move_target(arg), "Error with moving to Z move"),
         };
-        let moved = target.is_some_and(|target| self.move_gcode_index(target, effects));
+        let moved = target.is_some_and(|target| self.move_gcode_index(target, failure, effects));
         (!moved).then(|| failure.to_string())
     }
 

@@ -200,7 +200,7 @@ impl Bench {
     }
 
     fn apply(&mut self, event: Event) {
-        let effects = self.machine.handle(event, self.now);
+        let effects = self.machine.handle_inline(event, self.now);
         effects.into_iter().for_each(|effect| self.effect(effect));
     }
 
@@ -580,7 +580,7 @@ fn the_upgrade_needs_the_controller_and_a_serial_port() {
             })
             .collect()
     };
-    assert!(alerts(machine.handle(action("check"), Duration::ZERO))[0].contains("not connected"));
+    assert!(alerts(machine.handle_inline(action("check"), Duration::ZERO))[0].contains("not connected"));
     let mut bench = Bench::with(machine, Build::holey_51_27().on_board(OWNERS_BOARD));
     bench.act("check");
     assert_eq!(bench.settle(&[Stage::Checking], 10_000), Stage::Ready);
@@ -642,4 +642,25 @@ fn a_check_after_the_upgrade_still_rolls_back_to_the_firmware_read_off_the_board
     let stage = bench.settle(&[Stage::RollingBack, Stage::Restarting, Stage::Migrating], 120_000);
     assert_eq!(stage, Stage::RolledBack, "{:?}", bench.view().log);
     assert!(bench.alerts().iter().any(|a| a.starts_with("Rolled back to 51.27")));
+}
+
+/// The port opens off the machine task, so a rollback can start while an open is still on its way.
+#[test]
+fn a_port_that_opens_after_a_rollback_took_the_link_is_closed_again() {
+    let mut bench = Bench::owners();
+    assert_eq!(bench.upgrade(), Stage::SelfTest);
+    bench.pending.clear();
+    bench.apply(Event::PortClosed);
+    while !bench.pending.iter().any(|e| matches!(e, Event::PortOpened { .. })) {
+        bench.step();
+    }
+    let opened = bench.pending.pop_front().unwrap();
+    bench.pending.clear();
+    bench.act("rollback");
+    bench.apply(opened);
+    assert!(!bench.open, "the late port is closed, since avrdude has it");
+    assert_eq!(bench.machine.snapshot().link, wc_protocol::main::LinkStatus::Disconnected);
+    bench.apply(Event::PortFailed { port: "simulator".into(), error: "late".into() });
+    let stage = bench.settle(&[Stage::RollingBack, Stage::Restarting, Stage::Migrating], 120_000);
+    assert_eq!(stage, Stage::RolledBack, "{:?}", bench.view().log);
 }

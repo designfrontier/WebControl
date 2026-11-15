@@ -10,14 +10,13 @@ use wc_protocol::main::{
 };
 
 use crate::machine::{Effect, Machine, broadcast};
+use crate::work::{NO_COMPUTED_POSITION, Work};
 
 /// No firmware reports motor power; the classic UI shows this value as green.
 const MOTOR_POWER: f64 = 15.0;
 /// `data.feedRate`, which nothing updates.
 const REQUESTED_FEED: f64 = 20.0;
 const VELOCITY_FILTER: f64 = 0.5;
-/// Tells the UI there is no forward-kinematics position (wart 6).
-const NO_COMPUTED_POSITION: f64 = -999999.0;
 /// `initializeSettings`: each model parameter as the firmware key `updateSetting` takes it.
 const MODEL_SETTINGS: [(u32, &str, &str); 13] = [
     (2, "Maslow Settings", "motorSpacingX"),
@@ -127,7 +126,8 @@ impl Machine {
         }));
     }
 
-    /// `setErrorOnScreen`: errors as a fraction of the limit, sent when they change by 0.001 or more.
+    /// `setErrorOnScreen`: errors as a fraction of the limit, sent when they change by 0.001 or more. The computed
+    /// position is solved off the machine task, and only for a report that goes out.
     pub(crate) fn position_error(&mut self, error: PositionError, effects: &mut Vec<Effect>) {
         let limit = self.settings.number("Advanced Settings", "positionErrorLimit");
         if limit == 0.0 {
@@ -135,11 +135,6 @@ impl Machine {
         }
         let enabled = self.settings.number("WebControl Settings", "computedPosition") as i64;
         let enabled = if error.chains.is_some() { enabled } else { 0 };
-        // Solved on every report, as Python does, so the quadrilateral solver sees the same calls.
-        let guess = (self.position.x, self.position.y);
-        let computed =
-            error.chains.filter(|_| enabled > 0).and_then(|(l, r)| self.kinematics.forward_as_firmware(l, r, guess));
-        let (computed_x, computed_y) = computed.unwrap_or((NO_COMPUTED_POSITION, NO_COMPUTED_POSITION));
         let (left, right) = (error.left / limit, error.right / limit);
         self.reported_buffer = error.space;
         let (left_before, right_before) = self.errors.previous;
@@ -147,13 +142,20 @@ impl Machine {
             return;
         }
         self.errors.previous = (left, right);
-        effects.push(broadcast(&ErrorValueMessage {
+        let report = ErrorValueMessage {
             left_error: left.abs(),
             right_error: right.abs(),
-            computed_x,
-            computed_y,
+            computed_x: NO_COMPUTED_POSITION,
+            computed_y: NO_COMPUTED_POSITION,
             computed_enabled: enabled,
-        }));
+        };
+        match error.chains.filter(|_| enabled > 0) {
+            Some(chains) => {
+                let (model, guess) = (Box::new(self.kinematics.clone()), (self.position.x, self.position.y));
+                self.compute(Work::ComputedPosition { model, chains, guess, report }, effects);
+            }
+            None => effects.push(broadcast(&report)),
+        }
     }
 
     pub(crate) fn health(&mut self, cpu: f64, effects: &mut Vec<Effect>) {
@@ -176,7 +178,7 @@ impl Machine {
     }
 
     /// Everything a client keeps from pushes, sent to `sid` alone.
-    pub(crate) fn resync(&self, sid: &str, effects: &mut Vec<Effect>) {
+    pub(crate) fn resync(&mut self, sid: &str, effects: &mut Vec<Effect>) {
         let mut pushes = vec![
             broadcast(&HostAddress { host_address: self.host_address.clone() }),
             broadcast(&self.connection_status()),
@@ -190,7 +192,7 @@ impl Machine {
                 yval: self.settings.number("Advanced Settings", "homeY"),
             }),
         ];
-        self.push_gcode_position(&mut pushes);
+        self.push_gcode_position_to(sid, &mut pushes);
         self.gcode_update_requested(&mut pushes);
         self.push_board(&mut pushes);
         effects.extend(pushes.into_iter().map(|effect| match effect {
