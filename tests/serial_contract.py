@@ -14,8 +14,6 @@ import types
 from collections import deque
 from pathlib import Path
 
-import pytest
-
 REPO = Path(__file__).resolve().parent.parent
 CONTRACT = REPO / "contract" / "serial"
 SCHEMA = CONTRACT / "transcript.schema.json"
@@ -238,8 +236,9 @@ class Engine:
         import main
         from Background.messageProcessor import MessageProcessor
         from Background.UIProcessor import UIProcessor
+        from pytest import MonkeyPatch
 
-        self.patch = pytest.MonkeyPatch()
+        self.patch = MonkeyPatch()
         data = self.data
         self.saved_data = {name: copy.deepcopy(getattr(data, name)) for name in self._simple_data()}
         self.saved_settings = copy.deepcopy(data.config.settings)
