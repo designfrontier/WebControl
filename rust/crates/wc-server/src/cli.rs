@@ -87,6 +87,7 @@ fn local_ip() -> IpAddr {
 
 pub async fn serve(options: Options, shutdown: impl Future<Output = ()> + Send + 'static) -> std::io::Result<()> {
     let paths = Paths::new(&options.home);
+    [paths.gcode_dir(), paths.imports_dir(), paths.boards_dir()].iter().try_for_each(std::fs::create_dir_all)?;
     let settings = Settings::load(&paths);
     tracing::info!(source = ?settings.source(), home = %options.home.display(), "settings loaded");
     let port = options.port.unwrap_or_else(|| settings.web_port());
@@ -102,7 +103,7 @@ pub async fn serve(options: Options, shutdown: impl Future<Output = ()> + Send +
     let (machine, _task) = spawn(machine, opener, host);
     println!("webcontrol-rs listening on {bound}");
     std::io::stdout().flush()?;
-    let state = AppState::new(machine, PingConfig::default());
+    let state = AppState::new(machine, PingConfig::default(), paths);
     let closing = state.clone();
     let stopped = async move {
         tokio::select! {

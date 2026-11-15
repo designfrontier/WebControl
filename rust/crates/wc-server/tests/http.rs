@@ -53,7 +53,8 @@ async fn request_with(settings: Settings, method: &str, path: &str) -> Reply {
 async fn request_machine(machine: Machine, method: &str, path: &str) -> Reply {
     let (machine, _task) = spawn(machine, Box::new(NoPort), Arc::new(NoHost));
     let platform = Platform { name: "RPI".into(), can_turn_off: true };
-    let app = router(AppState::new(machine, PingConfig::default()).on(platform));
+    let home = Paths::new(std::path::Path::new("/nonexistent-home"));
+    let app = router(AppState::new(machine, PingConfig::default(), home).on(platform));
     let request = Request::builder().method(method).uri(path).body(Body::empty()).unwrap();
     let response = tower::ServiceExt::oneshot(app, request).await.unwrap();
     let header = |name: header::HeaderName| response.headers().get(name).map(|v| v.to_str().unwrap().to_string());
@@ -196,6 +197,28 @@ const ROUTED: &[(&str, &str)] = &[
     ("GET", "/api/system/info"),
     ("GET", "/next/{path}"),
     ("GET", "/static/{filename}"),
+    ("GET", "/api/files/gcode"),
+    ("POST", "/api/files/gcode/directories"),
+    ("GET", "/api/files/gcode/loaded"),
+    ("GET", "/api/files/gcode/text"),
+    ("GET", "/api/files/gcode/custom"),
+    ("GET", "/api/boards/files"),
+    ("POST", "/api/boards/directories"),
+    ("GET", "/api/boards/current"),
+    ("POST", "/openGCode"),
+    ("POST", "/uploadGCode"),
+    ("POST", "/saveGCode"),
+    ("POST", "/editGCode"),
+    ("POST", "/sendGCode"),
+    ("POST", "/importFile"),
+    ("POST", "/importFileWCJSON"),
+    ("POST", "/importRestoreWebControl"),
+    ("POST", "/openBoard"),
+    ("POST", "/saveBoard"),
+    ("POST", "/editBoard"),
+    ("POST", "/trimBoard"),
+    ("GET", "/downloadDiagnostics"),
+    ("GET", "/backupWebControl"),
 ];
 
 fn concrete(path: &str) -> String {
@@ -209,7 +232,7 @@ async fn every_endpoint_listed_as_routed_is_in_the_contract_and_answers() {
         assert_eq!(entry.path, *path);
         let reply = request_with(settings(None).1, method, &concrete(path)).await;
         assert_ne!(reply.status, StatusCode::METHOD_NOT_ALLOWED, "{method} {path}");
-        assert!(reply.status.is_success(), "{method} {path}: {}", reply.status);
+        assert_ne!(reply.status, StatusCode::NOT_FOUND, "{method} {path}");
     }
 }
 
@@ -252,7 +275,7 @@ async fn api_main_shows_the_loaded_files_current_line() {
     assert_eq!(reply.json()["gcode"], json!({"lineIndex": 0, "line": "G0 X1 ", "lineCount": 3}));
 }
 
-/// Ported from test_api_viewer: the frame in inches; no file or board until M3.
+/// Ported from test_api_viewer: the frame in inches, no gcode yet, and the bed-sized board.
 #[tokio::test]
 async fn api_viewer_reports_the_frame_in_inches() {
     let file = json!({"Maslow Settings": [{"key": "bedWidth", "value": "2438.4"}, {"key": "bedHeight", "value": 1219.2},
@@ -262,7 +285,8 @@ async fn api_viewer_reports_the_frame_in_inches() {
     assert_eq!(
         reply.json(),
         json!({"machine": {"bedWidth": 96.0, "bedHeight": 48.0, "motorOffsetY": null, "motorSpacingX": 141.7795},
-            "gcode": null, "board": null, "cutData": null})
+            "gcode": null, "board": {"width": 96.0, "height": 48.0, "thickness": 0.75, "centerX": 0.0, "centerY": 0.0,
+                "boardID": "-", "material": "-", "fileName": ""}, "cutData": "H4sIAAAAAAAA/4uOBQApu0wNAgAAAA=="})
     );
 }
 

@@ -23,6 +23,10 @@ impl Paths {
         Paths { home: home.to_path_buf() }
     }
 
+    pub fn home(&self) -> PathBuf {
+        self.home.clone()
+    }
+
     pub fn dir(&self) -> PathBuf {
         self.home.join(".WebControl")
     }

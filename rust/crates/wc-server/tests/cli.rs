@@ -57,7 +57,7 @@ fn the_binary_prints_its_version_and_help() {
 }
 
 #[test]
-fn the_binary_serves_on_the_port_it_reports_and_leaves_the_home_alone() {
+fn the_binary_serves_on_the_port_it_reports_and_only_makes_the_library_directories() {
     let home = tempfile::tempdir().unwrap();
     let mut child = binary()
         .args(["--port", "0", "--home"])
@@ -80,7 +80,12 @@ fn the_binary_serves_on_the_port_it_reports_and_leaves_the_home_alone() {
     assert!(child.wait().unwrap().success(), "SIGTERM should shut down cleanly");
     assert!(reply.starts_with("HTTP/1.1 200"), "{reply}");
     assert!(reply.contains("\"backend\":\"rust\""), "{reply}");
-    assert_eq!(std::fs::read_dir(home.path()).unwrap().count(), 0, "the binary wrote to the home directory");
+    let mut made: Vec<String> = std::fs::read_dir(home.path().join(".WebControl"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+        .collect();
+    made.sort();
+    assert_eq!(made, ["boards", "gcode", "imports"], "as Python's Config makes them, and no settings written");
 }
 
 #[test]

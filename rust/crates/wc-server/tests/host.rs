@@ -111,3 +111,36 @@ fn the_default_power_off_is_the_sudoers_rule() {
         std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../deploy/webcontrol-rs.sudoers")).unwrap();
     assert!(rule.lines().any(|line| line == "pi ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff"), "{rule}");
 }
+
+#[test]
+fn settings_are_saved_on_the_writer_thread_as_python_writes_them() {
+    let dir = tempfile::tempdir().unwrap();
+    let (host, _) = host_in(dir.path());
+    let mut settings = wc_config::Settings::defaults();
+    settings.set_value("Maslow Settings", "COMport", serde_json::json!("/dev/ttyACM9"));
+    host.save_settings(&settings);
+    host.flush_log();
+    let file = dir.path().join(".WebControl/webcontrol.json");
+    let text = std::fs::read_to_string(&file).unwrap();
+    assert!(text.starts_with("{\n    \"Advanced Settings\": [\n"), "{}", &text[..40]);
+    assert!(text.contains("/dev/ttyACM9"));
+    let blocker = dir.path().join("file");
+    std::fs::write(&blocker, "").unwrap();
+    let broken = SystemHost::new(&blocker.join("sub"), Arc::new(Notify::new()));
+    broken.save_settings(&settings);
+    broken.flush_log();
+}
+
+#[test]
+fn create_directory_makes_one_directory_inside_the_gcode_library() {
+    let dir = tempfile::tempdir().unwrap();
+    let (host, _) = host_in(dir.path());
+    let gcode = dir.path().join(".WebControl/gcode");
+    std::fs::create_dir_all(&gcode).unwrap();
+    assert!(host.create_directory("made"));
+    assert!(gcode.join("made").is_dir());
+    assert!(host.create_directory("made"), "an existing one is fine");
+    assert!(!host.create_directory("../escaped"));
+    assert!(!dir.path().join(".WebControl/escaped").exists());
+    assert!(!host.create_directory("deep/er"), "like os.mkdir, no parents");
+}
