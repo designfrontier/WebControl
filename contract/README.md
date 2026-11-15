@@ -1,8 +1,9 @@
 # WebControl frontend ↔ backend contract
 
-This directory freezes what the React UI (`frontend/`, served at `/next`) and the backend say to each other, in
-language-neutral JSON Schema (draft 2020-12). A replacement backend (the planned Rust one) implements it; the Python
-backend is checked against it.
+This directory freezes what the React UI (`frontend/`, served at `/`) and the backend say to each other, in
+language-neutral JSON Schema (draft 2020-12). The Rust backend (`rust/`) implements it. It was first written down
+from the Python backend (in git history up to `220aa0e`), so the warts below are that backend's, and the notes on
+where Rust differs from Python are kept as the record of each decision.
 
 Everything except this README and `VERSION` is generated from the zod schemas in `frontend/src/protocol/`. Do not edit
 generated files by hand.
@@ -44,7 +45,7 @@ Resume or Stop: one that arrived while lines were streaming, which may have job 
 `$16=0` prompt to adjust Z by hand. While a `G38.2` probe (Touch Z or typed) is queued or descending, every action
 but `stopRun`, `stopZ`, `pauseRun`, `createDirectory`, `toggleCamera`, `statusRequest` and `queryCamera` is refused
 with an Alert, whatever its gate, and so is `/sendGCode` (500); the probe's `ok` or `error:`, Stop, or a reconnect
-ends it. **The Rust backend differs here on purpose** (Python is being retired; Python's tests are unchanged):
+ends it. **The Rust backend differs from Python here on purpose:**
 
 - It also lets `shutdown`, `TurnOffRPI`, `updatePorts`, `clearLogs`, `boardProcessGCode` and `boardClearBoard` run
   during a probe, since they send the controller nothing.
@@ -59,8 +60,8 @@ HTTP `family` is `api` (JSON for this UI), `classic` (old form routes
 the UI reuses, with their old shapes) or `static`.
 
 Schemas describe the wire: what is actually sent, before the UI coerces anything. Objects do not forbid extra
-properties; ignore unknown fields. A backend still sends none: `tests/test_contract.py` fails on a field the
-schema does not list, so a new one goes into `frontend/src/protocol/` first. Fields marked as numbers-or-numeric-text really do arrive both ways.
+properties; ignore unknown fields. A backend still sends none: `wc-testkit`'s harness closes every object schema, so
+a Rust test fails on a field the schema does not list, and a new one goes into `frontend/src/protocol/` first. Fields marked as numbers-or-numeric-text really do arrive both ways.
 
 ## Job lock (Rust backend only)
 
@@ -78,8 +79,8 @@ the settings or sends the controller lines outside the job, so a cut never meets
 
 Python refuses none of these (it switches units while paused, and alerts `Cannot change units while sending gcode.`
 only while streaming). A `COMport` change mid-cut used to close the port without `!`; it is now refused and the cut
-goes on. The 409s keep the default reason phrase. Their contract entries say "Rust backend only", and
-`tests/test_contract.py` lists them in `RUST_ONLY_RESPONSES`. The UI disables these controls while
+goes on. The 409s keep the default reason phrase. Their contract entries say "Rust backend only" (Python never sent
+them). The UI disables these controls while
 `selectGcodeLocked` holds and shows the server's message if one is refused anyway.
 
 ## Regenerating and checking
@@ -88,17 +89,19 @@ goes on. The 409s keep the default reason phrase. Their contract entries say "Ru
 cd frontend
 npm run contract     # rewrites contract/index.json and contract/schemas/
 npm test             # src/contract/build.test.ts fails if contract/ is stale
-../.venv/bin/python -m pytest ../tests/test_contract.py
+cd ../rust
+cargo test --workspace   # wc-testkit's harness and the wc-server, wc-protocol and wc-machine tests
 ```
 
 - `frontend/src/contract/build.test.ts` regenerates in memory and compares with these files.
 - `frontend/src/contract/usage.test.ts` records every request the UI's api modules make and fails if one is missing
   from `index.json` or its body does not fit the request schema, or if `index.json` lists an endpoint the UI never
   calls.
-- `tests/test_contract.py` checks that Flask registers every endpoint and socket event listed, that
-  `Actions.processAction` handles exactly the listed actions and refuses each in exactly the run states its gate
-  lists, and validates real GET responses, successful writes, 4xx bodies, every `message` UIProcessor emits and
-  what a real gcode file's gzip payloads inflate to against the schemas.
+- `rust/crates/wc-testkit/src/contract.rs` loads these files and validates what the Rust server sends and accepts
+  against them, with every object schema closed. `wc-server`'s tests check that every endpoint listed is routed and
+  validate its answers and pushes; `wc-protocol`'s that `CONTRACT_VERSION` is `VERSION` and that its types encode to
+  the schemas; `wc-machine`'s `contract` test validates every message the machine produces, and its `gates` test
+  refuses every action in exactly the run states its gate lists.
 
 ## Versioning
 
@@ -107,34 +110,32 @@ endpoint or field; changing a type; making an optional field required; accepting
 something the current UI would reject. Additions the UI can ignore (a new optional field, a new command or endpoint)
 do not bump it.
 
-## Socket.io transport (today)
+## Namespaces and messages
 
-Python serves socket.io v4 (EIO=4) at `/socket.io`, long-polling only. Namespaces:
+`index.json`'s `socket.path` (`/socket.io`) is where the Python backend served socket.io v4 (EIO=4); the Rust backend
+carries the same namespaces, events and payloads over plain WebSockets (below). Namespaces:
 
 - `/MaslowCNC`: the UI's connection. Client → server events are in `clientToServer`; `classicOnlyClientToServer`
-  lists events only the classic UI at `/` sends, which a backend for this UI need not handle.
+  lists events only the old classic UI sent, which a backend for this UI need not handle.
 - `/MaslowCNCLogs`: a second, separate connection for the log viewer. The server pushes `message` events whose
   payload is the log object itself (no envelope); clients send nothing.
 - `/WebMCP`: the Docker watchdog's channel (`checkInRequested` → `checkIn`, `shutdown`, `webcontrolMessage`). Not used
-  by either UI.
+  by the UI.
 
 Every `/MaslowCNC` push is a `message` event carrying `{"command": ..., "data": ..., "dataFormat": ...}`.
 `dataFormat` is `"json"` for every command except those listed with `"int"` or `"base64"` in `index.json`; with
 `"json"`, `data` is JSON **text** that decodes to the command's schema.
 
 Pushes are broadcast to every client. A payload with a `client` field is meant only for the socket with that id
-(`"all"` means everyone); clients drop the rest. A connection's id is the socket.io sid.
+(`"all"` means everyone); clients drop the rest. A connection's id is its sid.
 
 On connect the server broadcasts `hostAddress`, then the client calls `GET /api/state` and emits
 `settingRequest {"section": "Computed Settings", "setting": "units"}` (the server resends the sled position only
 after that).
 
-## Plain WebSocket transport (for the Rust backend)
+## Plain WebSocket transport
 
-The same events and payloads, without socket.io. Before opening any connection the frontend reads `GET /api/state`
-and uses this transport (`frontend/src/transport/websocket.ts`) when `backend` is `"rust"`, socket.io otherwise
-(`frontend/src/transport/select.ts`). After three failed connects in a row it reads `/api/state` again and reloads
-the page if the backend changed.
+The same events and payloads, without socket.io. The frontend's only transport (`frontend/src/transport/websocket.ts`).
 
 - **Endpoint**: `ws://<host>/ws?ns=<url-encoded namespace>` (`wss:` under https), one WebSocket per namespace. The UI
   opens `/MaslowCNC` and, while the log viewer is open, a second one for `/MaslowCNCLogs`.
@@ -226,7 +227,7 @@ until a `VERSION` bump changes them.
 ## Rust-intended differences
 
 Where the Rust backend deliberately does not copy Python, as the owner decided (`spec/RUST-PLAN.md`). The schemas
-allow both; `tests/test_contract.py` checks Python only.
+allow both.
 
 - **Every settings import recomputes.** After `/importFileWCJSON` changes anything, Rust runs `computeSettings`
   (`kinematicsTypeComputed`, `distPerRot`, the PID gains, `chainOverSprocketComputed`, `fPWMComputed`), writes the

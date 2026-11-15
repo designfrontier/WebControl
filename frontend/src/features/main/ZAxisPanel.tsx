@@ -13,7 +13,7 @@ interface Props {
   touchPlate: boolean;
 }
 
-/** The classic UI's Z-Axis popup (templates/zaxis.html). */
+/** The classic UI's Z-Axis popup. */
 export const ZAxisPanel = ({ available, touchPlate }: Props) => {
   const client = useClient();
   const unitsZ = useMachine((s) => s.unitsZ);

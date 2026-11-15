@@ -20,7 +20,7 @@ interface Props {
   onClose(): void;
 }
 
-/** The right-click / long-press menu on the viewer (old templates/screenAction.html), owned by the client. */
+/** The right-click / long-press menu on the viewer (the classic UI's screen action menu), owned by the client. */
 export const ScreenActionDialog = ({
   point,
   units,

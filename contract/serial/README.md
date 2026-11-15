@@ -1,9 +1,11 @@
 # WebControl backend ↔ controller serial contract
 
 This directory freezes what the backend writes to the Maslow controller (holey firmware 51.27 unless a transcript
-says otherwise) and how it reacts to what the controller says. A replacement backend (the planned Rust one) must
-produce the same bytes; the Python backend is checked against it by `tests/test_serial_contract.py`. The browser side
-is in `../README.md`; this contract reuses its action names, HTTP endpoints and `message` commands.
+says otherwise) and how it reacts to what the controller says. The Rust backend must produce the same bytes;
+`cargo test -p wc-machine --test transcripts` replays every transcript against it. The corpus was first recorded from
+the Python backend (in git history up to `220aa0e`); it is now a hand-maintained spec ("Adding or changing a
+transcript" below). The browser side is in `../README.md`; this contract reuses its action names, HTTP endpoints and
+`message` commands.
 
 `spec/firmware.md` is the reference for the firmware's behaviour. A transcript records what the backend does today,
 which is not always what the firmware needs; the known gaps are listed under "Known warts" below.
@@ -14,24 +16,18 @@ which is not always what the firmware needs; the known gaps are listed under "Kn
 | --------------------------- | -------------------------------------------------------------------------------------- |
 | `transcript.schema.json`    | JSON Schema (draft 2020-12) for one transcript                                         |
 | `transcripts/<name>.json`   | The corpus, one behaviour per file, named by behaviour                                 |
-| `transcripts-rust/<name>.json` | Where Rust must differ (known warts): replaces the transcript of the same name for Rust; a new name is a Rust-only behaviour, its description starting "Rust only" |
 | `gcode/<name>.nc`           | G-code files transcripts load by path                                                  |
 | `gcode/real/<name>.nc`      | Trimmed G-code from the owner's real jobs ("Real jobs" below)                          |
 | `real-jobs/<name>.json`     | What v0.94 sent and read for those lines on the owner's machine                        |
 | `real-jobs.md`              | The backend's writes for the real jobs against v0.94's, differences classified         |
 | `recording.schema.json`     | One line of a serial recording (`~/.WebControl/serial-recordings/*.jsonl`)             |
 
-Tools, in the repository root:
-
-| Tool                                  | What                                                                          |
-| ------------------------------------- | ----------------------------------------------------------------------------- |
-| `tools/serial_scenarios.py`           | The scenarios the corpus is recorded from: setup plus steps, without the tx   |
-| `tools/record_serial_transcript.py`   | Runs scenarios against the real backend and writes `transcripts/`             |
-| `tools/convert_recording.py`          | Turns a real-machine recording (and its G-code) into a transcript skeleton    |
-| `tools/import_v094_log.py`            | Splits a v0.94 `log.txt`/`alog.txt` into recordings, one per connect          |
-| `tools/index_recordings.py`           | Streams recordings and prints one summary line per file (counts, features)    |
-| `tools/owner_machine.py`              | The owner's controller lines and settings, copied from its recordings         |
-| `tests/serial_contract.py`            | The Python replay engine (also used by the recorder)                          |
+The Python tools that made the corpus are in git history up to `220aa0e`, and the sections below that describe them
+are the record of how it was made: `tools/serial_scenarios.py` (the scenarios), `tools/record_serial_transcript.py`
+(ran them against the Python backend), `tools/convert_recording.py` and `tools/import_v094_log.py` (real-machine
+recordings and v0.94 logs into transcript skeletons), `tools/index_recordings.py`, `tools/owner_machine.py` (the
+owner's controller lines and settings), the real-job tools, and `tests/serial_contract.py` (the Python replay
+engine). The Rust runner is `rust/crates/wc-testkit/src/runner.rs`.
 
 ## A transcript
 
@@ -64,7 +60,7 @@ Tools, in the repository root:
 - `firmware.variant` (`holey`, `stock`, `optical`) and `firmware.version` as `B05` reports it (`"51.27"`; every
   51.29x build reports `"51.29"`). `firmware.build` narrows it: `"51.292"` means every `$n=` write also prints
   `Change in setting, rewriting EEPROM`, which is how the backend tells 51.292 from 51.291.
-- `webcontrolCommit`: the Python commit the transcript was recorded from.
+- `webcontrolCommit`: the commit the transcript was recorded from (a Python one) or last edited at.
 
 ### `setup`
 
@@ -137,8 +133,8 @@ buffer.
 
 ## Matching and timing
 
-The runner owns the clock and advances it in small steps (the Python backend sleeps 10 ms per serial loop pass and at
-least 50 ms between writes, all on the fake clock). Events run strictly in order:
+The runner owns the clock and advances it in steps of at most 10 ms (the Python backend slept 10 ms per serial loop
+pass and at least 50 ms between writes, which set the timings below). Events run strictly in order:
 
 1. **tx** events match lines in order. The runner waits up to `txTimeout` (default 2 s) for the next line; a
    different line fails at once, and so does the right line written after the timeout (each line is stamped with
@@ -161,8 +157,8 @@ it reads a status report once its input has run dry at least 0.25 s after the ha
 releases nothing. The backend
 treats 5 s without any controller line as a lost connection, so no transcript waits that long without an rx.
 
-Recording uses the same rules, so a recorded transcript replays: the recorder's controller model answers only once
-the backend has been quiet for `quiet` seconds, one line per settle.
+The Python recorder used the same rules, so a recorded transcript replayed: its controller model answered only once
+the backend had been quiet for `quiet` seconds, one line per settle.
 
 ## The corpus
 
@@ -180,9 +176,9 @@ the backend has been quiet for `quiet` seconds, one line per settle.
 | `touch_z_probe_fails_leaves_z_alone` | `error: probe did not connect` acks the probe: no `G10 Z0`, an alert |
 | `resume_during_probe_is_refused_until_the_probe_touches` | Resume mid-probe in a paused job is refused with an alert: no `~`, no restart; nothing follows the probe's `ok`; the next Resume returns to the job |
 | `resume_during_probe_is_refused_then_the_probe_misses` | the same, and the probe misses: the Touch Z Failed alert, no `G10 Z0` |
-| `probe_in_file_waits_for_the_touch` | Rust only: buffered streaming waits behind a `G38.2` from the file; a jog is refused and Clear Logs runs mid-probe; Resume after the touch lowers to Z 0 |
-| `probe_in_file_misses_and_waits_at_the_probe` | Rust only: a `G38.2` from the file misses: the Touch Z Failed alert, the job held at the probe line, Play returns and probes again |
-| `touch_z_without_zeroing_alerts` | Rust only: an `ok` with no `z axis zeroed` before it alerts that Z was not zeroed |
+| `probe_in_file_waits_for_the_touch` | Buffered streaming waits behind a `G38.2` from the file; a jog is refused and Clear Logs runs mid-probe; Resume after the touch lowers to Z 0 |
+| `probe_in_file_misses_and_waits_at_the_probe` | A `G38.2` from the file misses: the Touch Z Failed alert, the job held at the probe line, Play returns and probes again |
+| `touch_z_without_zeroing_alerts` | An `ok` with no `z axis zeroed` before it alerts that Z was not zeroed |
 | `stream_unbuffered_with_home_shift` | one line per ok; home shift keeps both operands' decimals |
 | `stream_buffered_short_job_fits_the_buffer` | the same job buffered: 125 bytes, all sent before the first ok |
 | `stream_buffered_with_home_shift` | 126-byte character counting, refilled by each ok |
@@ -209,31 +205,35 @@ the backend has been quiet for `quiet` seconds, one line per settle.
 
 ## Adding or changing a transcript
 
-1. Add or edit a scenario in `tools/serial_scenarios.py`. Steps are events without tx, plus recorder-only steps:
-   `idle()` (the controller model answers until the backend goes quiet), `wait_tx(regex)` (answer until the backend
-   writes a matching line, which stays unanswered), `firmware(ack=, flush=, forget=, rule=, echo=)` and
-   `pauses_on(regex, *replies)` (a line the firmware holds until `~`, after printing `replies`). A 51.27 scenario
-   starts with `firmware(echo=True)` and the owner's boot banner, so the model prints what 51.27 prints before each
-   line runs.
-2. `.venv/bin/python tools/record_serial_transcript.py <name>` (no name: all of them).
-3. Read the result against `spec/firmware.md` before committing. The recorder records whatever the backend does.
-4. `.venv/bin/python -m pytest tests/test_serial_contract.py`.
+Transcripts are edited by hand. They are the spec, not a record of what the code does, so the order is: decide the
+bytes, write them down, then make Rust produce them.
 
-Transcripts are written one event per line; the test fails on any other layout, so always write them with the
-recorder or `serial_contract.dumps`.
+1. Read the behaviour against `spec/firmware.md` first. Every `rx` must be something the controller really says:
+   copy replies from an existing transcript of the same firmware (the 51.27 ones carry the owner's banner, the echo
+   of each G/M/T word before its `ok`, and the status reports "Real replies" lists), never invent new ones.
+2. Change the smallest thing: edit the `tx` lines the change explains and leave every other event alone. A new
+   behaviour gets a new file named after it (`meta.name` equals the file name), usually started from a copy of the
+   closest transcript. Keep the 51.27 echo (`rx`) after each changed `tx`.
+3. Keep the layout: one event per line, as the existing files are, so a diff shows one event per changed line. Every
+   `tx` with `!` or `~` has `"realtime": true`, and only those.
+4. Update the table above (a new file) and, where the change departs from what Python did, "Rust-intended
+   deviations" below, in the same commit as the Rust change.
+5. `cargo test -p wc-testkit --test transcripts` checks the schema and the serde types;
+   `cargo test -p wc-machine --test transcripts` replays the corpus against the machine. A failure names the
+   transcript and the first event that differs.
 
-A recording from a real machine becomes a transcript with `tools/convert_recording.py` (below); a v0.94 log first
-goes through `tools/import_v094_log.py`.
+Never regenerate a transcript from what the backend now writes: a replay failure is either a bug in the change or a
+transcript edit the change needs, and which one is a decision to make by reading `spec/firmware.md`.
 
 ## Versioning
 
 `formatVersion` changes only when the transcript format does. A behaviour change in the backend changes the
-transcripts it affects, in the same commit, re-recorded and re-checked.
+transcripts it affects, in the same commit, edited by hand and re-checked.
 
-## How the Rust backend consumes this
+## The Rust runner
 
-The Rust backend gets its own runner, which implements the replay rules above against the Rust backend with a fake
-serial port and a virtual clock. The format is plain JSON designed for `serde`:
+`wc-testkit`'s runner implements the replay rules above against the Rust backend with a fake serial port and a
+virtual clock. The format is plain JSON designed for `serde`:
 
 - Events are an internally tagged enum: `#[serde(tag = "type", rename_all = "lowercase")] enum Event { Ui { action:
   Action }, Http { .. }, Rx { line: String }, Tx { bytes: String, #[serde(default)] realtime: bool, timeout:
@@ -252,11 +252,10 @@ serial port and a virtual clock. The format is plain JSON designed for `serde`:
 The runner needs these seams in the backend:
 
 1. A serial port trait the runner can implement: the backend writes byte strings and reads lines. Join the writes
-   and cut after each `\n`, then compare each line with the next `tx`, as the Python runner does; how the backend
-   splits its writes is free. A `realtime` tx must still not be queued behind buffered lines.
+   and cut after each `\n`, then compare each line with the next `tx`; how the backend splits its writes is free. A `realtime` tx must still not be queued behind buffered lines.
 2. A clock trait (or `tokio::time::pause()` with `advance`) so settles and ticks cost no real time. Advance in steps of
    at most 10 ms so the backend's own timers (write pacing, the 0.25 s resync, the 5 s link timeout) see time pass
-   as the Python one does.
+   smoothly.
 3. A way to know the backend has consumed every rx line (an idle signal, or "the read channel is empty and the
    backend task is parked"), for the settle rule.
 4. Settings, units, home and the gcode file set before start, the same way the app loads them; the `ui` events go
@@ -264,7 +263,7 @@ The runner needs these seams in the backend:
 5. `expect.state` names map onto `GET /api/state` and `statusMessage` fields; `emitted` checks the `message` pushes
    the WebSocket transport would send (decoded `data`).
 
-`expect.state` may also name `probing`, which only the Rust-only transcripts use.
+`expect.state` may also name `probing`, which only the probe transcripts use.
 
 The Rust runner replays the sans-IO machine (`Machine::handle_inline`, which also runs the CPU work the shell would
 run off the machine task), so it pins the bytes and their order, not how the shell writes them. The shell writes from
@@ -275,12 +274,14 @@ changes: the machine writes nothing between a `!` and the controller's resync.
 
 Rust does not need to reproduce the prelude's tx: it only has to reach the same state from the same rx lines. It
 must reproduce every byte after it. Where this contract pins something `spec/firmware.md` says is wrong (below), the
-Rust backend may fix it only together with a re-recorded transcript and a note here.
+Rust backend may fix it only together with an edited transcript and a note here.
 
 ## Recordings from a real machine
 
-With **WebControl Settings → Record serial traffic** on, the Python backend appends every serial line to
-`~/.WebControl/serial-recordings/<session>.jsonl`, a new session per connect. Each line is one JSON object
+With **WebControl Settings → Record serial traffic** on, the Python backend appended every serial line to
+`~/.WebControl/serial-recordings/<session>.jsonl`, a new session per connect. The Rust backend does not record (it
+logs every serial line to `~/.WebControl/webcontrol-rs.log`); this section is the format of the recordings the
+corpus came from. Each line is one JSON object
 (`recording.schema.json`) with `t`, monotonic seconds since the session started, and `type`:
 
 | `type`    | Fields                                                     |
@@ -298,8 +299,8 @@ slows streaming. After a write error the recorder reports it once on the console
 connect. Files rotate at 5 MB (`<session>.jsonl`, `<session>.1.jsonl`, ...) and the directory keeps the newest 40
 files, always including the current session's first file, which holds its `session` line.
 
-`tools/convert_recording.py <recording.jsonl>... [--gcode file.nc] [--name name]` writes a transcript skeleton to
-`transcripts/` (and copies the G-code into `gcode/`):
+`tools/convert_recording.py <recording.jsonl>... [--gcode file.nc] [--name name]` (Python, in git history) wrote a
+transcript skeleton to `transcripts/` (and copied the G-code into `gcode/`):
 
 - setup from the `session` line: start `boot` (a session begins at the connect), its units and home, and only the
   settings that differ from `defaultwebcontrol.json`;
@@ -310,8 +311,7 @@ files, always including the current session's first file, which holds its `sessi
 - the firmware from the `B05` reply (and 51.292 from its rewrite notice).
 
 Status reports are kept (they end resyncs) unless `--drop-status`. Expect events are not invented; add them by hand,
-trim, then replay. `tests/test_convert_recording.py` records sessions through the backend recorder, converts them and
-replays the result.
+trim, then replay.
 
 ## v0.94 logs
 
@@ -341,8 +341,8 @@ and `DataStructures/loggingQueue.py` at fe1f113:
   (and can leave a cut-off line or NUL bytes the next start's header is glued onto), batches can land out of order,
   and time can step back. The clock is wall time, which a Pi sets from NTP after boot.
 
-`tools/import_v094_log.py log.txt [--alog alog.txt] --out DIR` splits the log at every `+++++` header and at every
-connect, and writes one recording per connect, named by its start time, for `convert_recording.py`. It reads both
+`tools/import_v094_log.py log.txt [--alog alog.txt] --out DIR` (Python, in git history) splits the log at every
+`+++++` header and at every connect, and writes one recording per connect, named by its start time, for `convert_recording.py`. It reads both
 files a line at a time and writes as it goes, so an 8 GB log needs no more memory than a small one:
 
 - v0.94 sends `B05`, the units and `$$` when it opens the port, so a connect starts at each `Sent: B05`, or at the
@@ -366,16 +366,14 @@ files a line at a time and writes as it goes, so an 8 GB log needs no more memor
 
 UI actions are not in v0.94 logs, so the transcript needs its `ui` events added by hand where the TODO comments are.
 v0.94's handshake (`B05` first) also differs from today's, so a converted session is a starting point: keep the part
-that shows the behaviour (usually a job), restart it from `start: connected`, and re-record or hand-fix the tx.
-`tests/fixtures/v094/` holds a synthetic log and alog in this format; `tests/test_import_v094_log.py` checks the
-importer against it.
+that shows the behaviour (usually a job), restart it from `start: connected`, and hand-fix the tx.
 
 ## Real replies
 
 The owner's v0.94 logs (December 2025 to November 2026; holey 51.27 on a PCB v1.1 board, buffering off) were
 imported into 366 recordings (13 GB, 1.78 M lines written, 158 M read) and indexed with `tools/index_recordings.py`.
-They stay on the owner's machine; only the lines in `tools/owner_machine.py` and the trimmed G-code under
-`gcode/real/` are in the repository. What they hold, by recording file:
+They stay on the owner's machine; only the lines the transcripts carry (gathered in `tools/owner_machine.py`, now in
+git history) and the trimmed G-code under `gcode/real/` are in the repository. What they hold, by recording file:
 
 | Feature | Files | Count |
 | --- | --- | --- |
@@ -428,11 +426,11 @@ owner's settings (`tools/owner_machine.py`) and the home v0.94 streamed with. Th
 `real_katie_neck_back_pause_jog_resume` raises every Z in today's file by 25 mm: the owner regenerated
 `1-neck-back-25-endmill.nc` after cutting it, and the logs show the Z values it was cut with.
 
-`tools/extract_real_job.py` cuts both files from the recordings (its `JOBS` table names each job's recording, time
-windows and line ranges), `tools/real_job_scenarios.py` holds the scenarios, and `tools/compare_real_jobs.py` writes
+`tools/extract_real_job.py` cut both files from the recordings (its `JOBS` table named each job's recording, time
+windows and line ranges), `tools/real_job_scenarios.py` held the scenarios, and `tools/compare_real_jobs.py` wrote
 `real-jobs.md`: every write the backend makes for these lines against what v0.94 made, each difference either an
-intended change with its finding or commit, or UNEXPLAINED. Re-recording a real job needs only the files here; cutting
-a new one needs the owner's recordings.
+intended change with its finding or commit, or UNEXPLAINED. All three are Python, in git history. A behaviour change
+that touches a real job now edits its transcript by hand and updates `real-jobs.md` to match.
 
 ## Known warts
 
@@ -446,11 +444,10 @@ until a transcript and this list change together.
 3. **Doubled spaces.** Most lines end in two spaces (`G21  `, `G0 Z5  `); `home` and `returnToCenter` send `G90   `.
 4. **Handshake order and scope.** `G21`, `$$`, `G90` go out before `B05` and the `$13` write, so `$$` is compared
    before the firmware version is known. Only `$13` and settings `$$` shows differ are written, not the full set
-   `spec/firmware.md` B.2 and B.9 ask for after every boot. The Python backend keeps this on purpose. **The Rust
+   `spec/firmware.md` B.2 and B.9 ask for after every boot. The Python backend kept this on purpose. **The Rust
    backend does not copy it:** on each boot it sends `B05`, the units, `G90`, every setting the controller takes
-   (a blank one, never read from the controller, is left for `$$` to adopt), then `$$` to verify. Its four
-   `connect_*` transcripts are in `transcripts-rust/` (the prelude's tx is not checked). Python's runner reads only
-   `transcripts/`.
+   (a blank one, never read from the controller, is left for `$$` to adopt), then `$$` to verify. The four
+   `connect_*` transcripts pin that handshake (the prelude's tx is not checked).
 5. **Number formats vary.** A restore writes `$16=0.000000`, `$21=1300.00`, `$45=0.00000516850`: whatever each
    setting's formatter produces. Moves the backend builds print Python's `str(float)` (`G00 X254.0`, `G0 Z5.0`), and
    home-shifted file coordinates keep the longer operand's decimals (`X22.8456 Y3.00`).
@@ -472,10 +469,11 @@ until a transcript and this list change together.
 
 ## Rust-intended deviations
 
-Where the Rust backend writes something different from Python by owner decision, with no transcript to pin it.
+Where the Rust backend writes something different from Python by owner decision.
 
 1. **Triangular Accept raises Z first** (decision 3, 2026-11-15). Python's Accept queues `G21 `, `G90 `, `G40 `,
    `G0 X0 Y0 ` after the `$` lines, so the sled travels to the centre at whatever height the bit is. Rust queues
    `G0 Z<zAxisSafeHeight in mm> ` before `G0 X0 Y0 ` (after `G21`, so in millimetres), and refuses the Accept with a
-   409 or an alert, saving nothing, when the safe height is not a finite number. `tests/fixtures/calibration/
-   accept_commands.json` stays Python's record; `wc-calibration`'s fixture test inserts the raise.
+   409 or an alert, saving nothing, when the safe height is not a finite number. No transcript pins it:
+   `fixtures/calibration/accept_commands.json` stays Python's record, and `wc-calibration`'s fixture test inserts the
+   raise.

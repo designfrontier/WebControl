@@ -36,7 +36,7 @@ export class FormRouteError extends ApiError {
   }
 }
 
-/** Posts to one of main.py's classic form routes, which answer 200 or an error, mostly without a useful body. */
+/** Posts to one of the classic form routes, which answer 200 or an error, mostly without a useful body. */
 export const postForm = async (fetchImpl: Fetch, path: string, fields: Record<string, FormValue>) => {
   const body = new FormData();
   Object.entries(fields).forEach(([key, value]) =>
