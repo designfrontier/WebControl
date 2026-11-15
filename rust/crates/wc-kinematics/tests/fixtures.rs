@@ -1,11 +1,11 @@
-//! `tests/fixtures/calibration/kinematics.json`, with the README's rules: floats within `tolerance`, quadrilateral
+//! `fixtures/calibration/kinematics.json`, with the README's rules: floats within `tolerance`, quadrilateral
 //! cases on one fresh model in file order, `null` where no position matches.
 
 use serde_json::Value;
 use wc_kinematics::{ChainFeed, Geometry, Kinematics, Mode};
 
 fn fixture() -> Value {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../tests/fixtures/calibration/kinematics.json");
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../fixtures/calibration/kinematics.json");
     serde_json::from_str(&std::fs::read_to_string(path).expect("fixture")).expect("json")
 }
 

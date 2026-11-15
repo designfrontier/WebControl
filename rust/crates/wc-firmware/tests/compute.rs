@@ -1,5 +1,5 @@
-//! `computeSettings` against Python's: tests/fixtures/compute/cases.json holds what config.py derives, and the `$`
-//! lines it sends, for varied webcontrol.json files and groundcontrol.ini imports (regenerate with its generate.py).
+//! `computeSettings` against fixtures/compute/cases.json: what the Python backend derived, and the `$` lines it sent,
+//! for varied webcontrol.json files and groundcontrol.ini imports. The file is frozen; edit it by hand.
 
 use std::path::PathBuf;
 
@@ -11,7 +11,7 @@ const FIRMWARE: f64 = 51.27;
 const DEFAULTS: &str = include_str!("../../../../defaultwebcontrol.json");
 
 fn cases() -> Vec<Value> {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../tests/fixtures/compute/cases.json");
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../fixtures/compute/cases.json");
     serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
 }
 

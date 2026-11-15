@@ -1,5 +1,5 @@
-//! Ported from `tests/test_holey_calibration_model.py`, `test_holey_test_pattern.py` and the pure half of
-//! `test_calibration_accept.py`, plus the refusals Python reports on its message queue.
+//! Ported from the Python backend's test_holey_calibration_model, test_holey_test_pattern and the pure half of
+//! test_calibration_accept, plus the refusals Python reports on its message queue.
 #![allow(clippy::approx_constant)]
 
 use std::collections::HashMap;
@@ -25,7 +25,7 @@ const DEFAULTS: [(&str, &str, &str); 14] = [
     ("Advanced Settings", "kinematicsType", "Triangular"),
 ];
 
-/// `tests/test_holey_calibration_model.py`'s USER_SETTINGS: a machine someone calibrated before.
+/// test_holey_calibration_model's USER_SETTINGS: a machine someone calibrated before.
 const USER: [(&str, &str, &str); 6] = [
     ("Maslow Settings", "motorSpacingX", "3011.16237"),
     ("Maslow Settings", "motorOffsetY", "433.68186"),

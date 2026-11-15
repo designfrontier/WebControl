@@ -1,5 +1,5 @@
-//! The Rust half of the shared-file round trip: tests/fixtures/rust_settings/rust-written.json is what this writer
-//! makes of a Python-written file after typical edits, and tests/test_rust_settings_roundtrip.py loads it in Python.
+//! A Python-written webcontrol.json is written back byte for byte, and fixtures/rust_settings/rust-written.json is
+//! what this writer makes of it after typical edits (the Python backend loaded that file when it was checked in).
 //! `WC_REGENERATE=1 cargo test -p wc-config --test python_roundtrip` rewrites it.
 
 use std::fs;
@@ -9,7 +9,7 @@ use serde_json::json;
 use wc_config::{Paths, Settings, Source};
 
 fn fixtures() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../tests/fixtures/rust_settings")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../fixtures/rust_settings")
 }
 
 fn opened_python_file() -> (tempfile::TempDir, Paths, Settings) {

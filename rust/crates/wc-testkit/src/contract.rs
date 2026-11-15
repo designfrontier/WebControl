@@ -1,5 +1,5 @@
 //! Validates what a backend sends and accepts against `contract/`, with every object schema that lists its
-//! properties closed, as `tests/test_contract.py` does for Python.
+//! properties closed, as the Python backend's contract test did.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::PathBuf;

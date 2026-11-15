@@ -4,7 +4,7 @@ import viteConfig from "./vite.config.ts";
 export default mergeConfig(
   viteConfig,
   defineConfig({
-    // Contract tests read the Python sources (Actions/actions.py, static/scripts/baseSocket.js) with ?raw imports.
+    // The contract test reads ../contract with ?raw imports.
     server: { fs: { allow: [".."] } },
     test: {
       environment: "jsdom",

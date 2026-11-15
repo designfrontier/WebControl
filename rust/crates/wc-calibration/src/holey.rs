@@ -216,7 +216,7 @@ mod tests {
         }
     }
 
-    /// `tests/fixtures/trf_path.json`, recorded from scipy by `regenerate_trf_path.py` beside it. The first Jacobian
+    /// `tests/fixtures/trf_path.json`, recorded from scipy 1.9 and frozen. The first Jacobian
     /// steps by 1.5e-8 against forward solves that stop at 1e-9 mm, so libm's last bit (Linux against the Mac) shows
     /// below 1e-5 of the starting cost, a thousandth of the starting gradient and 0.001 mm of step.
     #[test]

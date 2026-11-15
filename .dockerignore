@@ -1,7 +1,0 @@
-**/.git
-**/.venv
-/firmware
-/build
-**/node_modules
-/frontend/dist
-/releases

@@ -126,21 +126,19 @@ fn restore_entries_that_would_leave_the_directory_are_skipped() {
     assert!(target.join("gcode").is_dir());
 }
 
-/// Python's zipfile reads a Rust backup, when a Python is on the path.
+/// Every entry reads back with its CRC checked, and the names are relative, as v0.94's restore expects.
 #[test]
-fn python_reads_a_rust_backup() {
+fn a_rust_backup_reads_back_whole() {
     let home = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(home.path().join(".WebControl/gcode")).unwrap();
     std::fs::write(home.path().join(".WebControl/webcontrol.json"), "{}").unwrap();
     std::fs::write(home.path().join(".WebControl/gcode/a.nc"), "G0 X1\n".repeat(100)).unwrap();
     let archive = backup(home.path()).unwrap();
-    let script = "import sys, zipfile\nz = zipfile.ZipFile(sys.argv[1])\nassert z.testzip() is None\n\
-                  print(','.join(sorted(z.namelist())))";
-    let Ok(output) = std::process::Command::new("python3").args(["-c", script]).arg(&archive).output() else {
-        return eprintln!("no python3; skipped");
-    };
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
-    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "gcode/a.nc,webcontrol.json");
+    assert_eq!(names(&archive), ["gcode/a.nc", "webcontrol.json"]);
+    let mut zip = zip::ZipArchive::new(std::fs::File::open(&archive).unwrap()).unwrap();
+    let mut text = String::new();
+    zip.by_name("gcode/a.nc").unwrap().read_to_string(&mut text).unwrap();
+    assert_eq!(text, "G0 X1\n".repeat(100));
 }
 
 #[tokio::test]

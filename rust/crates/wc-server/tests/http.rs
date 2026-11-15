@@ -392,11 +392,11 @@ async fn help_serves_the_index_page_by_default_without_its_front_matter() {
     assert!(page["markdown"].as_str().unwrap().starts_with("# WebControl\n"), "{page}");
 }
 
-/// tests/fixtures/help/python-pages.json holds Python's title and a SHA-256 of its markdown for every docs/ page.
+/// fixtures/help/python-pages.json holds Python's title and a SHA-256 of its markdown for every docs/ page.
 #[tokio::test]
 async fn every_help_page_matches_what_python_serves() {
     use sha2::Digest;
-    let fixture = wc_testkit::repo_root().join("tests/fixtures/help/python-pages.json");
+    let fixture = wc_testkit::repo_root().join("fixtures/help/python-pages.json");
     let expected: Value = serde_json::from_str(&std::fs::read_to_string(fixture).unwrap()).unwrap();
     for (path, want) in expected.as_object().unwrap() {
         let uri = format!("/api/system/help?path={}", path.replace('&', "%26"));

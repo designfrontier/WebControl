@@ -1,6 +1,6 @@
 //! G-code as the Python backend reads, rewrites and previews it (`File/gcodeFile.py`, `Connection/firmwareGcode.py`,
 //! the restart half of `Actions/actions.py`), and the board model (`Boards/`). Pure functions, no IO: every string
-//! that reaches the controller or a shared file matches Python's byte for byte (tests/fixtures/gcode).
+//! that reaches the controller or a shared file matches Python's byte for byte (fixtures/gcode).
 
 pub mod board;
 mod decimal;

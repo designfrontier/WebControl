@@ -1,4 +1,4 @@
-//! Ported from `tests/test_holey_kinematics.py` and the kinematics half of `tests/test_holey_calibration_model.py`.
+//! Ported from the Python backend's test_holey_kinematics and the kinematics half of test_holey_calibration_model.
 #![allow(clippy::approx_constant)]
 
 use wc_kinematics::{CHAIN_DENSITY, ChainFeed, FIRMWARE_PI, Geometry, Kinematics, Mode, python_float, sprocket_radius};

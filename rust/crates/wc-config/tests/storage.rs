@@ -1,4 +1,4 @@
-//! Writing the shared `webcontrol.json`; the first half is ported from tests/test_config_storage.py.
+//! Writing the shared `webcontrol.json`; the first half is ported from the Python backend's test_config_storage.
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
