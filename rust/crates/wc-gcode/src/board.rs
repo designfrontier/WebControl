@@ -373,11 +373,16 @@ impl CutGrid {
             self.mark_point(from)?;
             return self.mark_point(to);
         }
-        (0..=(length * 4.0) as i64).try_for_each(|step| {
+        let samples = length * 4.0;
+        // Python's int() raises here; a saturating cast would sample for ever.
+        if !samples.is_finite() {
+            return Err(BoardError::NotANumber);
+        }
+        (0..=samples as i64).try_for_each(|step| {
             let step = step as f64;
-            let xa = x0 + (x1 - x0) / (length * 4.0) * step;
-            let ya = y0 + (y1 - y0) / (length * 4.0) * step;
-            let za = z0 + (z1 - z0) / (length * 4.0) * step;
+            let xa = x0 + (x1 - x0) / samples * step;
+            let ya = y0 + (y1 - y0) / samples * step;
+            let za = z0 + (z1 - z0) / samples * step;
             if za < 0.0 && self.inside(xa, ya) { self.set(xa + self.offset.0, ya + self.offset.1) } else { Ok(()) }
         })
     }
@@ -546,6 +551,13 @@ mod tests {
             center_y: "0",
             units: "mm"
         }));
+    }
+
+    #[test]
+    fn a_cut_to_a_coordinate_past_float_range_is_refused_not_sampled_forever() {
+        let mut board = board(48.0, 24.0, (0.0, 0.0));
+        let moves = drawn(MoveKind::Line, &[[0.0, 0.0, -1.0], [f64::INFINITY, 0.0, -1.0]]);
+        assert_eq!(board.process_gcode(&moves, (0.0, 0.0), Units::Inches), Err(BoardError::NotANumber));
     }
 
     #[test]
