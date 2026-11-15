@@ -18,6 +18,12 @@ from app import app
 from DataStructures.makesmithInitFuncs import MakesmithInitFuncs
 from Actions import firmware
 
+SETTING_REPLY = re.compile(r"^\$(\d+)=\s*(\S+)")
+# The firmware stores these as (unsigned) ints, so it truncates any fraction written to them.
+INTEGER_FIRMWARE_KEYS = (9, 10, 11, 15)
+# Arduino's Serial.print(float, 8) resolution, which is all a $$ reply carries.
+PRINTED_RESOLUTION = 1e-8
+
 
 class Config(MakesmithInitFuncs):
     settings = {}
@@ -442,13 +448,14 @@ class Config(MakesmithInitFuncs):
                     break
         return ret
 
-    def syncFirmwareKey(self, firmwareKey, value, isImporting=False, useStored=False, data=None):
+    def syncFirmwareKey(self, firmwareKey, value, isImporting=False, useStored=False, data=None, reported=False):
         '''
         :param firmwareKey: the firmwareKey value
         :param value: the PREVIOUS value prior to updating.
         :param isImporting: indicates to bypass syncing until all the importing of values is done.
         :param useStored: indicates to use the value that's currently stored to update controller (holeyKinematics)
         :param data: used by optical calibration to send function the error array to send to controller. (optical)
+        :param reported: value is the controller's $$ reply, so compare it at the precision the firmware prints.
         :return:
         '''
         for section in self.settings:
@@ -473,7 +480,7 @@ class Config(MakesmithInitFuncs):
                                 value = 2
                             elif value == "Relay_Low":
                                 value = 3
-                            else:
+                            elif not reported:
                                 value = 0
                         # if error array, send by special function (optical)
                         if firmwareKey == 85:
@@ -503,7 +510,7 @@ class Config(MakesmithInitFuncs):
                                         self.data.holeyKinematics.updateSetting(firmwareKey, storedValue)
                                 else:
                                     break
-                        elif not self.isClose(float(storedValue), float(value)) and not isImporting:
+                        elif not self.firmwareValuesMatch(firmwareKey, storedValue, value, reported) and not isImporting:
                             # Update the controller value if its different enough from previous value and
                             # we are not importing the groundcontrol.ini file.
                             strValue = self.firmwareKeyString(firmwareKey, storedValue)
@@ -513,6 +520,16 @@ class Config(MakesmithInitFuncs):
                         else:
                             break
         return
+
+    def firmwareValuesMatch(self, firmwareKey, storedValue, value, reported):
+        stored, other = float(storedValue), float(value)
+        if not reported:
+            return self.isClose(stored, other)
+        if math.isnan(other):
+            return False
+        if firmwareKey in INTEGER_FIRMWARE_KEYS:
+            return int(stored) == int(other)
+        return self.isClose(stored, other) or abs(stored - other) <= PRINTED_RESOLUTION
 
     def isPercentClose(self, a, b, rel_tol = 0.0001):
         '''
@@ -649,24 +666,19 @@ class Config(MakesmithInitFuncs):
         response to a $$ request.  If the value received does not match the
         expected value.
         """
-        parameter, position = self.parseFloat(message, 0)
-        value, position = self.parseFloat(message, position)
-        if parameter is not None and value is not None:
-            self.syncFirmwareKey(int(parameter), value)
-
-    def parseFloat(self, text, position=0):
-        """
-            Takes a string and parses out the float found at position default to 0
-            returning a list of the matched float and the ending
-            position of the float
-            """
-        # This regex comes from a python docs recommended
-        regex = re.compile("[-+]?(\d+(\.\d*)?|\.\d+)([eE][-+]?\d+)?")
-        match = regex.search(text[position:])
+        match = SETTING_REPLY.match(message)
         if match:
-            return (float(match.group(0)), match.end(0))
-        else:
-            return (None, position)
+            self.syncFirmwareKey(int(match.group(1)), self.reportedValue(match.group(2)), reported=True)
+
+    def reportedValue(self, text):
+        '''
+        The number in a $$ reply; Arduino prints "nan", "inf" or "ovf" for values it can't show, all read as NaN.
+        '''
+        try:
+            value = float(text)
+        except ValueError:
+            return math.nan
+        return value if math.isfinite(value) else math.nan
 
     def computeSettings(self, section, key, value, doAll=False):
         '''
