@@ -93,7 +93,8 @@ export const Menu = ({ label, items, badge }: { label: string; items: MenuItem[]
                   title={item.disabledReason}
                   onClick={() => {
                     if (item.disabledReason) return;
-                    setOpen(false);
+                    // Focus the menu button first, so a dialog this opens restores focus there on close.
+                    closeMenu();
                     item.onSelect();
                   }}
                 >

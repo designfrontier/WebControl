@@ -61,6 +61,14 @@ describe("App shell", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  it("returns focus to the menu button when a modal opened from its menu closes", async () => {
+    const { user } = renderApp("/");
+    await pick(user, "Help", "About");
+    await user.keyboard("{Escape}");
+    expect(currentPath()).toBe("/");
+    expect(menu("Help")).toHaveFocus();
+  });
+
   it("opens the Actions modal straight from the menu bar", async () => {
     const { user } = renderApp("/");
     await user.click(menu("Actions"));
