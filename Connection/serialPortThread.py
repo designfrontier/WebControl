@@ -37,7 +37,7 @@ class SerialPortThread(MakesmithInitFuncs):
         self.unackedLines = deque()  # (length, gcode index or None) per line sent, newest on the left
         self.resyncAfter = None
         self.caughtUpSinceHalt = False
-        self.probeInFlight = False
+        self.probeLine = None  # the probe's entry in unackedLines while it awaits its ok or error:
         self.bootDeadline = None
 
     def _write(self, message, isQuickCommand=False, gcodeIndex=None):
@@ -106,7 +106,7 @@ class SerialPortThread(MakesmithInitFuncs):
         acks and hold regular lines until a status report read after the input ran dry past the resync delay.
         '''
         self._emptyAccounting()
-        self.probeInFlight = False
+        self.probeLine = None
         self.machineIsReadyForData = False
         self.resyncAfter = time.time() + self.RESYNC_DELAY
         self.caughtUpSinceHalt = False
@@ -440,10 +440,11 @@ class SerialPortThread(MakesmithInitFuncs):
         # Check if a line has been completed
         elif lineFromMachine == "ok\r\n" or (len(lineFromMachine) >= 6 and lineFromMachine[0:6] == "error:"):
             self.machineIsReadyForData = True
-            if bool(self.unackedLines) is True:  # if we've sent lines to the machine
-                # free up that space in the buffer
-                self.bufferSpace = (self.bufferSpace + self.unackedLines.pop()[0])
-            if self.probeInFlight:
+            acked = self.unackedLines.pop() if self.unackedLines else None
+            if acked is not None:
+                self.bufferSpace = self.bufferSpace + acked[0]
+            # Identity, not equality: a `~` sent mid-probe is acked first with an entry of its own.
+            if acked is not None and acked is self.probeLine:
                 self._probeFinished(lineFromMachine == "ok\r\n")
         # The firmware stops itself on these and never acks the lines it held.
         if lineFromMachine.startswith(("ALARM:", "Buffer overflow!")):
@@ -500,8 +501,7 @@ class SerialPortThread(MakesmithInitFuncs):
         if onlySelectsTool(command):
             return
         self._write(command)
-        # Queued commands go out one at a time, so the next ok or error: answers the probe.
-        self.probeInFlight = "G38.2" in command
+        self.probeLine = self.unackedLines[0] if "G38.2" in command and self.unackedLines else None
         # if units have changed, update settings and notify UI clients to stay in sync
         if command.find("G20") != -1 and self.data.units != "INCHES":
             self.data.actions.updateSetting("toInches", 0, True)  # value = doesn't matter
@@ -528,7 +528,7 @@ class SerialPortThread(MakesmithInitFuncs):
         '''
         The firmware answers a probe that never touched with `error: probe did not connect` instead of ok.
         '''
-        self.probeInFlight = False
+        self.probeLine = None
         if touched:
             self.data.actions.defineZ0()
         else:

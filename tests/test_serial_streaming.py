@@ -577,8 +577,27 @@ def test_a_status_report_still_queued_from_before_a_stop_does_not_end_the_resync
 def test_a_stop_or_alarm_during_a_probe_forgets_it(data):
     thread = SerialPortThread()
     thread.data = data
-    thread.probeInFlight = True
+    thread.probeLine = (16, None)
 
     thread._awaitResync()
 
-    assert thread.probeInFlight is False
+    assert thread.probeLine is None
+
+
+@pytest.mark.parametrize("answer, zeroed", [("ok", True), ("error: probe did not connect", False)])
+def test_the_ok_for_a_resume_sent_during_a_probe_is_not_the_probes_answer(serial, data, answer, zeroed):
+    thread = serial.thread(ack=False)
+    thread.machineIsReadyForData = True
+    serial.port.incoming.clear()
+    drain(data.gcode_queue)
+    drain(data.ui_queue1)
+
+    thread._sendQueuedCommand("G90 G38.2 Z-10")
+    thread._write("~", isQuickCommand=True)
+    serial.port.incoming.extend(["ok\r\n", answer + "\r\n"])
+    thread._exchangeLines()
+    thread._exchangeLines()
+
+    sent = drain(data.gcode_queue) + serial.port.sent
+    assert any(line.startswith("G10 Z0") for line in sent) is zeroed
+    assert ("Touch Z Failed" in str(serial.ui_messages())) is not zeroed
