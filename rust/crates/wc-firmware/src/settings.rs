@@ -22,7 +22,7 @@ fn is_optical(key: u32) -> bool {
 pub fn parse_setting_reply(line: &str) -> Option<(u32, f64)> {
     let (key, rest) = line.strip_prefix('$')?.split_once('=')?;
     let key = key.parse().ok().filter(|_| key.chars().all(|c| c.is_ascii_digit()))?;
-    let text = rest.trim_start().split_whitespace().next()?;
+    let text = rest.split_whitespace().next()?;
     let value = text.parse::<f64>().ok().filter(|v| v.is_finite()).unwrap_or(f64::NAN);
     Some((key, value))
 }

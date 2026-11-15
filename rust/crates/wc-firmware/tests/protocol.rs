@@ -2,7 +2,7 @@ use wc_firmware::boot::{
     board_banner, ends_boot, firmware_build, is_boot_banner, parse_firmware_version, supports_z_limits,
 };
 use wc_firmware::line::{Positioning, positioning_set_by, problem_with, sanitise, strip_comments};
-use wc_firmware::words::{changes_tool, pauses_firmware};
+use wc_firmware::words::{changes_tool, only_selects_tool, pauses_firmware};
 use wc_firmware::{Accounting, BUFFER_SIZE, PositionError, Reply, RunMode, Status, classify, split_glued};
 
 #[test]
@@ -161,4 +161,10 @@ fn m0_m1_and_m6_are_found_however_they_are_padded() {
     ["M10", "M100", "M3", "M1.5", "M", "G0 X1"].iter().for_each(|l| assert!(!pauses_firmware(l), "{l}"));
     ["M6", "M06", "T2 M6", "M6 T2"].iter().for_each(|l| assert!(changes_tool(l), "{l}"));
     ["M60", "M16", "M6.1", "T2"].iter().for_each(|l| assert!(!changes_tool(l), "{l}"));
+}
+
+#[test]
+fn a_lone_t_only_selects_a_tool() {
+    ["T2", " T2 ", "T 2", "N10 T2", "N10T2.", "T2.5 "].iter().for_each(|l| assert!(only_selects_tool(l), "{l}"));
+    ["T", "T2 M6", "G0 T2", "N T2", "NT2", "T2 X1", "2"].iter().for_each(|l| assert!(!only_selects_tool(l), "{l}"));
 }
