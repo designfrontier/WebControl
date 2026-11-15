@@ -1,8 +1,11 @@
 use serde_json::{Value, json};
 use wc_protocol::main::{
-    ActivateModal, Backend, ConnectionStatus, HostAddress, Macro, PauseButton, StartupState, Units,
+    ActivateModal, Alarm, Backend, ClearAlarm, ConnectionStatus, ControllerMessage, ErrorValueMessage, GcodeLine,
+    HealthMessage, HomePositionMessage, HostAddress, Macro, MainScreen, PauseButton, PositionMessage, RequestedSetting,
+    StartupState, StatusMessage, Units,
 };
-use wc_protocol::{Action, ClientEvent, Envelope, Frame, Namespace, Push};
+use wc_protocol::settings::UpdatePorts;
+use wc_protocol::{Action, ClientEvent, Envelope, Frame, Namespace, Push, float};
 use wc_testkit::contract::{Contract, ResponseBody};
 
 fn contract() -> &'static Contract {
@@ -153,11 +156,83 @@ fn action_events_decode_with_lenient_arguments() {
 }
 
 #[test]
-fn other_events_are_named_but_not_decoded_yet() {
-    let frame = Frame { ns: "/MaslowCNC".into(), event: "settingRequest".into(), data: json!({}) };
-    assert_eq!(ClientEvent::from_frame(&frame), Some(ClientEvent::Unhandled("settingRequest".into())));
-    let unknown = Frame { ns: "/MaslowCNC".into(), event: "bogus".into(), data: json!({}) };
-    assert_eq!(ClientEvent::from_frame(&unknown), None);
+fn setting_requests_decode_and_other_events_are_named_but_not_decoded_yet() {
+    let frame = |event: &str, data: Value| Frame { ns: "/MaslowCNC".into(), event: event.into(), data };
+    let request = frame("settingRequest", json!({"data": {"section": "Computed Settings", "setting": "units"}}));
+    contract().validate_frame(&request.encode()).unwrap();
+    assert_eq!(
+        ClientEvent::from_frame(&request),
+        Some(ClientEvent::SettingRequest { section: "Computed Settings".into(), setting: "units".into() })
+    );
+    assert_eq!(ClientEvent::from_frame(&frame("settingRequest", json!({"data": {"section": 1}}))), None);
+    assert_eq!(ClientEvent::from_frame(&frame("settingRequest", json!({}))), None);
+    let later = frame("updateSetting", json!({}));
+    assert_eq!(ClientEvent::from_frame(&later), Some(ClientEvent::Unhandled("updateSetting".into())));
+    assert_eq!(ClientEvent::from_frame(&frame("bogus", json!({}))), None);
+}
+
+#[test]
+fn action_arguments_read_like_pythons_float() {
+    assert_eq!(float(&json!(10)), Some(10.0));
+    assert_eq!(float(&json!(" 2.5 ")), Some(2.5));
+    assert_eq!(float(&json!("1e3")), Some(1000.0));
+    [json!(""), json!("nan"), json!("inf"), json!("up"), json!(null), json!(true)]
+        .iter()
+        .for_each(|value| assert_eq!(float(value), None, "{value}"));
+    assert_eq!(Action::new("move", json!("up"), json!(1)).arg_text(), "up");
+    assert_eq!(Action::new("defineHome", json!(10), json!(1)).arg_text(), "10");
+}
+
+/// Every message type the link sends, checked against its closed schema.
+#[test]
+fn link_messages_fit_their_schemas() {
+    let check = |envelope: Envelope| contract().validate_envelope(&serde_json::to_value(envelope).unwrap()).unwrap();
+    check(Envelope::json(&PositionMessage {
+        xval: 1.0,
+        yval: 2.0,
+        zval: 0.5,
+        vel: 0.0,
+        rqvel: 20.0,
+        pcom: "0.0%".into(),
+        state: "Idle".into(),
+        lpwr: 15.0,
+        rpwr: 15.0,
+        zpwr: 15.0,
+    }));
+    check(Envelope::json(&ErrorValueMessage {
+        left_error: 0.1,
+        right_error: 0.2,
+        computed_x: -999999.0,
+        computed_y: -999999.0,
+        computed_enabled: 0,
+    }));
+    check(Envelope::json(&HealthMessage { cpu_usage: 12.5, buffer_size: -1, controller_firmware_version: 51.27 }));
+    let status = StatusMessage {
+        upload_flag: 0,
+        positioning_mode: 0,
+        current_tool: 0,
+        job_in_progress: false,
+        manual_z_axis_adjust: false,
+    };
+    check(Envelope::json(&status));
+    check(Envelope::json(&ControllerMessage("Firmware Version 51.27".into())));
+    check(Envelope::json(&Alarm { message: "Alarm: Sled Not Keeping Up".into() }));
+    check(Envelope::json(&ClearAlarm::default()));
+    check(Envelope::json(&HomePositionMessage { xval: 1.0, yval: -2.0 }));
+    check(Envelope::json(&RequestedSetting { setting: "units".into(), value: json!("MM") }));
+    check(Envelope::json(&UpdatePorts(vec!["None".into()])));
+    check(Envelope::json(&ActivateModal::titled_alert("Touch Z Failed", "Z was not zeroed")));
+    let notification = ActivateModal::notification("Please insert tool 2", true);
+    assert_eq!((notification.title.as_str(), notification.resume.as_str()), ("Notification:", "resume"));
+    assert_eq!(notification.modal_type, "notification");
+    check(Envelope::json(&notification));
+    assert_eq!(ActivateModal::notification("x", false).resume, "false");
+    let main = MainScreen {
+        status,
+        touch_plate: false,
+        gcode: GcodeLine { line_index: 0, line: String::new(), line_count: 0 },
+    };
+    contract().check("schemas/http/get-api-main.200.json", &serde_json::to_value(main).unwrap()).unwrap();
 }
 
 #[test]
