@@ -42,17 +42,20 @@ export const RunPanel = ({ available, lineIndex }: Props) => {
 
   return (
     <section className="run" aria-label="Run">
-      <div className="alarm-status" role="status" data-alarm={alarm !== null}>
-        {alarm === null ? (
-          <span>No alarms</span>
-        ) : (
-          <>
-            <span>{alarm}</span>
-            <button type="button" onClick={() => client.sendAction("stopRun")}>
-              Stop and clear alarm
-            </button>
-          </>
-        )}
+      <div className="run-status">
+        <div className="alarm-status" role="status" data-alarm={alarm !== null}>
+          {alarm === null ? (
+            <span>No alarms</span>
+          ) : (
+            <>
+              <span>{alarm}</span>
+              <button type="button" onClick={() => client.sendAction("stopRun")}>
+                Stop and clear alarm
+              </button>
+            </>
+          )}
+        </div>
+        <PacingControl />
       </div>
       <div className="run-dock">
         <LoadedFile className="run-file" />
@@ -107,7 +110,6 @@ export const RunPanel = ({ available, lineIndex }: Props) => {
         </button>
         <CameraToggle />
       </form>
-      <PacingControl />
     </section>
   );
 };

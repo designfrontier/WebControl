@@ -11,10 +11,10 @@ export interface Pacing {
 }
 
 export const PRESETS = [
-  { id: "v094-50", label: "v0.94 · 50 ms", mode: "v0.94", gapMs: 50 },
-  { id: "min-50", label: "Min gap · 50 ms", mode: "minimum gap", gapMs: 50 },
-  { id: "min-25", label: "Min gap · 25 ms", mode: "minimum gap", gapMs: 25 },
-  { id: "fastest", label: "Fastest · 0 ms", mode: "minimum gap", gapMs: 0 },
+  { id: "v094-50", label: "v0.94 50 ms", mode: "v0.94", gapMs: 50 },
+  { id: "min-50", label: "Min 50 ms", mode: "minimum gap", gapMs: 50 },
+  { id: "min-25", label: "Min 25 ms", mode: "minimum gap", gapMs: 25 },
+  { id: "fastest", label: "Min 0 ms", mode: "minimum gap", gapMs: 0 },
 ] as const satisfies readonly (Pacing & { id: string; label: string })[];
 
 export const CUSTOM = "custom";
@@ -31,12 +31,16 @@ export const validGap = (text: string) => {
 
 export const fixed = (value: number | null, digits: number) => (value === null ? "–" : value.toFixed(digits));
 
-/** "507 lines/min" and the rest, as the run panel shows a segment. */
+const lostShort = ({ lost, lostPercent }: PacingSegment) =>
+  lostPercent === null ? `Lost ${lost}` : `Lost ${lost} (${fixed(lostPercent, 2)}%)`;
+
+/** "507 lines/min", "Lost 9 (0.39%)" and the rest, as the run panel shows a segment. */
 export const describe = (segment: PacingSegment) => ({
-  rate: `${fixed(segment.linesPerMinute, 0)} lines/min`,
+  rate: segment.linesPerMinute === null ? "No lines yet" : `${fixed(segment.linesPerMinute, 0)} lines/min`,
+  lost: lostShort(segment),
   detail: [
-    `Sent ${segment.lines}`,
-    `Lost ${segment.lost} (${fixed(segment.lostPercent, 2)}%)`,
+    `${segment.lines} lines sent`,
+    lostShort(segment),
     ...(segment.lostTwice > 0 ? [`${segment.lostTwice} lost twice`] : []),
     `${fixed(segment.secondsPerLine, 3)} s/line`,
     `${segment.recoveryS.toFixed(1)} s recovering`,

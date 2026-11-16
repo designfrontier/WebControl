@@ -31,7 +31,7 @@ const HistoryTable = ({ history }: { history: PacingSegment[] }) =>
   history.length === 0 ? (
     <p>No pacing segment has ended yet. A segment ends when the pacing changes, the job ends or Stop.</p>
   ) : (
-    <div className="pacing-history">
+    <div className="pacing-history" role="region" aria-label="Segment history" tabIndex={0}>
       <table>
         <caption>Ended segments, newest first</caption>
         <thead>
@@ -69,7 +69,7 @@ const HistoryTable = ({ history }: { history: PacingSegment[] }) =>
   );
 
 const StatsDialog = ({ stats, onClose }: { stats: PacingStats; onClose: () => void }) => (
-  <Dialog title="Line pacing" onClose={onClose} size="medium">
+  <Dialog title="Line pacing" onClose={onClose} size="large">
     <div className="pacing-details">
       <p>Pacing now: {pacingLabel(stats)}</p>
       {stats.segment && <Summary label="This segment" segment={stats.segment} />}
@@ -138,6 +138,7 @@ export const PacingControl = () => {
     );
   const shown = stats.segment ?? stats.job;
   const summary = shown && describe(shown);
+  const lostText = summary && (stats.segment ? summary.lost : `Last job · ${summary.lost}`);
 
   return (
     <div className="pacing" role="group" aria-label="Line pacing">
@@ -152,26 +153,33 @@ export const PacingControl = () => {
           }}
         >
           {PRESETS.map((option) => (
-            <option key={option.id} value={option.id}>
+            <option key={option.id} value={option.id} title={pacingLabel(option)}>
               {option.label}
             </option>
           ))}
-          <option value={CUSTOM}>
-            {preset === CUSTOM && !custom ? `Custom · ${pacingLabel(current)}` : "Custom…"}
-          </option>
+          <option value={CUSTOM}>{preset === CUSTOM && !custom ? pacingLabel(current) : "Custom…"}</option>
         </select>
         <button
           type="button"
           className="pacing-stats"
+          aria-haspopup="dialog"
+          aria-label={summary ? `${summary.rate}, ${lostText}` : undefined}
           title={summary ? `${summary.rate} · ${summary.detail}` : undefined}
           onClick={() => setDetails(true)}
         >
           {summary ? (
             <>
-              <strong>{summary.rate}</strong>
-              <span>
-                {stats.segment ? "" : "last job · "}Sent {shown.lines} · Lost {fixed(shown.lostPercent, 2)}%
-              </span>
+              <strong>
+                {shown.linesPerMinute === null ? (
+                  summary.rate
+                ) : (
+                  <>
+                    {fixed(shown.linesPerMinute, 0)}
+                    <span className="pacing-lines"> lines</span>/min
+                  </>
+                )}
+              </strong>
+              <span>{lostText}</span>
             </>
           ) : (
             "Pacing stats"
