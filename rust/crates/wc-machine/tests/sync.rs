@@ -82,7 +82,7 @@ fn restarted(rig: &Rig) -> bool {
 #[test]
 fn a_controller_holding_every_setting_gets_only_r() {
     let mut rig = Rig::new();
-    assert_eq!(rig.boot_reporting("51.27", &report(&[])), handshake_then(&["$13=63.5000"]));
+    assert_eq!(rig.boot_reporting("51.27", &report(&[])), handshake_then(&["$13=63.5"]));
     assert!(!restarted(&rig));
 }
 
@@ -91,7 +91,7 @@ fn one_differing_setting_is_written_with_r_then_read_back() {
     let mut rig = Rig::new();
     let sent = rig.boot_reporting("51.27", &report(&[(3, "478.00000000")]));
     // This controller never takes the write, so the read-back rewrites it once more and reads nothing again.
-    assert_eq!(sent, handshake_then(&["$3=463", "$13=63.5000", "$$", "$3=463"]));
+    assert_eq!(sent, handshake_then(&["$3=463", "$13=63.5", "$$", "$3=463"]));
     assert!(!restarted(&rig));
 }
 
@@ -103,13 +103,13 @@ fn a_differing_chain_over_sprocket_restarts_the_controller_before_anything_moves
     rig.open();
     ["PCB v1.6 TLE9201  Detected", "Grbl v1.00", "ready", "ok"].iter().for_each(|l| effects.extend(rig.rx(l)));
     let sent = rig.answer_with("51.27", &report(&[(38, "1")]));
-    assert_eq!(sent, handshake_then(&["$13=63.5000", "$38=2.00000"]), "no read-back: the restart replaces it");
+    assert_eq!(sent, handshake_then(&["$13=63.5", "$38=2"]), "no read-back: the restart replaces it");
     assert!(restarted(&rig));
     let jog = rig.act_with("move", json!("up"), json!("1"));
     assert!(written(&jog).is_empty());
     assert!(alerts(&jog)[0].contains("restarting the controller"), "{:?}", alerts(&jog));
     let sent = rig.boot_reporting("51.27", &report(&[]));
-    assert_eq!(sent, handshake_then(&["$13=63.5000"]), "$38 now matches: no second write, no second restart");
+    assert_eq!(sent, handshake_then(&["$13=63.5"]), "$38 now matches: no second write, no second restart");
     assert!(!restarted(&rig));
     rig.act_with("move", json!("up"), json!("1"));
     assert!(rig.run_to_quiet().contains(&"G91".to_string()), "moves go once it has booted");
@@ -145,10 +145,10 @@ fn a_ui_change_of_chain_over_sprocket_is_written_then_restarts() {
     rig.clear_written();
     let body = json!({"values": {"chainOverSprocket": "Top"}});
     rig.send(Event::Edit { id: 1, request: Request::UpdateSettings { section: "advanced".into(), body } });
-    assert_eq!(rig.run_to_quiet(), ["$38=1.000000"]);
+    assert_eq!(rig.run_to_quiet(), ["$38=1"]);
     assert!(restarted(&rig));
     let sent = rig.boot_reporting("51.27", &report(&[(38, "1")]));
-    assert_eq!(sent, handshake_then(&["$13=63.5000"]));
+    assert_eq!(sent, handshake_then(&["$13=63.5"]));
 }
 
 #[test]
@@ -160,7 +160,7 @@ fn a_board_that_does_not_reset_is_reported_and_moves_wait_for_a_banner() {
     let effects = rig.advance(3100);
     assert!(alerts(&effects).iter().any(|a| a.contains("did not restart")), "{:?}", alerts(&effects));
     let sent = rig.answer_with("51.27", &report(&[]));
-    assert_eq!(sent, handshake_then(&["$13=63.5000"]));
+    assert_eq!(sent, handshake_then(&["$13=63.5"]));
     let jog = rig.act_with("move", json!("up"), json!("1"));
     assert!(alerts(&jog)[0].contains("did not restart"));
     assert!(rig.run_to_quiet().is_empty());
@@ -178,10 +178,10 @@ fn a_value_that_does_not_stick_is_not_written_again_after_the_restart() {
         rig.rx(l);
     });
     let sent = rig.answer_with("51.27", &report(&[(38, "1")]));
-    assert_eq!(sent, handshake_then(&["$13=63.5000"]), "no loop");
+    assert_eq!(sent, handshake_then(&["$13=63.5"]), "no loop");
     assert!(!restarted(&rig));
     let next = rig.boot_reporting("51.27", &report(&[(38, "1")]));
-    assert_eq!(next, handshake_then(&["$13=63.5000", "$38=2.00000"]), "a later boot tries once more");
+    assert_eq!(next, handshake_then(&["$13=63.5", "$38=2"]), "a later boot tries once more");
 }
 
 #[test]
@@ -189,7 +189,7 @@ fn a_read_back_after_a_restart_that_did_not_stick_never_writes_chain_over_sprock
     let mut rig = Rig::new();
     rig.boot_reporting("51.27", &report(&[(38, "1")]));
     let sent = rig.boot_reporting("51.27", &report(&[(38, "1"), (3, "478.00000000")]));
-    assert_eq!(sent, handshake_then(&["$3=463", "$13=63.5000", "$$", "$3=463"]), "no $38 from the read-back either");
+    assert_eq!(sent, handshake_then(&["$3=463", "$13=63.5", "$$", "$3=463"]), "no $38 from the read-back either");
     assert!(!restarted(&rig));
 }
 
@@ -237,7 +237,7 @@ fn a_chain_over_sprocket_change_during_an_alarm_hold_still_restarts_and_the_hold
     rig.clear_written();
     let body = json!({"values": {"chainOverSprocket": "Top"}});
     rig.send(Event::Edit { id: 1, request: Request::UpdateSettings { section: "advanced".into(), body } });
-    assert_eq!(rig.run_to_quiet(), ["$38=1.000000"]);
+    assert_eq!(rig.run_to_quiet(), ["$38=1"]);
     assert!(restarted(&rig));
     rig.reboot();
     let jog = rig.act_with("move", json!("up"), json!("1"));
@@ -291,4 +291,60 @@ fn typed_gcode_waits_for_the_board_that_did_not_restart() {
     let effects = rig.send(Event::Request { id: 1, request: wc_machine::files::Request::SendGcode("G0 X10".into()) });
     assert!(alerts(&effects).iter().any(|a| a.contains("did not restart")), "{:?}", alerts(&effects));
     assert!(rig.run_to_quiet().is_empty());
+}
+
+fn power_cycle(rig: &mut SimRig) {
+    rig.send(Event::PortOpened { port: "/dev/ttyACM0".into() });
+    let boot = rig.sim.boot(0);
+    rig.deliver(boot);
+    rig.run(3000);
+    rig.take();
+}
+
+/// Whether a jog moves the sled; the simulator alarms instead when the L and R PIDs have no gains.
+fn jogs(rig: &mut SimRig) -> bool {
+    let before = rig.sim.position()[1];
+    rig.act_with("move", json!("up"), json!("10"));
+    rig.run(500);
+    rig.take();
+    rig.sim.position()[1] > before
+}
+
+/// The owner's 51.27 on 2026-11-15: a full push wrote `$24=1.000000`, which reads as 1.00000012, and after the next
+/// boot `SetTunings` left the L and R PIDs at zero gains, so every move alarmed.
+#[test]
+fn a_simulated_eeprom_restore_leaves_a_controller_that_still_moves_after_a_power_cycle() {
+    let sim = Sim::new(Build::holey_51_27()).with_eeprom_reset();
+    let mut rig = SimRig::on(settings(&[("Maslow Settings", "zAxis", json!(1))]), sim);
+    rig.run(3000);
+    [24, 28, 32, 36].iter().for_each(|&key| assert_eq!(rig.sim.setting(key), Some(1.0), "${key} reads as exactly 1"));
+    power_cycle(&mut rig);
+    assert!(rig.sim.main_axes_tuned() && rig.sim.z_axis_tuned());
+    assert!(jogs(&mut rig), "the sled moved: {:?}", rig.sim.position());
+}
+
+/// A controller an earlier build left with `$24` and `$32` at 1.00000012 is repaired on connect, then moves.
+#[test]
+fn a_simulated_controller_with_a_weight_above_one_is_repaired_on_connect() {
+    let corrupted = f64::from(f32::from_bits(1.0_f32.to_bits() + 1));
+    let sim = Sim::new(Build::holey_51_27()).with_setting(24, corrupted).with_setting(32, corrupted);
+    let mut rig = SimRig::on(settings(&[("Maslow Settings", "zAxis", json!(1))]), sim);
+    rig.run(3000);
+    assert_eq!((rig.sim.setting(24), rig.sim.setting(32)), (Some(1.0), Some(1.0)));
+    assert!(rig.sim.main_axes_tuned());
+    assert!(jogs(&mut rig), "the sled moved: {:?}", rig.sim.position());
+    power_cycle(&mut rig);
+    assert!(jogs(&mut rig), "and still moves after the next boot");
+}
+
+#[test]
+fn a_ui_change_of_a_pid_weight_writes_text_the_firmware_reads_exactly() {
+    let mut rig = Rig::connected();
+    rig.clear_written();
+    let body = json!({"values": {"enablePosPIDValues": true, "propWeight": "0.5"}});
+    rig.send(Event::Edit { id: 1, request: Request::UpdateSettings { section: "advanced".into(), body } });
+    assert_eq!(rig.run_to_quiet(), ["$24=0.5"]);
+    let body = json!({"values": {"propWeight": "1"}});
+    rig.send(Event::Edit { id: 2, request: Request::UpdateSettings { section: "advanced".into(), body } });
+    assert_eq!(rig.run_to_quiet(), ["$24=1"]);
 }

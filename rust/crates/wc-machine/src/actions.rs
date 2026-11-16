@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use serde_json::Value;
 use wc_config::python_float_str;
+use wc_firmware::settings::setting_line;
 use wc_protocol::main::{HomePositionMessage, PauseButton, RequestedSetting, Units};
 use wc_protocol::{Action, float};
 
@@ -138,9 +139,9 @@ impl Machine {
             "macro1" | "macro2" => self.run_macro(command),
             "setMaxZ" => self.set_z_limit(63),
             "setMinZ" => self.set_z_limit(64),
-            "clearZ" => {
-                self.z_limits(|| [format!("$63={CLEARED_Z_LIMIT_MM}"), format!("$64={}", -CLEARED_Z_LIMIT_MM)].into())
-            }
+            "clearZ" => self.z_limits(|| {
+                [setting_line(63, &CLEARED_Z_LIMIT_MM.into()), setting_line(64, &(-CLEARED_Z_LIMIT_MM).into())].into()
+            }),
             "getZlimits" => self.z_limits(|| vec!["B20".into()]),
             "defineHome" => self.define_home(&action.arg, &action.arg1, effects).or_else(|| {
                 self.push_units(effects);
@@ -283,7 +284,7 @@ impl Machine {
     /// The firmware keeps Z limits in mm, whatever the machine's units.
     fn set_z_limit(&mut self, key: u32) -> Option<String> {
         let z_mm = if self.units() == Units::Inches { self.position.z * 25.4 } else { self.position.z };
-        self.z_limits(|| vec![format!("${key}={z_mm:.3}")])
+        self.z_limits(|| vec![setting_line(key, &((z_mm * 1000.0).round() / 1000.0).into())])
     }
 
     fn run_macro(&mut self, command: &str) -> Option<String> {

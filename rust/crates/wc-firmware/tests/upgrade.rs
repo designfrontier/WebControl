@@ -83,8 +83,8 @@ fn line_for(push: &wc_firmware::settings::Push, key: u32) -> Vec<&String> {
 fn the_migration_pushes_every_setting_with_the_stock_z_speed_and_clears_z_limits() {
     let settings = Settings::defaults();
     let push = migration_push(&settings, 51.29, None, Migration::Upgrade { preflight_z_rpm: None });
-    assert_eq!(line_for(&push, 18), ["$18=12.6000"]);
-    assert_eq!(line_for(&push, 17), ["$17=0.000000"], "an explicit $17");
+    assert_eq!(line_for(&push, 18), ["$18=12.6"]);
+    assert_eq!(line_for(&push, 17), ["$17=0"], "an explicit $17");
     ["$9=", "$28=", "$36=", "$13="].iter().for_each(|k| assert!(push.lines.iter().any(|l| l.starts_with(k)), "{k}"));
     assert_eq!(&push.lines[push.lines.len() - 2..], ["$63=9999", "$64=-9999"]);
     assert!(push.adopted.contains(&("Advanced Settings".into(), "maxZRPM".into(), json!("12.6"))));
@@ -95,9 +95,9 @@ fn the_migration_never_keeps_51_292s_factory_z_speed() {
     let mut settings = Settings::defaults();
     settings.set_value("Advanced Settings", "maxZRPM", json!("126"));
     let push = migration_push(&settings, 51.29, None, Migration::Upgrade { preflight_z_rpm: Some(12.6) });
-    assert_eq!(line_for(&push, 18), ["$18=12.6000"]);
+    assert_eq!(line_for(&push, 18), ["$18=12.6"]);
     let push = migration_push(&settings, 51.29, None, Migration::Upgrade { preflight_z_rpm: Some(126.0) });
-    assert_eq!(line_for(&push, 18), ["$18=12.6000"]);
+    assert_eq!(line_for(&push, 18), ["$18=12.6"]);
 }
 
 #[test]
@@ -105,10 +105,10 @@ fn the_migration_keeps_a_z_speed_the_owner_set() {
     let mut settings = Settings::defaults();
     settings.set_value("Advanced Settings", "maxZRPM", json!("15"));
     let push = migration_push(&settings, 51.29, None, Migration::Upgrade { preflight_z_rpm: Some(12.6) });
-    assert_eq!(line_for(&push, 18), ["$18=15.0000"]);
+    assert_eq!(line_for(&push, 18), ["$18=15"]);
     settings.set_value("Advanced Settings", "maxZRPM", json!(""));
     let push = migration_push(&settings, 51.29, None, Migration::Upgrade { preflight_z_rpm: Some(14.0) });
-    assert_eq!(line_for(&push, 18), ["$18=14.0000"], "a blank takes what 51.27 reported");
+    assert_eq!(line_for(&push, 18), ["$18=14"], "a blank takes what 51.27 reported");
 }
 
 #[test]

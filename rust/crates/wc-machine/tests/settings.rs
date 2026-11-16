@@ -58,7 +58,7 @@ fn an_update_saves_through_set_value_and_returns_the_fresh_section() {
     assert_eq!(value(&rig, "Maslow Settings", "zAxisSafeHeight"), "7.5");
     assert_eq!(field(&response, "macro1_title")["value"], "Spindle");
     assert_eq!(saves(&effects), 1);
-    assert_eq!(rig.run_to_quiet(), ["$16=1.000000"]);
+    assert_eq!(rig.run_to_quiet(), ["$16=1"]);
 }
 
 #[test]
@@ -94,7 +94,7 @@ fn changing_a_firmware_setting_writes_it_to_the_controller() {
     put(&mut rig, "maslow", json!({"values": {"motorSpacingX": "3000"}}));
     assert_eq!(rig.run_to_quiet(), ["$2=3000"]);
     put(&mut rig, "advanced", json!({"values": {"chainOverSprocket": "Top"}}));
-    assert_eq!(rig.run_to_quiet(), ["$38=1.000000"]);
+    assert_eq!(rig.run_to_quiet(), ["$38=1"]);
 }
 
 #[test]
@@ -139,6 +139,11 @@ fn invalid_updates_are_refused_without_saving_anything() {
             json!({"chainOverSprocket": "Must be one of the listed options"}),
         ),
         ("webcontrol", json!({"webPort": "50.5"}), json!({"webPort": "Must be a whole number"})),
+        (
+            "advanced",
+            json!({"propWeight": "1.5", "propWeightVZ": "-0.1", "KdV": "-1", "KpPosZ": "1300"}),
+            json!({"propWeight": "Must be between 0 and 1", "propWeightVZ": "Must be between 0 and 1", "KdV": "Must be 0 or more"}),
+        ),
         ("gpio", json!({"gpio4": "Explode"}), json!({"gpio4": "Must be one of the listed options"})),
         (
             "maslow",
@@ -234,13 +239,13 @@ fn quick_configure_saves_the_answers_and_reads_them_back() {
     assert_eq!(value(&rig, "Advanced Settings", "kinematicsType"), "Triangular");
     assert_eq!(value(&rig, "Advanced Settings", "rotationRadius"), "273");
     assert_eq!(value(&rig, "Maslow Settings", "motorSpacingX"), "2938.05");
-    assert_eq!(rig.run_to_quiet(), ["$8=273", "$38=1.000000", "$2=2938.05", "$3=470"]);
+    assert_eq!(rig.run_to_quiet(), ["$8=273", "$38=1", "$2=2938.050", "$3=470"]);
     rig.reboot();
     let quad = json!({"kinematicsType": "Quadrilateral", "rotationRadius": 138.4, "chainOverSprocket": "Bottom",
         "motorSpacingX": 3000, "motorOffsetY": 470});
     let (quad, _) = checked(&mut rig, "POST", path, Request::QuickConfigure(quad));
     assert_eq!(quad.body["kinematicsType"], "Quadrilateral");
-    assert_eq!(rig.run_to_quiet(), ["$7=1", "$8=138.4", "$38=2.00000", "$2=3000"]);
+    assert_eq!(rig.run_to_quiet(), ["$7=1", "$8=138.39999", "$38=2", "$2=3000"]);
 }
 
 #[test]

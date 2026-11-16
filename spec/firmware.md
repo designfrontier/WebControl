@@ -71,6 +71,30 @@ the raw line, re-send B05 on any boot banner (`PCB v1.`, `Grbl v1.00`, `ready`),
   (0 until `$29` is sent).
 - Resync noise: `$45` and fractional `$10`/`$11`/`$15` are re-sent on every connect.
 
+### How a `$n=value` is read, and the values the firmware refuses
+
+Every version (S126, H27, H28, H291, H292, H293) reads both `n` and `value` with the same `readFloat`
+(`NutsAndBolts.cpp`): it skips leading spaces, accumulates every digit into a 32-bit `long` (wrapping past ten
+digits), multiplies a float32 `fraction` by 0.1 once per digit after the point, and stores `value * fraction` in
+float32 (`value` alone when there is no point). `settingsStoreGlobalSetting` range-checks nothing. So trailing zeros
+change the result: `1.000000` reads as 1.00000012, `1300.00` as 1300.00012, `63.5000` as 63.5000038, `0.28` as
+0.28000003, while `1`, `1300`, `63.5` and `0.280` read as the nearest float32.
+
+| Keys | Rule | Where | Effect of a value outside it |
+|---|---|---|---|
+| `$24`, `$28`, `$32`, `$36` (proportional weights) | 0 ≤ pOn ≤ 1 | `PID::SetTunings` (`PID_v1.cpp:101`), same in every version | the whole tuning is ignored; after `setupAxes()` (boot, `$38`) the PID keeps the zero gains `Axis::setup()` gave it and the axis never moves (`ALARM: The sled is not keeping up`) |
+| `$21`-`$23`, `$25`-`$27`, `$29`-`$31`, `$33`-`$35` (gains) | K ≥ 0 | the same check | the same |
+| `$7`, `$16`, `$17`, `$38`, `$39` (byte, bool, enum) and `$9`, `$10`, `$11`, `$15` (unsigned int) | whole numbers | the float is truncated on store | a fraction is dropped; `$39` is also clamped to 1..3 by `setPWMPrescalers` |
+
+A live write of a refused tuning leaves the gains the PID had, so the damage shows only after the next boot. On the
+owner's 51.27 (2026-11-15) Rust's full push had written `$24=1.000000` and `$32=1.000000`; `$$` showed
+`1.00000011`, and no motor moved until `$24=1` and `$32=1` were written by hand.
+
+WebControl therefore writes each value as the shortest text `readFloat` turns into the float32 nearest the intended
+value: integers without a point, else the fewest fraction digits (up to nine significant) that read exactly, the
+digits closest to the value when several do (`2438.4` goes out as `2438.3998`, `0.28` as `0.280`). A PID value is
+first brought into its range. When no text reads exactly (beyond a 32-bit `long`), the closest one in range is sent.
+
 ### `$` writes with side effects
 
 `settingsStoreGlobalSetting` (`Settings.cpp`) stores the value and ends every successful write with
@@ -190,8 +214,10 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
 
 1. 57600 8N1; send `\n`, parse `\r\n`; don't gate the first send only on the boot `ok`.
 2. Treat any line containing `PCB v1.`, `Grbl v1.00` or `ready` as a boot. On each boot reset units, G90, tool and
-   accounting, then B05 → units → G90 → `$$` → write only the keys `$$` shows differ (at the printed precision, B9),
-   plus `$13` once (§6) → `$$` again only if a key other than `$13` was written. Keys `$$` does not report are not
+   accounting, then B05 → units → G90 → `$$` → write only the keys `$$` shows differ (at the printed precision, B9)
+   or hold a value the firmware refuses (a PID weight outside [0, 1] or a negative gain, §4, even when it compares
+   equal), plus `$13` once (§6) → `$$` again only if a key other than `$13` was written. Every `$` value goes out as
+   text `readFloat` reads as the nearest float32 (§4). `connect_repairs_a_pid_weight_above_one`. Keys `$$` does not report are not
    written; a blank one it reports is adopted. Never write a key the controller already holds: writing `$38` re-runs
    `setupAxes()` on the live board and the motors stop following ("`$` writes with side effects", §4). When `$38`
    must be written (it differs, an EEPROM reset, the C6 migration, a settings change, a restore), write it with the

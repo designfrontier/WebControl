@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use serde_json::{Value, json};
 use wc_config::{Paths, Settings};
-use wc_firmware::settings::write;
+use wc_firmware::settings::{setting_key, setting_line, write};
 
 fn fixtures() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../fixtures/rust_settings")
@@ -37,7 +37,14 @@ fn edits_send_the_lines_python_sends() {
         edits.iter().map(|(section, key, value)| write(&mut settings, 0.0, section, key, value).unwrap()).collect();
     let python: Vec<Vec<String>> =
         serde_json::from_str(&std::fs::read_to_string(fixtures().join("edit-lines.json")).unwrap()).unwrap();
-    assert_eq!(sent, python);
+    // The same values, each as the text the firmware reads exactly (`spec/firmware.md` §4).
+    let exact = |line: &String| {
+        let (_, text) = line.split_once('=').unwrap();
+        setting_line(setting_key(line).unwrap(), &Value::String(text.into()))
+    };
+    let expected: Vec<Vec<String>> = python.iter().map(|lines| lines.iter().map(exact).collect()).collect();
+    assert_eq!(sent, expected);
+    assert_eq!(sent[7..], [vec!["$21=1400".to_string()], vec!["$46=101.24999".to_string()]]);
 }
 
 fn lines(settings: &mut Settings, firmware: f64, section: &str, key: &str, value: Value) -> Vec<String> {
@@ -56,20 +63,35 @@ fn an_unchanged_value_sends_nothing_and_a_blank_one_is_left_for_the_controller()
 #[test]
 fn the_spindle_mode_goes_out_as_its_code() {
     let mut settings = Settings::defaults();
-    assert_eq!(lines(&mut settings, 51.27, "Advanced Settings", "spindleAutomate", json!("Servo")), ["$17=1.000000"]);
-    assert_eq!(
-        lines(&mut settings, 51.27, "Advanced Settings", "spindleAutomate", json!("Relay_Low")),
-        ["$17=3.00000"]
-    );
+    assert_eq!(lines(&mut settings, 51.27, "Advanced Settings", "spindleAutomate", json!("Servo")), ["$17=1"]);
+    assert_eq!(lines(&mut settings, 51.27, "Advanced Settings", "spindleAutomate", json!("Relay_Low")), ["$17=3"]);
     assert!(lines(&mut settings, 51.27, "Advanced Settings", "spindleAutomate", json!("Relay_Low")).is_empty());
 }
 
 #[test]
 fn derived_settings_follow_with_their_own_lines() {
     let mut settings = Settings::defaults();
-    assert_eq!(lines(&mut settings, 51.27, "Advanced Settings", "gearTeeth", json!("9")), ["$13=57.15"]);
+    assert_eq!(
+        lines(&mut settings, 51.27, "Advanced Settings", "gearTeeth", json!("9")),
+        ["$13=57.150"],
+        "57.15 reads as 57.1500053"
+    );
     assert_eq!(lines(&mut settings, 51.27, "Advanced Settings", "kinematicsType", json!("Quadrilateral")), ["$7=1"]);
-    assert_eq!(lines(&mut settings, 51.27, "Advanced Settings", "fPWM", json!("4,100Hz")), ["$39=2.00000"]);
+    assert_eq!(lines(&mut settings, 51.27, "Advanced Settings", "fPWM", json!("4,100Hz")), ["$39=2"]);
+}
+
+/// The owner's controller on 2026-11-15: `$24=1.000000` read as 1.00000012, above the 1 `SetTunings` accepts.
+#[test]
+fn a_pid_weight_change_is_written_as_text_the_firmware_reads_exactly() {
+    let mut settings = Settings::defaults();
+    assert!(lines(&mut settings, 51.27, "Advanced Settings", "enablePosPIDValues", json!(true)).is_empty());
+    assert_eq!(lines(&mut settings, 51.27, "Advanced Settings", "propWeight", json!("0.5")), ["$24=0.5"]);
+    assert_eq!(lines(&mut settings, 51.27, "Advanced Settings", "propWeight", json!("1")), ["$24=1"]);
+    assert_eq!(
+        lines(&mut settings, 51.27, "Advanced Settings", "KdV", json!("0.29")),
+        ["$27=0.28999994"],
+        "0.29 and 0.290 read high"
+    );
 }
 
 #[test]

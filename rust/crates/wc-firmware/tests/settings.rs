@@ -9,28 +9,28 @@ use wc_firmware::settings::{
 fn a_boot_that_finds_every_value_held_writes_only_r() {
     let held = [(0, 2438.4), (3, 463.0), (13, 63.5), (38, 2.0), (39, 3.0)];
     let push = boot_sync(&Settings::defaults(), 51.27, &held);
-    assert_eq!(push, Push { lines: vec!["$13=63.5000".into()], adopted: vec![] });
+    assert_eq!(push, Push { lines: vec!["$13=63.5".into()], adopted: vec![] });
 }
 
 #[test]
 fn a_boot_writes_what_differs_in_key_order_with_r_once_and_adopts_unknown_keys() {
     let reported = [(38, 1.0), (13, 10.1), (3, 478.0), (18, 12.6)];
     let push = boot_sync(&Settings::defaults(), 51.27, &reported);
-    assert_eq!(push.lines, ["$3=463", "$13=63.5000", "$38=2.00000"]);
+    assert_eq!(push.lines, ["$3=463", "$13=63.5", "$38=2"]);
     assert_eq!(push.adopted, [("Advanced Settings".into(), "maxZRPM".into(), json!("12.6"))]);
-    assert_eq!(boot_sync(&Settings::defaults(), 51.27, &[]).lines, ["$13=63.5000"], "nothing reported");
+    assert_eq!(boot_sync(&Settings::defaults(), 51.27, &[]).lines, ["$13=63.5"], "nothing reported");
 }
 
 #[test]
 fn only_chain_over_sprocket_reinitialises_and_a_held_one_is_never_rewritten() {
-    assert!(reinitialises_axes("$38=2.00000 ") && !reinitialises_axes("$39=3") && !reinitialises_axes("$$"));
+    assert!(reinitialises_axes("$38=2 ") && !reinitialises_axes("$39=3") && !reinitialises_axes("$$"));
     assert_eq!((setting_key("$RST=*"), setting_key(" $12=8113.73 ")), (None, Some(12)));
     let mut push = boot_push(&Settings::defaults(), 51.27, true);
     skip_held_reinit_keys(&mut push, &[(38, 2.0), (39, 3.0)]);
-    assert!(!push.lines.iter().any(|l| l.starts_with("$38=")) && push.lines.contains(&"$39=3.00000".to_string()));
+    assert!(!push.lines.iter().any(|l| l.starts_with("$38=")) && push.lines.contains(&"$39=3".to_string()));
     let mut differs = boot_push(&Settings::defaults(), 51.27, true);
     skip_held_reinit_keys(&mut differs, &[(38, 1.0)]);
-    assert!(differs.lines.contains(&"$38=2.00000".to_string()));
+    assert!(differs.lines.contains(&"$38=2".to_string()));
 }
 
 /// The restore lines Python writes in `connect_eeprom_read_fail_restores_settings`, by stored value.
@@ -55,7 +55,7 @@ fn values_are_written_the_way_config_firmware_key_value_prints_them() {
         (json!(1.0e8), "100000000.0"),
     ];
     cases.iter().for_each(|(value, text)| assert_eq!(firmware_key_value(value), *text, "{value}"));
-    assert_eq!(setting_line(13, &json!(63.5)), "$13=63.5000");
+    assert_eq!(setting_line(13, &json!(63.5)), "$13=63.5");
 }
 
 #[test]
@@ -94,7 +94,8 @@ fn line_values(lines: &[String]) -> Vec<&str> {
     lines.iter().map(String::as_str).collect()
 }
 
-/// Wart 4: every boot gets every setting the firmware takes, in key order, `$13` included.
+/// Wart 4: every boot gets every setting the firmware takes, in key order, `$13` included, each as the text the
+/// firmware reads as the float32 nearest the stored value (`2438.4` reads high; `2438.3998` reads exactly).
 #[test]
 fn a_boot_pushes_every_known_setting_in_key_order() {
     let push = boot_push(&Settings::defaults(), 51.27, false);
@@ -102,9 +103,9 @@ fn a_boot_pushes_every_known_setting_in_key_order() {
     assert_eq!(
         line_values(&push.lines),
         [
-            "$0=2438.4",
-            "$1=1219.2",
-            "$2=2978.4",
+            "$0=2438.3998",
+            "$1=1219.1999",
+            "$2=2978.3998",
             "$3=463",
             "$4=310",
             "$5=139",
@@ -113,36 +114,36 @@ fn a_boot_pushes_every_known_setting_in_key_order() {
             "$8=139.1",
             "$10=3360",
             "$11=1651",
-            "$12=8113.73",
-            "$13=63.5000",
+            "$12=8113.7300",
+            "$13=63.5",
             "$15=800",
-            "$16=0.000000",
-            "$17=0.000000",
-            "$19=3.17",
-            "$20=7560.0",
-            "$21=1300.00",
-            "$22=0.000000",
-            "$23=34.0000",
-            "$24=1.000000",
-            "$25=5.00000",
-            "$26=0.000000",
-            "$27=0.280000",
-            "$29=1300.00",
-            "$30=0.000000",
-            "$31=34.0000",
-            "$32=1.000000",
-            "$33=5.00000",
-            "$34=0.000000",
-            "$35=0.280000",
+            "$16=0",
+            "$17=0",
+            "$19=3.170",
+            "$20=7560",
+            "$21=1300",
+            "$22=0",
+            "$23=34",
+            "$24=1",
+            "$25=5",
+            "$26=0",
+            "$27=0.280",
+            "$29=1300",
+            "$30=0",
+            "$31=34",
+            "$32=1",
+            "$33=5",
+            "$34=0",
+            "$35=0.280",
             "$37=33",
-            "$38=2.00000",
-            "$39=3.00000",
+            "$38=2",
+            "$39=3",
             "$40=0",
             "$41=0",
-            "$42=2.0",
+            "$42=2",
             "$43=0",
-            "$45=0.00000516850",
-            "$46=97.9000",
+            "$45=0.0000051684986",
+            "$46=97.9",
         ]
     );
 }
@@ -179,7 +180,7 @@ fn text_that_is_not_a_number_never_goes_out() {
 #[test]
 fn the_spindle_setting_goes_out_as_its_code() {
     let push = boot_push(&settings_with("Advanced Settings", "spindleAutomate", json!("Relay_Low")), 51.27, false);
-    assert!(push.lines.contains(&"$17=3.00000".to_string()));
+    assert!(push.lines.contains(&"$17=3".to_string()));
 }
 
 #[test]
@@ -196,12 +197,12 @@ fn each_reported_value_is_adopted_rewritten_or_left() {
     let settings = Settings::defaults();
     assert_eq!(
         sync_reported(&settings, 51.27, 18, 12.6),
-        Sync::Adopt { section: "Advanced Settings".into(), key: "maxZRPM".into(), value: json!("12.6") }
+        Sync::Adopt { section: "Advanced Settings".into(), key: "maxZRPM".into(), value: json!("12.6"), repair: None }
     );
     assert_eq!(sync_reported(&settings, 51.27, 18, f64::NAN), Sync::Agrees, "a NaN is never adopted");
     assert_eq!(sync_reported(&settings, 51.27, 3, 478.0), Sync::Rewrite("$3=463".into()));
     assert_eq!(sync_reported(&settings, 51.27, 3, 463.0), Sync::Agrees);
-    assert_eq!(sync_reported(&settings, 51.27, 13, 10.1), Sync::Rewrite("$13=63.5000".into()));
+    assert_eq!(sync_reported(&settings, 51.27, 13, 10.1), Sync::Rewrite("$13=63.5".into()));
     assert_eq!(sync_reported(&settings, 51.27, 99, 1.0), Sync::Agrees, "a key WebControl does not know");
     assert_eq!(sync_reported(&settings, 51.27, 144, 1.0), Sync::Agrees, "a key the firmware rejects");
     let relay = settings_with("Advanced Settings", "spindleAutomate", json!("Relay_High"));
@@ -224,9 +225,56 @@ fn the_owners_connect_writes_only_r_on_this_and_every_later_boot() {
     let reported: Vec<(u32, f64)> = lines.filter_map(parse_setting_reply).collect();
     assert_eq!(reported.len(), 46);
     let first = boot_sync(&settings, 51.27, &reported);
-    assert_eq!(first.lines, ["$13=63.5000"]);
+    assert_eq!(first.lines, ["$13=63.5"]);
     first.adopted.iter().for_each(|(section, key, value)| {
         settings.set_value(section, key, value.clone());
     });
-    assert_eq!(boot_sync(&settings, 51.27, &reported), Push { lines: vec!["$13=63.5000".into()], adopted: vec![] });
+    assert_eq!(boot_sync(&settings, 51.27, &reported), Push { lines: vec!["$13=63.5".into()], adopted: vec![] });
+}
+
+/// The owner's `$$` after the old build wrote `$24=1.000000` and `$32=1.000000`: each reads as 1.00000012, within the
+/// printed-precision tolerance of the stored 1, but above the 1 `SetTunings` accepts, so both are rewritten.
+#[test]
+fn a_boot_repairs_pid_values_the_firmware_refuses_even_when_they_compare_equal() {
+    let settings = Settings::from_text(include_str!("fixtures/owner_webcontrol.json")).expect("the owner's settings");
+    let transcript: Value =
+        serde_json::from_str(include_str!("../../../../contract/serial/transcripts/connect_boot_handshake.json"))
+            .expect("transcript");
+    let events = transcript["events"].as_array().expect("events");
+    let lines = events.iter().filter(|e| e["type"] == "rx").filter_map(|e| e["line"].as_str());
+    let corrupted = |(key, value): (u32, f64)| if key == 24 || key == 32 { (key, 1.00000011) } else { (key, value) };
+    let reported: Vec<(u32, f64)> = lines.filter_map(parse_setting_reply).map(corrupted).collect();
+    assert!(values_match(24, &json!(1), 1.00000011), "the tolerance alone would leave it");
+    assert_eq!(boot_sync(&settings, 51.27, &reported).lines, ["$13=63.5", "$24=1", "$32=1"]);
+}
+
+/// A stored weight above 1 goes out as `$24=1`, so a later boot that reads 1 back leaves it alone.
+#[test]
+fn a_stored_pid_value_out_of_range_is_compared_as_it_was_written() {
+    let settings = settings_with("Computed Settings", "propWeightMain", json!(1.5));
+    assert_eq!(sync_reported(&settings, 51.27, 24, 1.0), Sync::Agrees);
+    assert_eq!(sync_reported(&settings, 51.27, 24, 0.5), Sync::Rewrite("$24=1".into()));
+    let settings = settings_with("Advanced Settings", "propWeightV", json!("-2"));
+    assert_eq!(sync_reported(&settings, 51.27, 28, 0.0), Sync::Agrees);
+    assert_eq!(boot_sync(&settings, 51.27, &[(24, 1.0), (28, 0.0)]).lines, ["$13=63.5"]);
+}
+
+#[test]
+fn a_negative_gain_is_repaired_and_an_unknown_weight_out_of_range_is_adopted_in_range_and_written() {
+    let settings = Settings::defaults();
+    assert_eq!(sync_reported(&settings, 51.27, 22, -0.000000001), Sync::Rewrite("$22=0".into()));
+    assert_eq!(sync_reported(&settings, 51.27, 22, 0.0), Sync::Agrees);
+    assert_eq!(sync_reported(&settings, 51.27, 24, f64::NAN), Sync::Rewrite("$24=1".into()));
+    assert_eq!(
+        sync_reported(&settings, 51.27, 28, 1.00000012),
+        Sync::Adopt {
+            section: "Advanced Settings".into(),
+            key: "propWeightV".into(),
+            value: json!("1"),
+            repair: Some("$28=1".into())
+        }
+    );
+    let push = boot_sync(&settings, 51.27, &[(36, -2.0)]);
+    assert_eq!(push.lines, ["$13=63.5", "$36=0"]);
+    assert_eq!(push.adopted, [("Advanced Settings".into(), "propWeightVZ".into(), json!("0"))]);
 }

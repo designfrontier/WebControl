@@ -194,7 +194,7 @@ fn holey_accept_saves_the_fit_and_writes_each_changed_setting_once() {
         json!({"motorYoffset": 462.64616, "distanceBetweenMotors": 2978.54418, "leftChainTolerance": -0.03767,
             "rightChainTolerance": 0.04275})
     );
-    assert_eq!(rig.run_to_quiet(), ["$3=462.64616", "$2=2978.54418", "$40=-0.03767", "$41=0.04275"]);
+    assert_eq!(rig.run_to_quiet(), ["$3=462.64613", "$2=2978.544", "$40=-0.03767", "$41=0.04275"]);
     assert_eq!(text(&rig, "Maslow Settings", "motorSpacingX"), "2978.54418");
     assert_eq!(accept_on(&mut rig, Kind::Holey).status, 409);
 }

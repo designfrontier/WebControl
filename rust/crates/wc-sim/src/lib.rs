@@ -8,9 +8,13 @@ pub use port::spawn;
 
 use std::collections::{BTreeMap, VecDeque};
 
+use wc_firmware::number::{in_firmware_range, read_float};
+
 /// The firmware's `INCBUFFERLENGTH 128` ring holds 127 bytes.
 pub const RING_BYTES: usize = 127;
 const STATUS_INTERVAL_MS: u64 = 200;
+/// Kp, Ki, Kd and the proportional weight of the main position, main velocity, Z position and Z velocity PIDs.
+const TUNINGS: [[u32; 4]; 4] = [[21, 22, 23, 24], [25, 26, 27, 28], [29, 30, 31, 32], [33, 34, 35, 36]];
 
 /// Which firmware the simulator pretends to be.
 #[derive(Debug, Clone, PartialEq)]
@@ -83,6 +87,8 @@ pub struct Sim {
     pub stuck_motor: Option<char>,
     /// `$38` was written since the boot: `setupAxes()` ran on the live board and the motors no longer follow.
     axes_reinitialised: bool,
+    /// Which of `TUNINGS` holds gains: `setup()` zeroes them and `SetTunings` replaces them only with a tuning it accepts.
+    tuned: [bool; 4],
 }
 
 /// The 51.27 defaults a fresh EEPROM boots with.
@@ -175,6 +181,7 @@ impl Sim {
             chains: (1650.0, 1651.0),
             stuck_motor: None,
             axes_reinitialised: false,
+            tuned: [true; 4],
         }
     }
 
@@ -210,8 +217,30 @@ impl Sim {
             self.settings = default_settings(&self.build);
             lines.push("error: EEPROM read fail. Using default settings.".into());
         }
+        self.setup_axes();
         lines.extend(["Grbl v1.00", "ready", "ok"].map(String::from));
         lines
+    }
+
+    /// Whether `PID::SetTunings` takes the stored tuning: no negative gain, a weight within [0, 1].
+    fn accepts(&self, tuning: &[u32; 4]) -> bool {
+        tuning.iter().all(|key| self.settings.get(key).is_none_or(|value| in_firmware_range(*key, *value)))
+    }
+
+    /// `setupAxes()`: every PID starts at zero gains, then takes the stored tuning if it accepts it.
+    fn setup_axes(&mut self) {
+        self.tuned = TUNINGS.map(|tuning| self.accepts(&tuning));
+    }
+
+    /// `setPIDValues()` after a write of `$21`-`$36`: a refused tuning leaves the gains the PID had.
+    fn set_pid_values(&mut self, key: u32) {
+        let accepted = TUNINGS.map(|tuning| self.accepts(&tuning));
+        let group = match key {
+            21..=28 => 0..2,
+            29..=36 => 2..4,
+            _ => 0..0,
+        };
+        group.for_each(|i| self.tuned[i] |= accepted[i]);
     }
 
     fn unread(&self) -> usize {
@@ -322,14 +351,21 @@ impl Sim {
             if key.starts_with("RST") {
                 return None;
             }
-            match (key.parse::<u32>(), value.trim().parse::<f64>()) {
-                (Ok(key), Ok(value)) => {
-                    self.settings.insert(key, value);
-                    self.axes_reinitialised |= key == 38;
+            match (key.parse::<u32>(), read_float(value)) {
+                (Ok(key), Some(value)) => {
+                    self.settings.insert(key, f64::from(value));
+                    if key == 38 {
+                        self.axes_reinitialised = true;
+                        self.setup_axes();
+                    }
+                    if (21..=36).contains(&key) {
+                        self.set_pid_values(key);
+                    }
                     if self.build.rewrite_notice {
                         out.push("Change in setting, rewriting EEPROM".into());
                     }
                 }
+                (Ok(_), None) => out.push("error: Bad number format".into()),
                 _ => out.push("error: Invalid statement".into()),
             }
             return Some(0);
@@ -380,13 +416,16 @@ impl Sim {
         }
         let axes = ['X', 'Y', 'Z'].map(|axis| word(text, axis));
         let moved = axes.iter().any(Option::is_some);
-        if moved && self.axes_reinitialised {
+        let untuned = !(self.tuned[0] && self.tuned[1]);
+        if moved && (self.axes_reinitialised || untuned) {
             // The setpoint runs ahead of encoders that never move (the owner's machine, 2026-11-15).
             self.stop();
             out.push("ALARM: The sled is not keeping up with its expected position and has halted.".into());
             return None;
         }
-        axes.iter().enumerate().for_each(|(i, value)| {
+        // Only L and R raise the keeping-up alarm (Report.cpp); a Z with zero gains just stays where it is.
+        let z_follows = self.tuned[2] && self.tuned[3];
+        axes.iter().enumerate().filter(|(i, _)| *i < 2 || z_follows).for_each(|(i, value)| {
             if let Some(value) = value {
                 self.position[i] = if self.absolute { value * scale } else { self.position[i] + value * scale };
             }
@@ -468,6 +507,16 @@ impl Sim {
 
     pub fn axes_reinitialised(&self) -> bool {
         self.axes_reinitialised
+    }
+
+    /// Whether the main (L and R) position and velocity PIDs hold gains, so the sled follows moves.
+    pub fn main_axes_tuned(&self) -> bool {
+        self.tuned[0] && self.tuned[1]
+    }
+
+    /// Whether the Z position and velocity PIDs hold gains, so Z follows moves.
+    pub fn z_axis_tuned(&self) -> bool {
+        self.tuned[2] && self.tuned[3]
     }
 
     pub fn setting(&self, key: u32) -> Option<f64> {

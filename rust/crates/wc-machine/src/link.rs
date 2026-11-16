@@ -322,7 +322,11 @@ impl Machine {
         let sync = sync_reported(&self.settings, self.firmware_version, key, value);
         self.upgrade_setting(line, if let Sync::Rewrite(text) = &sync { Some(text) } else { None });
         match sync {
-            Sync::Adopt { section, key, value } => self.set_setting(&section, &key, value),
+            Sync::Adopt { section, key, value, repair } => {
+                self.set_setting(&section, &key, value);
+                let repair = repair.map(|text| Queued::Line { text, boot: false });
+                self.controller.queue.extend(repair);
+            }
             Sync::Rewrite(line) if self.controller.reinit_suppressed && reinitialises_axes(&line) => {}
             Sync::Rewrite(line) => self.controller.queue.push_back(Queued::Line { text: line, boot: false }),
             Sync::Agrees => {}

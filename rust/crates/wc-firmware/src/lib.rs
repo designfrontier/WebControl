@@ -5,6 +5,7 @@ pub mod boot;
 pub mod classify;
 pub mod flow;
 pub mod image;
+pub mod number;
 pub mod settings;
 pub mod upgrade;
 
