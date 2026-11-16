@@ -132,7 +132,7 @@ Every `/MaslowCNC` push is a `message` event carrying `{"command": ..., "data": 
 Pushes are broadcast to every client. A payload with a `client` field is meant only for the socket with that id
 (`"all"` means everyone); clients drop the rest. A connection's id is its sid.
 
-On connect the server broadcasts `hostAddress`, then the client calls `GET /api/state` and emits
+On connect the server broadcasts `hostAddress` and `connectionStatus`, then the client calls `GET /api/state` and emits
 `settingRequest {"section": "Computed Settings", "setting": "units"}` (the server resends the sled position only
 after that).
 

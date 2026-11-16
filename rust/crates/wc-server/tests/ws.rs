@@ -9,8 +9,11 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
 use wc_config::Settings;
 use wc_machine::{Core, Effect, Event, Machine, MachineHandle, NoHost, NoPort, Snapshot, spawn};
+use wc_protocol::main::LinkStatus;
 use wc_protocol::{Envelope, Push};
+use wc_server::serial::SimOpener;
 use wc_server::{AppState, PingConfig, router};
+use wc_sim::Build;
 use wc_testkit::contract::Contract;
 
 type Client = WebSocketStream<MaybeTlsStream<TcpStream>>;
@@ -90,6 +93,42 @@ async fn a_new_ui_client_hears_the_host_address_and_that_the_controller_is_disco
     assert_eq!(host, ("hostAddress".into(), json!({"hostAddress": "10.0.0.5:5000"})));
     let (command, status) = decoded(&next_frame(&mut client).await);
     assert_eq!((command.as_str(), status["status"].as_str()), ("connectionStatus", Some("disconnected")));
+}
+
+/// A server whose machine has already connected to the simulator, so no link change happens after a client opens.
+async fn serve_connected() -> String {
+    let machine = Machine::new("10.0.0.5:5000", Settings::defaults()).on_port("simulator");
+    let (handle, _task) = spawn(machine, Box::new(SimOpener::new(Build::holey_51_27())), Arc::new(NoHost));
+    let connected = async {
+        while handle.snapshot().link != LinkStatus::Connected {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    };
+    tokio::time::timeout(Duration::from_secs(10), connected).await.expect("the simulator connected");
+    serve_with(handle, PingConfig::default()).await
+}
+
+async fn heard_link(client: &mut Client) -> Value {
+    decoded(&next_message(client, "connectionStatus").await).1
+}
+
+#[tokio::test]
+async fn a_client_opening_after_the_controller_connected_hears_it_is_connected() {
+    let address = serve_connected().await;
+    let mut client = open(&address, "/MaslowCNC").await;
+    let link = heard_link(&mut client).await;
+    assert_eq!((link["status"].as_str(), link["port"].as_str()), (Some("connected"), Some("simulator")));
+}
+
+#[tokio::test]
+async fn a_client_reconnecting_hears_the_link_state_again() {
+    let address = serve_connected().await;
+    let mut first = open(&address, "/MaslowCNC").await;
+    heard_link(&mut first).await;
+    first.close(None).await.unwrap();
+    let mut again = open(&address, "/MaslowCNC").await;
+    let link = heard_link(&mut again).await;
+    assert_eq!((link["status"].as_str(), link["port"].as_str()), (Some("connected"), Some("simulator")));
 }
 
 #[tokio::test]
