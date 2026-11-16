@@ -164,7 +164,7 @@ async fn a_scan_measures_the_misconfigured_geometry_and_accept_writes_the_four_s
     let keys: Vec<&str> = writes.iter().map(|line| line.split('=').next().unwrap()).collect();
     assert_eq!(keys, ["$3", "$2", "$40", "$41"], "holey calibration's Accept order: {writes:?}");
     let saved = server.machine.snapshot().settings.clone();
-    let value = |key: &str| saved.value("Maslow Settings", key).map(|v| number(&v)).unwrap();
+    let value = |key: &str| saved.value("Maslow Settings", key).map(number).unwrap();
     assert!((value("motorSpacingX") - TRUE_SPACING).abs() < 0.5);
     assert!((value("motorOffsetY") - TRUE_OFFSET_Y).abs() < 0.5);
 }
