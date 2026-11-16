@@ -240,7 +240,11 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
    written again (one restart per attempt, with an alert). Never write `$38` while a job holds the machine; a `$38`
    line in a job's file is skipped with an alert.
 3. Character-count flow control against 126 bytes; free on `ok`/`error:`; hard-reject lines over 126 characters;
-   optionally resync from the PE `space` field when idle.
+   optionally resync from the PE `space` field when idle. Pace every line as v0.94's `_write` did (2026-11-15):
+   a line due under 50 ms (`MINTimePerLine`) after the previous write waits a full 50 ms from when it became due,
+   not the rest of the 50 ms; `!` and `~` are never paced. On the owner's cuts (51.27, router on) waiting
+   only for the rest lost about 1 line in 290 (B18 sent each again), every one written 0–40 ms after the previous
+   `ok`; v0.94's pacing lost none in 165,876 lines, and an air cut lost none under either.
 4. Realtime: `!` resets accounting (immediate `ok`, no ack for the aborted line); `~` immediate `ok`.
 5. Sanitise outgoing lines: strip comments, reject an unclosed `(`, remove `!`, `~`, backtick, `?` and control
    characters, and upper-case the rest (§1); read every line WebControl inspects (file, typed, restart, preview)

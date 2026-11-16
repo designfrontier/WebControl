@@ -154,6 +154,7 @@ impl Machine {
         self.controller.watch.written(idle, now);
         self.controller.ready = false;
         self.controller.last_write = Some(now);
+        self.controller.paced_until = None;
         if let Some(probe) = self.controller.probe.as_mut().filter(|probe| probe.id == sent.id) {
             probe.id = id;
         }

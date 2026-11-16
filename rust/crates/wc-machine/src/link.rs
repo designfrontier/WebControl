@@ -22,8 +22,9 @@ use crate::machine::{Controller, Effect, Link, Machine, Probe, Queued, alert, br
 
 /// The 5 s poller Python used to reopen the port.
 pub const RECONNECT: Duration = Duration::from_secs(5);
-/// Python sleeps at least this long between writes so the Arduino keeps up.
-pub const LINE_GAP: Duration = Duration::from_millis(50);
+/// v0.94's `MINTimePerLine`: its `_write` slept this long in full, not the remainder, after a write under this long
+/// ago. On the owner's cuts that pacing lost no line where waiting out only the remainder lost 1 in 290.
+pub const MIN_TIME_PER_LINE: Duration = Duration::from_millis(50);
 pub const RESYNC_DELAY: Duration = Duration::from_millis(250);
 /// Longer than a reset takes to print its banner, shorter than the link timeout.
 pub const BOOT_WAIT: Duration = Duration::from_secs(3);
@@ -369,6 +370,7 @@ impl Machine {
         effects.push(Effect::Realtime(message.clone().into_bytes()));
         effects.push(Effect::Log(format!("Sent: {text}")));
         self.controller.last_write = Some(now);
+        self.controller.paced_until = None;
         self.controller.watch.realtime_written();
         if text == "!" {
             self.await_resync(now);
@@ -384,6 +386,7 @@ impl Machine {
         let id = self.controller.accounting.sent(&message, index);
         self.controller.ready = false;
         self.controller.last_write = Some(now);
+        self.controller.paced_until = None;
         self.controller.watch.written(idle, now);
         if let Some(mode) = positioning_set_by(&message) {
             self.positioning = mode;
@@ -398,13 +401,21 @@ impl Machine {
         id
     }
 
-    /// Connected, not resyncing, not held by a `Delay`, and 50 ms since the last write.
+    /// Connected, not resyncing and not held by a `Delay`.
     fn may_write(&self, now: Duration) -> bool {
         let controller = &self.controller;
         matches!(self.link, Link::Connected { .. })
             && controller.resync_after.is_none()
             && controller.hold_until.is_none_or(|until| now >= until)
-            && controller.last_write.is_none_or(|at| now >= at + LINE_GAP)
+    }
+
+    /// A line due under `MIN_TIME_PER_LINE` after the last write waits a full `MIN_TIME_PER_LINE` from now.
+    fn paced(&mut self, now: Duration) -> bool {
+        let controller = &mut self.controller;
+        if controller.paced_until.is_none() && controller.last_write.is_some_and(|at| now < at + MIN_TIME_PER_LINE) {
+            controller.paced_until = Some(now + MIN_TIME_PER_LINE);
+        }
+        controller.paced_until.is_none_or(|until| now >= until)
     }
 
     /// The controller has acked everything: a queued command, or an unbuffered job line, may go.
@@ -445,6 +456,10 @@ impl Machine {
                     self.expand_settings_sync(effects);
                     false
                 }
+                Queued::Line { text, boot } if !self.paced(now) => {
+                    self.controller.queue.push_front(Queued::Line { text, boot });
+                    return;
+                }
                 Queued::Line { text, .. } => self.send_queued(&text, now, effects),
                 Queued::Delay(wait) => {
                     self.controller.hold_until = Some(now + wait);
@@ -461,7 +476,7 @@ impl Machine {
                 return;
             }
         }
-        if self.can_stream(now) && !self.controller.axes_reinitialised {
+        if self.can_stream(now) && !self.controller.axes_reinitialised && self.paced(now) {
             self.send_next_line(now, effects);
         }
     }
@@ -513,6 +528,7 @@ impl Machine {
             matches!(queued, Queued::Line { boot: true, .. } | Queued::SettingsSync | Queued::Mark(_))
         });
         self.controller.hold_until = None;
+        self.controller.paced_until = None;
         self.controller.raise_deadline = None;
     }
 

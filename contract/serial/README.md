@@ -134,7 +134,8 @@ buffer.
 ## Matching and timing
 
 The runner owns the clock and advances it in steps of at most 10 ms (the Python backend slept 10 ms per serial loop
-pass and at least 50 ms between writes, which set the timings below). Events run strictly in order:
+pass and, before a line due under 50 ms after the last write, a full 50 ms more, which set the timings below; "Known
+warts" 8). Events run strictly in order:
 
 1. **tx** events match lines in order. The runner waits up to `txTimeout` (default 2 s) for the next line; a
    different line fails at once, and so does the right line written after the timeout (each line is stamped with
@@ -486,6 +487,12 @@ until a transcript and this list change together.
 7. **The line limit counts bytes in Rust (Rust-intended).** A line is refused when, as written with its `\n`, it is
    over 126. Python counts characters; Rust counts bytes, as the firmware's buffer does. The two agree on every
    transcript, which is ASCII; they differ only for non-ASCII text, which Rust refuses sooner.
+8. **Line pacing is v0.94's.** A line due under 50 ms after the previous write waits a full 50 ms from when it became
+   due (`MINTimePerLine`: `_write` slept 50 ms, not the rest of it), so lines due back to back go about 60 ms apart.
+   `!` and `~` are never paced. Rust once waited only for the rest of the 50 ms and, on the owner's cuts, lost
+   about 1 line in 290 (each written 0–40 ms after the previous `ok`), where v0.94 lost none in 165,876; it returned
+   to v0.94's pacing on 2026-11-15 (`spec/firmware.md` B3). The runner checks only that a line comes after what
+   releases it and within `txTimeout`, so no transcript changed; `wc-machine`'s `tests/link.rs` pins the timing.
 
 ## Rust-intended deviations
 

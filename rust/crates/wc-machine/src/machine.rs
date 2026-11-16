@@ -290,6 +290,8 @@ pub(crate) struct Controller {
     pub reinit_suppressed: bool,
     /// A `Delay` holds writes until then.
     pub hold_until: Option<Duration>,
+    /// The line due under `MIN_TIME_PER_LINE` after the last write goes then (`link.rs`).
+    pub paced_until: Option<Duration>,
     /// `bufferOn` as the port opened: job lines go out while they fit, not one per `ok`.
     pub buffering: bool,
     /// A raise waiting for a status report to tell the bit's height is refused then.
@@ -319,6 +321,7 @@ impl Controller {
             axes_reinitialised: false,
             reinit_suppressed: false,
             hold_until: None,
+            paced_until: None,
             buffering: false,
             raise_deadline: None,
             stop_reload: false,

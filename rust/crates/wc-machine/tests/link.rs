@@ -337,3 +337,85 @@ fn writes_are_paced_50_ms_apart() {
     assert!(written(&rig.advance(40)).is_empty());
     assert_eq!(written(&rig.advance(10)), ["G00 Y1.0"]);
 }
+
+/// v0.94 slept a full 50 ms from the moment a line was due, not what was left of the 50 ms since the last write.
+#[test]
+fn a_line_due_10_ms_after_a_write_goes_50_ms_after_it_was_due() {
+    let mut rig = Rig::connected();
+    assert_eq!(written(&rig.act_with("move", json!("up"), json!("1"))), ["G91"]);
+    rig.advance(10);
+    assert!(written(&rig.rx("ok")).is_empty());
+    assert!(written(&rig.advance(40)).is_empty(), "50 ms since the write is not enough");
+    assert_eq!(written(&rig.advance(10)), ["G00 Y1.0"]);
+}
+
+#[test]
+fn a_line_due_50_ms_or_more_after_a_write_goes_at_once() {
+    let mut rig = Rig::connected();
+    rig.act_with("move", json!("up"), json!("1"));
+    rig.advance(60);
+    assert_eq!(written(&rig.rx("ok")), ["G00 Y1.0"]);
+    let mut job = Rig::connected();
+    job.machine.load_gcode("G0 X1\nG0 X2\n");
+    job.act("startRun");
+    job.advance(50);
+    assert_eq!(written(&job.rx("ok")), ["G0 X2"]);
+}
+
+fn realtime(effects: &[Effect]) -> Vec<&[u8]> {
+    effects
+        .iter()
+        .filter_map(|effect| match effect {
+            Effect::Realtime(bytes) => Some(bytes.as_slice()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_tilde_is_never_paced_and_the_next_line_waits_50_ms_from_its_ack() {
+    let mut rig = Rig::connected();
+    rig.act_with("move", json!("up"), json!("1"));
+    rig.advance(10);
+    rig.rx("ok");
+    rig.advance(10);
+    rig.rx("Maslow Paused");
+    let resume = rig.act("resumeRun");
+    assert_eq!((written(&resume), realtime(&resume)), (vec!["~".to_string()], vec![b"~\n".as_slice()]));
+    rig.advance(10);
+    assert!(written(&rig.rx("ok")).is_empty());
+    assert!(written(&rig.advance(40)).is_empty());
+    assert_eq!(written(&rig.advance(10)), ["G00 Y1.0"]);
+}
+
+#[test]
+fn stop_while_a_command_waits_out_the_pace_writes_at_once_and_drops_it() {
+    let mut rig = Rig::connected();
+    rig.act_with("move", json!("up"), json!("1"));
+    rig.advance(10);
+    let mut effects = rig.rx("ok");
+    effects.extend(rig.advance(40));
+    effects.extend(rig.act("stopRun"));
+    assert_eq!(written(&effects), ["!"], "50 ms after the write, the line still waits");
+    rig.advance(300);
+    let mut effects = rig.rx("<Idle,MPos:0,0,0>");
+    effects.extend(rig.advance(200));
+    assert!(written(&effects).is_empty(), "{:?}", written(&effects));
+}
+
+#[test]
+fn stop_while_a_job_line_waits_out_the_pace_writes_at_once_and_drops_it() {
+    let mut rig = Rig::connected();
+    rig.machine.load_gcode("G0 X1\nG0 X2\n");
+    assert_eq!(written(&rig.act("startRun")), ["G0 X1"]);
+    rig.advance(10);
+    let mut effects = rig.rx("ok");
+    effects.extend(rig.advance(40));
+    effects.extend(rig.act("stopRun"));
+    assert_eq!(written(&effects), ["!"]);
+    rig.advance(300);
+    let mut effects = rig.rx("<Idle,MPos:0,0,0>");
+    effects.extend(rig.advance(200));
+    assert!(written(&effects).is_empty(), "{:?}", written(&effects));
+    assert_eq!(rig.machine.snapshot().upload_flag, 0);
+}
