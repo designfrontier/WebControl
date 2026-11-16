@@ -369,7 +369,9 @@ fn an_eeprom_reset_after_the_flash_is_answered_by_the_settings_migration() {
     bench.settle(&[Stage::Restarting, Stage::Migrating], 60_000);
     let written = bench.take_written();
     let push = written.iter().position(|l| l.starts_with("$0=")).expect("the full push");
-    assert_eq!(written[..push], ["B05", "G21", "G90"]);
+    assert_eq!(written[..push], ["B05", "G21", "G90", "$$"]);
+    let restarts = written.iter().filter(|l| l.starts_with("$38=")).count();
+    assert_eq!(restarts, 1, "$38 goes once, then the restart; after it $$ shows it held: {written:?}");
     assert!(written.contains(&"$18=12.6000".to_string()), "{written:?}");
     assert!(written.contains(&"$17=0.000000".to_string()), "an explicit $17");
     let verify = written.iter().rposition(|l| l == "$$").unwrap();

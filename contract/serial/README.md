@@ -165,10 +165,11 @@ the backend had been quiet for `quiet` seconds, one line per settle.
 
 | Transcript | Pins down |
 | --- | --- |
-| `connect_boot_handshake` | boot banner → `G21`, `$$`, `G90`, `B05`, `$13` once; B05 reply parsed |
-| `connect_settings_sync_adopts_unknown_keys` | `$$` reply: `$18`/`$9`/`$28`/`$36` adopted, a differing `$3` rewritten, `$45` at 8 decimals left alone |
-| `connect_eeprom_read_fail_restores_settings` | `error: EEPROM read fail` at boot → every key written back, `$$`, alert |
-| `connect_without_a_reset_handshakes_after_3_s` | no banner and no `ok` 3 s after the port opens → the same handshake, `B05` and `$13` anyway |
+| `connect_boot_handshake` | the owner's real connect (51.27, PCB v1.1, full `$$`): `B05`, `G21`, `G90`, `$$`, then only `$13`; no `$38`; B05 reply parsed |
+| `connect_settings_sync_adopts_unknown_keys` | `$$` reply: `$18`/`$9`/`$28`/`$36` adopted, a differing `$3` written with `$13`, then `$$` again; `$45` at 8 decimals left alone |
+| `connect_eeprom_read_fail_restores_settings` | `error: EEPROM read fail` at boot → `$$`, every key written back, alert; the factory `$38` differs, so the port is reopened (a reset) and the next boot writes only `$13` |
+| `connect_without_a_reset_handshakes_after_3_s` | no banner and no `ok` 3 s after the port opens → the same handshake: `B05`, units, `G90`, `$$`, `$13` |
+| `connect_chain_over_sprocket_differs_restarts_the_controller` | the owner's `$$` with `$38=1`: `$13` and `$38` written, the port reopened (a reset), and the next boot writes only `$13` |
 | `jog_each_direction_mm`, `jog_each_direction_inches` | the eight jog buttons |
 | `home_at_safe_height_mm`, `return_to_center_inches` | Home and Return to Center, safe height in each unit |
 | `define_home_from_sled_then_home` | Define Home from the sled and from arguments (inches → mm); Home goes there |
@@ -452,12 +453,12 @@ until a transcript and this list change together.
    `GCode.cpp` in both 51.27 and 51.292), so nothing reaches its line buffer.
 2. **Resume always sends `~`**, even after a plain Pause, when the firmware is not paused. It costs an extra `ok`.
 3. **Doubled spaces.** Most lines end in two spaces (`G21  `, `G0 Z5  `); `home` and `returnToCenter` send `G90   `.
-4. **Handshake order and scope.** `G21`, `$$`, `G90` go out before `B05` and the `$13` write, so `$$` is compared
-   before the firmware version is known. Only `$13` and settings `$$` shows differ are written, not the full set
-   `spec/firmware.md` B.2 and B.9 ask for after every boot. The Python backend kept this on purpose. **The Rust
-   backend does not copy it:** on each boot it sends `B05`, the units, `G90`, every setting the controller takes
-   (a blank one, never read from the controller, is left for `$$` to adopt), then `$$` to verify. The four
-   `connect_*` transcripts pin that handshake (the prelude's tx is not checked).
+4. **Handshake order.** Python sent `G21`, `$$`, `G90` before `B05` and the `$13` write, so `$$` was compared
+   before the firmware version was known. Rust sends `B05` first, then the units, `G90` and `$$`, and then, as
+   Python did, writes only `$13` and the settings `$$` shows differ (`spec/firmware.md` B2). Rust once wrote every
+   setting after every boot instead; that wrote `$38`, which re-runs `setupAxes()` on the live board, and the owner's
+   motors stopped following (2026-11-15). The `connect_*` transcripts pin the handshake (the prelude's tx is not
+   checked, and its `$$` gets a bare `ok`, so a prelude writes only `$13`).
 5. **Number formats vary.** A restore writes `$16=0.000000`, `$21=1300.00`, `$45=0.00000516850`: whatever each
    setting's formatter produces. Moves the backend builds print Python's `str(float)` (`G00 X254.0`, `G0 Z5.0`), and
    home-shifted file coordinates keep the longer operand's decimals (`X22.8456 Y3.00`).
@@ -525,3 +526,13 @@ Where the Rust backend writes something different from Python by owner decision.
    and so held its queue until Stop). Rust drops those commands and refuses new ones until Stop, or Play on the held
    job (`spec/firmware.md` B17). Transcript: `alarm_mid_home_holds_the_plunge_until_stop`, built from the owner's
    `webcontrol-rs.log` lines.
+5. **A `$38` write resets the controller** (2026-11-15). Python wrote `$38` like any setting and left the board
+   running with re-initialised axes. Rust writes `$38` only when `$$` shows it differs (or after an EEPROM reset,
+   in the upgrade's migration, or for a settings change), and once the `$` lines with it are answered it closes and
+   reopens the port, which resets the Mega through DTR; the lines queued behind them are dropped with the old link.
+   Every action that could move the machine is refused until the next boot banner; a reopen with no banner gets an
+   alert to power-cycle the controller. After that boot `$$` shows `$38` held, so it is not written again; if it
+   still differs it is skipped with an alert, so the reset cannot loop. `$38` is never written while a job holds the
+   machine. The transcript runner reopens the port as the shell does; the banner after a reset is an `rx`.
+   Transcripts: `connect_chain_over_sprocket_differs_restarts_the_controller`,
+   `connect_eeprom_read_fail_restores_settings`.

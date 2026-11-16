@@ -421,7 +421,8 @@ fn a_restore_derives_the_computed_settings_from_the_restored_file() {
     restored.set_value("Advanced Settings", "chainOverSprocket", json!("Top"));
     assert_eq!(ask(&mut rig, Request::RestoreSettings(Box::new(restored))).0, Reply::Done);
     assert_eq!(computed(&rig, "chainOverSprocketComputed"), 1);
-    assert_eq!(rig.run_to_quiet(), ["$38=1.000000", "$$"]);
+    assert_eq!(rig.run_to_quiet(), ["$38=1.000000"], "the restart $38 needs replaces the read-back");
+    assert_eq!(rig.reboot(), ["B05", "G20", "G90", "$$", "$13=63.5000"], "the restored file is in inches");
 }
 
 /// Python's `importWebControlJSON` never recomputes; Rust does, so an imported file cannot leave them stale.

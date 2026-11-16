@@ -417,6 +417,10 @@ impl Machine {
             effects.push(alert(if self.probing { PROBING } else { crate::alarm::HELD }));
             return Reply::Failed;
         }
+        if let Some(refusal) = self.restart_refusal() {
+            effects.push(alert(refusal));
+            return Reply::Failed;
+        }
         self.queue(split_lines(&text).map(String::from).collect::<Vec<_>>());
         self.custom_gcode = Some(text);
         Reply::Done

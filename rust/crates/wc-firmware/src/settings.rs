@@ -1,5 +1,5 @@
-//! `$n=value` lines (B9): how a stored setting is written, how a `$$` reply compares with it, and the full push the
-//! Rust backend sends after every boot (contract/serial wart 4).
+//! `$n=value` lines (B9): how a stored setting is written, how a `$$` reply compares with it, what a boot writes
+//! after reading `$$` (B2), and the full push after an EEPROM reset.
 
 use serde_json::Value;
 use wc_config::{FirmwareOption, Settings, Stored, python_str};
@@ -10,6 +10,9 @@ pub const INTEGER_KEYS: [u32; 4] = [9, 10, 11, 15];
 pub const UNSENDABLE_KEYS: [u32; 3] = [85, 86, 144];
 /// Settings.cpp sets the sprocket radius R from `$13` on a write only; it boots with R = 10.1.
 pub const WRITE_ONLY_KEY: u32 = 13;
+/// A write of these re-runs `setupAxes()` on the live board (`spec/firmware.md` B2), after which the motors no
+/// longer follow; the controller must reboot before it moves again.
+pub const REINIT_KEYS: [u32; 1] = [38];
 /// Arduino's `Serial.print(float, 8)` resolution, which is all a `$$` reply carries.
 const PRINTED_RESOLUTION: f64 = 1e-8;
 const CUSTOM_FIRMWARE: f64 = 100.0;
@@ -46,6 +49,15 @@ pub fn firmware_key_value(value: &Value) -> String {
 
 pub fn setting_line(key: u32, value: &Value) -> String {
     format!("${key}={}", firmware_key_value(value))
+}
+
+/// The key a `$n=value` line writes.
+pub fn setting_key(line: &str) -> Option<u32> {
+    line.trim().strip_prefix('$')?.split_once('=')?.0.trim().parse().ok()
+}
+
+pub fn reinitialises_axes(line: &str) -> bool {
+    setting_key(line).is_some_and(|key| REINIT_KEYS.contains(&key))
 }
 
 /// The number Python's `float()` reads from a stored value, if it reads one.
@@ -173,6 +185,41 @@ pub fn sync_reported(settings: &Settings, firmware: f64, key: u32, reported: f64
         (false, Some(written)) => Sync::Rewrite(setting_line(key, &written)),
         _ => Sync::Agrees,
     }
+}
+
+/// The `$13` line a boot always writes, since only that write sets R.
+fn radius_line(settings: &Settings, firmware: f64) -> Option<String> {
+    let option = settings.firmware_options().find(|o| o.firmware_key == WRITE_ONLY_KEY && sendable(o, firmware))?;
+    written_value(&option, &option.value).map(|value| setting_line(WRITE_ONLY_KEY, &value))
+}
+
+/// B2: the boot's `$$` against the stored settings. Unknown keys are adopted, only keys that differ are written, and
+/// `$13` goes once. Keys `$$` did not report are left alone, as Python left them.
+pub fn boot_sync(settings: &Settings, firmware: f64, reported: &[(u32, f64)]) -> Push {
+    let mut push = reported.iter().fold(Push::default(), |mut push, &(key, value)| {
+        match sync_reported(settings, firmware, key, value) {
+            Sync::Adopt { section, key, value } => push.adopted.push((section, key, value)),
+            Sync::Rewrite(line) => push.lines.push(line),
+            Sync::Agrees => {}
+        }
+        push
+    });
+    let radius = radius_line(settings, firmware).filter(|_| !push.lines.iter().any(|l| setting_key(l) == Some(13)));
+    push.lines.extend(radius);
+    push.lines.sort_by_key(|line| setting_key(line));
+    push.lines.dedup_by_key(|line| setting_key(line));
+    push
+}
+
+/// Drops each write of a re-initialising key whose value `$$` showed the controller already holds.
+pub fn skip_held_reinit_keys(push: &mut Push, reported: &[(u32, f64)]) {
+    let held = |line: &String| {
+        let key = setting_key(line).filter(|key| REINIT_KEYS.contains(key));
+        let found = key.and_then(|key| reported.iter().find(|(k, _)| *k == key));
+        let written = line.split_once('=').and_then(|(_, value)| value.trim().parse::<f64>().ok());
+        matches!((found, written), (Some(&(key, value)), Some(w)) if values_match(key, &Value::from(w), value))
+    };
+    push.lines.retain(|line| !held(line));
 }
 
 /// Python's `isPercentClose` with its default 0.01% tolerance.

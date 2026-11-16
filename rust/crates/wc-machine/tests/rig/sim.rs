@@ -25,9 +25,14 @@ pub struct SimRig {
 impl SimRig {
     /// A Z motor attached, so Z moves need no hand adjustment, unless `settings` says otherwise.
     pub fn with(settings: Settings) -> SimRig {
+        SimRig::on(settings, Sim::new(Build::holey_51_27()))
+    }
+
+    /// `with`, against a controller set up beforehand.
+    pub fn on(settings: Settings, sim: Sim) -> SimRig {
         let mut rig = SimRig {
             machine: Machine::new("10.0.0.5:5000", settings),
-            sim: Sim::new(Build::holey_51_27()),
+            sim,
             now: Duration::ZERO,
             effects: Vec::new(),
             written: Vec::new(),
@@ -53,12 +58,18 @@ impl SimRig {
         let mut pending = VecDeque::from([event]);
         while let Some(event) = pending.pop_front() {
             let effects = self.machine.handle_inline(event, self.now);
-            effects.iter().for_each(|effect| {
-                if let Effect::Write(bytes) | Effect::Realtime(bytes) = effect {
+            effects.iter().for_each(|effect| match effect {
+                Effect::Write(bytes) | Effect::Realtime(bytes) => {
                     self.written.push(String::from_utf8_lossy(bytes).trim_end_matches('\n').to_string());
                     let replies = self.sim.receive(bytes, self.millis());
                     pending.extend(replies.into_iter().map(Event::ControllerLine));
                 }
+                // Opening the port resets the board, as `SimOpener` and a real Mega do.
+                Effect::OpenPort(port) => {
+                    pending.push_back(Event::PortOpened { port: port.clone() });
+                    pending.extend(self.sim.boot(self.millis()).into_iter().map(Event::ControllerLine));
+                }
+                _ => {}
             });
             self.effects.extend(effects);
         }

@@ -43,6 +43,8 @@ impl MachineBackend {
     fn collect(&mut self, effects: Vec<Effect>) {
         effects.into_iter().for_each(|effect| match effect {
             Effect::Write(bytes) | Effect::Realtime(bytes) => self.written.extend(bytes),
+            // The shell opens the port at once; the controller's banner then comes as the transcript's rx.
+            Effect::OpenPort(port) => self.apply(Event::PortOpened { port }),
             Effect::Push(push) if push.ns == Namespace::MaslowCnc => {
                 Contract::shared().validate_frame(&push.frame().encode()).unwrap();
                 let data = push.data["data"].as_str().and_then(|t| serde_json::from_str(t).ok());
@@ -154,39 +156,35 @@ fn every_transcript_passes() {
     assert!(failures.is_empty(), "{} failing:\n{}", failures.len(), failures.join("\n"));
 }
 
-/// The milestone's hardware check, simulated: edit a setting, power-cycle the controller, and every setting goes out
-/// again with the new value and `$13`, then `$$` verifies. Built from the handshake transcript.
+/// The milestone's hardware check, simulated: edit a setting, power-cycle the controller, and its `$$` shows the
+/// edit held, so only `$13` goes out. Built from the owner's handshake transcript.
 fn edit_then_reboot() -> Transcript {
     let path = wc_testkit::repo_root().join("contract/serial/transcripts/connect_boot_handshake.json");
     let mut raw: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
-    raw["meta"]["name"] = "settings_edit_then_reboot_repushes_everything".into();
+    raw["meta"]["name"] = "settings_edit_then_reboot_writes_only_r".into();
     raw["setup"]["start"] = "connected".into();
-    let boot: Vec<Value> = raw["events"].as_array().unwrap().clone();
-    let reboot: Vec<Value> = boot
+    raw["setup"]["bootBanner"] = serde_json::json!(["PCB v1.1 Detected", "Grbl v1.00", "ready", "ok"]);
+    let reboot: Vec<Value> = raw["events"]
+        .as_array()
+        .unwrap()
         .iter()
-        .map(|event| match event["bytes"].as_str() {
-            Some("$2=2978.4 \n") => serde_json::json!({"type": "tx", "bytes": "$2=3000 \n"}),
+        .map(|event| match event["line"].as_str() {
+            Some(line) if line.starts_with("$3=") => serde_json::json!({"type": "rx", "line": "$3=470.00000000"}),
             _ => event.clone(),
         })
         .collect();
-    // The last two events are the `$$` read-back's `ok` and the closing expect; the dump goes before them.
-    let (handshake, ending) = reboot.split_at(reboot.len() - 2);
     let edit = serde_json::json!([
-        {"type": "http", "method": "PUT", "path": "/api/settings/maslow", "json": {"values": {"motorSpacingX": "3000"}}, "status": 200},
-        {"type": "tx", "bytes": "$2=3000 \n"},
+        {"type": "http", "method": "PUT", "path": "/api/settings/maslow", "json": {"values": {"motorOffsetY": "470"}}, "status": 200},
+        {"type": "tx", "bytes": "$3=470 \n"},
         {"type": "rx", "line": "ok"},
-        {"type": "expect", "settings": [{"section": "Maslow Settings", "key": "motorSpacingX", "value": "3000"}]},
+        {"type": "expect", "settings": [{"section": "Maslow Settings", "key": "motorOffsetY", "value": "470"}]},
     ]);
-    let dump =
-        serde_json::json!([{"type": "rx", "line": "$2=3000.00000000"}, {"type": "rx", "line": "$13=63.50000000"}]);
-    let events: Vec<Value> =
-        [edit.as_array().unwrap().as_slice(), handshake, dump.as_array().unwrap().as_slice(), ending].concat();
-    raw["events"] = Value::Array(events);
+    raw["events"] = Value::Array([edit.as_array().unwrap().as_slice(), &reboot].concat());
     serde_json::from_value(raw).unwrap()
 }
 
 #[test]
-fn an_edited_setting_is_pushed_with_all_the_others_after_a_reboot_and_verified() {
+fn an_edited_setting_the_controller_kept_is_not_written_again_after_a_reboot() {
     replay(&mut MachineBackend::new(), &edit_then_reboot()).unwrap();
 }
 

@@ -163,8 +163,8 @@ pub(crate) enum Queued {
         text: String,
         boot: bool,
     },
-    /// Expanded once B05 has answered, so the push knows the firmware version.
-    SettingsPush,
+    /// Expanded once the `$$` before it has answered, so the writes know the firmware and what it holds.
+    SettingsSync,
     /// Nothing more is written for this long, as Python's `time.sleep` in the action held the queue.
     Delay(Duration),
     /// The upgrade acts here once every line before it is answered.
@@ -276,6 +276,12 @@ pub(crate) struct Controller {
     /// The G38.2 line awaiting its `ok` or `error:`.
     pub probe: Option<Probe>,
     pub eeprom_reset: bool,
+    /// The boot's `$$` reply, read until its `SettingsSync`.
+    pub reported: Vec<(u32, f64)>,
+    /// A re-initialising `$` line went out on this boot, so the controller must restart before it moves.
+    pub axes_reinitialised: bool,
+    /// The restart did not make `$38` stick, so no `$$` on this boot writes it again.
+    pub reinit_suppressed: bool,
     /// A `Delay` holds writes until then.
     pub hold_until: Option<Duration>,
     /// `bufferOn` as the port opened: job lines go out while they fit, not one per `ok`.
@@ -301,6 +307,9 @@ impl Controller {
             queue: VecDeque::new(),
             probe: None,
             eeprom_reset: false,
+            reported: Vec::new(),
+            axes_reinitialised: false,
+            reinit_suppressed: false,
             hold_until: None,
             buffering: false,
             raise_deadline: None,
@@ -357,6 +366,7 @@ pub struct Machine {
     /// The forward-kinematics model for the computed sled position, kept current by every `$` write.
     pub(crate) kinematics: wc_kinematics::Kinematics,
     pub(crate) upgrade: Upgrade,
+    pub(crate) restart: crate::sync::Restart,
     pub(crate) lanes: Lanes,
 }
 
@@ -412,6 +422,7 @@ impl Machine {
             calibration: crate::calibration::Results::default(),
             kinematics,
             upgrade: Upgrade::new(Image::embedded()),
+            restart: crate::sync::Restart::None,
             lanes: Lanes::default(),
         }
     }

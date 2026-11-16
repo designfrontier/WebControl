@@ -235,6 +235,7 @@ fn quick_configure_saves_the_answers_and_reads_them_back() {
     assert_eq!(value(&rig, "Advanced Settings", "rotationRadius"), "273");
     assert_eq!(value(&rig, "Maslow Settings", "motorSpacingX"), "2938.05");
     assert_eq!(rig.run_to_quiet(), ["$8=273", "$38=1.000000", "$2=2938.05", "$3=470"]);
+    rig.reboot();
     let quad = json!({"kinematicsType": "Quadrilateral", "rotationRadius": 138.4, "chainOverSprocket": "Bottom",
         "motorSpacingX": 3000, "motorOffsetY": 470});
     let (quad, _) = checked(&mut rig, "POST", path, Request::QuickConfigure(quad));

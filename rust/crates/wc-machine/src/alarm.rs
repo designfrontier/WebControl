@@ -47,7 +47,7 @@ pub(crate) fn moves_nothing(text: &str) -> bool {
 /// The boot's handshake and settings, the upgrade's marks, and lines that move nothing.
 pub(crate) fn survives_alarm(queued: &Queued) -> bool {
     match queued {
-        Queued::Line { boot: true, .. } | Queued::SettingsPush | Queued::Mark(_) => true,
+        Queued::Line { boot: true, .. } | Queued::SettingsSync | Queued::Mark(_) => true,
         Queued::Line { text, .. } => moves_nothing(text),
         Queued::Delay(_) | Queued::Raise(_) => false,
     }

@@ -1,8 +1,37 @@
 use serde_json::{Value, json};
 use wc_config::Settings;
 use wc_firmware::settings::{
-    Sync, adopted_text, boot_push, firmware_key_value, parse_setting_reply, setting_line, sync_reported, values_match,
+    Push, Sync, adopted_text, boot_push, boot_sync, firmware_key_value, parse_setting_reply, reinitialises_axes,
+    setting_key, setting_line, skip_held_reinit_keys, sync_reported, values_match,
 };
+
+#[test]
+fn a_boot_that_finds_every_value_held_writes_only_r() {
+    let held = [(0, 2438.4), (3, 463.0), (13, 63.5), (38, 2.0), (39, 3.0)];
+    let push = boot_sync(&Settings::defaults(), 51.27, &held);
+    assert_eq!(push, Push { lines: vec!["$13=63.5000".into()], adopted: vec![] });
+}
+
+#[test]
+fn a_boot_writes_what_differs_in_key_order_with_r_once_and_adopts_unknown_keys() {
+    let reported = [(38, 1.0), (13, 10.1), (3, 478.0), (18, 12.6)];
+    let push = boot_sync(&Settings::defaults(), 51.27, &reported);
+    assert_eq!(push.lines, ["$3=463", "$13=63.5000", "$38=2.00000"]);
+    assert_eq!(push.adopted, [("Advanced Settings".into(), "maxZRPM".into(), json!("12.6"))]);
+    assert_eq!(boot_sync(&Settings::defaults(), 51.27, &[]).lines, ["$13=63.5000"], "nothing reported");
+}
+
+#[test]
+fn only_chain_over_sprocket_reinitialises_and_a_held_one_is_never_rewritten() {
+    assert!(reinitialises_axes("$38=2.00000 ") && !reinitialises_axes("$39=3") && !reinitialises_axes("$$"));
+    assert_eq!((setting_key("$RST=*"), setting_key(" $12=8113.73 ")), (None, Some(12)));
+    let mut push = boot_push(&Settings::defaults(), 51.27, true);
+    skip_held_reinit_keys(&mut push, &[(38, 2.0), (39, 3.0)]);
+    assert!(!push.lines.iter().any(|l| l.starts_with("$38=")) && push.lines.contains(&"$39=3.00000".to_string()));
+    let mut differs = boot_push(&Settings::defaults(), 51.27, true);
+    skip_held_reinit_keys(&mut differs, &[(38, 1.0)]);
+    assert!(differs.lines.contains(&"$38=2.00000".to_string()));
+}
 
 /// The restore lines Python writes in `connect_eeprom_read_fail_restores_settings`, by stored value.
 #[test]
@@ -179,4 +208,25 @@ fn each_reported_value_is_adopted_rewritten_or_left() {
     assert_eq!(sync_reported(&relay, 51.27, 17, 2.0), Sync::Agrees);
     let junk = settings_with("Maslow Settings", "bedWidth", json!("wide"));
     assert_eq!(sync_reported(&junk, 51.27, 0, 1.0), Sync::Agrees, "junk text is never written");
+}
+
+/// The owner's real webcontrol.json against the `$$` their 51.27 printed on 2026-11-14: Python wrote only `$13`.
+#[test]
+fn the_owners_connect_writes_only_r_on_this_and_every_later_boot() {
+    let file = include_str!("fixtures/owner_webcontrol.json");
+    let mut settings = Settings::from_text(file).expect("the owner's settings");
+    assert!(settings.compute().is_empty(), "startup derives nothing new from the saved file");
+    let transcript: Value =
+        serde_json::from_str(include_str!("../../../../contract/serial/transcripts/connect_boot_handshake.json"))
+            .expect("transcript");
+    let events = transcript["events"].as_array().expect("events");
+    let lines = events.iter().filter(|e| e["type"] == "rx").filter_map(|e| e["line"].as_str());
+    let reported: Vec<(u32, f64)> = lines.filter_map(parse_setting_reply).collect();
+    assert_eq!(reported.len(), 46);
+    let first = boot_sync(&settings, 51.27, &reported);
+    assert_eq!(first.lines, ["$13=63.5000"]);
+    first.adopted.iter().for_each(|(section, key, value)| {
+        settings.set_value(section, key, value.clone());
+    });
+    assert_eq!(boot_sync(&settings, 51.27, &reported), Push { lines: vec!["$13=63.5000".into()], adopted: vec![] });
 }
