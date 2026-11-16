@@ -101,7 +101,7 @@
     {"type": "rx", "line": "$46=97.90000152 (Sled Weight, N)"},
     {"type": "rx", "line": ""},
     {"type": "rx", "line": "ok"},
-    {"type": "tx", "bytes": "$13=63.5000 \n", "comment": "every value matches, so only $13 goes: its write alone sets R"},
+    {"type": "tx", "bytes": "$13=63.5 \n", "comment": "every value matches, so only $13 goes: its write alone sets R"},
     {"type": "rx", "line": "ok"},
     {"type": "expect", "state": {"firmwareBuild": "51.27", "controllerBoard": "PCB v1.1 Detected"}, "emitted": [{"command": "controllerMessage", "data": "Firmware Version 51.27"}]}
   ]

@@ -4,6 +4,8 @@
 use serde_json::Value;
 use wc_config::{FirmwareOption, Settings, Stored, python_str};
 
+use crate::number::{firmware_range, firmware_text, in_firmware_range};
+
 /// The firmware stores these as (unsigned) ints, so it truncates any fraction written to them.
 pub const INTEGER_KEYS: [u32; 4] = [9, 10, 11, 15];
 /// The error array goes out as `$O` lines, and the firmware rejects `$86` and `$144`.
@@ -30,7 +32,8 @@ pub fn parse_setting_reply(line: &str) -> Option<(u32, f64)> {
     Some((key, value))
 }
 
-/// `Config.firmwareKeyValue`: text goes out as stored; numbers with about six significant decimals.
+/// `Config.firmwareKeyValue`: text as stored; numbers with about six significant decimals. Only the fallback for
+/// a value no text makes the firmware read exactly.
 pub fn firmware_key_value(value: &Value) -> String {
     let number = match value {
         Value::Number(n) => n.as_f64().unwrap_or_default(),
@@ -47,8 +50,11 @@ pub fn firmware_key_value(value: &Value) -> String {
     format!("{number:>width$.prec$}", prec = precision as usize)
 }
 
+/// The `$key=` line that makes the firmware store the float32 nearest `value` (`number::firmware_text`).
 pub fn setting_line(key: u32, value: &Value) -> String {
-    format!("${key}={}", firmware_key_value(value))
+    let fallback = firmware_key_value(value);
+    let text = stored_number(value).map_or_else(|| fallback.clone(), |number| firmware_text(key, number, &fallback));
+    format!("${key}={text}")
 }
 
 /// The key a `$n=value` line writes.
@@ -159,15 +165,24 @@ pub fn boot_push(settings: &Settings, firmware: f64, eeprom_reset: bool) -> Push
 /// What to do about one `$n=value` line of a `$$` reply.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Sync {
-    /// WebControl never knew the value: store the controller's.
+    /// WebControl never knew the value: store the controller's, brought into the firmware's range, and write that
+    /// back when the controller's was outside it.
     Adopt {
         section: String,
         key: String,
         value: Value,
+        repair: Option<String>,
     },
-    /// It differs from the stored value: write the stored one again.
+    /// It differs from the stored value, or the firmware refuses to use it: write the stored one again.
     Rewrite(String),
     Agrees,
+}
+
+fn adopt(option: FirmwareOption, reported: f64) -> Sync {
+    let (low, high) = firmware_range(option.firmware_key).map_or((f64::MIN, f64::MAX), |(l, h)| (l.into(), h.into()));
+    let value = Value::from(adopted_text(reported.clamp(low, high)));
+    let repair = (!in_firmware_range(option.firmware_key, reported)).then(|| setting_line(option.firmware_key, &value));
+    Sync::Adopt { section: option.section, key: option.key, value, repair }
 }
 
 pub fn sync_reported(settings: &Settings, firmware: f64, key: u32, reported: f64) -> Sync {
@@ -175,13 +190,11 @@ pub fn sync_reported(settings: &Settings, firmware: f64, key: u32, reported: f64
         return Sync::Agrees;
     };
     if option.value == Value::String(String::new()) {
-        return match reported.is_nan() {
-            true => Sync::Agrees,
-            false => Sync::Adopt { section: option.section, key: option.key, value: adopted_text(reported).into() },
-        };
+        return if reported.is_nan() { Sync::Agrees } else { adopt(option, reported) };
     }
     let stored = if option.key == "spindleAutomate" { spindle_code(&option.value) } else { option.value.clone() };
-    match (values_match(key, &stored, reported), written_value(&option, &option.value)) {
+    let held = values_match(key, &stored, reported) && in_firmware_range(key, reported);
+    match (held, written_value(&option, &option.value)) {
         (false, Some(written)) => Sync::Rewrite(setting_line(key, &written)),
         _ => Sync::Agrees,
     }
@@ -198,7 +211,10 @@ fn radius_line(settings: &Settings, firmware: f64) -> Option<String> {
 pub fn boot_sync(settings: &Settings, firmware: f64, reported: &[(u32, f64)]) -> Push {
     let mut push = reported.iter().fold(Push::default(), |mut push, &(key, value)| {
         match sync_reported(settings, firmware, key, value) {
-            Sync::Adopt { section, key, value } => push.adopted.push((section, key, value)),
+            Sync::Adopt { section, key, value, repair } => {
+                push.adopted.push((section, key, value));
+                push.lines.extend(repair);
+            }
             Sync::Rewrite(line) => push.lines.push(line),
             Sync::Agrees => {}
         }

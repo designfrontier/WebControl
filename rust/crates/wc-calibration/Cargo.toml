@@ -11,6 +11,7 @@ publish.workspace = true
 nalgebra.workspace = true
 serde_json.workspace = true
 wc-config.workspace = true
+wc-firmware.workspace = true
 wc-kinematics.workspace = true
 
 [dev-dependencies]

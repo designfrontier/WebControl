@@ -327,7 +327,7 @@ fn the_upgrade_backs_up_flashes_migrates_and_rolls_back() {
     let files = ["flash-read.hex", "rollback.hex", "settings-dump.txt", "chain-lengths.txt", "webcontrol.json"];
     files.iter().for_each(|f| assert!(bench.avrdude.saved.contains(&f.to_string()), "{f}"));
     assert_eq!(bench.sim.build().version, "51.29");
-    assert_eq!(bench.sim.setting(18), Some(12.6), "never 51.292's factory 126");
+    assert_eq!(bench.sim.setting(18), Some(f64::from(12.6_f32)), "never 51.292's factory 126");
     assert_eq!((bench.sim.setting(63), bench.sim.setting(64)), (Some(9999.0), Some(-9999.0)));
     let view = bench.view();
     assert_eq!(view.backup.as_deref(), Some("/home/pi/.WebControl/firmware-backups/1"));
@@ -348,7 +348,7 @@ fn the_upgrade_backs_up_flashes_migrates_and_rolls_back() {
     assert_eq!(bench.settle(&[Stage::RollingBack, Stage::Restarting, Stage::Migrating], 120_000), Stage::RolledBack);
     assert_eq!(bench.avrdude.jobs.last().map(String::as_str), Some("write simulator rollback"));
     assert_eq!(bench.sim.build().version, "51.27");
-    assert_eq!(bench.sim.setting(18), Some(12.6));
+    assert_eq!(bench.sim.setting(18), Some(f64::from(12.6_f32)));
     let written = bench.take_written();
     assert_eq!(written.first().map(String::as_str), Some("!"), "Stop before the port is handed over");
     assert!(!written.iter().any(|l| l.starts_with("$63=") || l.starts_with("$64=")), "51.27 has no Z limits");
@@ -372,13 +372,13 @@ fn an_eeprom_reset_after_the_flash_is_answered_by_the_settings_migration() {
     assert_eq!(written[..push], ["B05", "G21", "G90", "$$"]);
     let restarts = written.iter().filter(|l| l.starts_with("$38=")).count();
     assert_eq!(restarts, 1, "$38 goes once, then the restart; after it $$ shows it held: {written:?}");
-    assert!(written.contains(&"$18=12.6000".to_string()), "{written:?}");
-    assert!(written.contains(&"$17=0.000000".to_string()), "an explicit $17");
+    assert!(written.contains(&"$18=12.6".to_string()), "{written:?}");
+    assert!(written.contains(&"$17=0".to_string()), "an explicit $17");
     let verify = written.iter().rposition(|l| l == "$$").unwrap();
     assert_eq!(written[verify - 2..verify], ["$63=9999".to_string(), "$64=-9999".to_string()]);
     assert_eq!(written[verify + 1..], ["G21", "G90"], "units and G90 again after the verify");
     assert!(!bench.alerts().iter().any(|a| a.contains("EEPROM read fail")), "the wizard explains the reset");
-    assert_eq!(bench.sim.setting(18), Some(12.6));
+    assert_eq!(bench.sim.setting(18), Some(f64::from(12.6_f32)));
 }
 
 #[test]
@@ -611,7 +611,7 @@ fn a_link_lost_while_the_settings_go_back_restarts_the_post_flash_checks() {
     bench.apply(Event::PortClosed);
     let stage = bench.settle(&[Stage::Migrating, Stage::Restarting], 60_000);
     assert_eq!(stage, Stage::SelfTest, "{:?}", bench.view().log);
-    assert_eq!(bench.sim.setting(18), Some(12.6));
+    assert_eq!(bench.sim.setting(18), Some(f64::from(12.6_f32)));
 }
 
 #[test]

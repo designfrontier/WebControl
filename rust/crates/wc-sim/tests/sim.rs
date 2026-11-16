@@ -228,3 +228,38 @@ fn b10_measures_each_chain_and_b04_tests_each_motor() {
     assert_eq!(report[8], format!("{status}Direction 2 - Fail"));
     assert_eq!(&report[9..], [format!("{status}Tests complete."), "ok".into()]);
 }
+
+const SLED_ALARM: &str = "ALARM: The sled is not keeping up with its expected position and has halted.";
+
+/// The owner's 51.27 on 2026-11-15: `$24=1.000000` stored 1.00000012, and after the next boot no motor moved.
+#[test]
+fn a_weight_written_as_1_000000_zeroes_the_gains_from_the_next_boot() {
+    let mut sim = sim();
+    assert_eq!(send(&mut sim, "$24=1.000000\n"), ["ok"]);
+    assert_eq!(sim.setting(24), Some(f64::from(f32::from_bits(1.0_f32.to_bits() + 1))));
+    assert!(send(&mut sim, "$$\n").contains(&"$24=1.00000012".to_string()));
+    assert!(sim.main_axes_tuned(), "SetTunings refused it, so the gains it had stay until a boot");
+    assert_eq!(send(&mut sim, "G0 X5\n"), ["ok"]);
+    sim.boot(0);
+    assert!(!sim.main_axes_tuned());
+    assert_eq!(send(&mut sim, "G0 X10\n"), [SLED_ALARM]);
+    assert_eq!(send(&mut sim, "$24=1\n"), ["ok"]);
+    assert!(sim.main_axes_tuned(), "an accepted tuning gives the PID its gains again");
+    assert_eq!(send(&mut sim, "G0 X10\n"), ["ok"]);
+}
+
+#[test]
+fn every_pid_tuning_is_checked_and_a_bad_number_is_refused() {
+    let mut z_only = Sim::new(Build::holey_51_27()).with_setting(32, 1.5);
+    z_only.boot(0);
+    assert!(z_only.main_axes_tuned(), "a Z tuning leaves L and R alone");
+    let mut velocity = Sim::new(Build::holey_51_27()).with_setting(26, -1.0);
+    velocity.boot(0);
+    assert!(!velocity.main_axes_tuned());
+    let mut sim = sim();
+    assert_eq!(send(&mut sim, "$3=-\n"), ["error: Bad number format", "ok"]);
+    assert_eq!(send(&mut sim, "$38=2\n"), ["ok"]);
+    assert_eq!(send(&mut sim, "$24=1.5\n"), ["ok"]);
+    sim.boot(0);
+    assert!(!sim.main_axes_tuned());
+}

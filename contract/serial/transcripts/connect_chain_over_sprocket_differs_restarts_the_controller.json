@@ -101,9 +101,9 @@
     {"type": "rx", "line": "$46=97.90000152 (Sled Weight, N)"},
     {"type": "rx", "line": ""},
     {"type": "rx", "line": "ok"},
-    {"type": "tx", "bytes": "$13=63.5000 \n"},
+    {"type": "tx", "bytes": "$13=63.5 \n"},
     {"type": "rx", "line": "ok"},
-    {"type": "tx", "bytes": "$38=2.00000 \n", "comment": "the one setting that differs; its write re-initialises the axes"},
+    {"type": "tx", "bytes": "$38=2 \n", "comment": "the one setting that differs; its write re-initialises the axes"},
     {"type": "rx", "line": "ok"},
     {"type": "expect", "alerts": [{"title": "Alert", "message": "restarting the controller"}]},
     {"type": "rx", "line": "PCB v1.1 Detected", "comment": "no read-back and no move: the port closed and reopened, which resets the board"},
@@ -173,7 +173,7 @@
     {"type": "rx", "line": "$46=97.90000152 (Sled Weight, N)"},
     {"type": "rx", "line": ""},
     {"type": "rx", "line": "ok"},
-    {"type": "tx", "bytes": "$13=63.5000 \n", "comment": "$38 now matches, so it is not written again"},
+    {"type": "tx", "bytes": "$13=63.5 \n", "comment": "$38 now matches, so it is not written again"},
     {"type": "rx", "line": "ok"},
     {"type": "expect", "state": {"controllerBoard": "PCB v1.1 Detected"}}
   ]

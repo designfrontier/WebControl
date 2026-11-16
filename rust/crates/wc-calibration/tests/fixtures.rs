@@ -3,6 +3,7 @@
 
 use serde_json::{Value, json};
 use wc_calibration::{Accept, MachineSettings, holey, triangular};
+use wc_firmware::settings::setting_line;
 
 fn fixture(name: &str) -> Value {
     let path = format!("{}/../../../fixtures/calibration/{name}", env!("CARGO_MANIFEST_DIR"));
@@ -146,6 +147,21 @@ fn described(accept: &Accept, geometry: &Value) -> Vec<Value> {
         .collect()
 }
 
+/// Python's queued commands with each value as the text the firmware reads exactly (`spec/firmware.md` §4).
+fn exact(python: &[Value]) -> Vec<Value> {
+    python
+        .iter()
+        .map(|entry| match (entry["key"].as_u64(), entry["value"].as_str()) {
+            (Some(key), Some(value)) => {
+                let line = setting_line(key as u32, &Value::String(value.into()));
+                let text = line.split_once('=').map(|(_, text)| text).unwrap_or_default().to_string();
+                json!({"command": line, "key": key, "value": text, "units": entry["units"]})
+            }
+            _ => entry.clone(),
+        })
+        .collect()
+}
+
 #[test]
 fn accept_queues_the_python_fixture_commands() {
     let fixture = fixture("accept_commands.json");
@@ -162,10 +178,10 @@ fn accept_queues_the_python_fixture_commands() {
     .expect("measurements");
     let measurements: Vec<Value> = measurements.iter().map(|m| json!(m)).collect();
     let holey = holey::calibrate(&settings, &measurements).expect("holey");
-    assert_eq!(described(&holey.accept(), geometry), *fixture["holey"]["queued"].as_array().expect("queued"));
+    assert_eq!(described(&holey.accept(), geometry), exact(fixture["holey"]["queued"].as_array().expect("queued")));
 
     // Rust-intended deviation (owner decision 3): Z rises to the safe height before Python's `G0 X0 Y0`.
-    let mut expected = fixture["triangular"]["queued"].as_array().expect("queued").clone();
+    let mut expected = exact(fixture["triangular"]["queued"].as_array().expect("queued"));
     let centre = expected.iter().position(|line| line == &json!({"gcode": "G0 X0 Y0 "})).expect("the move to centre");
     expected.insert(centre, json!({"gcode": "G0 Z7.5 "}));
     let triangular = triangular::calculate(&settings, &fixture["triangular"]["inputs"]).expect("triangular");

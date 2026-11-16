@@ -410,7 +410,7 @@ fn a_groundcontrol_import_derives_the_computed_settings_and_writes_them_before_d
     assert_eq!(ask(&mut rig, Request::ImportIni(ini.into())).0, Reply::Done);
     assert_eq!(computed(&rig, "distPerRot"), "57.15");
     assert_eq!(computed(&rig, "kinematicsTypeComputed"), "1");
-    assert_eq!(rig.run_to_quiet(), ["$7=1", "$13=57.15", "$$"]);
+    assert_eq!(rig.run_to_quiet(), ["$7=1", "$13=57.150", "$$"]);
 }
 
 #[test]
@@ -421,8 +421,8 @@ fn a_restore_derives_the_computed_settings_from_the_restored_file() {
     restored.set_value("Advanced Settings", "chainOverSprocket", json!("Top"));
     assert_eq!(ask(&mut rig, Request::RestoreSettings(Box::new(restored))).0, Reply::Done);
     assert_eq!(computed(&rig, "chainOverSprocketComputed"), 1);
-    assert_eq!(rig.run_to_quiet(), ["$38=1.000000"], "the restart $38 needs replaces the read-back");
-    assert_eq!(rig.reboot(), ["B05", "G20", "G90", "$$", "$13=63.5000"], "the restored file is in inches");
+    assert_eq!(rig.run_to_quiet(), ["$38=1"], "the restart $38 needs replaces the read-back");
+    assert_eq!(rig.reboot(), ["B05", "G20", "G90", "$$", "$13=63.5"], "the restored file is in inches");
 }
 
 /// Python's `importWebControlJSON` never recomputes; Rust does, so an imported file cannot leave them stale.
@@ -433,7 +433,7 @@ fn a_webcontrol_json_import_derives_the_computed_settings_too() {
     let imported = json!({"Advanced Settings": [{"key": "fPWM", "value": "4,100Hz"}]});
     assert_eq!(ask(&mut rig, Request::ImportWebControl(imported)).0, Reply::Done);
     assert_eq!(computed(&rig, "fPWMComputed"), 2);
-    assert_eq!(rig.run_to_quiet(), ["$39=2.00000", "$$"]);
+    assert_eq!(rig.run_to_quiet(), ["$39=2", "$$"]);
     let stale = json!({"Computed Settings": [{"key": "distPerRot", "value": "63.5"}]});
     assert_eq!(ask(&mut rig, Request::ImportWebControl(stale)).0, Reply::Done);
     assert!(rig.run_to_quiet().is_empty(), "an import that changes nothing writes nothing");

@@ -2086,6 +2086,7 @@ dependencies = [
  "nalgebra",
  "serde_json",
  "wc-config",
+ "wc-firmware",
  "wc-kinematics",
 ]
 
@@ -2199,6 +2200,7 @@ name = "wc-sim"
 version = "0.1.0"
 dependencies = [
  "tokio",
+ "wc-firmware",
 ]
 
 [[package]]

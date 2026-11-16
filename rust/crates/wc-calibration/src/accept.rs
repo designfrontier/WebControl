@@ -1,3 +1,5 @@
+use serde_json::Value;
+use wc_firmware::settings::setting_line;
 use wc_kinematics::python_float;
 
 use crate::CalibrationError;
@@ -68,7 +70,7 @@ impl Accept {
             .filter_map(|write| {
                 let key = firmware_key(write.key)?;
                 let unchanged = values_match(&write.value, previous(write.section, write.key).as_deref());
-                (!unchanged).then(|| format!("${key}={}", write.value))
+                (!unchanged).then(|| setting_line(key, &Value::String(write.value.clone())))
             })
             .chain(self.gcode.iter().cloned())
             .collect())
@@ -104,7 +106,7 @@ mod tests {
         };
         assert_eq!(
             accept.queued(previous),
-            Ok(vec!["$2=2990.0".into(), "$41=0.1".into(), "$8=139".into(), "G21 ".into()])
+            Ok(vec!["$2=2990".into(), "$41=0.1".into(), "$8=139".into(), "G21 ".into()])
         );
     }
 

@@ -158,7 +158,7 @@ pub fn migration_push(settings: &Settings, firmware: f64, build: Option<&str>, m
     }
     push.adopted.retain(|(_, key, _)| key != "maxZRPM");
     push.adopted.push(("Advanced Settings".into(), "maxZRPM".into(), Value::from(wc_config::python_float_str(rpm))));
-    push.lines.extend(CLEARED_Z_LIMITS.iter().map(|(key, value)| format!("${key}={value:.0}")));
+    push.lines.extend(CLEARED_Z_LIMITS.iter().map(|&(key, value)| setting_line(key, &Value::from(value))));
     push
 }
 

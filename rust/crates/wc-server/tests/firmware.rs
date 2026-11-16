@@ -191,7 +191,7 @@ async fn the_rehearsal_upgrades_the_simulator_and_rolls_back_through_the_shell()
     );
     let backup = PathBuf::from(handle.snapshot().firmware_upgrade.backup.unwrap());
     assert!(backup.join("rollback.hex").is_file() && backup.join("webcontrol.json").is_file());
-    assert_eq!(sim.lock().unwrap().setting(18), Some(12.6));
+    assert_eq!(sim.lock().unwrap().setting(18), Some(f64::from(12.6_f32)));
     assert_eq!(handle.snapshot().firmware_build.as_deref(), Some("51.292"));
 
     step(&handle, "rollback");

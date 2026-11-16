@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use serde_json::{Map, Value, json};
 use wc_config::Settings;
-use wc_firmware::settings::recompute;
+use wc_firmware::settings::{recompute, setting_key, setting_line};
 
 const FIRMWARE: f64 = 51.27;
 const DEFAULTS: &str = include_str!("../../../../defaultwebcontrol.json");
@@ -61,6 +61,17 @@ fn derived(settings: &mut Settings, change: impl FnOnce(&mut Settings)) -> Value
     json!({ "changes": changes(&before, &as_json(settings)), "lines": lines })
 }
 
+/// Python's lines with each value as the text the firmware reads exactly (`spec/firmware.md` §4), Rust's one change.
+fn exact(python: &Value) -> Value {
+    let mut expected = python.clone();
+    let lines = python["lines"].as_array().unwrap().iter().filter_map(Value::as_str).map(|line| {
+        let (_, text) = line.split_once('=').unwrap();
+        setting_line(setting_key(line).unwrap(), &Value::String(text.trim().into()))
+    });
+    expected["lines"] = lines.collect();
+    expected
+}
+
 #[test]
 fn the_derived_settings_and_lines_match_python_for_every_case() {
     let cases = cases();
@@ -68,10 +79,10 @@ fn the_derived_settings_and_lines_match_python_for_every_case() {
     cases.iter().for_each(|case| {
         let name = case["name"].as_str().unwrap();
         let mut settings = opened(case["overrides"].as_object().unwrap());
-        assert_eq!(derived(&mut settings, |_| ()), case["startup"], "{name} at startup");
+        assert_eq!(derived(&mut settings, |_| ()), exact(&case["startup"]), "{name} at startup");
         if let Some(ini) = case["ini"].as_str() {
             let imported = derived(&mut settings, |settings| settings.import_ini(ini).unwrap());
-            assert_eq!(imported, case["import"], "{name} after the groundcontrol.ini import");
+            assert_eq!(imported, exact(&case["import"]), "{name} after the groundcontrol.ini import");
         }
     });
 }
