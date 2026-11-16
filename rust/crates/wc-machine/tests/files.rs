@@ -440,6 +440,27 @@ fn imports_and_restores_replace_the_settings_and_ask_for_dollar_dollar() {
     assert_eq!(ask(&mut rig, Request::ImportWebControl(json!([]))).0, Reply::Failed);
 }
 
+/// Upstream #90 and #135: an import tells the user which values it converted or kept.
+#[test]
+fn an_import_alerts_the_values_it_converted_or_kept() {
+    let mut rig = Rig::connected();
+    let ini = "[Maslow Settings]\nzAxis = 1.0\nzAxisSafeHeight = 0,01\nsledWeight = heavy\n";
+    let (reply, effects) = ask(&mut rig, Request::ImportIni(ini.into()));
+    assert_eq!(reply, Reply::Done);
+    let alert = "The import did not take every value as written. Read zAxisSafeHeight \"0,01\" as 0.01. \
+                 Kept sledWeight as it was: \"heavy\" is not a number.";
+    assert_eq!(pushed(&effects, "activateModal")[0]["message"], alert);
+    let settings = rig.machine.snapshot().settings;
+    assert_eq!(settings.value("Maslow Settings", "zAxis"), Some(&json!(1)));
+    assert_eq!(settings.value("Maslow Settings", "zAxisSafeHeight"), Some(&json!("0.01")));
+    let refused = json!({"Maslow Settings": [{"key": "zAxisSafeHeight", "value": "abc"}]});
+    let (reply, effects) = ask(&mut rig, Request::ImportWebControl(refused));
+    assert_eq!(reply, Reply::Done);
+    let alert = "The import did not take every value as written. Kept zAxisSafeHeight as it was: \"abc\" is not a \
+                 number.";
+    assert_eq!(pushed(&effects, "activateModal")[0]["message"], alert);
+}
+
 fn computed(rig: &Rig, key: &str) -> Value {
     rig.machine.snapshot().settings.value("Computed Settings", key).cloned().unwrap()
 }

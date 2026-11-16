@@ -6,7 +6,7 @@ use regex::Regex;
 
 use crate::{GcodeError, py, words};
 
-static WORD_AFTER_DIGIT: LazyLock<Regex> = LazyLock::new(|| Regex::new("([0-9])([GXYZIJFTM]) *").expect("pattern"));
+static WORD_AFTER_DIGIT: LazyLock<Regex> = LazyLock::new(|| Regex::new("(?i)([0-9])([GXYZIJFTM]) *").expect("pattern"));
 static SPACE_RUNS: LazyLock<Regex> = LazyLock::new(|| Regex::new("  +").expect("pattern"));
 
 /// Python's universal newlines, which `open(path, "r")` applies when the route reads a file from disk.
@@ -50,7 +50,7 @@ pub fn z_moves(lines: &[String], tolerance: f64) -> ZMoves {
     let mut moves = ZMoves { indices: vec![0], tolerance, warnings: Vec::new() };
     let mut last_z = None;
     lines.iter().enumerate().for_each(|(index, line)| {
-        let line = words::blank_comments(line);
+        let line = words::code(line);
         if !py::isspace(&line) {
             if line.contains("G20") {
                 moves.tolerance = 0.020;
@@ -90,6 +90,7 @@ mod tests {
         assert_eq!(lines("G1X10.5Y2Z-1F300\n"), ["G1 X10.5 Y2 Z-1 F300 ", " "]);
         assert_eq!(lines("  G0   X 1  Y 2"), ["G0 X1 Y2 "]);
         assert_eq!(lines("G1 X1T2M6"), ["G1 X1 T2 M6 "]);
+        assert_eq!(lines("g1x1m3"), ["g1 x1 m3 "], "the firmware upper-cases it, so it is spaced as upper case");
     }
 
     #[test]
@@ -120,5 +121,9 @@ mod tests {
     #[test]
     fn g21_wins_when_a_line_has_both_units() {
         assert_eq!(z_moves(&lines("G20 G21"), 0.1).tolerance, 0.5);
+        assert_eq!(
+            z_moves(&lines("g20\ng1 z1"), 0.5),
+            ZMoves { indices: vec![0, 1], tolerance: 0.020, warnings: vec![] }
+        );
     }
 }

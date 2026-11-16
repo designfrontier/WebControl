@@ -156,8 +156,8 @@ it reads a status report once its input has run dry at least 0.25 s after the ha
 0.3 s and then send a status report; `stop_ignores_a_status_report_read_too_soon` pins that an earlier report
 releases nothing. After an ALARM or overflow the resync releases only `$` and modal lines: anything that moves waits
 for Stop, or Play on the held job (Rust-intended deviation 4). A line the controller never received goes out again
-once 2 s of status reports show an empty ring and a still sled with no echo or ack (Rust-intended deviation 6), so
-those transcripts stream the recorded reports with `tick` 0.2 between them. The backend treats 5 s without any
+once three status reports past a 150 ms grace after the write show an empty ring and a still sled with no echo or
+ack (Rust-intended deviation 6), so those transcripts stream the recorded reports with `tick` 0.2 between them. The backend treats 5 s without any
 controller line as a lost connection, so no transcript waits that long without an rx.
 
 The Python recorder used the same rules, so a recorded transcript replayed: its controller model answered only once
@@ -202,12 +202,14 @@ the backend had been quiet for `quiet` seconds, one line per settle.
 | `stop_ignores_a_status_report_read_too_soon` | a status report within 0.25 s of `!` does not end the resync |
 | `alarm_mid_cut_rewinds_and_resumes` | ALARM: halt, rewind to the oldest unacknowledged line, Play resumes there |
 | `alarm_mid_home_holds_the_plunge_until_stop` | The owner's Home with the motor supply off: ALARM mid-travel; Home's `G00 Z0` never goes out, a jog is refused, Stop clears it and the next jog goes |
-| `stream_lost_line_is_sent_again` | the owner's cut: an arc never echoed or acked, the ring empty and the sled still for 2 s; it goes out again once and the job goes on |
+| `stream_lost_line_is_sent_again` | the owner's cut: an arc never echoed or acked, the ring empty and the sled still for three reports; it goes out again once and the job goes on |
 | `stream_line_lost_twice_pauses_until_resume` | the same arc lost again: the job pauses at it with an alert; Resume returns there and sends it |
 | `buffer_overflow_halts_streaming` | `Buffer overflow!` and its buffer dump: halt, rewind, Stop |
 | `line_too_long_pauses_the_job` | a line over 126 bytes as written is never sent; the job pauses with an alert |
 | `unclosed_comment_pauses_the_job` | an unclosed `(` is never sent; the job pauses with an alert |
 | `realtime_characters_stripped_from_lines` | `!`, `~`, backtick, `?`, control characters and comments removed from lines |
+| `typed_lower_case_g20_switches_units_then_jog` | A `g20` sent with `/sendGCode` goes out as `G20` and switches WebControl to inches (home, jog step); the mm Z panel then moves in inches |
+| `lower_case_file_g91_g90_m0_then_resume` | A lower-case file goes out upper-cased: `g91` stops the home shift, `g90` resumes it, `m0` pauses, Resume returns |
 | `z_limits_refused_on_51_27` | Z-limit actions alert and send nothing below 51.292 |
 | `z_limits_on_51_292` | `$63`/`$64` in mm, clear, `B20`, with 51.292's replies to each |
 | `holey_calibration_accept_writes_settings` | Calculate sends nothing; Accept writes `$3`, `$2`, `$40`, `$41` |
@@ -546,10 +548,27 @@ Where the Rust backend writes something different from Python by owner decision.
 6. **A line the controller never received goes out again** (2026-11-15). On the owner's cut a written arc got no
    echo and no `ok`, and every report showed `[PE:]` space 127 and the same MPos until Stop, 44 s later; Python
    would have waited the same way. Rust takes the unacknowledged lines as lost when, since the last ack, the
-   controller printed only status reports and for 2 s each showed an empty ring, an unchanged MPos and `Idle`
-   (`spec/firmware.md` B18), and writes the same bytes again once, with a `controllerMessage` naming the line. Lost
+   controller printed only status reports and three in a row, each read at least 150 ms after the latest write,
+   showed an empty ring, an unchanged MPos and `Idle` (`spec/firmware.md` B18): the firmware reads the port into
+   its ring before every report, so a line that arrived would show in the ring or be echoed first; on the owner's two
+   cuts every line received was echoed within 40 ms. Rust then writes the same bytes again once, with a `controllerMessage` naming the line. Lost
    again, a job line pauses the job at it with a `Line Not Received` alert, and Resume returns to the file there as
    after any pause; a lost command is dropped with what was queued after it. Only a line written to an idle
    controller is checked, since an `ok` behind a lost buffered line is counted for the lost one. A job paused by the user waits at the
    lost line for Resume. Transcripts: `stream_lost_line_is_sent_again`, built from the owner's
    `webcontrol-rs.log` lines, and `stream_line_lost_twice_pauses_until_resume`.
+7. **Lines are read and sent upper-cased** (2026-11-15). The firmware upper-cases every line before it parses it
+   (`spec/firmware.md` §1), but Python checked lines case-sensitively and wrote them as the file or the user had
+   them (only absolute file lines were upper-cased, by the home shift). So a typed `g20` put the controller in inches
+   while WebControl stayed in mm, a lower-case `m0` or `m6` streamed on without a pause, `g91` and `g90` were missed,
+   and a restart dropped a lower-case `m3`. Rust upper-cases each line once its comments are stripped, before it
+   checks or writes it, and reads the file upper-cased for the restart state, the positions and the preview (the
+   loaded text keeps the case it was written in). No upper-case line changes, so no earlier transcript does.
+   Transcripts: `typed_lower_case_g20_switches_units_then_jog`, `lower_case_file_g91_g90_m0_then_resume`.
+8. **No restart from an unknown XY** (2026-11-15). Python's restart state started X and Y at home, so a file that
+   moves X or Y relatively (G91) before it sets them absolutely was restarted, or resumed after a pause, by
+   travelling to home plus the file's relative moves, wherever the file had really started; every relative move
+   after that cut in the wrong place. Rust refuses Play mid-file and Resume at any line before such a file sets X
+   and Y absolutely, even one before its first X or Y move, with an alert, sends nothing (no `~`; a paused job stays
+   paused) and keeps the index; Stop and Play from the first line still run the file. A file that sets X and Y absolutely before its relative passes restarts as before. No transcript has such a
+   file (`wc-machine` tests `resume_and_play_mid_file_are_refused_before_a_g91_file_sets_x_and_y`).

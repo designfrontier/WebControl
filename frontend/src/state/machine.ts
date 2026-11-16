@@ -114,19 +114,22 @@ const applySetting = (state: MachineState, { setting, value }: MessageData<"requ
   }
 };
 
+const controllerOf = ({
+  status,
+  port,
+  fakeServoStatus,
+}: MessageData<"connectionStatus">): MachineState["controller"] => ({
+  status,
+  port: status === "connected" ? port : null,
+  fakeServo: fakeServoStatus ?? false,
+});
+
 const applyMessage = (state: MachineState, event: Extract<MachineEvent, { type: "message" }>): MachineState => {
   switch (event.command) {
     case "hostAddress":
       return { ...state, hostAddress: event.data.hostAddress };
     case "connectionStatus":
-      return {
-        ...state,
-        controller: {
-          status: event.data.status,
-          port: event.data.status === "connected" ? event.data.port : null,
-          fakeServo: event.data.fakeServoStatus ?? false,
-        },
-      };
+      return { ...state, controller: controllerOf(event.data) };
     case "healthMessage": {
       const { cpuUsage, bufferSize, controllerFirmwareVersion } = event.data;
       return {
@@ -208,6 +211,7 @@ export const machineReducer = (state: MachineState, event: MachineEvent): Machin
         pauseButtonSetting,
         hostAddress,
         macros,
+        connectionStatus,
         controllerFirmwareVersion,
         jobInProgress,
         manualZAxisAdjust,
@@ -230,6 +234,8 @@ export const machineReducer = (state: MachineState, event: MachineEvent): Machin
         hostAddress,
         macros,
         gcodeFile,
+        controller:
+          connectionStatus && state.controller.status === "unknown" ? controllerOf(connectionStatus) : state.controller,
       };
     }
     case "message":

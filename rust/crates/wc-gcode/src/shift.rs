@@ -53,8 +53,9 @@ fn shift_axis(line: &str, axis: char, shift: f64, cap: u32) -> Option<String> {
     Some(format!("{}{text}{}", &line[..=word.start], &line[word.end..]))
 }
 
-/// `_positioningModeSetBy`: the mode of the line's last G90 or G91, if it has one.
+/// `_positioningModeSetBy`: the mode of the line's last G90 or G91, if it has one, in either case.
 pub fn positioning_set_by(line: &str) -> Option<Positioning> {
+    let line = line.to_ascii_uppercase();
     match (line.rfind("G90"), line.rfind("G91")) {
         (None, None) => None,
         (absolute, relative) if absolute > relative => Some(Positioning::Absolute),
@@ -199,6 +200,8 @@ mod tests {
         assert_eq!(positioning_set_by("G90 G91 X1"), Some(Positioning::Relative));
         assert_eq!(positioning_set_by("G91 G90 X1"), Some(Positioning::Absolute));
         assert_eq!(positioning_set_by("G91.1"), Some(Positioning::Relative));
+        assert_eq!(positioning_set_by("g91 g0 x1"), Some(Positioning::Relative));
+        assert_eq!(positioning_set_by("g91 g90"), Some(Positioning::Absolute));
     }
 
     #[test]
@@ -208,5 +211,6 @@ mod tests {
         assert_eq!(shift_to_home("G1 X1", Positioning::Relative, &shift), "G1 X1");
         assert_eq!(shift_to_home("G90 G1 X1", Positioning::Relative, &shift), "G90 G1 X2 ");
         assert_eq!(shift_to_home("G91 G1 X1", Positioning::Absolute, &shift), "G91 G1 X1");
+        assert_eq!(shift_to_home("g90 g1 x1", Positioning::Relative, &shift), "G90 G1 X2 ");
     }
 }

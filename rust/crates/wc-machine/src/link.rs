@@ -263,7 +263,7 @@ impl Machine {
             Reply::Status(status) => self.status_report(status, now, effects),
             Reply::Misread(text) => tracing::debug!(text, "misread controller report"),
             Reply::PositionError(error) => self.position_error(error, effects),
-            Reply::Setting { key, value } => self.reported_setting(line, key, value),
+            Reply::Setting { key, value } => self.reported_setting(line, key, value, effects),
             Reply::Measured(mm) if self.upgrade.collects_chains() => self.upgrade_measured(mm),
             Reply::Measured(mm) => self.measured(mm, now, effects),
             Reply::FakeServo(on) => self.fake_servo = on,
@@ -317,22 +317,25 @@ impl Machine {
         }
     }
 
-    fn reported_setting(&mut self, line: &str, key: u32, value: f64) {
+    fn reported_setting(&mut self, line: &str, key: u32, value: f64, effects: &mut Vec<Effect>) {
         if self.controller.queue.contains(&Queued::SettingsSync) {
             self.controller.reported.push((key, value));
             return self.upgrade_setting(line, None);
         }
         let sync = sync_reported(&self.settings, self.firmware_version, key, value);
         self.upgrade_setting(line, if let Sync::Rewrite(text) = &sync { Some(text) } else { None });
-        match sync {
+        let written = match sync {
             Sync::Adopt { section, key, value, repair } => {
                 self.set_setting(&section, &key, value);
-                let repair = repair.map(|text| Queued::Line { text, boot: false });
-                self.controller.queue.extend(repair);
+                repair
             }
-            Sync::Rewrite(line) if self.controller.reinit_suppressed && reinitialises_axes(&line) => {}
-            Sync::Rewrite(line) => self.controller.queue.push_back(Queued::Line { text: line, boot: false }),
-            Sync::Agrees => {}
+            Sync::Rewrite(line) if self.controller.reinit_suppressed && reinitialises_axes(&line) => None,
+            Sync::Rewrite(line) => Some(line),
+            Sync::Agrees => None,
+        };
+        if let Some(text) = written {
+            self.announce_writes(std::slice::from_ref(&text), &[(key, value)], effects);
+            self.controller.queue.push_back(Queued::Line { text, boot: false });
         }
     }
 
@@ -381,7 +384,7 @@ impl Machine {
         let id = self.controller.accounting.sent(&message, index);
         self.controller.ready = false;
         self.controller.last_write = Some(now);
-        self.controller.watch.written(idle);
+        self.controller.watch.written(idle, now);
         if let Some(mode) = positioning_set_by(&message) {
             self.positioning = mode;
         }

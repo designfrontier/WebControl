@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use serde_json::Value;
-use wc_config::python_float_str;
+use wc_config::{python_float_str, python_str};
 use wc_firmware::settings::setting_line;
 use wc_protocol::main::{HomePositionMessage, PauseButton, RequestedSetting, Units};
 use wc_protocol::{Action, float};
@@ -19,6 +19,7 @@ const NOT_CONNECTED: &str = "The controller is not connected.";
 const Z_LIMITS_UNSUPPORTED: &str = "Z-axis limits need holey firmware 51.292 or later.";
 const JOB_LINES_HELD: &str = "The controller paused with lines of the job still in its buffer, which would run before \
                               this move. Press Resume or STOP first.";
+const NO_JOG_DISTANCE: &str = "Enter a jog distance that is a number other than zero.";
 const ADJUST_Z_FIRST: &str = "The controller is waiting for Z to be adjusted by hand. Adjust it, then press Resume.";
 const GCODE_LOADING: &str = "Gcode is still loading. Start the job when the preview appears.";
 const CLEARED_Z_LIMIT_MM: i32 = 9999;
@@ -197,7 +198,9 @@ impl Machine {
     }
 
     fn jog(&mut self, action: &Action) -> Option<String> {
-        let distance = float(&action.arg1)?;
+        let Some(distance) = float(&action.arg1).filter(|d| commands::round4(*d) != 0.0) else {
+            return Some(format!("{NO_JOG_DISTANCE} It was \"{}\".", python_str(&action.arg1)));
+        };
         let diagonal =
             matches!(self.settings.value("WebControl Settings", "diagonalMove"), Some(v) if v == 1 || v == true);
         let Some(lines) = commands::jog(&action.arg_text(), distance, diagonal) else {
@@ -232,13 +235,22 @@ impl Machine {
         None
     }
 
-    fn safe_height(&self) -> Option<f64> {
-        float(self.settings.value("Maslow Settings", "zAxisSafeHeight")?)
+    /// The safe height, or why there is none, naming the setting and what it holds.
+    fn safe_height(&self, moving: &str) -> Result<f64, String> {
+        let stored = self.settings.value("Maslow Settings", "zAxisSafeHeight");
+        stored.and_then(float).ok_or_else(|| {
+            let held = stored.map(python_str).unwrap_or_default();
+            format!(
+                "Set the Z-axis safe height (Maslow Settings, zAxisSafeHeight) to a number before {moving}, so the \
+                 bit rises before it moves. It holds \"{held}\"."
+            )
+        })
     }
 
     fn home(&mut self) -> Option<String> {
-        let Some(safe) = self.safe_height() else {
-            return Some("Error with returning to home.".into());
+        let safe = match self.safe_height("returning to home") {
+            Ok(safe) => safe,
+            Err(refused) => return Some(refused),
         };
         let text = |key: &str| self.settings.text("Advanced Settings", key).unwrap_or_default();
         let lines = commands::home(&text("homeX"), &text("homeY"));
@@ -253,8 +265,9 @@ impl Machine {
     }
 
     fn return_to_center(&mut self) -> Option<String> {
-        let Some(safe) = self.safe_height() else {
-            return Some("Error with returning to center".into());
+        let safe = match self.safe_height("returning to center") {
+            Ok(safe) => safe,
+            Err(refused) => return Some(refused),
         };
         self.queue_raised(safe, commands::return_to_center());
         None

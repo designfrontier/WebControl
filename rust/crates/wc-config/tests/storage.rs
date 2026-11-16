@@ -204,3 +204,49 @@ fn a_home_that_cannot_be_prepared_still_gets_the_derived_settings_and_is_left_al
     assert_eq!(settings.value("Computed Settings", "distPerRot"), Some(&json!("57.15")));
     assert_eq!(fs::read_to_string(paths.settings_file()).unwrap(), before);
 }
+
+fn option_mut<'a>(file: &'a mut Value, section: &str, key: &str) -> &'a mut Value {
+    file[section].as_array_mut().unwrap().iter_mut().find(|o| o["key"] == key).unwrap()
+}
+
+/// Upstream #70: a desc, title or firmwareKey changed in the defaults reached only files that lacked the key.
+#[test]
+fn a_stored_option_takes_the_defaults_metadata_but_keeps_its_value() {
+    let home = tempfile::tempdir().unwrap();
+    let paths = Paths::new(home.path());
+    fs::create_dir_all(paths.dir()).unwrap();
+    let mut file: Value = serde_json::from_str(&Settings::defaults().to_python_json()).unwrap();
+    let stale = option_mut(&mut file, "Advanced Settings", "maxZRPM");
+    stale["value"] = json!("12.6");
+    stale["firmwareKey"] = json!(177);
+    stale["desc"] = json!("An older description");
+    stale["options"] = json!(["a", "b"]);
+    stale["custom"] = json!(1);
+    option_mut(&mut file, "Maslow Settings", "zAxisSafeHeight")["firmwareKey"] = json!(99);
+    file["Maslow Settings"].as_array_mut().unwrap().push(json!({"key": "legacy", "title": "Old", "value": 1}));
+    let written = python_json(&file);
+    fs::write(paths.settings_file(), &written).unwrap();
+
+    let mut settings = Settings::open(&paths).unwrap();
+    assert_eq!(fs::read_to_string(paths.settings_file()).unwrap(), written, "metadata alone makes no save");
+    assert!(!paths.settings_backup().exists());
+    let defaults = Settings::defaults();
+    let refreshed = settings.option("Advanced Settings", "maxZRPM").unwrap();
+    let default = defaults.option("Advanced Settings", "maxZRPM").unwrap();
+    assert_eq!((refreshed["firmwareKey"].clone(), refreshed["desc"].clone()), (json!(18), default["desc"].clone()));
+    assert_eq!((refreshed["value"].clone(), refreshed["custom"].clone()), (json!("12.6"), json!(1)));
+    assert!(!refreshed.contains_key("options"));
+    assert!(!settings.option("Maslow Settings", "zAxisSafeHeight").unwrap().contains_key("firmwareKey"));
+    assert_eq!(settings.option("Maslow Settings", "legacy").unwrap()["title"], "Old", "not in the defaults");
+    let keys: Vec<u32> = settings.firmware_options().map(|o| o.firmware_key).collect();
+    assert!(keys.contains(&18) && !keys.contains(&177) && !keys.contains(&99));
+
+    settings.set_value("Maslow Settings", "COMport", json!("/dev/ttyACM0"));
+    settings.save(&paths).unwrap();
+    let saved = read(&paths.settings_file());
+    let find = |section: &str, key: &str| saved[section].as_array().unwrap().iter().find(|o| o["key"] == key).cloned();
+    let max_z = find("Advanced Settings", "maxZRPM").unwrap();
+    assert_eq!((max_z["firmwareKey"].clone(), max_z["value"].clone()), (json!(18), json!("12.6")));
+    assert!(find("Maslow Settings", "zAxisSafeHeight").unwrap().get("firmwareKey").is_none());
+    assert_eq!(find("Maslow Settings", "legacy").unwrap()["title"], "Old");
+}

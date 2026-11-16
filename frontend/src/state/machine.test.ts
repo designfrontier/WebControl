@@ -58,6 +58,27 @@ describe("machineReducer socket and startup", () => {
   });
 });
 
+describe("machineReducer link state from /api/state", () => {
+  const link = { status: "connected", port: "/dev/ttyACM0", fakeServoStatus: true } as const;
+
+  it("fills in a controller still unknown", () => {
+    const state = apply([{ type: "startup", state: startupState({ connectionStatus: link }) }]);
+    expect(state.controller).toEqual({ status: "connected", port: "/dev/ttyACM0", fakeServo: true });
+  });
+
+  it("leaves a controller a push already reported, since the push may be newer", () => {
+    const state = apply([
+      message("connectionStatus", { status: "disconnected", port: "none" }),
+      { type: "startup", state: startupState({ connectionStatus: link }) },
+    ]);
+    expect(state.controller).toEqual({ status: "disconnected", port: null, fakeServo: false });
+  });
+
+  it("stays unknown when /api/state has no link state", () => {
+    expect(apply([{ type: "startup", state: startupState() }]).controller.status).toBe("unknown");
+  });
+});
+
 describe("machineReducer messages", () => {
   it("records the controller as disconnected without a port", () => {
     const state = apply([message("connectionStatus", { status: "disconnected", port: "none" })]);

@@ -1,7 +1,10 @@
 //! A line the controller never received (`spec/firmware.md` B18): no echo, no `ok`, an empty ring and a still sled
-//! for 2 s. It is sent again once; lost again, the job pauses at it. Nothing that runs a line is taken for one.
+//! in three reports past the 150 ms grace after the write. It is sent again once; lost again, the job pauses at it.
+//! Nothing that runs a line is taken for one.
 
 mod rig;
+
+use std::time::Duration;
 
 use rig::{Rig, alerts, pushed, settings, written};
 use serde_json::json;
@@ -83,10 +86,10 @@ fn lose_second_line(rig: &mut Rig, lines: &[&str]) {
     assert_eq!(ok(rig), [lines[1]]);
 }
 
-/// The line written last never arrives; 2 s of empty, still reports later it goes out again, once.
-fn resent_after_two_seconds(rig: &mut Rig, line: &str) -> Vec<Effect> {
-    assert!(written(&reports(rig, 1800, STILL, EMPTY)).is_empty(), "not before 2 s");
-    let effects = reports(rig, 600, STILL, EMPTY);
+/// The line written last never arrives; on the third empty, still report it goes out again, once.
+fn resent_after_three_reports(rig: &mut Rig, line: &str) -> Vec<Effect> {
+    assert!(written(&reports(rig, 400, STILL, EMPTY)).is_empty(), "not on two reports");
+    let effects = reports(rig, 200, STILL, EMPTY);
     assert_eq!(written(&effects), [line]);
     effects
 }
@@ -95,7 +98,7 @@ fn resent_after_two_seconds(rig: &mut Rig, line: &str) -> Vec<Effect> {
 fn a_line_the_controller_never_echoed_is_sent_again_once_and_the_job_goes_on() {
     let mut rig = Rig::connected();
     lose_second_line(&mut rig, &["G1 X1", ARC, "G1 X3"]);
-    let effects = resent_after_two_seconds(&mut rig, ARC);
+    let effects = resent_after_three_reports(&mut rig, ARC);
     let notes = controller_messages(&effects);
     assert!(notes.iter().any(|note| note.contains("Line 2") && note.contains(ARC)), "{notes:?}");
     assert!(alerts(&effects).is_empty());
@@ -108,13 +111,13 @@ fn a_line_the_controller_never_echoed_is_sent_again_once_and_the_job_goes_on() {
 fn a_status_report_that_moves_or_a_ring_that_holds_bytes_starts_the_wait_over() {
     let mut rig = Rig::connected();
     lose_second_line(&mut rig, &["G1 X1", ARC, "G1 X3"]);
-    reports(&mut rig, 1800, STILL, EMPTY);
-    rig.rx("<Idle,MPos:-140.21,25.13,-6.01,WPos:0.000,0.000,0.000>");
-    rig.rx(EMPTY);
-    reports(&mut rig, 1600, "<Idle,MPos:-140.21,25.13,-6.01,WPos:0.000,0.000,0.000>", EMPTY);
-    rig.rx("[PE:-0.00,-0.01,89,1590.41,1822.64]");
-    assert!(written(&reports(&mut rig, 1800, STILL, EMPTY)).is_empty());
-    assert_eq!(written(&reports(&mut rig, 400, STILL, EMPTY)), [ARC]);
+    let moved = "<Idle,MPos:-140.21,25.13,-6.01,WPos:0.000,0.000,0.000>";
+    let mut effects = reports(&mut rig, 400, STILL, EMPTY);
+    effects.extend(reports(&mut rig, 400, moved, EMPTY));
+    effects.extend(rig.rx("[PE:-0.00,-0.01,89,1590.41,1822.64]"));
+    effects.extend(reports(&mut rig, 400, STILL, EMPTY));
+    assert!(written(&effects).is_empty());
+    assert_eq!(written(&reports(&mut rig, 200, STILL, EMPTY)), [ARC]);
 }
 
 #[test]
@@ -127,7 +130,7 @@ fn a_long_move_is_never_taken_for_a_lost_line() {
     lose_second_line(&mut moved, &["G1 X1", "G1 X500", ARC]);
     assert!(written(&moving(&mut moved, 4000)).is_empty(), "the sled moves: it runs, echo or not");
     assert_eq!(ok(&mut rig), [ARC]);
-    resent_after_two_seconds(&mut rig, ARC);
+    resent_after_three_reports(&mut rig, ARC);
 }
 
 #[test]
@@ -137,7 +140,7 @@ fn a_dwell_is_never_taken_for_a_lost_line() {
     rig.rx("G4 P6000");
     assert!(written(&reports(&mut rig, 4600, STILL, EMPTY)).is_empty());
     assert_eq!(ok(&mut rig), [ARC]);
-    resent_after_two_seconds(&mut rig, ARC);
+    resent_after_three_reports(&mut rig, ARC);
 }
 
 #[test]
@@ -154,7 +157,7 @@ fn an_m0_pause_is_never_taken_for_a_lost_line() {
     effects.extend(rig.advance(100));
     effects.extend(rig.rx(STILL));
     ack_until(&mut rig, written(&effects), ARC);
-    resent_after_two_seconds(&mut rig, ARC);
+    resent_after_three_reports(&mut rig, ARC);
 }
 
 #[test]
@@ -165,7 +168,7 @@ fn an_m0_whose_echo_was_lost_is_never_taken_for_a_lost_line() {
     assert!(written(&reports(&mut rig, 4000, STILL, EMPTY)).is_empty());
     let mut lost = Rig::connected();
     lose_second_line(&mut lost, &["G1 X1", "M0", ARC]);
-    resent_after_two_seconds(&mut lost, "M0");
+    resent_after_three_reports(&mut lost, "M0");
 }
 
 #[test]
@@ -182,7 +185,7 @@ fn a_probe_is_never_taken_for_a_lost_line() {
     let mut lost = Rig::connected();
     let probe = written(&lost.act("touchZ"));
     assert!(probe[0].contains("G38.2"), "{probe:?}");
-    resent_after_two_seconds(&mut lost, &probe[0]);
+    resent_after_three_reports(&mut lost, &probe[0]);
     lost.rx("G90");
     lost.rx("z axis zeroed");
     let touched = lost.rx("ok");
@@ -224,16 +227,16 @@ fn a_buffered_line_written_to_an_idle_controller_is_still_resent() {
     let mut rig = buffered();
     rig.machine.load_gcode(&file(&["G1 X1"]));
     assert_eq!(written(&rig.act("startRun")), ["G1 X1"]);
-    resent_after_two_seconds(&mut rig, "G1 X1");
+    resent_after_three_reports(&mut rig, "G1 X1");
 }
 
 #[test]
 fn a_line_lost_twice_pauses_the_job_at_it_and_resume_sends_it_again() {
     let mut rig = Rig::connected();
     lose_second_line(&mut rig, &["G21", ARC, "G1 X3"]);
-    resent_after_two_seconds(&mut rig, ARC);
-    assert!(written(&reports(&mut rig, 1800, STILL, EMPTY)).is_empty());
-    let effects = reports(&mut rig, 600, STILL, EMPTY);
+    resent_after_three_reports(&mut rig, ARC);
+    assert!(written(&reports(&mut rig, 400, STILL, EMPTY)).is_empty());
+    let effects = reports(&mut rig, 200, STILL, EMPTY);
     assert!(written(&effects).is_empty(), "never a third time on its own");
     let alert = alerts(&effects);
     assert!(alert.len() == 1 && alert[0].contains(NOT_RECEIVED) && alert[0].contains(ARC), "{alert:?}");
@@ -272,10 +275,10 @@ fn resume_pressed_before_the_loss_is_seen_still_gets_the_line_sent() {
     let mut rig = Rig::connected();
     lose_second_line(&mut rig, &["G21", ARC, "G1 X3"]);
     rig.act("pauseRun");
-    reports(&mut rig, 1000, STILL, EMPTY);
+    reports(&mut rig, 400, STILL, EMPTY);
     assert_eq!(written(&rig.act("resumeRun")), ["~"]);
     rig.rx("ok");
-    let effects = reports(&mut rig, 2400, STILL, EMPTY);
+    let effects = reports(&mut rig, 600, STILL, EMPTY);
     assert_eq!(written(&effects), [ARC], "the restart waits behind it");
 }
 
@@ -283,7 +286,7 @@ fn resume_pressed_before_the_loss_is_seen_still_gets_the_line_sent() {
 fn stop_clears_a_lost_line_and_nothing_is_sent_again() {
     let mut rig = Rig::connected();
     lose_second_line(&mut rig, &["G1 X1", ARC, "G1 X3"]);
-    reports(&mut rig, 1000, STILL, EMPTY);
+    reports(&mut rig, 400, STILL, EMPTY);
     assert_eq!(written(&rig.act("stopRun")), ["!"]);
     rig.rx("ok");
     rig.rx("[Forward Calculating Position]");
@@ -291,7 +294,7 @@ fn stop_clears_a_lost_line_and_nothing_is_sent_again() {
     assert!(written(&effects).is_empty() && alerts(&effects).is_empty());
     assert!(!rig.machine.snapshot().job_in_progress);
     assert_eq!(jog(&mut rig), ["G91"]);
-    resent_after_two_seconds(&mut rig, "G91");
+    resent_after_three_reports(&mut rig, "G91");
 }
 
 #[test]
@@ -302,19 +305,20 @@ fn a_tilde_waiting_for_its_ok_holds_the_check() {
     assert_eq!(written(&rig.act("resumeRun")), ["~"]);
     assert!(written(&reports(&mut rig, 4000, STILL, EMPTY)).is_empty());
     rig.rx("ok");
-    assert_eq!(written(&reports(&mut rig, 2400, STILL, EMPTY)), [ARC]);
+    assert!(written(&reports(&mut rig, 400, STILL, EMPTY)).is_empty(), "the count starts at the `~`'s ok");
+    assert_eq!(written(&reports(&mut rig, 200, STILL, EMPTY)), [ARC]);
 }
 
 #[test]
 fn a_lost_command_is_sent_again_and_one_lost_twice_is_dropped_with_what_follows() {
     let mut rig = Rig::connected();
     assert_eq!(jog(&mut rig), ["G91"]);
-    let effects = resent_after_two_seconds(&mut rig, "G91");
+    let effects = resent_after_three_reports(&mut rig, "G91");
     assert!(controller_messages(&effects).iter().any(|note| note.contains("did not receive G91")));
     rig.rx("G91");
     assert_eq!(ok(&mut rig), ["G00 X1.0"]);
-    reports(&mut rig, 2400, STILL, EMPTY);
-    let effects = reports(&mut rig, 2400, STILL, EMPTY);
+    resent_after_three_reports(&mut rig, "G00 X1.0");
+    let effects = reports(&mut rig, 600, STILL, EMPTY);
     assert!(alerts(&effects).iter().any(|alert| alert.contains("did not receive G00 X1.0")), "{:?}", alerts(&effects));
     assert_eq!(written(&effects), ["G21"], "the firmware is set back to G21 and G90 instead of the jog's tail");
     rig.rx("G21");
@@ -333,8 +337,8 @@ fn a_restart_line_lost_twice_pauses_the_job_again() {
     effects.extend(rig.rx(STILL));
     let first = written(&effects);
     assert_eq!(first.len(), 1, "{first:?}");
-    resent_after_two_seconds(&mut rig, &first[0]);
-    let effects = reports(&mut rig, 2400, STILL, EMPTY);
+    resent_after_three_reports(&mut rig, &first[0]);
+    let effects = reports(&mut rig, 600, STILL, EMPTY);
     assert!(alerts(&effects).iter().any(|alert| alert.contains("The job is paused")), "{:?}", alerts(&effects));
     assert_eq!(written(&effects), ["G21"]);
     let snapshot = rig.machine.snapshot();
@@ -345,7 +349,7 @@ fn a_restart_line_lost_twice_pauses_the_job_again() {
 fn a_tool_change_lost_twice_still_changes_the_tool_on_resume() {
     let mut rig = Rig::connected();
     lose_second_line(&mut rig, &["G21", "T2 M6", "G1 X3"]);
-    resent_after_two_seconds(&mut rig, "T2 M6");
+    resent_after_three_reports(&mut rig, "T2 M6");
     assert!(!alerts(&reports(&mut rig, 2400, STILL, EMPTY)).is_empty());
     assert_eq!(rig.machine.snapshot().current_tool, 0, "the firmware never saw the M6");
     assert_eq!(written(&rig.act("resumeRun")), ["~"]);
@@ -359,4 +363,79 @@ fn a_tool_change_lost_twice_still_changes_the_tool_on_resume() {
     rig.rx("Tool Change: Please insert tool 2");
     rig.rx("Maslow Paused");
     assert_eq!(rig.machine.snapshot().current_tool, 2);
+}
+
+/// A one-line job; returns when its line went out.
+fn start(rig: &mut Rig) -> Duration {
+    rig.machine.load_gcode(&file(&[ARC]));
+    assert_eq!(written(&rig.act("startRun")), [ARC]);
+    rig.now
+}
+
+/// One empty, still report `ms` after the last.
+fn report(rig: &mut Rig, ms: u64) -> Vec<Effect> {
+    let mut effects = rig.advance(ms);
+    effects.extend(rig.rx(STILL));
+    effects.extend(rig.rx(EMPTY));
+    effects
+}
+
+#[test]
+fn a_lost_line_goes_out_again_on_the_third_report_under_a_second_after_the_write() {
+    let mut rig = Rig::connected();
+    let at = start(&mut rig);
+    let mut effects = report(&mut rig, 200);
+    effects.extend(report(&mut rig, 200));
+    assert!(written(&effects).is_empty(), "two reports are not enough");
+    assert_eq!(written(&report(&mut rig, 200)), [ARC]);
+    assert_eq!(rig.now - at, Duration::from_millis(600));
+}
+
+#[test]
+fn a_report_inside_the_grace_never_counts() {
+    let mut rig = Rig::connected();
+    start(&mut rig);
+    let mut effects = report(&mut rig, 60);
+    effects.extend(report(&mut rig, 80));
+    effects.extend(report(&mut rig, 200));
+    effects.extend(report(&mut rig, 200));
+    assert!(written(&effects).is_empty(), "the reports 60 and 140 ms after the write say nothing");
+    assert_eq!(written(&report(&mut rig, 200)), [ARC]);
+    let mut edge = Rig::connected();
+    start(&mut edge);
+    let mut effects = report(&mut edge, 150);
+    effects.extend(report(&mut edge, 200));
+    assert!(written(&effects).is_empty());
+    assert_eq!(written(&report(&mut edge, 200)), [ARC], "a report 150 ms after the write counts");
+}
+
+#[test]
+fn a_late_echo_never_sends_the_line_again() {
+    let mut rig = Rig::connected();
+    start(&mut rig);
+    report(&mut rig, 100);
+    rig.advance(40);
+    rig.rx(ARC);
+    assert!(written(&reports(&mut rig, 4000, STILL, EMPTY)).is_empty(), "echoed 140 ms after the write");
+    let mut late = Rig::connected();
+    start(&mut late);
+    report(&mut late, 200);
+    report(&mut late, 200);
+    late.rx(ARC);
+    assert!(written(&reports(&mut late, 4000, STILL, EMPTY)).is_empty(), "echoed after two empty reports");
+}
+
+#[test]
+fn a_garbled_report_or_a_ring_holding_bytes_starts_the_count_over() {
+    ["<Idle,MPos:-140.2", "[PE:-0.00,-0.0", "[PE:-0.00,-0.01,89,1590.41,1822.64]"].iter().for_each(|line| {
+        let mut rig = Rig::connected();
+        start(&mut rig);
+        let mut effects = report(&mut rig, 200);
+        effects.extend(report(&mut rig, 200));
+        effects.extend(rig.rx(line));
+        effects.extend(report(&mut rig, 200));
+        effects.extend(report(&mut rig, 200));
+        assert!(written(&effects).is_empty(), "{line}");
+        assert_eq!(written(&report(&mut rig, 200)), [ARC], "{line}");
+    });
 }

@@ -5,9 +5,12 @@ use std::time::Duration;
 
 use wc_firmware::boot::firmware_build;
 use wc_firmware::settings::{
-    WRITE_ONLY_KEY, boot_push, boot_sync, reinitialises_axes, setting_key, skip_held_reinit_keys,
+    Correction, WRITE_ONLY_KEY, adopted_text, boot_push, boot_sync, corrections, reinitialises_axes, setting_key,
+    skip_held_reinit_keys,
 };
 use wc_firmware::upgrade::migration_push;
+
+use wc_protocol::main::ControllerMessage;
 
 use crate::machine::{Effect, Link, Machine, Queued, alert, broadcast};
 
@@ -22,6 +25,8 @@ const NOT_RESTARTED: &str = "The controller did not restart after its chain-over
 const STILL_DIFFERS: &str = "The controller still reports a different chain-over-sprocket setting ($38) after \
                              restarting, so WebControl did not write it again. Check Advanced Settings, then restart \
                              the controller.";
+const PID_REPAIRED: &str = "The controller held PID values its firmware ignores, which leave the motors unable to \
+                            move, so WebControl wrote its own:";
 const JOB_HOLDS: &str = "The chain-over-sprocket setting ($38) was not sent: writing it re-initialises the motors, \
                          so the controller has to restart. Stop the job first.";
 
@@ -58,6 +63,9 @@ impl Machine {
         if self.restart == Restart::Booted {
             self.restart = Restart::None;
         }
+        if migration.is_none() && !eeprom_reset {
+            self.announce_writes(&push.lines, &reported, effects);
+        }
         push.adopted.into_iter().for_each(|(section, key, value)| self.set_setting(&section, &key, value));
         // `$13` alone needs no read-back: the controller already reported it.
         let verify = push.lines.iter().any(|line| setting_key(line) != Some(WRITE_ONLY_KEY));
@@ -69,6 +77,22 @@ impl Machine {
             .for_each(|text| self.controller.queue.push_front(Queued::Line { text, boot: true }));
         if eeprom_reset && migration.is_none() {
             effects.push(alert(EEPROM_RESTORED));
+        }
+    }
+
+    /// Tells the user what each write changes on the controller, with an alert for PID values it repairs.
+    pub(crate) fn announce_writes(&self, lines: &[String], reported: &[(u32, f64)], effects: &mut Vec<Effect>) {
+        let corrections = corrections(&self.settings, self.firmware_version, lines, reported);
+        let change = |c: &Correction| format!("${} ({}) was {}", c.key, c.setting, adopted_text(c.controller));
+        corrections.iter().for_each(|c| {
+            let text = format!("Settings sync: {} on the controller; WebControl wrote {}.", change(c), c.written);
+            tracing::info!("{text}");
+            effects.push(broadcast(&ControllerMessage(text)));
+        });
+        let repairs: Vec<String> =
+            corrections.iter().filter(|c| c.repair).map(|c| format!("{}, now {}.", change(c), c.written)).collect();
+        if !repairs.is_empty() {
+            effects.push(alert(&format!("{PID_REPAIRED} {}", repairs.join(" "))));
         }
     }
 

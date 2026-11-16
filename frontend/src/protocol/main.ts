@@ -122,6 +122,8 @@ export const startupStateSchema = z.object({
   /** A G38.2 probe is queued or descending. Rust only; Python never sends it. */
   probing: z.boolean().default(false),
   hostAddress: z.string(),
+  /** The link as `connectionStatus` last pushed it, for a client that missed that push. Absent from Python. */
+  connectionStatus: mainMessages.connectionStatus.optional(),
   /** 0 until the controller reports its version on connect. */
   controllerFirmwareVersion: z.number().default(0),
   /** The controller's boot banner, such as "PCB v1.6 TLE9201 Detected"; null until it boots on this connection. */

@@ -342,7 +342,9 @@ impl Sim {
 
     /// Runs one line; `None` when it never acks.
     fn execute(&mut self, line: &str, out: &mut Vec<String>) -> Option<u64> {
-        let text = line.trim();
+        // `prettyReadLine`: trimmed and upper-cased before parsing.
+        let upper = line.trim().to_ascii_uppercase();
+        let text = upper.as_str();
         if text == "$$" {
             out.extend(self.settings.iter().map(|(key, value)| format!("${key}={value:.8}")));
             return Some(0);

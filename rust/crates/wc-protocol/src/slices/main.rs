@@ -318,6 +318,8 @@ pub struct StartupState {
     /// A G38.2 probe is queued or descending (Rust only).
     pub probing: bool,
     pub host_address: String,
+    /// The link as `connectionStatus` last pushed it, for a client that missed that push.
+    pub connection_status: ConnectionStatus,
     pub controller_firmware_version: f64,
     pub controller_board: Option<String>,
     pub firmware_build: Option<String>,

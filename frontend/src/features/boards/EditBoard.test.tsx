@@ -49,6 +49,30 @@ describe("Create or edit board", () => {
     await expectPath("/");
   });
 
+  it("posts decimal commas as points and keeps commas in the name", async () => {
+    const { user, edit } = setup();
+    await user.clear(await screen.findByLabelText("Board ID"));
+    await user.type(field("Board ID"), "Shelf, left");
+    await user.clear(field("Thickness"));
+    await user.type(field("Thickness"), "0,75");
+    await user.clear(field("Center X"));
+    await user.type(field("Center X"), "-1,5");
+    await user.click(screen.getByRole("button", { name: "Save board" }));
+
+    expect(edit.forms()).toEqual([
+      expect.objectContaining({ boardID: "Shelf, left", thickness: "0.75", centerX: "-1.5", centerY: "0" }),
+    ]);
+  });
+
+  it("refuses a measurement with mixed separators", async () => {
+    const { user, edit } = setup();
+    await user.clear(await screen.findByLabelText("Width"));
+    await user.type(field("Width"), "1.234,5");
+    await user.click(screen.getByRole("button", { name: "Save board" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Fix the highlighted fields.");
+    expect(edit.calls).toEqual([]);
+  });
+
   it("flags measurements that are missing, not numbers or not positive", async () => {
     const { user, edit } = setup();
     await user.clear(await screen.findByLabelText("Width"));

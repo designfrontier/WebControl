@@ -25,6 +25,9 @@ const isForSomeoneElse = (data: unknown, ownId: string | undefined) => {
   return client !== "all" && client !== ownId;
 };
 
+/** Enough for the connect-time burst and a few seconds of pushes. */
+const EARLY_LIMIT = 256;
+
 export const createClient = (socket: Transport): WebControlClient => {
   const handlers = new Map<string, Set<Handler>>();
   const statusListeners = new Set<(status: ConnectionStatus) => void>();
@@ -48,9 +51,28 @@ export const createClient = (socket: Transport): WebControlClient => {
     listeners.forEach((handler) => (handler as (data: unknown) => void)(parsed.data));
   };
 
-  socket.on("message", (raw: never) => dispatch(raw));
+  // The store binds in an effect, after the socket opens; what arrives before anyone listens is replayed to them.
+  const early: unknown[] = [];
+  let listening = false;
+  const hold = (raw: unknown) => {
+    early.push(raw);
+    if (early.length > EARLY_LIMIT) early.shift();
+  };
+  const replayEarly = () => early.splice(0).forEach(dispatch);
+
+  const received = (raw: unknown) => {
+    if (!listening) return hold(raw);
+    replayEarly();
+    dispatch(raw);
+  };
+
+  socket.on("message", (raw: never) => received(raw));
   socket.on("connect", () => setStatus("connected"));
-  socket.on("disconnect", () => setStatus("disconnected"));
+  socket.on("disconnect", () => {
+    // A held message from a dropped connection is stale; the next connect pushes it again.
+    early.length = 0;
+    setStatus("disconnected");
+  });
   socket.on("connect_error", () => setStatus("disconnected"));
 
   const emit = <E extends ClientEvent>(event: E, payload: ClientEvents[E]) => {
@@ -65,6 +87,8 @@ export const createClient = (socket: Transport): WebControlClient => {
       const set = handlers.get(command) ?? new Set<Handler>();
       set.add(handler as Handler);
       handlers.set(command, set);
+      if (!listening) queueMicrotask(replayEarly);
+      listening = true;
       return () => {
         set.delete(handler as Handler);
       };

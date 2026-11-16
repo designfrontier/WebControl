@@ -17,6 +17,8 @@ pub struct Rig {
     pub now: Duration,
     /// Every line written and not yet answered by `answer_until_quiet`.
     outbox: Vec<String>,
+    /// Every effect since the last `take_effects`.
+    log: Vec<Effect>,
 }
 
 pub fn settings(changes: &[(&str, &str, Value)]) -> Settings {
@@ -79,7 +81,12 @@ pub fn action(command: &str, arg: Value, arg1: Value) -> Event {
 
 impl Rig {
     pub fn with(settings: Settings) -> Rig {
-        Rig { machine: Machine::new("10.0.0.5:5000", settings), now: Duration::ZERO, outbox: Vec::new() }
+        Rig {
+            machine: Machine::new("10.0.0.5:5000", settings),
+            now: Duration::ZERO,
+            outbox: Vec::new(),
+            log: Vec::new(),
+        }
     }
 
     pub fn new() -> Rig {
@@ -89,7 +96,12 @@ impl Rig {
     pub fn send(&mut self, event: Event) -> Vec<Effect> {
         let effects = self.machine.handle_inline(event, self.now);
         self.outbox.extend(written(&effects));
+        self.log.extend(effects.iter().cloned());
         effects
+    }
+
+    pub fn take_effects(&mut self) -> Vec<Effect> {
+        std::mem::take(&mut self.log)
     }
 
     pub fn rx(&mut self, line: &str) -> Vec<Effect> {

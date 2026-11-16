@@ -60,6 +60,28 @@
     "hostAddress": {
       "type": "string"
     },
+    "connectionStatus": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "connected",
+            "disconnected"
+          ]
+        },
+        "port": {
+          "type": "string"
+        },
+        "fakeServoStatus": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "status",
+        "port"
+      ]
+    },
     "controllerFirmwareVersion": {
       "default": 0,
       "type": "number"

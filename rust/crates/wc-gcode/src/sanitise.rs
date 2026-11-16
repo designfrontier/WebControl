@@ -13,9 +13,10 @@ pub fn strip_comments(line: &str) -> String {
 }
 
 /// `_sanitise`: comments removed, then every character the firmware would act on as a realtime command anywhere in
-/// a line (`!`, `~`, backtick, `?`), and every control character.
+/// a line (`!`, `~`, backtick, `?`), and every control character; upper-cased, as the firmware reads every line.
 pub fn sanitise(line: &str) -> String {
-    strip_comments(line).chars().filter(|&c| !matches!(c, '!' | '~' | '`' | '?' | '\x00'..='\x1f' | '\x7f')).collect()
+    let code = strip_comments(line).to_ascii_uppercase();
+    code.chars().filter(|&c| !matches!(c, '!' | '~' | '`' | '?' | '\x00'..='\x1f' | '\x7f')).collect()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -85,7 +86,14 @@ mod tests {
     fn comments_and_realtime_characters_are_removed() {
         assert_eq!(strip_comments("G1 X1 (a) ; b"), "G1 X1  ");
         assert_eq!(sanitise("G1 X1 ! ~ ` ? (c)\t\x01\x7f"), "G1 X1     ");
-        assert_eq!(sanitise("G1 X1 (open"), "G1 X1 (open");
+        assert_eq!(sanitise("G1 X1 (open"), "G1 X1 (OPEN");
+    }
+
+    #[test]
+    fn a_line_is_upper_cased_as_the_firmware_reads_it_but_its_comments_are_gone_first() {
+        assert_eq!(sanitise("g20 (inch) ; Mm"), "G20  ");
+        assert_eq!(sanitise("$rst=$"), "$RST=$");
+        assert_eq!(sanitise("g0 xü1").len(), "g0 xü1".len());
     }
 
     #[test]

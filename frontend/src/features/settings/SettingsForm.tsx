@@ -6,7 +6,7 @@ import { errorBodySchema, settingsRejectionSchema } from "../../protocol";
 import { selectGcodeLocked } from "../../state/machine";
 import type { SettingsSection } from "../../protocol";
 import { saveSettingsSection } from "./api";
-import { changedValues, initialValues, isLocked, validate } from "./form";
+import { changedValues, initialValues, isLocked, toSend, validate } from "./form";
 import type { FieldValue, FormErrors } from "./form";
 import { SettingField } from "./SettingField";
 
@@ -66,7 +66,7 @@ export const SettingsForm = ({ section, onSaved }: Props) => {
     if (Object.keys(found).length > 0) return setNotice({ tone: "bad", text: "Fix the highlighted settings." });
     setSaving(true);
     try {
-      const saved = await saveSettingsSection(fetchImpl, section.id, changes);
+      const saved = await saveSettingsSection(fetchImpl, section.id, toSend(section, changes));
       const fresh = initialValues(saved.settings);
       setInitial(fresh);
       setValues(fresh);

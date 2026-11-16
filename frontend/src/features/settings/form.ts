@@ -1,3 +1,4 @@
+import { decimalPoint } from "../../numbers/decimal";
 import type { Setting, SettingsSection } from "../../protocol";
 
 export type FieldValue = string | boolean;
@@ -53,9 +54,18 @@ export const validateValue = (setting: Setting, value: FieldValue): string | und
     ? undefined
     : setting.type === "int" && !WHOLE_NUMBER.test(value)
       ? "Enter a whole number"
-      : setting.numeric && !isFiniteNumber(value)
+      : setting.numeric && !isFiniteNumber(decimalPoint(value))
         ? "Enter a number"
         : undefined;
+
+/** The values as the server wants them: numeric settings with a decimal comma get a point. */
+export const toSend = (section: SettingsSection, values: FormValues): FormValues =>
+  Object.fromEntries(
+    Object.entries(values).map(([key, value]) => {
+      const numeric = section.settings.some((setting) => setting.key === key && setting.numeric);
+      return [key, numeric && typeof value === "string" ? decimalPoint(value) : value];
+    }),
+  );
 
 /** Errors for the editable settings present in `values` (the changes), keyed by setting key. */
 export const validate = (section: SettingsSection, values: FormValues): FormErrors =>

@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use serde_json::Value;
-use wc_config::Settings;
+use wc_config::{Imported, Settings};
 use wc_gcode::board::{Board, BoardEdit, BoardTrim};
 use wc_gcode::preview::{self, Move};
 use wc_gcode::{GcodeError, load, py};
@@ -21,6 +21,7 @@ pub const GCODE_LOCKED: &str = "Cannot load gcode while a job is running or paus
 pub const SETTINGS_LOCKED: &str = "Cannot change settings while a job is running or paused. Stop the job first.";
 pub const SEND_LOCKED: &str = "Cannot send gcode while a job is running or paused. Stop the job first.";
 const PROBING: &str = "Wait for Touch Z to finish or press Stop";
+const IMPORT_NOTES: &str = "The import did not take every value as written.";
 
 /// The 3D preview: the gzip `gcodeUpdateCompressed` sends, `None` until a file is first loaded.
 #[derive(Debug, Clone, PartialEq)]
@@ -460,6 +461,13 @@ impl Machine {
         Reply::Done
     }
 
+    fn imported(&mut self, imported: Imported, effects: &mut Vec<Effect>) -> Reply {
+        if !imported.notes.is_empty() {
+            effects.push(alert(&format!("{IMPORT_NOTES} {}", imported.notes.join(" "))));
+        }
+        if imported.changed { self.settings_replaced() } else { Reply::Done }
+    }
+
     /// Decision 2: nothing but the job reaches the controller or the settings while the job holds the gcode.
     fn job_lock(&self, request: &Request) -> Option<&'static str> {
         let refused = match request {
@@ -506,7 +514,7 @@ impl Machine {
                 }
             },
             Request::ImportIni(text) => match Arc::make_mut(&mut self.settings).import_ini(&text) {
-                Some(()) => self.settings_replaced(),
+                Some(imported) => self.imported(imported, effects),
                 None => {
                     self.settings_dirty = true;
                     self.problem(Problem::ImportUnreadable, effects);
@@ -514,8 +522,7 @@ impl Machine {
                 }
             },
             Request::ImportWebControl(value) => match Arc::make_mut(&mut self.settings).import_webcontrol(&value) {
-                Some(true) => self.settings_replaced(),
-                Some(false) => Reply::Done,
+                Some(imported) => self.imported(imported, effects),
                 None => {
                     self.problem(Problem::ImportUnreadable, effects);
                     Reply::Failed

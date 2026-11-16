@@ -1,3 +1,4 @@
+import { decimalPoint } from "../../numbers/decimal";
 import type { KinematicsType, QuickConfigure } from "../../protocol";
 
 export const KINEMATICS_OPTIONS: { value: KinematicsType; label: string; image?: string }[] = [
@@ -38,7 +39,7 @@ export const toForm = (values: QuickConfigure): QuickConfigureForm => ({
 });
 
 const parseMm = (text: string) => {
-  const trimmed = text.trim();
+  const trimmed = decimalPoint(text.trim());
   const value = Number(trimmed);
   return trimmed !== "" && Number.isFinite(value) && value >= 0 ? value : null;
 };
@@ -53,9 +54,9 @@ export const fromForm = (form: QuickConfigureForm): QuickConfigure | null =>
     ? null
     : {
         ...form,
-        rotationRadius: Number(form.rotationRadius),
-        motorSpacingX: Number(form.motorSpacingX),
-        motorOffsetY: Number(form.motorOffsetY),
+        rotationRadius: Number(decimalPoint(form.rotationRadius)),
+        motorSpacingX: Number(decimalPoint(form.motorSpacingX)),
+        motorOffsetY: Number(decimalPoint(form.motorOffsetY)),
       };
 
 export const withKinematics = (form: QuickConfigureForm, kinematicsType: KinematicsType): QuickConfigureForm => {

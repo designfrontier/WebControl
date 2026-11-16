@@ -58,6 +58,8 @@ fn moves_follow_units_and_positioning_and_ack_when_done() {
     assert_eq!(send(&mut sim, "G20\nG90 G0 X1 Z0.5\n"), ["ok", "ok"]);
     assert_eq!(sim.position(), [25.4, -5.0, 12.7]);
     assert_eq!(sim.status(), "<Idle,MPos:1.00,-0.20,0.50,WPos:0.000,0.000,0.000>");
+    assert_eq!(send(&mut sim, "g21\ng91 g0 x-25.4\n"), ["ok", "ok"], "lower case runs as upper case");
+    assert_eq!(sim.position(), [0.0, -5.0, 12.7]);
     assert_eq!(send(&mut sim, "G10 Z0\n"), ["ok"]);
     assert_eq!(sim.position()[2], 0.0);
     assert_eq!(send(&mut sim, "G17 G0 X1\n"), ["Command G17 unsupported and ignored.", "ok"]);
