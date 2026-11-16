@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use serde_json::Value;
-use wc_config::python_float_str;
+use wc_config::{python_float_str, python_str};
 use wc_firmware::settings::setting_line;
 use wc_protocol::main::{HomePositionMessage, PauseButton, RequestedSetting, Units};
 use wc_protocol::{Action, float};
@@ -232,13 +232,22 @@ impl Machine {
         None
     }
 
-    fn safe_height(&self) -> Option<f64> {
-        float(self.settings.value("Maslow Settings", "zAxisSafeHeight")?)
+    /// The safe height, or why there is none, naming the setting and what it holds.
+    fn safe_height(&self, moving: &str) -> Result<f64, String> {
+        let stored = self.settings.value("Maslow Settings", "zAxisSafeHeight");
+        stored.and_then(float).ok_or_else(|| {
+            let held = stored.map(python_str).unwrap_or_default();
+            format!(
+                "Set the Z-axis safe height (Maslow Settings, zAxisSafeHeight) to a number before {moving}, so the \
+                 bit rises before it moves. It holds \"{held}\"."
+            )
+        })
     }
 
     fn home(&mut self) -> Option<String> {
-        let Some(safe) = self.safe_height() else {
-            return Some("Error with returning to home.".into());
+        let safe = match self.safe_height("returning to home") {
+            Ok(safe) => safe,
+            Err(refused) => return Some(refused),
         };
         let text = |key: &str| self.settings.text("Advanced Settings", key).unwrap_or_default();
         let lines = commands::home(&text("homeX"), &text("homeY"));
@@ -253,8 +262,9 @@ impl Machine {
     }
 
     fn return_to_center(&mut self) -> Option<String> {
-        let Some(safe) = self.safe_height() else {
-            return Some("Error with returning to center".into());
+        let safe = match self.safe_height("returning to center") {
+            Ok(safe) => safe,
+            Err(refused) => return Some(refused),
         };
         self.queue_raised(safe, commands::return_to_center());
         None

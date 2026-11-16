@@ -68,9 +68,21 @@ fn home_and_center_rise_to_the_safe_height_first() {
     assert_eq!(rig.run_to_quiet(), ["G90", "G00 Z5.0", "G00 X12.5 Y0.0", "G00 Z0"]);
     rig.act("returnToCenter");
     assert_eq!(rig.run_to_quiet(), ["G90", "G00 Z5.0", "G00 X0.0 Y0.0"]);
-    let mut broken = Rig::connected_with(settings(&[("Maslow Settings", "zAxisSafeHeight", json!("high"))]));
-    assert_eq!(alerts(&broken.act("home")), ["Error with returning to home."]);
-    assert_eq!(alerts(&broken.act("returnToCenter")), ["Error with returning to center"]);
+}
+
+/// Upstream #135: a hand-edited `0,01` used to answer only "Error with returning to home."
+#[test]
+fn home_and_center_name_the_safe_height_they_cannot_read() {
+    let mut broken = Rig::connected_with(settings(&[("Maslow Settings", "zAxisSafeHeight", json!("0,01"))]));
+    let refusal = |moving: &str| {
+        format!(
+            "Set the Z-axis safe height (Maslow Settings, zAxisSafeHeight) to a number before {moving}, so the bit \
+             rises before it moves. It holds \"0,01\"."
+        )
+    };
+    assert_eq!(alerts(&broken.act("home")), [refusal("returning to home")]);
+    assert_eq!(alerts(&broken.act("returnToCenter")), [refusal("returning to center")]);
+    assert!(broken.run_to_quiet().is_empty());
 }
 
 #[test]
