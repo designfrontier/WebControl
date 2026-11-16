@@ -11,8 +11,12 @@ use crate::gpio::Led;
 use crate::job::{Flow, pause_button};
 use crate::machine::{Effect, Machine, broadcast};
 
-/// Ten status reports in a row; the owner's 51.27 echoes a line about 20 ms after it is written.
-pub const LOST_AFTER: Duration = Duration::from_secs(2);
+/// The firmware reads serial into its ring before every report and a line is under 10 ms on the wire, so a later
+/// report shows the line in the ring or follows its echo (the owner's 51.27 echoes about 20 ms after the write).
+pub const GRACE: Duration = Duration::from_millis(150);
+
+/// Reports past `GRACE` in a row, so one garbled or glued report is never enough.
+pub const LOST_AFTER: u32 = 3;
 
 const NOT_RECEIVED: &str = "Line Not Received";
 
@@ -23,8 +27,10 @@ pub(crate) struct Watch {
     heard: bool,
     /// MPos in the latest status report.
     still_at: Option<(f64, f64, f64)>,
-    /// The first report of the current run with an empty ring, a still sled and nothing written.
-    since: Option<Duration>,
+    /// When the latest line went out.
+    written_at: Option<Duration>,
+    /// Reports past `GRACE` in a row with an empty ring and a still sled.
+    empty: u32,
     /// A line went out while another waited for its ack, so an `ok` may belong to a line it is not counted for.
     crowded: bool,
     /// Lines sent again once, by the id they went out with the second time.
@@ -34,44 +40,47 @@ pub(crate) struct Watch {
 impl Watch {
     /// A write starts the wait over; what the controller said before a write to an idle controller was about
     /// lines already answered.
-    pub fn written(&mut self, idle: bool) {
-        self.since = None;
+    pub fn written(&mut self, idle: bool, now: Duration) {
+        self.empty = 0;
+        self.written_at = Some(now);
         self.heard &= !idle;
         self.crowded = !idle;
     }
 
     pub fn realtime_written(&mut self) {
-        self.since = None;
+        self.empty = 0;
     }
 
     /// A `~`'s ack says nothing about the line the firmware runs.
     pub fn acked(&mut self, sent: Option<&Sent>) {
-        self.since = None;
+        self.empty = 0;
         if let Some(sent) = sent.filter(|sent| sent.text.is_some()) {
             self.heard = false;
             self.resent.retain(|&id| id != sent.id);
         }
     }
 
-    /// True once the oldest unacknowledged line has been missing from the controller for `LOST_AFTER`.
+    /// True once `LOST_AFTER` reports in a row say the unacknowledged lines never reached the controller.
     pub fn read(&mut self, reply: &Reply, now: Duration) -> bool {
         match reply {
-            Reply::Ok | Reply::Error(_) | Reply::Misread(_) => self.since = None,
+            Reply::Ok | Reply::Error(_) | Reply::Misread(_) => self.empty = 0,
             Reply::Status(status) => {
                 let at = Some((status.x, status.y, status.z));
                 if status.mode != RunMode::Idle || at != self.still_at {
-                    self.since = None;
+                    self.empty = 0;
                 }
                 self.still_at = at;
             }
             Reply::PositionError(error) if error.space == EMPTY_RING && self.still_at.is_some() => {
-                let since = *self.since.get_or_insert(now);
-                return !self.heard && now.saturating_sub(since) >= LOST_AFTER;
+                if self.written_at.is_none_or(|at| now.saturating_sub(at) >= GRACE) {
+                    self.empty = self.empty.saturating_add(1);
+                }
+                return !self.heard && self.empty >= LOST_AFTER;
             }
-            Reply::PositionError(_) => self.since = None,
+            Reply::PositionError(_) => self.empty = 0,
             _ => {
                 self.heard = true;
-                self.since = None;
+                self.empty = 0;
             }
         }
         false
@@ -142,7 +151,7 @@ impl Machine {
         let idle = self.controller.accounting.is_empty();
         let id = self.controller.accounting.sent(&text, sent.index);
         self.controller.watch.resent.push(id);
-        self.controller.watch.written(idle);
+        self.controller.watch.written(idle, now);
         self.controller.ready = false;
         self.controller.last_write = Some(now);
         if let Some(probe) = self.controller.probe.as_mut().filter(|probe| probe.id == sent.id) {

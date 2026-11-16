@@ -291,11 +291,16 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
 18. Lost lines (2026-11-15): on the owner's cut a line Rust wrote never reached the firmware (no echo, no `ok`,
     `[PE:]` space 127 and MPos unchanged for 44 s), and Rust waited for its `ok` until Stop; Python had the same
     blind spot. Unacknowledged lines are lost when, since the last ack, the controller has printed nothing but
-    status reports (no echo, no message) and for 2 s every report showed an empty ring (space 127), the same MPos
-    and `Idle`, with no `~` awaiting its `ok`, no `Maslow Paused` or Z prompt, and no boot or resync (§1, §2: a
-    line in the ring keeps space under 127, a line that runs has been echoed, a running move changes MPos). 2 s
-    is ten reports; 51.27 echoes about 20 ms after a write. They were never run, so each goes out again once, as
-    written, with a controller message naming it; the 126-byte accounting forgets the lost ones first. A job line
+    status reports (no echo, no message) and three reports in a row, each read at least 150 ms after the latest
+    write, showed an empty ring (space 127), the same MPos and `Idle`, with no `~` awaiting its `ok`, no `Maslow
+    Paused` or Z prompt, and no boot or resync (§1, §2: a line in the ring keeps space under 127, a line that runs
+    has been echoed, a running move changes MPos). The firmware reads the port into the ring before every report
+    (§2) and a line is under 10 ms on the wire at 57600 baud, so a report made after the bytes arrived shows space
+    under 127 or follows the echo; reports within 150 ms of the write are ignored all the same, and three are
+    needed so one garbled or glued report is never enough. Detection comes about 0.6–0.8 s after the write. On
+    the owner's two cuts (3247 lines sent) 51.27 echoed or answered every line it received within 40 ms (about
+    20 ms typically), and the rule finds all 11 lost lines and no other. They were never run, so each goes out
+    again once, as written, with a controller message naming it; the 126-byte accounting forgets the lost ones first. A job line
     lost again pauses the job at it (`Line Not Received`) and Resume returns to the file there and sends it; a
     command lost again is dropped with the commands queued after it, `G20`/`G21` and `G90` are written to put
     the firmware back in step, and a job in progress pauses. A job the user paused waits at the lost line for
