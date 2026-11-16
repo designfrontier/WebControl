@@ -1,16 +1,22 @@
-/* About 70% viewer, 30% controls; both fill the height and nothing scrolls but the message list. */
+/* Landscape: the viewer over the controller messages, the controls down the right; nothing scrolls but the panels. */
 .control-screen {
   display: grid;
-  grid-template-columns: minmax(0, 7fr) minmax(360px, 3fr);
+  grid-template-columns: minmax(0, 1fr) clamp(340px, 30vw, 420px);
+  grid-template-rows: minmax(0, auto) minmax(7.5rem, 1fr);
+  grid-template-areas:
+    "viewer controls"
+    "console controls";
   gap: var(--space-3);
   height: 100%;
   padding: var(--space-3);
 }
 
-.control-panel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+.control-screen > .viewer {
+  grid-area: viewer;
+}
+
+.control-panel,
+.control-screen > .console {
   min-height: 0;
   padding: var(--space-3);
   border: 1px solid var(--line);
@@ -18,7 +24,37 @@
   background: var(--surface);
 }
 
-.control-panel h2 {
+.control-panel {
+  display: flex;
+  grid-area: controls;
+  flex-direction: column;
+  gap: var(--space-3);
+  overflow-y: auto;
+}
+
+.control-screen > .console {
+  grid-area: console;
+}
+
+/* Spare height goes to bigger jog buttons, up to a point. */
+.control-jog {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: 20rem;
+}
+
+.jog {
+  flex: 1;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.jog-grid {
+  grid-auto-rows: minmax(var(--control), 1fr);
+}
+
+.control-screen h2 {
   margin: 0;
   font-size: 1.1rem;
 }
@@ -121,6 +157,7 @@ button.side-button:not(:disabled),
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
+  min-height: calc(var(--control) - 8px);
   padding: 0 var(--space-3);
   border: 1px solid var(--ok);
   border-radius: var(--radius);
@@ -251,10 +288,10 @@ button.caution:not(:disabled) {
   min-height: 0;
 }
 
-/* The log gives up height first, down to about one message, so a short window keeps Play on screen. */
+/* The log gives up height first, down to two messages. */
 .console ol {
   flex: 1;
-  min-height: calc(1.5em + 2 * var(--space-2) + 2px);
+  min-height: calc(2 * 1.45em + 2 * var(--space-2) + 2px);
   margin: 0;
   padding: var(--space-2);
   overflow-y: auto;
@@ -282,10 +319,66 @@ button.caution:not(:disabled) {
   flex: 1 1 auto;
 }
 
+/* Tall landscape windows: the messages run under both, so the viewer gets the controls' height. */
+@media (orientation: landscape) and (min-height: 900px) {
+  .control-screen {
+    grid-template-rows: auto minmax(7.5rem, 1fr);
+    grid-template-areas:
+      "viewer controls"
+      "console console";
+  }
+}
+
+/* Portrait tablets: the viewer across the top, jog beside run, then the readouts and messages, all on one screen. */
+@media (orientation: portrait) and (min-width: 701px) {
+  .control-screen {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: minmax(0, auto) auto auto minmax(7rem, 1fr);
+    grid-template-areas:
+      "viewer viewer"
+      "jog run"
+      "readouts readouts"
+      "console console";
+  }
+
+  .control-panel {
+    display: contents;
+  }
+
+  .control-jog,
+  .run,
+  .readouts {
+    padding: var(--space-3);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+
+  .control-jog {
+    grid-area: jog;
+  }
+
+  .run {
+    grid-area: run;
+    align-content: start;
+  }
+
+  .readouts {
+    grid-area: readouts;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.4fr);
+  }
+
+  .readouts .wide {
+    grid-column: span 2;
+  }
+}
+
 /* Phones: the viewer above the controls, the page scrolls, and the file with Play / Pause / Stop stays pinned below. */
-@media (max-width: 900px) {
+@media (max-width: 700px), (max-height: 500px) {
   .control-screen {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas: "viewer" "controls" "console";
     height: auto;
     padding: var(--space-2) var(--space-2) calc(var(--tap) + 3.2rem + 3 * var(--space-2));
   }

@@ -27,8 +27,15 @@
   white-space: nowrap;
 }
 
+/* A finger leaves no cursor to report. */
+@media (hover: none) {
+  .viewer-readout:not(.viewer-line) {
+    display: none;
+  }
+}
+
 .viewer-line {
-  flex: 1 1 12em;
+  flex: 1 1 5em;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -40,10 +47,12 @@
   color: var(--accent-ink);
 }
 
+/* Shaped like the bed, so the drawing fills it; the layout may squeeze it shorter, never taller. */
 .viewer-stage {
   position: relative;
-  flex: 1;
-  min-height: 260px;
+  flex: 1 1 auto;
+  min-height: 160px;
+  aspect-ratio: var(--stage-aspect, 2);
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -152,14 +161,7 @@
   color: var(--danger);
 }
 
-/* Phones: no spare height to fill, so the stage keeps close to the 2:1 bed. */
-@media (max-width: 900px) {
-  .viewer-stage {
-    flex: none;
-    aspect-ratio: 3 / 2;
-    min-height: 0;
-  }
-
+@media (max-width: 700px), (max-height: 500px) {
   .viewer-toolbar button {
     min-height: var(--tap);
   }
