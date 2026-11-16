@@ -50,7 +50,8 @@
     {"type": "rx", "line": "[Measure: 1791.79]"},
     {"type": "rx", "line": "ok"},
     {"type": "expect", "emitted": [{"command": "opticalScanProgress", "data": {"state": "orienting", "cell": {"i": 0, "j": 0}}}], "comment": "the camera check reports as orienting while it moves, settles and looks"},
-    {"type": "tx", "bytes": "G1 X5.0 Y0.0 F500.0 \n", "comment": "after the 0.5 s settle and the camera's look"},
+    {"type": "tick", "seconds": 0.5, "comment": "the 0.5 s settle; the camera then looks"},
+    {"type": "tx", "bytes": "G1 X5.0 Y0.0 F500.0 \n", "comment": "after the settle and the camera's look"},
     {"type": "rx", "line": "G1 X5.0 Y0.0 F500.0"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "B10 L \n"},
@@ -89,6 +90,6 @@
     {"type": "tx", "bytes": "G90 \n", "comment": "the scan is done; the positioning mode it found comes back"},
     {"type": "rx", "line": "G90"},
     {"type": "rx", "line": "ok"},
-    {"type": "expect", "state": {"units": "MM", "positioningMode": "G90", "uploadFlag": 0}, "emitted": [{"command": "opticalScanProgress", "data": {"state": "done", "done": 2, "total": 2}}], "noAlerts": [{}]}
+    {"type": "expect", "state": {"units": "MM", "positioningMode": "G90", "uploadFlag": 0}, "emitted": [{"command": "opticalScanProgress", "data": {"state": "done", "done": 2, "total": 2}}], "noAlerts": [{"message": ""}]}
   ]
 }
