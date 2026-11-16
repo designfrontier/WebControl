@@ -286,6 +286,22 @@ fn a_jump_trips_the_step_limit_and_skip_moves_on() {
 }
 
 #[test]
+fn a_measurement_or_orientation_that_is_not_a_number_never_reaches_the_controller() {
+    let mut world = World::new();
+    world.lens = |square, sled, n| if n < 3 { true_lens(square, sled, n) } else { (f64::NAN, 0.0) };
+    world.scan(&[(0, 0)]);
+    world.run(3000);
+    assert_eq!(world.alerts(), [format!("{} Press Retry, Skip or Stop.", optical::NOT_A_NUMBER)]);
+    let mut turned = World::new();
+    turned.orientation = Orientation { rotation_deg: f64::NAN, ..UPRIGHT };
+    turned.scan(&[(0, 0)]);
+    turned.run(3000);
+    assert_eq!(turned.last_state(), "failed");
+    let moves = [world.moves(), turned.moves()].concat();
+    assert!(moves.iter().all(|line| !line.to_lowercase().contains("nan")), "{moves:?}");
+}
+
+#[test]
 fn a_square_that_never_centres_fails_after_six_attempts_and_retry_starts_again() {
     let mut world = World::new();
     world.lens = |square, sled, n| if n < 3 { true_lens(square, sled, n) } else { (0.5, 0.0) };

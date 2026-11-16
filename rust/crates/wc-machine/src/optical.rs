@@ -31,6 +31,8 @@ pub const NOTHING_MEASURED: &str = "Nothing has been measured yet. Scan the targ
 pub const NOTHING_TO_ACCEPT: &str = "There is no fitted geometry to accept. Scan the target and press Fit first.";
 pub const JOB_RUNNING: &str = "Stop the job before running optical calibration.";
 pub const NOT_CONNECTED: &str = "The controller is not connected.";
+/// A measurement that is not a number would reach the controller as `G1 Xnan`.
+pub const NOT_A_NUMBER: &str = "The camera's measurement was not a number.";
 pub const NO_SAFE_HEIGHT: &str = "Set the Z-axis safe height to a number, so the bit rises before the scan moves.";
 pub const ATTEMPTS: u32 = 6;
 pub const MAX_STEP_MM: f64 = 10.0;
@@ -429,6 +431,10 @@ impl Machine {
     }
 
     fn optical_measured(&mut self, measurement: Measurement, now: Duration, effects: &mut Vec<Effect>) {
+        let m = &measurement;
+        if ![m.dx_mm, m.dy_mm, m.centre_px.x, m.centre_px.y].iter().all(|v| v.is_finite()) {
+            return self.optical_fail(NOT_A_NUMBER.into(), effects);
+        }
         let Some(scan) = self.optical.scan.as_mut() else { return };
         if let Some(seen) = scan.orienting.as_mut() {
             seen.push(measurement);
@@ -495,6 +501,7 @@ impl Machine {
 
     fn optical_oriented(&mut self, orientation: Orientation, now: Duration, effects: &mut Vec<Effect>) {
         let problem = match orientation {
+            o if !(o.rotation_deg.is_finite() && o.px_per_mm.is_finite()) => Some(NOT_A_NUMBER.to_string()),
             o if o.mirrored => {
                 Some("The camera's image is mirrored. Mount it so the image is not flipped.".to_string())
             }
