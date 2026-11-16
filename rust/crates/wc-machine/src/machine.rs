@@ -296,6 +296,8 @@ pub(crate) struct Controller {
     pub raise_deadline: Option<Duration>,
     /// Stop's `!` makes the firmware reload its position; that reload's unplaceable-sled message does not hold.
     pub stop_reload: bool,
+    /// Whether the line it waits for ever reached the controller.
+    pub watch: crate::lost::Watch,
 }
 
 impl Controller {
@@ -320,6 +322,7 @@ impl Controller {
             buffering: false,
             raise_deadline: None,
             stop_reload: false,
+            watch: crate::lost::Watch::default(),
         }
     }
 }
