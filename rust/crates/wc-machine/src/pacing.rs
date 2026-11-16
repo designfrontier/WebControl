@@ -240,7 +240,7 @@ pub(crate) struct Stats {
 
 impl Stats {
     pub fn new(pacing: Pacing) -> Stats {
-        let mut stats = Stats {
+        Stats {
             pacing,
             in_job: false,
             job: None,
@@ -258,9 +258,7 @@ impl Stats {
                 segment: None,
                 history: Vec::new(),
             }),
-        };
-        stats.shown = Arc::new(stats.report(Duration::ZERO));
-        stats
+        }
     }
 
     pub fn pacing(&self) -> Pacing {
