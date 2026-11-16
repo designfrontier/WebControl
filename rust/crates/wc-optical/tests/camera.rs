@@ -161,12 +161,8 @@ fn rpicam_decodes_frames_waits_until_the_deadline_and_stops_its_process() {
     std::fs::write(scratch.0.join("1.jpg"), jpeg(90)).unwrap();
     let mut rpicam = fake_rpicam(&scratch.0, "sleep 0.3; cat \"$D/1.jpg\"; exec sleep 30");
     rpicam.start(&CameraConfig { width: 32, height: 24, fps: 5.0 }).unwrap();
-    match rpicam.next_frame(Instant::now() + Duration::from_secs(5)) {
-        Ok(frame) => assert_eq!((frame.width, frame.height), (32, 24)),
-        // Track A's decoder lands separately; until then the JPEG still arrives whole.
-        Err(OpticalError::NotImplemented(what)) => assert_eq!(what, "Frame::decode"),
-        Err(other) => panic!("{other}"),
-    }
+    let frame = rpicam.next_frame(Instant::now() + Duration::from_secs(5)).unwrap();
+    assert_eq!((frame.width, frame.height), (32, 24));
     let waited = Instant::now();
     assert_eq!(rpicam.next_jpeg(Instant::now() + Duration::from_millis(200)), Err(OpticalError::NoFrame));
     assert!(waited.elapsed() >= Duration::from_millis(200));
