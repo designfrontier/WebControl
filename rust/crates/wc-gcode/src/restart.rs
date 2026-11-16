@@ -35,6 +35,9 @@ pub struct GcodeState {
     pub spindle_speed: Option<f64>,
     pub laser: Option<&'static str>,
     pub dwell: Option<String>,
+    /// The file moves X or Y relatively before it first sets that axis absolutely, and has not set it by this
+    /// line, so the axis counts from wherever the file started, which a restart cannot know.
+    pub xy_unknown: bool,
 }
 
 pub fn units_word(units: Units) -> &'static str {
@@ -57,13 +60,24 @@ pub fn state_at(
     before.iter().enumerate().try_for_each(|(line_index, line)| {
         parser.line(line).map_err(|()| GcodeError::Unreadable { index: line_index })
     })?;
+    let mut ahead = parser.clone();
+    let _ = lines[index..].iter().try_for_each(|line| match ahead.first_relative {
+        [Some(_), Some(_)] => Err(()),
+        _ => ahead.line(line),
+    });
+    let unplaced_relative = |axis: usize| !parser.placed[axis] && ahead.first_relative[axis] == Some(true);
+    parser.state.xy_unknown = unplaced_relative(0) || unplaced_relative(1);
     Ok(parser.state)
 }
 
+#[derive(Clone)]
 struct StateParser {
     state: GcodeState,
     home: (f64, f64),
     next_tool: Option<i64>,
+    /// Per axis (X, Y): set absolutely, and whether the axis's first word was relative.
+    placed: [bool; 2],
+    first_relative: [Option<bool>; 2],
 }
 
 impl StateParser {
@@ -83,12 +97,13 @@ impl StateParser {
             spindle_speed: None,
             laser: None,
             dwell: None,
+            xy_unknown: false,
         };
-        StateParser { state, home: (home_x, home_y), next_tool: None }
+        StateParser { state, home: (home_x, home_y), next_tool: None, placed: [false; 2], first_relative: [None; 2] }
     }
 
     fn line(&mut self, raw: &str) -> Result<(), ()> {
-        let line = words::blank_comments(raw);
+        let line = words::code(raw);
         if py::isspace(&line) {
             return Ok(());
         }
@@ -158,12 +173,15 @@ impl StateParser {
         let relative = state.positioning == Positioning::Relative;
         if line.contains('X') {
             let x = word(line, 'X')?;
-            state.x = if relative { state.x + x } else { x + self.home.0 };
+            self.state.x = if relative { self.state.x + x } else { x + self.home.0 };
+            self.moved(0, relative);
         }
         if line.contains('Y') {
             let y = word(line, 'Y')?;
-            state.y = if relative { state.y + y } else { y + self.home.1 };
+            self.state.y = if relative { self.state.y + y } else { y + self.home.1 };
+            self.moved(1, relative);
         }
+        let state = &mut self.state;
         if has(38.2) {
             // A touching probe zeroes Z; a miss holds the job at the probe line.
             state.z = Some(0.0);
@@ -183,6 +201,11 @@ impl StateParser {
             }
         }
         Ok(())
+    }
+
+    fn moved(&mut self, axis: usize, relative: bool) {
+        self.first_relative[axis].get_or_insert(relative);
+        self.placed[axis] |= !relative;
     }
 }
 
@@ -582,6 +605,38 @@ mod tests {
         assert_eq!(tool_of(&["G21", "T2", "M6", "T5", "G0 X1"]), Some(2));
         assert_eq!(tool_of(&["G21", "G0 X1 T4", "M6", "G0 X1"]), Some(4));
         assert_eq!(tool_of(&["G21", "M6"]), None);
+    }
+
+    #[test]
+    fn a_lower_case_file_is_read_as_the_firmware_upper_cases_it() {
+        let lines = ["g20", "g90", "t2 m6", "g0 x1 y2", "m3 s1000", "g1 z-0.1 f10", "g91", "g1 x1", "g1 x1"];
+        let state = state_at(&file(&lines), 8, 0.0, 0.0, Units::Mm).unwrap();
+        assert_eq!(
+            (state.units, state.positioning, state.x, state.z),
+            (Units::Inches, Positioning::Relative, 2.0, Some(-0.1))
+        );
+        assert_eq!((state.tool, state.spindle, state.spindle_speed), (Some(2), Some("M3 "), Some(1000.0)));
+        assert!(restart_with(&lines, 8, (0.0, 0.0), Units::Mm, 2).contains(&"M3 ".into()));
+    }
+
+    #[test]
+    fn xy_is_unknown_once_a_relative_move_comes_before_an_absolute_one() {
+        let unknown = |lines: &[&str]| state_at(&file(lines), lines.len(), 0.0, 0.0, Units::Mm).unwrap().xy_unknown;
+        assert!(unknown(&["G91", "G1 X1 Y1", "G1 X1"]));
+        assert!(unknown(&["G90", "G0 X1", "G91", "G1 Y1"]));
+        assert!(!unknown(&["G90", "G0 X1 Y1", "G91", "G1 X1 Y1"]));
+        assert!(!unknown(&["G91", "G1 X1 Y1", "G90", "G0 X0 Y0", "G91", "G1 X1"]));
+        assert!(!unknown(&["G91", "G1 Z-1", "G90"]));
+        assert!(!unknown(&["G90", "G4 P1"]));
+    }
+
+    #[test]
+    fn xy_is_unknown_before_a_g91_file_first_moves_x_or_y() {
+        let unknown_at = |lines: &[&str], index| state_at(&file(lines), index, 0.0, 0.0, Units::Mm).unwrap().xy_unknown;
+        assert!(unknown_at(&["G91", "G1 Z-1", "G1 X1 Y1"], 2));
+        assert!(unknown_at(&["G90", "G0 X1", "G91", "G1 Z-1", "G1 Y1"], 4));
+        assert!(!unknown_at(&["G91", "G1 Z-1", "G90", "G0 X1 Y1", "G91", "G1 X1"], 2));
+        assert!(!unknown_at(&["G90", "G1 Z-1", "G0 X1 Y1"], 2));
     }
 
     #[test]

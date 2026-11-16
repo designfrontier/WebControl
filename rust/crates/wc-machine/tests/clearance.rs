@@ -428,8 +428,8 @@ fn a_report_from_before_a_line_it_cannot_follow_is_stale() {
 #[test]
 fn a_resume_refused_and_pressed_again_still_lowers_to_the_paused_z() {
     let mut rig = Rig::connected();
-    let lines = ["G21", "G91", "G0 Z5", "G0 X10 Y10", "G1 Z-6 F100", "G1 X10", "G1 X10"];
-    pause_at(&mut rig, &lines, 6);
+    let lines = ["G21", "G90", "G0 X0 Y0", "G91", "G0 Z5", "G0 X10 Y10", "G1 Z-6 F100", "G1 X10", "G1 X10"];
+    pause_at(&mut rig, &lines, 8);
     rig.act("touchZ");
     rig.run_to_quiet();
     rig.act("resumeRun");

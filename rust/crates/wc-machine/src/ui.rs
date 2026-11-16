@@ -84,6 +84,7 @@ impl Machine {
     /// `setPosOnScreen`: sent only when the sled moved, plus once after it stops.
     pub(crate) fn status_report(&mut self, status: Status, now: std::time::Duration, effects: &mut Vec<Effect>) {
         self.bit.reported(status.z);
+        self.sled.reported(status.x, status.y);
         let axes = [("x", status.x), ("y", status.y), ("z", status.z)].map(|(axis, value)| {
             if value.is_nan() {
                 effects.push(broadcast(&wc_protocol::main::ControllerMessage(format!(
@@ -195,6 +196,7 @@ impl Machine {
         ];
         self.push_gcode_position_to(sid, &mut pushes);
         self.gcode_update_requested(&mut pushes);
+        self.push_gcode_name(&mut pushes);
         self.push_board(&mut pushes);
         effects.extend(pushes.into_iter().map(|effect| match effect {
             Effect::Push(push) => Effect::Push(push.to_client(sid)),

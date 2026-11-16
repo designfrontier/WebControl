@@ -18,7 +18,7 @@ pub fn find_position_at(lines: &[String], index: usize) -> Result<Position, Gcod
     let mut position = Position { x: 0.0, y: 0.0, z: 0.0, feed_rate: None };
     let mut positioning = Positioning::Absolute;
     before.iter().enumerate().try_for_each(|(line_index, raw)| {
-        let line = words::blank_comments(raw);
+        let line = words::code(raw);
         if py::isspace(&line) {
             return Ok(());
         }
@@ -74,6 +74,7 @@ pub fn word(line: &str, letter: char) -> Result<Option<f64>, Unreadable> {
 
 /// `sendGCodePositionUpdate` without recalculating: the target of one streamed line, from the one before it.
 pub fn line_target(previous: Position, positioning: Positioning, line: &str) -> Result<Position, Unreadable> {
+    let line = &line.to_ascii_uppercase();
     let relative = positioning == Positioning::Relative;
     let axis = |letter: char, before: f64| -> Result<f64, Unreadable> {
         Ok(word(line, letter)?.map_or(before, |value| if relative { before + value } else { value }))
@@ -127,5 +128,14 @@ mod tests {
         assert_eq!(relative, Position { x: 5.0, y: 3.0, z: 2.0, feed_rate: Some(300.0) });
         assert!(line_target(start, Positioning::Absolute, "G1 X. ").is_err());
         assert_eq!(word("G1 Z-1.5 ", 'Z'), Ok(Some(-1.5)));
+    }
+
+    #[test]
+    fn lower_case_words_are_read_as_the_firmware_reads_them() {
+        let start = Position { x: 1.0, y: 2.0, z: 3.0, feed_rate: None };
+        let moved = line_target(start, Positioning::Absolute, "g1 x5 z-1 f300 ").unwrap();
+        assert_eq!(moved, Position { x: 5.0, y: 2.0, z: -1.0, feed_rate: Some(300.0) });
+        let lines = file(&["g0 x10 y20", "g91", "g1 x1 y1", "g90 g0 z2"]);
+        assert_eq!(find_position_at(&lines, 4).unwrap(), Position { x: 11.0, y: 21.0, z: 2.0, feed_rate: None });
     }
 }

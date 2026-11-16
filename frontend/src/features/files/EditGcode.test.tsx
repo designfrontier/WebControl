@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { fakeFetch } from "../../test/fakeFetch";
 import { expectPath, pending, recorder } from "../../test/filesBoards";
@@ -18,8 +18,30 @@ describe("View or edit gcode", () => {
     expect(editor).toHaveValue("G21\nG0 X1 Y1\nG1 Z-1");
     expect(editor).toHaveAttribute("spellcheck", "false");
     expect(editor).toHaveAttribute("wrap", "off");
-    expect(editor).toHaveAccessibleDescription(/^3 lines\. Applying replaces the loaded gcode/);
+    expect(editor).toHaveAccessibleDescription(
+      /^3 lines\. Line numbers match Go to line.* Applying replaces the loaded gcode/,
+    );
     expect(screen.getByRole("button", { name: "Apply changes" })).toBeDisabled();
+  });
+
+  it("numbers the loaded program's lines beside the editor, hidden from assistive tech", async () => {
+    const { user } = setup();
+    const editor = await screen.findByLabelText("Loaded gcode");
+    const gutter = screen.getByText("1 2 3");
+    expect(gutter).toHaveAttribute("aria-hidden", "true");
+    expect(editor).toHaveAccessibleDescription(/Line numbers match Go to line; blank lines in the file are dropped/);
+
+    await user.type(editor, "\nM2");
+    expect(gutter).toHaveTextContent("1 2 3 4");
+  });
+
+  it("keeps the line numbers level with the text while it scrolls", async () => {
+    setup(recorder(), Array.from({ length: 200 }, (_, i) => `G0 X${i}`).join("\n"));
+    const editor = await screen.findByLabelText("Loaded gcode");
+    const gutter = screen.getByText(/^1 2 3 .* 200$/);
+    editor.scrollTop = 840;
+    fireEvent.scroll(editor);
+    expect(gutter.scrollTop).toBe(840);
   });
 
   it("applies edits without trailing blank lines and returns to the control screen", async () => {

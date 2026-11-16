@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useClient, useMachine, useServerMessage } from "../../app/context";
 import { StopButton } from "../../app/StopButton";
+import { LoadedFile } from "../files/LoadedFile";
 import type { ControlAvailability } from "./controls";
 import { useDraft } from "./hooks";
 
@@ -52,19 +53,22 @@ export const RunPanel = ({ available, lineIndex }: Props) => {
           </>
         )}
       </div>
-      <div className="run-buttons">
-        <button type="button" className="go" disabled={!available.play} onClick={() => client.sendAction("startRun")}>
-          Play
-        </button>
-        <button
-          type="button"
-          className="caution"
-          disabled={!available.pause}
-          onClick={() => client.sendAction(pauseButton === "Pause" ? "pauseRun" : "resumeRun")}
-        >
-          {pauseButton}
-        </button>
-        <StopButton />
+      <div className="run-dock">
+        <LoadedFile className="run-file" />
+        <div className="run-buttons">
+          <button type="button" className="go" disabled={!available.play} onClick={() => client.sendAction("startRun")}>
+            Play
+          </button>
+          <button
+            type="button"
+            className="caution"
+            disabled={!available.pause}
+            onClick={() => client.sendAction(pauseButton === "Pause" ? "pauseRun" : "resumeRun")}
+          >
+            {pauseButton}
+          </button>
+          <StopButton />
+        </div>
       </div>
       <div className="step-buttons" role="group" aria-label="Step through gcode">
         {STEPS.map(({ command, delta, label, text }) => (

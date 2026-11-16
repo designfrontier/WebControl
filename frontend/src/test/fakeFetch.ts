@@ -28,6 +28,7 @@ export const startupState = (over: Partial<StartupState> = {}): StartupState => 
   controllerFirmwareVersion: 0,
   controllerBoard: null,
   firmwareBuild: null,
+  gcodeFile: null,
   macros: [
     { command: "macro1", title: "Macro 1" },
     { command: "macro2", title: "Macro 2" },

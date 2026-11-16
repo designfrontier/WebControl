@@ -1,6 +1,7 @@
 //! What a streamed line goes through before it is written (`SerialPortThread._sanitise` and `_problemWith`): its
 //! comments and realtime characters removed, and a refusal for a line the controller cannot safely take.
 
+use crate::arc::ArcProblem;
 use crate::shift::{HomeShift, shift_to_home};
 use crate::{Positioning, py, words};
 
@@ -13,9 +14,10 @@ pub fn strip_comments(line: &str) -> String {
 }
 
 /// `_sanitise`: comments removed, then every character the firmware would act on as a realtime command anywhere in
-/// a line (`!`, `~`, backtick, `?`), and every control character.
+/// a line (`!`, `~`, backtick, `?`), and every control character; upper-cased, as the firmware reads every line.
 pub fn sanitise(line: &str) -> String {
-    strip_comments(line).chars().filter(|&c| !matches!(c, '!' | '~' | '`' | '?' | '\x00'..='\x1f' | '\x7f')).collect()
+    let code = strip_comments(line).to_ascii_uppercase();
+    code.chars().filter(|&c| !matches!(c, '!' | '~' | '`' | '?' | '\x00'..='\x1f' | '\x7f')).collect()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,6 +26,8 @@ pub enum LineProblem {
     UnclosedComment,
     /// The ring overflows and the firmware then runs the line's unread tail as a command.
     TooLong { written: usize },
+    /// An arc that cannot be rewritten as I and J with absolute X and Y.
+    Arc(ArcProblem),
 }
 
 impl LineProblem {
@@ -31,6 +35,7 @@ impl LineProblem {
         match self {
             LineProblem::UnclosedComment => "Unclosed Comment",
             LineProblem::TooLong { .. } => "Too Long",
+            LineProblem::Arc(problem) => problem.title(),
         }
     }
 
@@ -41,6 +46,7 @@ impl LineProblem {
             LineProblem::TooLong { written } => {
                 format!("is {written} characters; the controller accepts at most {BUFFER_SIZE}.")
             }
+            LineProblem::Arc(problem) => problem.reason().to_string(),
         }
     }
 
@@ -52,6 +58,7 @@ impl LineProblem {
                 "Resume stops here again: stop the job, fix the file (e.g. enable Truncate Floating Point Numbers) \
                  and load it again."
             }
+            LineProblem::Arc(problem) => problem.advice(),
         };
         (format!("Line {}", self.title()), format!("Line {} {} {advice}", index + 1, self.reason()))
     }
@@ -85,7 +92,14 @@ mod tests {
     fn comments_and_realtime_characters_are_removed() {
         assert_eq!(strip_comments("G1 X1 (a) ; b"), "G1 X1  ");
         assert_eq!(sanitise("G1 X1 ! ~ ` ? (c)\t\x01\x7f"), "G1 X1     ");
-        assert_eq!(sanitise("G1 X1 (open"), "G1 X1 (open");
+        assert_eq!(sanitise("G1 X1 (open"), "G1 X1 (OPEN");
+    }
+
+    #[test]
+    fn a_line_is_upper_cased_as_the_firmware_reads_it_but_its_comments_are_gone_first() {
+        assert_eq!(sanitise("g20 (inch) ; Mm"), "G20  ");
+        assert_eq!(sanitise("$rst=$"), "$RST=$");
+        assert_eq!(sanitise("g0 xü1").len(), "g0 xü1".len());
     }
 
     #[test]
@@ -131,6 +145,15 @@ mod tests {
             LineProblem::TooLong { written: 127 }.alert(0).1,
             "Line 1 is 127 characters; the controller accepts at most 126. Resume stops here again: stop the job, \
              fix the file (e.g. enable Truncate Floating Point Numbers) and load it again."
+        );
+        assert_eq!(
+            LineProblem::Arc(ArcProblem::RadiusTooSmall).alert(2),
+            (
+                "Line Impossible Arc".to_string(),
+                "Line 3 is an arc whose radius (R) is shorter than half the distance to its end. Resume stops here \
+                 again: stop the job, fix the file and load it again."
+                    .to_string()
+            )
         );
     }
 }

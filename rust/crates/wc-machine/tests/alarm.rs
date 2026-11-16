@@ -169,7 +169,16 @@ fn a_jog_queued_behind_a_move_never_moves_after_an_alarm() {
     assert_eq!(written(&rig.advance(60)), ["G00 X10.0"]);
     rig.act_with("move", json!("up"), json!("10"));
     rig.rx(SLED_NOT_KEEPING_UP);
-    let after = reports_for(&mut rig, 3000);
+    let after: Vec<String> = (0..15)
+        .flat_map(|_| {
+            let lines = reports_for(&mut rig, 200);
+            lines.iter().for_each(|line| {
+                rig.rx(line);
+                rig.rx("ok");
+            });
+            lines
+        })
+        .collect();
     assert!(after.iter().all(|line| !line.contains(['X', 'Y', 'Z'])), "{after:?}");
     assert_eq!(after.last().map(String::as_str), Some("G90"), "the jogs' G90 leaves the firmware absolute");
     assert_eq!(rig.machine.snapshot().positioning, wc_gcode::Positioning::Absolute);

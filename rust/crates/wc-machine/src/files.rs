@@ -1,17 +1,17 @@
 //! The loaded gcode and the board (`File/gcodeFile.py`, `Boards/boardManager.py`): what the file routes load, the
 //! preview the viewer draws, and the actions that move through the file or mark the board.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use serde_json::Value;
-use wc_config::Settings;
+use wc_config::{Imported, Settings};
 use wc_gcode::board::{Board, BoardEdit, BoardTrim};
 use wc_gcode::preview::{self, Move};
 use wc_gcode::{GcodeError, load, py};
 use wc_protocol::boards::BoardDataUpdate;
 use wc_protocol::files::UpdateDirectories;
-use wc_protocol::main::{ActivateModal, Units};
+use wc_protocol::main::{ActivateModal, GcodeFile, Units};
 use wc_protocol::{Envelope, Push};
 
 use crate::machine::{Effect, Machine, alert, broadcast};
@@ -21,6 +21,7 @@ pub const GCODE_LOCKED: &str = "Cannot load gcode while a job is running or paus
 pub const SETTINGS_LOCKED: &str = "Cannot change settings while a job is running or paused. Stop the job first.";
 pub const SEND_LOCKED: &str = "Cannot send gcode while a job is running or paused. Stop the job first.";
 const PROBING: &str = "Wait for Touch Z to finish or press Stop";
+const IMPORT_NOTES: &str = "The import did not take every value as written.";
 
 /// The 3D preview: the gzip `gcodeUpdateCompressed` sends, `None` until a file is first loaded.
 #[derive(Debug, Clone, PartialEq)]
@@ -204,6 +205,25 @@ impl Machine {
         effects.push(Effect::Push(Push::message(Envelope::base64("gcodeUpdateCompressed", compressed))));
     }
 
+    /// The loaded file's path in the library, with `/` between its parts; `None` while no gcode is loaded.
+    pub(crate) fn gcode_name(&self) -> Option<String> {
+        let file = self.gcode_file.as_deref().filter(|_| !self.gcode.is_empty())?;
+        let relative = self.library.as_deref().and_then(|root| file.strip_prefix(root).ok());
+        let parts = relative.unwrap_or_else(|| file.file_name().map_or(file, Path::new));
+        let name = parts.iter().map(|part| part.to_string_lossy()).collect::<Vec<_>>().join("/");
+        (!name.is_empty()).then_some(name)
+    }
+
+    pub(crate) fn push_gcode_name(&self, effects: &mut Vec<Effect>) {
+        effects.push(broadcast(&GcodeFile { file: self.gcode_name() }));
+    }
+
+    fn push_gcode_name_if_changed(&self, before: Option<String>, effects: &mut Vec<Effect>) {
+        if self.gcode_name() != before {
+            self.push_gcode_name(effects);
+        }
+    }
+
     pub(crate) fn push_board(&self, effects: &mut Vec<Effect>) {
         effects.push(broadcast(&BoardDataUpdate(self.workpiece.info())));
         effects.push(Effect::Push(Push::message(Envelope::int("showFPSpinner", 1))));
@@ -270,7 +290,7 @@ impl Machine {
         if let Some(text) = &gcode.too_large {
             effects.push(alert(text));
         }
-        let index = self.index;
+        let (index, name) = (self.index, self.gcode_name());
         self.install(gcode);
         self.index = match origin {
             Origin::Edit => index.min(self.gcode.len().saturating_sub(1)),
@@ -283,6 +303,7 @@ impl Machine {
         if origin != Origin::Open {
             self.push_gcode(effects);
         }
+        self.push_gcode_name_if_changed(name, effects);
         Reply::Done
     }
 
@@ -290,9 +311,11 @@ impl Machine {
         if self.gcode_locked() {
             return Some(GCODE_LOCKED.into());
         }
+        let name = self.gcode_name();
         self.install(Gcode::empty(self.units()));
         self.index = 0;
         self.push_gcode(effects);
+        self.push_gcode_name_if_changed(name, effects);
         None
     }
 
@@ -360,7 +383,9 @@ impl Machine {
             }
         };
         if matches!(problem, Problem::GcodeUnreadable | Problem::GcodeUnsaved) {
+            let name = self.gcode_name();
             self.gcode_file = None;
+            self.push_gcode_name_if_changed(name, effects);
         }
         effects.push(alert(text));
     }
@@ -436,6 +461,13 @@ impl Machine {
         Reply::Done
     }
 
+    fn imported(&mut self, imported: Imported, effects: &mut Vec<Effect>) -> Reply {
+        if !imported.notes.is_empty() {
+            effects.push(alert(&format!("{IMPORT_NOTES} {}", imported.notes.join(" "))));
+        }
+        if imported.changed { self.settings_replaced() } else { Reply::Done }
+    }
+
     /// Decision 2: nothing but the job reaches the controller or the settings while the job holds the gcode.
     fn job_lock(&self, request: &Request) -> Option<&'static str> {
         let refused = match request {
@@ -482,7 +514,7 @@ impl Machine {
                 }
             },
             Request::ImportIni(text) => match Arc::make_mut(&mut self.settings).import_ini(&text) {
-                Some(()) => self.settings_replaced(),
+                Some(imported) => self.imported(imported, effects),
                 None => {
                     self.settings_dirty = true;
                     self.problem(Problem::ImportUnreadable, effects);
@@ -490,8 +522,7 @@ impl Machine {
                 }
             },
             Request::ImportWebControl(value) => match Arc::make_mut(&mut self.settings).import_webcontrol(&value) {
-                Some(true) => self.settings_replaced(),
-                Some(false) => Reply::Done,
+                Some(imported) => self.imported(imported, effects),
                 None => {
                     self.problem(Problem::ImportUnreadable, effects);
                     Reply::Failed

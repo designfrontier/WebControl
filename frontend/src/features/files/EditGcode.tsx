@@ -29,7 +29,7 @@ const EditForm = ({ initial }: { initial: string }) => {
         label="Loaded gcode"
         value={text}
         onChange={setText}
-        hint="Applying replaces the loaded gcode; use Save as to keep it in a file."
+        hint="Line numbers match Go to line; blank lines in the file are dropped. Applying replaces the loaded gcode; use Save as to keep it in a file."
       />
       <FormError message={error} />
       {locked && <p className="muted">A job is running or paused. Stop the job first to apply changes.</p>}

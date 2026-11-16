@@ -98,13 +98,42 @@
   border-color: var(--danger);
 }
 
+.fb .code-frame {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.fb .code-gutter,
 .fb .code-editor {
-  width: 100%;
-  min-height: 50vh;
   font-family: var(--mono);
   font-size: 0.9rem;
   line-height: 1.4;
   white-space: pre;
+}
+
+/* Height 0 keeps the numbers from stretching the textarea; the bottom padding lets the gutter scroll as far as a
+   textarea with a horizontal scrollbar. */
+.fb .code-gutter {
+  height: 0;
+  min-height: 100%;
+  margin: 0;
+  padding: var(--space-2) var(--space-2) calc(var(--space-2) + 2rem);
+  overflow: hidden;
+  border-right: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  text-align: right;
+  user-select: none;
+}
+
+.fb .code-frame .code-editor {
+  width: 100%;
+  min-height: 50vh;
+  border: 0;
+  border-radius: 0;
   overflow: auto;
   resize: vertical;
 }

@@ -9,6 +9,7 @@ use flate2::write::GzEncoder;
 use serde::Serialize;
 use wc_protocol::main::Units;
 
+use crate::arc::{RADIUS_TOLERANCE_MM, centre_from_radius};
 use crate::load::unreadable_word;
 use crate::{py, words};
 
@@ -58,6 +59,7 @@ pub fn render(lines: &[String], machine: Units) -> Preview {
         position: [0.0; 3],
         scale: if machine == Units::Mm { MILLIMETERS } else { 1.0 },
         relative: false,
+        arcs_relative: false,
         prepend: "G00 ".to_string(),
         tool: 0,
         file_units: machine,
@@ -71,10 +73,21 @@ pub fn render(lines: &[String], machine: Units) -> Preview {
 
 pub fn too_large_alert(count: usize) -> String {
     format!(
-        "The current file contains {count} lines of gcode.  Rendering all {count} lines simultaneously may crash the \
-         program, therefore, only the first {MAX_LINES}lines are shown here.  The complete program will cut if you \
-         choose to do so unless the home position is moved from (0,0)."
+        "The file has {} lines of gcode. The preview shows only the first {} lines; the whole file still runs.",
+        grouped(count),
+        grouped(MAX_LINES)
     )
+}
+
+fn grouped(count: usize) -> String {
+    let digits = count.to_string();
+    digits.char_indices().fold(String::new(), |mut out, (i, digit)| {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(digit);
+        out
+    })
 }
 
 /// The gzipped JSON `gcodeUpdateCompressed` sends.
@@ -92,6 +105,8 @@ struct Drawing {
     position: [f64; 3],
     scale: f64,
     relative: bool,
+    /// A real G91 (not G91.1, which Python's `relative` also takes, nor ended by G90.1); arcs go out relative to it.
+    arcs_relative: bool,
     prepend: String,
     tool: i64,
     file_units: Units,
@@ -113,8 +128,9 @@ fn from_char(text: &str, c: char) -> String {
 }
 
 impl Drawing {
+    /// Upper-cased before it is split at its G words, so `g90 g0 x1` is two commands, as the firmware reads it.
     fn line(&mut self, raw: &str) {
-        let text = words::replace_semicolons(&words::replace_parens(raw, "\n"), "\n");
+        let text = py::upper(&words::replace_semicolons(&words::replace_parens(raw, "\n"), "\n"));
         let parts: Vec<&str> = text.split('G').collect();
         if parts.len() > 1 {
             parts.iter().filter(|part| !part.is_empty()).for_each(|part| self.command(&format!("G{part}")));
@@ -153,8 +169,14 @@ impl Drawing {
                 self.scale = MILLIMETERS;
                 self.file_units = Units::Mm;
             }
-            "G90" => self.relative = false,
-            "G91" => self.relative = true,
+            "G90" => {
+                self.relative = false;
+                self.arcs_relative = self.arcs_relative && !words::numbers('G', &full).contains(&90.0);
+            }
+            "G91" => {
+                self.relative = true;
+                self.arcs_relative = self.arcs_relative || words::numbers('G', &full).contains(&91.0);
+            }
             _ => {}
         }
         let t_word = from_char(&full, 'T');
@@ -219,20 +241,36 @@ impl Drawing {
         let [x0, y0, z0] = self.position;
         let mut target = self.position;
         let mut centre_offset = [0.0, 0.0];
-        if let Some(x) = self.value(line, 'X') {
-            target[0] = x * self.scale;
+        let (x, y) = (self.value(line, 'X'), self.value(line, 'Y'));
+        let (i, j) = (self.value(line, 'I'), self.value(line, 'J'));
+        let radius = if i.is_none() && j.is_none() { self.value(line, 'R') } else { None };
+        // Drawn as WebControl writes it: a G91 arc goes out with absolute X and Y, so it ends where the file means.
+        let from = |start: f64| if self.arcs_relative { start } else { 0.0 };
+        if let Some(x) = x {
+            target[0] = from(x0) + x * self.scale;
         }
-        if let Some(y) = self.value(line, 'Y') {
-            target[1] = y * self.scale;
+        if let Some(y) = y {
+            target[1] = from(y0) + y * self.scale;
         }
-        if let Some(i) = self.value(line, 'I') {
+        if let Some(i) = i {
             centre_offset[0] = i * self.scale;
         }
-        if let Some(j) = self.value(line, 'J') {
+        if let Some(j) = j {
             centre_offset[1] = j * self.scale;
         }
         if let Some(z) = self.value(line, 'Z') {
             target[2] = z * self.scale;
+        }
+        if let Some(radius) = radius {
+            let tolerance = RADIUS_TOLERANCE_MM * MILLIMETERS;
+            let Ok(centre) =
+                centre_from_radius([x0, y0], [target[0], target[1]], radius * self.scale, clockwise, tolerance)
+            else {
+                self.warnings.push(format!("Preview skipped an arc its radius does not define: {}", line.trim_end()));
+                self.position = target;
+                return;
+            };
+            centre_offset = [centre[0] - x0, centre[1] - y0];
         }
         let radius = (centre_offset[0].powi(2) + centre_offset[1].powi(2)).sqrt();
         let (centre_x, centre_y) = (x0 + centre_offset[0], y0 + centre_offset[1]);
@@ -382,6 +420,35 @@ mod tests {
         assert_eq!(cw_full.moves[0].points.len(), 1 + 63 + 1);
     }
 
+    fn same_moves(a: &Preview, b: &Preview) -> bool {
+        let points = |p: &Preview| p.moves.iter().flat_map(|m| m.points.clone()).collect::<Vec<_>>();
+        let (a, b) = (points(a), points(b));
+        a.len() == b.len() && a.iter().zip(&b).all(|(p, q)| p.iter().zip(q).all(|(u, v)| (u - v).abs() < 1e-9))
+    }
+
+    #[test]
+    fn r_arcs_are_drawn_as_the_i_and_j_arcs_they_name() {
+        let pairs = [
+            ("G21\nG0 X10 Y10\nG2 X20 Y0 R10", "G21\nG0 X10 Y10\nG2 X20 Y0 I0 J-10"),
+            ("G21\nG0 X20 Y0\nG3 X10 Y-10 R-10", "G21\nG0 X20 Y0\nG3 X10 Y-10 I-10 J0"),
+            ("G21\nG0 X20 Y0\ng3 x10 y-10 r10 z-1", "G21\nG0 X20 Y0\nG3 X10 Y-10 I0 J-10 Z-1"),
+            ("G20\nG0 X1 Y1\nG91\nG2 X1 Y-1 R1", "G20\nG0 X1 Y1\nG2 X2 Y0 I0 J-1"),
+            ("G20\nG0 X1 Y1\nG91\nG2 X1 Y-1 I0 J-1", "G20\nG0 X1 Y1\nG2 X2 Y0 I0 J-1"),
+            ("G20\nG0 X1 Y1\nG91.1\nG2 X2 Y0 I0 J-1", "G20\nG0 X1 Y1\nG2 X2 Y0 I0 J-1"),
+            ("G20\nG0 X1 Y1\nG91\nG90.1\nG2 X1 Y-1 I0 J-1", "G20\nG0 X1 Y1\nG2 X2 Y0 I0 J-1"),
+        ];
+        pairs.iter().for_each(|(r, ij)| assert!(same_moves(&draw(r, Units::Mm), &draw(ij, Units::Mm)), "{r}"));
+        assert_eq!(draw("G21\nG0 X10 Y10\nG2 X20 Y0 R10", Units::Mm).moves[1].points.len(), 1 + 16 + 1);
+    }
+
+    #[test]
+    fn an_r_arc_its_radius_does_not_define_is_skipped_with_a_warning() {
+        let preview = draw("G20\nG2 X4 Y0 R1\nG1 X5", Units::Mm);
+        assert_eq!(preview.warnings, ["Preview skipped an arc its radius does not define: G2 X4 Y0 R1"]);
+        assert_eq!(preview.moves[0].points, [[4.0, 0.0, 0.0], [5.0, 0.0, 0.0]]);
+        assert_eq!(draw("G2 R1", Units::Inches).warnings.len(), 1);
+    }
+
     #[test]
     fn m_commands_draw_circles_with_their_meaning() {
         let preview = draw("T3\nM3 S1000\nM4\nM03 S0\nM5\nM6\nM8\nM6T2", Units::Inches);
@@ -411,6 +478,13 @@ mod tests {
     }
 
     #[test]
+    fn a_lower_case_line_with_several_commands_is_drawn() {
+        let preview = draw("g90 g0 x1 y1\ng91 g1 x1 (g90)\n", Units::Inches);
+        assert_eq!(preview.moves[0].points, [[0.0, 0.0, 0.0], [1.0, 1.0, 0.0]]);
+        assert_eq!(last_point(&preview), [2.0, 1.0, 0.0]);
+    }
+
+    #[test]
     fn g18_is_reported_and_comments_are_not_drawn() {
         let preview = draw("G18\n(G0 X5)\nG0 X1 ; G0 X9", Units::Inches);
         assert_eq!(preview.warnings, ["G18 not supported"]);
@@ -421,7 +495,11 @@ mod tests {
     fn only_the_first_max_lines_are_drawn() {
         let lines = vec!["G1 X1 ".to_string(); MAX_LINES + 1];
         let preview = render(&lines, Units::Inches);
-        assert!(preview.too_large.unwrap().starts_with("The current file contains 300001 lines of gcode."));
+        assert_eq!(
+            preview.too_large.unwrap(),
+            "The file has 300,001 lines of gcode. The preview shows only the first 300,000 lines; the whole file still \
+             runs."
+        );
         assert_eq!(preview.moves[0].points.len(), 2);
         assert_eq!(render(&lines[..2], Units::Inches).too_large, None);
     }

@@ -21,6 +21,50 @@ describe("createClient messages", () => {
     expect(onOther).not.toHaveBeenCalled();
   });
 
+  it("replays messages that arrived before anyone listened, once the first listener binds", async () => {
+    const { socket, client } = setup();
+    socket.serverMessage("healthMessage", { cpuUsage: 1, bufferSize: 0 });
+    socket.serverMessage("alarm", { message: "Early alarm" });
+    const onHealth = vi.fn();
+    const onAlarm = vi.fn();
+    client.onMessage("healthMessage", onHealth);
+    client.onMessage("alarm", onAlarm);
+    expect(onHealth).not.toHaveBeenCalled();
+
+    await Promise.resolve();
+
+    expect(onHealth).toHaveBeenCalledWith({ cpuUsage: 1, bufferSize: 0 });
+    expect(onAlarm).toHaveBeenCalledWith({ message: "Early alarm" });
+  });
+
+  it("replays held messages before a newer one that beats the replay", () => {
+    const { socket, client } = setup();
+    socket.serverMessage("healthMessage", { cpuUsage: 1, bufferSize: 0 });
+    const seen: number[] = [];
+    client.onMessage("healthMessage", ({ cpuUsage }) => seen.push(cpuUsage));
+    socket.serverMessage("healthMessage", { cpuUsage: 2, bufferSize: 0 });
+    expect(seen).toEqual([1, 2]);
+  });
+
+  it("drops held messages when their connection drops before anyone listens", async () => {
+    const { socket, client } = setup();
+    socket.serverMessage("connectionStatus", { status: "connected", port: "/dev/ttyACM0" });
+    socket.serverDisconnect();
+    const onLink = vi.fn();
+    client.onMessage("connectionStatus", onLink);
+    await Promise.resolve();
+    expect(onLink).not.toHaveBeenCalled();
+  });
+
+  it("holds only the newest 256 messages", async () => {
+    const { socket, client } = setup();
+    Array.from({ length: 300 }, (_, i) => socket.serverMessage("healthMessage", { cpuUsage: i, bufferSize: 0 }));
+    const seen: number[] = [];
+    client.onMessage("healthMessage", ({ cpuUsage }) => seen.push(cpuUsage));
+    await Promise.resolve();
+    expect(seen).toEqual(Array.from({ length: 256 }, (_, i) => i + 44));
+  });
+
   it("passes through data that is not JSON-encoded", () => {
     const { socket, client } = setup();
     const onSpinner = vi.fn();

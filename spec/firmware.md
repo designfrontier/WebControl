@@ -17,8 +17,15 @@ upgrade flow are built against. Firmware paths are relative to `cnc_ctrl_v1/`.
 - **Link:** 57600 baud 8N1 in every version. Lines in end at `\n` (`\r` is stripped); lines out end `\r\n`.
 - **Buffer:** `INCBUFFERLENGTH 128`, a ring buffer holding 127 bytes. WebControl's `bufferSize = 126` is safe; it
   counts the appended space and `\n` exactly as stored. `?` and the realtime characters never enter the ring.
+- **Case:** every version trims each line and upper-cases it before parsing it (`maslowRingBuffer::prettyReadLine`,
+  `maslowRingBuffer.cpp:102-112`, from `gcodeExecuteLoop`: S126 `GCode.cpp:622`, H27 `:685`, H292 `:774`), so `g20`,
+  `m0`, `m6`, `t2`, `g91`, `g38.2`, `b05` and `$rst` act exactly as their upper-case forms.
 - **Over-long lines:** a line over 126 characters overflows the ring. The firmware prints `Buffer overflow!`, stops,
   flushes, and then **executes the unread tail of the line as a new command** and acks it.
+- **Echo:** the main loop takes a whole line out of the ring (`gcodeExecuteLoop`, H27 `GCode.cpp:685`), then
+  prints it before running it: a B line whole, a G/M line one word group at a time, a line with no G or M whole
+  (`interpretCommandString`, H27 `GCode.cpp:629-667`; the same in S126 and H292). `$` lines are the only ones not
+  echoed. No status report can come between taking the line and its echo.
 - **`ok`:** one per line, sent when the line *finishes* (moves, dwells and pauses block first). No `ok` for a line
   that was stopped (`!`, ALARM, overflow, failed probe, `$RST`). Boot sends one unsolicited `ok`.
 - **`error:`:** `error: <text>` — `Bad number format`, `Invalid statement` (unknown B code or `$` key),
@@ -39,7 +46,11 @@ upgrade flow are built against. Firmware paths are relative to `cnc_ctrl_v1/`.
 
 No Run state (it says Idle while moving). MPos is in current units with 2 decimals (0.254 mm resolution under G20).
 No version sends `PWR:` or `F:`, so that parsing in `UIProcessor.py` is dead code. Reports are at least 200 ms apart.
-`space` is the firmware's true free space. B04 prints a status line with no newline.
+`space` is the firmware's true free space (`incSerialBuffer.spaceAvailable()`, 127 with the ring empty, including
+while a line runs, since it has left the ring). Every report comes from `execSystemRealtime()`, which reads the
+serial port into the ring first (H27 `System.cpp:567-568`), and moves, dwells (`maslowDelay`), M0 pauses and the
+forward solve all call it, so a byte that has reached the board is in the ring by the next report. B04 prints a
+status line with no newline.
 
 ## 3. Version reporting
 
@@ -182,10 +193,21 @@ a plunge the plunge's 12.8 mm/min stays the modal feed, so the file's next F-les
 ## 9. What 51.29x adds
 
 A standalone `S` line sets spindle speed (only with the spindle on; `M3 S…` ignores S, and M3 leaves PWM at 0 until
-an S line). R-format arcs. `$60`/`$61` spindle min/max; `$63`/`$64` Z limits (51.292). TB6643 boards. Text quirks:
+an S line). R-format arcs (below). `$60`/`$61` spindle min/max; `$63`/`$64` Z limits (51.292). TB6643 boards. Text quirks:
 ` prescaler to ` appended to the boot line, `the value received:` after each `$` write, `ok` glued to a line after
 `$60`/`$61` on 51.291, `Change in setting, rewriting EEPROM` on 51.292. Comments no longer hang the firmware (51.27
 loops forever on one, so WebControl's comment stripping is load-bearing).
+
+**R-format arcs.** 51.27, 51.28 and stock 1.26 never read R: `G2()` takes the centre as the start plus I and J, each
+0 when absent, so an R arc has radius 0; `arc()` then takes no steps and `endMove()` sends the sled straight to the end
+point at whatever speed the PID reaches (GCode.cpp `G2`, Motion.cpp `arc` on H27). 51.29x reads R only when it is
+non-zero and X or Y differs from the start: centre = midpoint + e·√(R² − (d/2)²)·(−dy, dx)/d, with e = −1 for G2 and
+1 for G3. `sq(R)` drops R's sign, so a negative R cuts the short arc, not the one over 180°; an R shorter than half
+the chord gives a NaN centre; with no X/Y change it falls back to I and J. Every version's G2/G3 reads X, Y and Z as
+absolute even under G91 (only G0/G1 honour it), ignores G17/G18/G19 (`Command G17 unsupported and ignored.`) and
+cuts in XY. Like every word, R is found by the first `R` in the segment (the line is upper-cased, then split at each
+G and M), and its number is the digits and punctuation after it, so `R 5` reads as R0. The G number is truncated
+to an int, so G91.1 and G90.1 switch G0/G1 to relative and absolute like G91 and G90.
 
 ## Implications
 
@@ -209,6 +231,9 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
 | A14 | Low | `$86`, `$144` rejected; `$43` unused on holey; G17 ignored. |
 | A15 | Info | `bufferSize = 126` is right; PWR:/F: parsing is dead code; PE lines are mis-parsed until B05 is parsed. |
 | A16 | Fixed | After a touching probe WebControl queued `G10 Z0` behind anything already queued; behind a Resume's restart it zeroed Z at the restart's height. The firmware zeroes Z on a touch, so none is sent. Resume and other moving actions pressed mid-probe are now refused until the probe answers or Stop. |
+| A17 | Fixed | Every check WebControl made of a line (units, positioning and the home shift, M0/M1, T and M6, G38.2, `$RST`, the restart state, the preview's G words) was case-sensitive, so a lower-case `g20`, `m0` or `g91` acted on the controller but not in WebControl (upstream #177, #102). Lines are now upper-cased before they are read or written. |
+| A18 | Fixed | R-format arcs (upstream #120) were streamed untouched, so 51.27 sent the sled straight to the end at PID speed (§9); now converted (B19). |
+| A19 | Fixed | G2/G3 under G91 were streamed untouched; every firmware runs their X/Y (and Z) as absolute, while the position, restart and Z tracking took them as relative. Now written absolute, with Z refused (B19). |
 
 ### B. Rust backend requirements
 
@@ -231,7 +256,8 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
    optionally resync from the PE `space` field when idle.
 4. Realtime: `!` resets accounting (immediate `ok`, no ack for the aborted line); `~` immediate `ok`.
 5. Sanitise outgoing lines: strip comments, reject an unclosed `(`, remove `!`, `~`, backtick, `?` and control
-   characters.
+   characters, and upper-case the rest (§1); read every line WebControl inspects (file, typed, restart, preview)
+   upper-cased too. A restart needs an absolute X and Y: refuse one where the file moves X or Y relatively first.
 6. ALARM or `Buffer overflow!` halts streaming and rewinds the job to the oldest unacknowledged line; acks are
    ignored until a status report (the resync); a probe `error:` is that line's ack;
    `$RST` has no `ok` of its own; detect a trailing glued `ok` on 51.291.
@@ -279,6 +305,46 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
     reply shows the alarm again instead of clearing it. The unplaceable-sled message that ends Stop's own reload is
     shown but does not hold again, however long the 200 failed guesses take. After it the firmware takes the sled to
     be at 0, 0, so a job it held resumes only from Stop. `alarm_mid_home_holds_the_plunge_until_stop`.
+
+18. Lost lines (2026-11-15): on the owner's cut a line Rust wrote never reached the firmware (no echo, no `ok`,
+    `[PE:]` space 127 and MPos unchanged for 44 s), and Rust waited for its `ok` until Stop; Python had the same
+    blind spot. Unacknowledged lines are lost when, since the last ack, the controller has printed nothing but
+    status reports (no echo, no message) and three reports in a row, each read at least 150 ms after the latest
+    write, showed an empty ring (space 127), the same MPos and `Idle`, with no `~` awaiting its `ok`, no `Maslow
+    Paused` or Z prompt, and no boot or resync (§1, §2: a line in the ring keeps space under 127, a line that runs
+    has been echoed, a running move changes MPos). The firmware reads the port into the ring before every report
+    (§2) and a line is under 10 ms on the wire at 57600 baud, so a report made after the bytes arrived shows space
+    under 127 or follows the echo; reports within 150 ms of the write are ignored all the same, and three are
+    needed so one garbled or glued report is never enough. Detection comes about 0.6–0.8 s after the write. On
+    the owner's two cuts (3247 lines sent) 51.27 echoed or answered every line it received within 40 ms (about
+    20 ms typically), and the rule finds all 11 lost lines and no other. They were never run, so each goes out
+    again once, as written, with a controller message naming it; the 126-byte accounting forgets the lost ones first. A job line
+    lost again pauses the job at it (`Line Not Received`) and Resume returns to the file there and sends it; a
+    command lost again is dropped with the commands queued after it, `G20`/`G21` and `G90` are written to put
+    the firmware back in step, and a job in progress pauses. A job the user paused waits at the lost line for
+    Resume instead. A line written while another awaited its `ok` (buffered mode) is never taken for lost: with
+    an earlier line lost, the next line's echo and `ok` would be counted for it. Not covered: a line whose `\n` alone was lost (the ring keeps its bytes, space stays under
+    127) and a line that ran while both its echo and `ok` were lost on the way back.
+    `stream_lost_line_is_sent_again`, `stream_line_lost_twice_pauses_until_resume`.
+
+19. Arcs as the file means them (upstream #120), on every firmware version: every line as it is written (a job
+    line after the home shift, a typed line, a restart's) has each G2/G3 segment with an R and no I or J rewritten
+    with I and J at 4 decimals, R removed, and each G2/G3 segment under a real G91 rewritten with the absolute X and
+    Y it ends at (start plus offset, 4 decimals; I and J are already offsets and stay as written). The centre is the
+    standard one: G2 clockwise, G3 counter-clockwise, a negative R the arc over 180°. 51.29x gets the same bytes as
+    51.27: it reads R but drops its sign (§9), and one path keeps what is cut independent of the version. The start
+    is where WebControl last commanded the sled, following the controller's own parse (segments split at G and M,
+    the modal G, G20/G21, G90/G91 with G91.1 truncated to G91 for G0/G1; G2/G3 X/Y absolute); after a Stop, an
+    alarm, a line lost twice (B18), a `B` or `$` line, or with no absolute move yet, it is the last status report's MPos read while nothing
+    that moves is unacknowledged. G91.1 and G90.1 (arc-centre modes) do not make an arc relative. Refused like an
+    unclosed comment (a job pauses before the line with an alert; a typed line is dropped with one): |R| shorter
+    than half the chord by over 0.05 mm, an R arc with no X/Y change, an R arc under G18/G19, a G91 arc with a Z
+    word (the firmware would take it as absolute), or no known start where one is needed. The rewritten line must
+    still fit B3. Since what is sent then ends where the file means, the file-side position and restart state keep
+    reading G91 arcs as relative; the commanded Z (B10) reads an arc's Z as absolute, as the firmware does. The
+    preview draws R arcs with the same centre and real-G91 arcs relative. `r_arc_converted_to_i_j_on_51_27`,
+    `r_arc_impossible_radius_pauses_the_job`, `r_arc_converted_on_51_292`, `g91_arc_written_absolute`,
+    `g91_arc_with_z_pauses_the_job`.
 
 ### C. One-click firmware upgrade
 

@@ -47,6 +47,36 @@ describe("machineReducer socket and startup", () => {
       macros: startupState().macros,
     });
   });
+
+  it("knows the loaded gcode file from /api/state, follows gcodeFile pushes and forgets it when cleared", () => {
+    expect(initialMachineState.gcodeFile).toBeNull();
+    const loaded = apply([{ type: "startup", state: startupState({ gcodeFile: "jobs/leg.nc" }) }]);
+    expect(loaded.gcodeFile).toBe("jobs/leg.nc");
+    const replaced = machineReducer(loaded, message("gcodeFile", { file: "mancala/top.nc" }));
+    expect(replaced.gcodeFile).toBe("mancala/top.nc");
+    expect(machineReducer(replaced, message("gcodeFile", { file: null })).gcodeFile).toBeNull();
+  });
+});
+
+describe("machineReducer link state from /api/state", () => {
+  const link = { status: "connected", port: "/dev/ttyACM0", fakeServoStatus: true } as const;
+
+  it("fills in a controller still unknown", () => {
+    const state = apply([{ type: "startup", state: startupState({ connectionStatus: link }) }]);
+    expect(state.controller).toEqual({ status: "connected", port: "/dev/ttyACM0", fakeServo: true });
+  });
+
+  it("leaves a controller a push already reported, since the push may be newer", () => {
+    const state = apply([
+      message("connectionStatus", { status: "disconnected", port: "none" }),
+      { type: "startup", state: startupState({ connectionStatus: link }) },
+    ]);
+    expect(state.controller).toEqual({ status: "disconnected", port: null, fakeServo: false });
+  });
+
+  it("stays unknown when /api/state has no link state", () => {
+    expect(apply([{ type: "startup", state: startupState() }]).controller.status).toBe("unknown");
+  });
 });
 
 describe("machineReducer messages", () => {

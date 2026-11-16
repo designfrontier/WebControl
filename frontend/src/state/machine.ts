@@ -31,6 +31,8 @@ export interface MachineState {
   positionError: { left: number; right: number; computed: Point | null } | null;
   homePosition: Point | null;
   gcodePosition: (Point & { z: number; line: string; lineIndex: number }) | null;
+  /** The loaded gcode file's path in the library, such as "jobs/leg.nc"; null when none is loaded. */
+  gcodeFile: string | null;
   units: Units | null;
   unitsZ: Units | null;
   distToMove: number | null;
@@ -51,6 +53,7 @@ export const STORE_COMMANDS = [
   "errorValueMessage",
   "homePositionMessage",
   "gcodePositionMessage",
+  "gcodeFile",
   "requestedSetting",
   "controllerMessage",
   "alarm",
@@ -80,6 +83,7 @@ export const initialMachineState: MachineState = {
   positionError: null,
   homePosition: null,
   gcodePosition: null,
+  gcodeFile: null,
   units: null,
   unitsZ: null,
   distToMove: null,
@@ -110,19 +114,22 @@ const applySetting = (state: MachineState, { setting, value }: MessageData<"requ
   }
 };
 
+const controllerOf = ({
+  status,
+  port,
+  fakeServoStatus,
+}: MessageData<"connectionStatus">): MachineState["controller"] => ({
+  status,
+  port: status === "connected" ? port : null,
+  fakeServo: fakeServoStatus ?? false,
+});
+
 const applyMessage = (state: MachineState, event: Extract<MachineEvent, { type: "message" }>): MachineState => {
   switch (event.command) {
     case "hostAddress":
       return { ...state, hostAddress: event.data.hostAddress };
     case "connectionStatus":
-      return {
-        ...state,
-        controller: {
-          status: event.data.status,
-          port: event.data.status === "connected" ? event.data.port : null,
-          fakeServo: event.data.fakeServoStatus ?? false,
-        },
-      };
+      return { ...state, controller: controllerOf(event.data) };
     case "healthMessage": {
       const { cpuUsage, bufferSize, controllerFirmwareVersion } = event.data;
       return {
@@ -171,6 +178,8 @@ const applyMessage = (state: MachineState, event: Extract<MachineEvent, { type: 
       const { xval, yval, zval, gcodeLine, gcodeLineIndex } = event.data;
       return { ...state, gcodePosition: { x: xval, y: yval, z: zval, line: gcodeLine, lineIndex: gcodeLineIndex } };
     }
+    case "gcodeFile":
+      return { ...state, gcodeFile: event.data.file };
     case "requestedSetting":
       return applySetting(state, event.data);
     case "controllerMessage":
@@ -202,12 +211,14 @@ export const machineReducer = (state: MachineState, event: MachineEvent): Machin
         pauseButtonSetting,
         hostAddress,
         macros,
+        connectionStatus,
         controllerFirmwareVersion,
         jobInProgress,
         manualZAxisAdjust,
         probing,
         version,
         commit,
+        gcodeFile,
       } = event.state;
       return {
         ...state,
@@ -222,6 +233,9 @@ export const machineReducer = (state: MachineState, event: MachineEvent): Machin
         pauseButton: pauseButtonSetting,
         hostAddress,
         macros,
+        gcodeFile,
+        controller:
+          connectionStatus && state.controller.status === "unknown" ? controllerOf(connectionStatus) : state.controller,
       };
     }
     case "message":

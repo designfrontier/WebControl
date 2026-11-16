@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { MainScreenState } from "../../protocol";
-import { fakeFetch, jsonResponse } from "../../test/fakeFetch";
+import { fakeFetch, jsonResponse, startupState } from "../../test/fakeFetch";
 import type { FakeSocket } from "../../test/fakeSocket";
 import { renderApp } from "../../test/render";
 import type { RenderOptions } from "../../test/render";
@@ -377,6 +377,28 @@ describe("MainPage gcode stepping", () => {
     await renderMain(mainState({ gcode: { lineIndex: 0, line: "", lineCount: 0 } }));
     expect(screen.getByLabelText("Line #")).not.toHaveAttribute("max");
     expect(screen.getByRole("status", { name: "Current gcode line" })).toHaveTextContent("No line");
+  });
+});
+
+describe("MainPage loaded file", () => {
+  const runFile = () => within(screen.getByRole("region", { name: "Run" })).getByText("File:").parentElement;
+
+  it("names the file from /api/state beside Play, with its folder, and follows every load and clear", async () => {
+    const fetch = fakeFetch({
+      "/api/main": mainState(),
+      "GET /api/state": startupState({ gcodeFile: "mancala/mancala.frd.roughing.25.endmill.nc" }),
+    });
+    const { socket } = await renderMain(mainState(), { fetch });
+    await waitFor(() => expect(runFile()).toHaveTextContent("File: mancala.frd.roughing.25.endmill.nc in mancala"));
+    expect(runFile()).toHaveAttribute("title", "mancala/mancala.frd.roughing.25.endmill.nc");
+
+    socket.serverMessage("gcodeFile", { file: "leg.nc" });
+    expect(runFile()).toHaveTextContent(/^File: leg\.nc\s*$/);
+    expect(runFile()).toHaveAttribute("title", "leg.nc");
+
+    socket.serverMessage("gcodeFile", { file: null });
+    expect(runFile()).toHaveTextContent(/^File: No file loaded\s*$/);
+    expect(runFile()).not.toHaveAttribute("title");
   });
 });
 

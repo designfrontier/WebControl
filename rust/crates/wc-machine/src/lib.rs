@@ -3,6 +3,7 @@
 
 mod actions;
 mod alarm;
+mod arcs;
 pub mod calibration;
 mod camera;
 mod clearance;
@@ -14,6 +15,7 @@ mod gates;
 pub mod gpio;
 mod job;
 mod link;
+mod lost;
 mod machine;
 pub mod optical;
 mod pid;

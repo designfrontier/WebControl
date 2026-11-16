@@ -292,6 +292,17 @@ impl Macro {
     }
 }
 
+/// Broadcast when the loaded gcode file changes; `None` once nothing is loaded.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct GcodeFile {
+    /// The file's path in the gcode library, such as `jobs/leg.nc`.
+    pub file: Option<String>,
+}
+
+impl Message for GcodeFile {
+    const COMMAND: &'static str = "gcodeFile";
+}
+
 /// `GET /api/state`.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -307,6 +318,8 @@ pub struct StartupState {
     /// A G38.2 probe is queued or descending (Rust only).
     pub probing: bool,
     pub host_address: String,
+    /// The link as `connectionStatus` last pushed it, for a client that missed that push.
+    pub connection_status: ConnectionStatus,
     pub controller_firmware_version: f64,
     pub controller_board: Option<String>,
     pub firmware_build: Option<String>,
@@ -318,4 +331,6 @@ pub struct StartupState {
     pub commit: String,
     /// The experimental features turned on in the settings, such as `"optical"` (Rust only).
     pub experimental: Vec<String>,
+    /// The loaded gcode file's path in the gcode library; `None` when nothing is loaded.
+    pub gcode_file: Option<String>,
 }

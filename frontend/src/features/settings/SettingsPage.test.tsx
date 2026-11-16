@@ -76,6 +76,21 @@ describe("SettingsPage", () => {
     expect(saveButton()).toBeDisabled();
   });
 
+  it("sends a decimal comma as a point and leaves text settings as typed", async () => {
+    const { fetch, puts } = settingsServer();
+    const { user } = renderApp("/settings", { fetch });
+    await form();
+    const spacing = screen.getByLabelText("Distance Between Motors");
+    await user.clear(spacing);
+    await user.type(spacing, "2978,5");
+    await user.clear(screen.getByLabelText("Macro 1 Title"));
+    await user.type(screen.getByLabelText("Macro 1 Title"), "1,5");
+    await user.click(saveButton());
+
+    expect(await screen.findByText("Maslow Settings saved.")).toBeInTheDocument();
+    expect(puts).toEqual([{ motorSpacingX: "2978.5", macro1_title: "1,5" }]);
+  });
+
   it("flags invalid numbers without saving, and clears the flag on edit", async () => {
     const { fetch, puts } = settingsServer();
     const { user } = renderApp("/settings", { fetch });

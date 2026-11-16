@@ -74,6 +74,8 @@ export const mainMessages = {
   activateModal: modalSchema,
   closeModals: z.object({ title: z.string() }),
   closeAlertModals: z.object({ title: z.string() }),
+  /** Broadcast when the loaded gcode file changes: its path in the gcode library, or null once none is loaded. */
+  gcodeFile: z.object({ file: z.string().nullable() }),
 } satisfies MessageSchemas;
 
 /** processAction commands the front page issues. */
@@ -120,6 +122,8 @@ export const startupStateSchema = z.object({
   /** A G38.2 probe is queued or descending. Rust only; Python never sends it. */
   probing: z.boolean().default(false),
   hostAddress: z.string(),
+  /** The link as `connectionStatus` last pushed it, for a client that missed that push. Absent from Python. */
+  connectionStatus: mainMessages.connectionStatus.optional(),
   /** 0 until the controller reports its version on connect. */
   controllerFirmwareVersion: z.number().default(0),
   /** The controller's boot banner, such as "PCB v1.6 TLE9201 Detected"; null until it boots on this connection. */
@@ -135,6 +139,8 @@ export const startupStateSchema = z.object({
   commit: z.string().optional(),
   /** Experimental features turned on in the settings: "optical" for optical calibration. Rust only. */
   experimental: z.array(z.string()).default([]),
+  /** The loaded gcode file's path in the gcode library, such as "jobs/leg.nc"; null when none is loaded. */
+  gcodeFile: z.string().nullable().default(null),
 });
 export type StartupState = z.infer<typeof startupStateSchema>;
 

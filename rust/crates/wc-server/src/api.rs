@@ -40,6 +40,7 @@ pub(crate) async fn state(State(state): State<AppState>) -> Json<StartupState> {
         manual_z_axis_adjust: snapshot.manual_z_axis_adjust,
         probing: snapshot.probing,
         host_address: snapshot.host_address.clone(),
+        connection_status: snapshot.connection_status(),
         controller_firmware_version: snapshot.controller_firmware_version,
         controller_board: snapshot.controller_board.clone(),
         firmware_build: snapshot.firmware_build.clone(),
@@ -50,6 +51,7 @@ pub(crate) async fn state(State(state): State<AppState>) -> Json<StartupState> {
         version: crate::VERSION.into(),
         commit: crate::COMMIT.into(),
         experimental: wc_machine::optical::experimental(settings),
+        gcode_file: snapshot.gcode_name.clone(),
     })
 }
 

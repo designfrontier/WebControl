@@ -184,6 +184,7 @@ pub(crate) enum Queued {
 pub struct Snapshot {
     pub link: LinkStatus,
     pub port: String,
+    pub fake_servo: bool,
     pub upload_flag: i32,
     pub job_in_progress: bool,
     pub manual_z_axis_adjust: bool,
@@ -201,6 +202,8 @@ pub struct Snapshot {
     pub gcode_count: usize,
     pub gcode: Shared<Vec<String>>,
     pub gcode_file: Option<PathBuf>,
+    /// The loaded file's path in the gcode library, or `None` when no gcode is loaded.
+    pub gcode_name: Option<String>,
     /// What `/sendGCode` last sent.
     pub custom_gcode: Option<String>,
     /// The file routes refuse to replace the gcode while this holds (their 409).
@@ -218,6 +221,11 @@ pub struct Snapshot {
 }
 
 impl Snapshot {
+    /// What `connectionStatus` would push now.
+    pub fn connection_status(&self) -> ConnectionStatus {
+        ConnectionStatus { status: self.link, port: self.port.clone(), fake_servo_status: self.fake_servo }
+    }
+
     pub fn status(&self) -> StatusMessage {
         StatusMessage {
             upload_flag: self.upload_flag,
@@ -299,6 +307,8 @@ pub(crate) struct Controller {
     pub raise_deadline: Option<Duration>,
     /// Stop's `!` makes the firmware reload its position; that reload's unplaceable-sled message does not hold.
     pub stop_reload: bool,
+    /// Whether the line it waits for ever reached the controller.
+    pub watch: crate::lost::Watch,
 }
 
 impl Controller {
@@ -323,6 +333,7 @@ impl Controller {
             buffering: false,
             raise_deadline: None,
             stop_reload: false,
+            watch: crate::lost::Watch::default(),
         }
     }
 }
@@ -355,6 +366,8 @@ pub struct Machine {
     pub(crate) gcode: Arc<Vec<String>>,
     pub(crate) index: usize,
     pub(crate) gcode_file: Option<PathBuf>,
+    /// The gcode library, which the loaded file's name is relative to.
+    pub(crate) library: Option<PathBuf>,
     pub(crate) z_moves: Vec<usize>,
     pub(crate) preview: Arc<Preview>,
     /// The loaded file's truncate setting, which the home shift keeps to.
@@ -365,6 +378,7 @@ pub struct Machine {
     pub(crate) ports: Vec<String>,
     pub(crate) position: PositionTracker,
     pub(crate) bit: crate::clearance::BitHeight,
+    pub(crate) sled: crate::arcs::Sled,
     pub(crate) errors: ErrorTracker,
     pub(crate) reported_buffer: i64,
     pub(crate) last_status: Option<StatusMessage>,
@@ -419,6 +433,7 @@ impl Machine {
             gcode: Arc::new(Vec::new()),
             index: 0,
             gcode_file: None,
+            library: None,
             z_moves: vec![0],
             truncate: None,
             custom_gcode: None,
@@ -426,6 +441,7 @@ impl Machine {
             ports: Vec::new(),
             position: PositionTracker::default(),
             bit: crate::clearance::BitHeight::new(),
+            sled: crate::arcs::Sled::new(),
             errors: ErrorTracker::default(),
             reported_buffer: 127,
             last_status: None,
@@ -450,6 +466,11 @@ impl Machine {
     /// Always opens `port`, whatever `COMport` says.
     pub fn on_port(self, port: &str) -> Machine {
         Machine { fixed_port: Some(port.into()), ..self }
+    }
+
+    /// Names loaded files by their path under `root`; without it, by their file name alone.
+    pub fn with_library(self, root: PathBuf) -> Machine {
+        Machine { library: Some(root), ..self }
     }
 
     /// Loads lines as `/openGCode` would, without the preview; transcripts and tests use it directly.
@@ -562,6 +583,7 @@ impl Machine {
         Snapshot {
             link,
             port,
+            fake_servo: self.fake_servo,
             upload_flag: self.job.flow.upload_flag(),
             job_in_progress: self.job.flow.in_job(),
             manual_z_axis_adjust: self.job.manual_z.is_some(),
@@ -578,6 +600,7 @@ impl Machine {
             gcode_count: self.gcode.len(),
             gcode: Shared(self.gcode.clone()),
             gcode_file: self.gcode_file.clone(),
+            gcode_name: self.gcode_name(),
             custom_gcode: self.custom_gcode.clone(),
             gcode_locked: self.gcode_locked(),
             preview: Shared(self.preview.clone()),

@@ -14,9 +14,11 @@ use wc_gcode::shift::positioning_set_by;
 use wc_protocol::main::{ActivateModal, Alarm, ControllerMessage, PauseButton, Units};
 
 use crate::alarm::survives_alarm;
+use crate::arcs::Sled;
 use crate::clearance::BitHeight;
 use crate::gpio::Led;
 use crate::job::{Flow, pause_button};
+use crate::lost::Watch;
 use crate::machine::{Controller, Effect, Link, Machine, Probe, Queued, alert, broadcast};
 
 /// The 5 s poller Python used to reopen the port.
@@ -51,6 +53,7 @@ impl Machine {
         self.controller.buffering = self.settings.number("Maslow Settings", "bufferOn") != 0.0;
         self.job.controller_reset();
         self.bit = BitHeight::new();
+        self.sled = Sled::new();
         effects.push(controller_message(&format!("Connected on port {port}")));
         self.link = Link::Connected { port };
         effects.push(broadcast(&self.connection_status()));
@@ -135,6 +138,7 @@ impl Machine {
         self.rewrite_notice = false;
         self.job.controller_reset();
         self.bit = BitHeight::new();
+        self.sled = Sled::new();
         self.probing = false;
         self.restart_booted();
         self.handshake(now);
@@ -191,6 +195,7 @@ impl Machine {
         }
         let reply = classify(line);
         self.acknowledge(line, &reply, effects);
+        self.watch_for_lost_line(&reply, now, effects);
         self.react(line, reply, now, effects);
     }
 
@@ -209,11 +214,13 @@ impl Machine {
         }
         controller.ready = true;
         let acked = controller.accounting.acked();
+        controller.watch.acked(acked.as_ref());
         if controller.accounting.is_empty() {
             self.bit.settled();
+            self.sled.settled();
         }
         // Identity, not position: a `~` sent mid-probe is acked first with an entry of its own.
-        let answered = controller.probe.take_if(|probe| acked.is_some_and(|sent| sent.id == probe.id));
+        let answered = controller.probe.take_if(|probe| acked.as_ref().is_some_and(|sent| sent.id == probe.id));
         if let Some(probe) = answered {
             self.probe_answered(probe, matches!(reply, Reply::Ok), effects);
         }
@@ -260,7 +267,7 @@ impl Machine {
             Reply::Status(status) => self.status_report(status, now, effects),
             Reply::Misread(text) => tracing::debug!(text, "misread controller report"),
             Reply::PositionError(error) => self.position_error(error, effects),
-            Reply::Setting { key, value } => self.reported_setting(line, key, value),
+            Reply::Setting { key, value } => self.reported_setting(line, key, value, effects),
             Reply::Measured(mm) if self.upgrade.collects_chains() => self.upgrade_measured(mm),
             Reply::Measured(mm) => self.measured(mm, now, effects),
             Reply::FakeServo(on) => self.fake_servo = on,
@@ -314,22 +321,25 @@ impl Machine {
         }
     }
 
-    fn reported_setting(&mut self, line: &str, key: u32, value: f64) {
+    fn reported_setting(&mut self, line: &str, key: u32, value: f64, effects: &mut Vec<Effect>) {
         if self.controller.queue.contains(&Queued::SettingsSync) {
             self.controller.reported.push((key, value));
             return self.upgrade_setting(line, None);
         }
         let sync = sync_reported(&self.settings, self.firmware_version, key, value);
         self.upgrade_setting(line, if let Sync::Rewrite(text) = &sync { Some(text) } else { None });
-        match sync {
+        let written = match sync {
             Sync::Adopt { section, key, value, repair } => {
                 self.set_setting(&section, &key, value);
-                let repair = repair.map(|text| Queued::Line { text, boot: false });
-                self.controller.queue.extend(repair);
+                repair
             }
-            Sync::Rewrite(line) if self.controller.reinit_suppressed && reinitialises_axes(&line) => {}
-            Sync::Rewrite(line) => self.controller.queue.push_back(Queued::Line { text: line, boot: false }),
-            Sync::Agrees => {}
+            Sync::Rewrite(line) if self.controller.reinit_suppressed && reinitialises_axes(&line) => None,
+            Sync::Rewrite(line) => Some(line),
+            Sync::Agrees => None,
+        };
+        if let Some(text) = written {
+            self.announce_writes(std::slice::from_ref(&text), &[(key, value)], effects);
+            self.controller.queue.push_back(Queued::Line { text, boot: false });
         }
     }
 
@@ -346,12 +356,14 @@ impl Machine {
     pub(crate) fn await_resync(&mut self, now: Duration) {
         let controller = &mut self.controller;
         controller.accounting.clear();
+        controller.watch = Watch::default();
         controller.probe = None;
         controller.ready = false;
         controller.resync_after = Some(now + RESYNC_DELAY);
         controller.caught_up = false;
         self.probing = false;
         self.bit.lost();
+        self.sled.lost();
     }
 
     pub(crate) fn realtime(&mut self, text: &str, now: Duration, effects: &mut Vec<Effect>) {
@@ -362,6 +374,7 @@ impl Machine {
         effects.push(Effect::Realtime(message.clone().into_bytes()));
         effects.push(Effect::Log(format!("Sent: {text}")));
         self.controller.last_write = Some(now);
+        self.controller.watch.realtime_written();
         if text == "!" {
             self.await_resync(now);
         } else {
@@ -372,20 +385,23 @@ impl Machine {
 
     pub(crate) fn write(&mut self, text: &str, index: Option<usize>, now: Duration, effects: &mut Vec<Effect>) -> u64 {
         let message = format!("{text}\n");
-        let sent = self.controller.accounting.sent(message.len(), index);
+        let idle = self.controller.accounting.is_empty();
+        let id = self.controller.accounting.sent(&message, index);
         self.controller.ready = false;
         self.controller.last_write = Some(now);
+        self.controller.watch.written(idle, now);
         if let Some(mode) = positioning_set_by(&message) {
             self.positioning = mode;
         }
         self.bit.written(text);
+        self.sled.written(text);
         let setting = text.strip_prefix('$').and_then(|setting| setting.split_once('='));
         if let Some((key, value)) = setting.and_then(|(key, value)| Some((key.parse().ok()?, value.trim()))) {
             self.kinematics.update_setting(key, value);
         }
         effects.push(Effect::Write(message.into_bytes()));
         effects.push(Effect::Log(format!("Sent: {text}")));
-        sent.id
+        id
     }
 
     /// Connected, not resyncing, not held by a `Delay`, and 50 ms since the last write.
@@ -464,13 +480,18 @@ impl Machine {
         }
         let command = format!("{command} ");
         let to_send = tool_change_line(&command, self.job.next_tool, self.job.tool).line;
-        if let Some(problem) = problem_with(&to_send) {
-            let reason = format!("That command {}", problem.reason());
-            effects.push(broadcast(&ActivateModal::titled_alert(&format!("Command {}", problem.title()), &reason)));
-            self.probing = self.probing && !command.contains("G38.2");
-            return false;
-        }
-        let command = self.manage_tool_change(&command);
+        let checked = self.sled.convert(&to_send).and_then(|line| problem_with(&line).map_or(Ok(line), Err));
+        let to_send = match checked {
+            Ok(line) => line,
+            Err(problem) => {
+                let reason = format!("That command {}", problem.reason());
+                effects.push(broadcast(&ActivateModal::titled_alert(&format!("Command {}", problem.title()), &reason)));
+                self.probing = self.probing && !command.contains("G38.2");
+                return false;
+            }
+        };
+        self.manage_tool_change(&command);
+        let command = to_send;
         if only_selects_tool(&command) || !self.may_reinitialise(&command, effects) {
             return false;
         }
