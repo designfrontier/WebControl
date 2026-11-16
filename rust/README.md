@@ -34,7 +34,9 @@ recorded outputs.
   `wc-sim`
 - `cargo test -p wc-config --test python_roundtrip`: a v0.94-written `webcontrol.json` is written back byte for byte,
   and typical edits give `fixtures/rust_settings/rust-written.json`; `WC_REGENERATE=1` rewrites that file after a
-  deliberate format change
+  deliberate format change. Loading gives every stored option that the defaults also have their metadata (all but
+  `value`: `title`, `desc`, `type`, `options`, `firmwareKey`, ...), so `python-written.json`'s metadata must match
+  `defaultwebcontrol.json`; that alone never rewrites the file, but the next save writes it
 - `cargo test -p wc-firmware --test compute`: the derived settings and their `$` lines against
   `fixtures/compute/cases.json`, recorded from Python's `computeSettings`
 - `cargo run -p wc-calibration --example calibrate -- <home> holey M1 … M12`: a calibration against a copy of

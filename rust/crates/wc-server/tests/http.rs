@@ -334,14 +334,14 @@ async fn api_settings_describes_each_section() {
 #[tokio::test]
 async fn api_settings_marks_blank_numbers_numeric_and_keeps_unknown_fields_out() {
     let file = json!({"Advanced Settings": [
-        {"key": "homeX", "value": "", "default": "0", "type": "string", "custom": 1, "extra": true},
+        {"key": "pluginOffset", "value": "", "default": "0", "type": "string", "custom": 1, "extra": true},
         {"key": "odd", "value": 3}]});
     let advanced = request_with(settings(Some(file)).1, "GET", "/api/settings/advanced").await;
     advanced.checked("GET", "/api/settings/advanced");
     let list = advanced.json()["settings"].clone();
     assert_eq!(
         list[0],
-        json!({"key": "homeX", "title": "homeX", "desc": "", "type": "string", "value": "",
+        json!({"key": "pluginOffset", "title": "pluginOffset", "desc": "", "type": "string", "value": "",
         "custom": true, "numeric": true})
     );
     assert_eq!(list[1]["type"], "string");

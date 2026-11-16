@@ -236,6 +236,41 @@ pub fn boot_sync(settings: &Settings, firmware: f64, reported: &[(u32, f64)]) ->
     push
 }
 
+/// A sync write that changes what `$$` showed the controller holding.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Correction {
+    pub key: u32,
+    /// The WebControl setting the key belongs to.
+    pub setting: String,
+    pub controller: f64,
+    pub written: String,
+    /// The controller's value was one the firmware refuses to use (a PID weight or gain out of range).
+    pub repair: bool,
+}
+
+/// The `lines` that change a value in `reported`; rewriting a value the controller already holds, as the `$13`
+/// every boot sends does, is none.
+pub fn corrections(settings: &Settings, firmware: f64, lines: &[String], reported: &[(u32, f64)]) -> Vec<Correction> {
+    lines
+        .iter()
+        .filter_map(|line| {
+            let key = setting_key(line)?;
+            let &(_, controller) = reported.iter().rev().find(|(k, _)| *k == key)?;
+            let written = line.split_once('=')?.1.trim().to_string();
+            let repair = !in_firmware_range(key, controller);
+            let held = written.parse::<f64>().is_ok_and(|w| values_match(key, &Value::from(w), controller));
+            let setting = settings.firmware_options().find(|o| o.firmware_key == key && sendable(o, firmware));
+            (repair || !held).then(|| Correction {
+                key,
+                setting: setting.map(|o| o.key).unwrap_or_default(),
+                controller,
+                written,
+                repair,
+            })
+        })
+        .collect()
+}
+
 /// Drops each write of a re-initialising key whose value `$$` showed the controller already holds.
 pub fn skip_held_reinit_keys(push: &mut Push, reported: &[(u32, f64)]) {
     let held = |line: &String| {

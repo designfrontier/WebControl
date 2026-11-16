@@ -1,8 +1,8 @@
 use serde_json::{Value, json};
 use wc_config::Settings;
 use wc_firmware::settings::{
-    Push, Sync, adopted_text, boot_push, boot_sync, firmware_key_value, parse_setting_reply, reinitialises_axes,
-    setting_key, setting_line, skip_held_reinit_keys, sync_reported, values_match,
+    Correction, Push, Sync, adopted_text, boot_push, boot_sync, corrections, firmware_key_value, parse_setting_reply,
+    reinitialises_axes, setting_key, setting_line, skip_held_reinit_keys, sync_reported, values_match,
 };
 
 #[test]
@@ -277,4 +277,50 @@ fn a_negative_gain_is_repaired_and_an_unknown_weight_out_of_range_is_adopted_in_
     let push = boot_sync(&settings, 51.27, &[(36, -2.0)]);
     assert_eq!(push.lines, ["$13=63.5", "$36=0"]);
     assert_eq!(push.adopted, [("Advanced Settings".into(), "propWeightVZ".into(), json!("0"))]);
+}
+
+fn correction(key: u32, setting: &str, controller: f64, written: &str, repair: bool) -> Correction {
+    Correction { key, setting: setting.into(), controller, written: written.into(), repair }
+}
+
+/// Upstream #23: what a boot's writes change, for the user; the routine `$13` changes nothing.
+#[test]
+fn a_boots_corrections_are_the_writes_that_change_a_reported_value() {
+    let settings = Settings::defaults();
+    let reported = [(3, 478.0), (13, 63.5), (24, 1.00000011), (22, -0.5), (36, -2.0), (39, 3.0)];
+    let push = boot_sync(&settings, 51.27, &reported);
+    assert_eq!(push.lines, ["$3=463", "$13=63.5", "$22=0", "$24=1", "$36=0"]);
+    assert_eq!(
+        corrections(&settings, 51.27, &push.lines, &reported),
+        [
+            correction(3, "motorOffsetY", 478.0, "463", false),
+            correction(22, "KiPosMain", -0.5, "0", true),
+            correction(24, "propWeightMain", 1.00000011, "1", true),
+            correction(36, "propWeightVZ", -2.0, "0", true),
+        ]
+    );
+    let moved_r = corrections(&settings, 51.27, &["$13=63.5".into()], &[(13, 10.1)]);
+    assert_eq!(moved_r, [correction(13, "distPerRot", 10.1, "63.5", false)]);
+    assert!(corrections(&settings, 51.27, &["$13=63.5".into(), "$$".into()], &[]).is_empty(), "nothing reported");
+}
+
+/// Loading takes each option's metadata from the defaults; in the owner's file that moves only descriptions and
+/// titles, so no value, type, option list or `$` key changes.
+#[test]
+fn loading_the_owners_file_refreshes_only_descriptions_and_titles() {
+    let file = include_str!("fixtures/owner_webcontrol.json");
+    let stored: serde_json::Map<String, Value> = serde_json::from_str(file).expect("the owner's settings");
+    let loaded = Settings::from_text(file).expect("the owner's settings");
+    let meaning = |option: &serde_json::Map<String, Value>| {
+        let kept = option.iter().filter(|(field, _)| !["desc", "title"].contains(&field.as_str()));
+        kept.map(|(field, value)| (field.clone(), value.clone())).collect::<Vec<_>>()
+    };
+    let options =
+        stored.iter().flat_map(|(section, list)| list.as_array().into_iter().flatten().map(move |o| (section, o)));
+    let compared = options.map(|(section, option)| {
+        let key = option["key"].as_str().expect("a key");
+        let refreshed = loaded.option(section, key).expect("still there");
+        assert_eq!(meaning(option.as_object().expect("an option")), meaning(refreshed), "{section} {key}");
+    });
+    assert_eq!(compared.count(), 151);
 }
