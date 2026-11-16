@@ -1,0 +1,61 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "optical_stop_mid_scan",
+    "description": "Stop during an optical scan on an inches machine: the ! goes out at once, the B10 L behind the move is never sent, and once the controller has resynced the scan puts back the inches (G20) and absolute mode (G90) it found. The scan ends as stopped and WebControl's units follow the G20 back to inches.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "1770dab"
+  },
+  "setup": {
+    "units": "INCHES",
+    "home": {
+      "x": 0,
+      "y": 0
+    },
+    "sled": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "bootBanner": [
+      "PCB v1.1 Detected",
+      "Grbl v1.00",
+      "ready",
+      "ok",
+      "[Forward Calculating Position]",
+      "position loaded at:",
+      "0.00",
+      "0.00"
+    ]
+  },
+  "events": [
+    {"type": "http", "method": "POST", "path": "/api/calibration/optical/scan", "json": {"settings": {"markerX": 0.6, "markerY": 0.6, "scaleX": 1.0, "scaleY": 1.0, "opticalCenterX": 0.0, "opticalCenterY": 0.0, "positionTolerance": 0.125, "tlX": -15, "tlY": 7, "brX": 15, "brY": -7, "calibrationExtents": "Full Area", "autoScanDirection": 0, "gaussianBlurValue": 5, "cannyLowValue": 50.0, "cannyHighValue": 100.0, "feedRate": 500.0, "settleTime": 1.0}, "cell": {"i": -2, "j": 1}}, "status": 200},
+    {"type": "tx", "bytes": "G21 \n", "comment": "the scan moves in mm whatever the machine's units"},
+    {"type": "rx", "line": "G21"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90 \n"},
+    {"type": "rx", "line": "G90"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 Z5.0  \n"},
+    {"type": "expect", "state": {"units": "MM"}, "comment": "WebControl's units follow the G21, as for any G21 sent"},
+    {"type": "rx", "line": "G0 Z5.0"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 X-152.4 Y76.2 F500.0 \n"},
+    {"type": "rx", "line": "G1 X-152.4 Y76.2 F500.0", "comment": "the echo; the move is still running when Stop is pressed"},
+    {"type": "ui", "action": {"command": "stopRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "!\n", "realtime": true},
+    {"type": "expect", "emitted": [{"command": "opticalScanProgress", "data": {"state": "stopped", "done": 0, "total": 1}}]},
+    {"type": "tick", "seconds": 0.3, "comment": "nothing more goes out until a status report read once input ran dry"},
+    {"type": "rx", "line": "<Idle,MPos:-20.31,10.12,5.00,WPos:0.000,0.000,0.000>"},
+    {"type": "tx", "bytes": "G20 \n"},
+    {"type": "rx", "line": "G20"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90 \n"},
+    {"type": "rx", "line": "G90"},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "state": {"units": "INCHES", "positioningMode": "G90"}}
+  ]
+}

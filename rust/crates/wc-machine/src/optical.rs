@@ -299,7 +299,7 @@ impl Machine {
             target: None,
             restore_inches,
         });
-        self.queue(["G21 ".to_string(), "G90 ".to_string()]);
+        self.queue(["G21".to_string(), "G90".to_string()]);
         self.queue_raise(Raise::Accept { safe_height_mm });
         self.optical_move(now, effects);
         let mut body = serde_json::to_value(ScanStarted { total }).unwrap_or(Value::Null);
@@ -514,8 +514,8 @@ impl Machine {
         if self.measure == Some(Measure::Optical) {
             self.measure = None;
         }
-        let restore = scan.restore_inches.then(|| "G20 ".to_string());
-        self.queue(restore.into_iter().chain(["G90 ".to_string()]));
+        let restore = scan.restore_inches.then(|| "G20".to_string());
+        self.queue(restore.into_iter().chain(["G90".to_string()]));
         self.optical.state = Some(state);
         let done = scan.at.min(scan.cells.len()) as u32;
         let progress = ScanProgress {
