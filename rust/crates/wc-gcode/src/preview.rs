@@ -113,8 +113,9 @@ fn from_char(text: &str, c: char) -> String {
 }
 
 impl Drawing {
+    /// Upper-cased before it is split at its G words, so `g90 g0 x1` is two commands, as the firmware reads it.
     fn line(&mut self, raw: &str) {
-        let text = words::replace_semicolons(&words::replace_parens(raw, "\n"), "\n");
+        let text = py::upper(&words::replace_semicolons(&words::replace_parens(raw, "\n"), "\n"));
         let parts: Vec<&str> = text.split('G').collect();
         if parts.len() > 1 {
             parts.iter().filter(|part| !part.is_empty()).for_each(|part| self.command(&format!("G{part}")));
@@ -408,6 +409,13 @@ mod tests {
         assert_eq!(tool_number("TM6 "), 0);
         assert_eq!(m_command("M6T2 "), 0);
         assert_eq!(spindle_speed("M3 S"), 0.0);
+    }
+
+    #[test]
+    fn a_lower_case_line_with_several_commands_is_drawn() {
+        let preview = draw("g90 g0 x1 y1\ng91 g1 x1 (g90)\n", Units::Inches);
+        assert_eq!(preview.moves[0].points, [[0.0, 0.0, 0.0], [1.0, 1.0, 0.0]]);
+        assert_eq!(last_point(&preview), [2.0, 1.0, 0.0]);
     }
 
     #[test]

@@ -270,9 +270,37 @@ fn resume_goes_to_the_new_line_when_the_index_moved_while_paused() {
 #[test]
 fn resume_restores_an_absolute_z_and_relative_mode_in_a_g91_file() {
     let mut rig = Rig::connected();
-    pause_at(&mut rig, &["G91", "G0 X10 Y20", "G1 Z-3", "G1 X5", "G1 X1"], 3);
+    pause_at(&mut rig, &["G90", "G0 X0 Y0", "G91", "G0 X10 Y20", "G1 Z-3", "G1 X5", "G1 X1"], 5);
     let sent = resume(&mut rig);
     assert_eq!(sent[..7], ["~", "G21", "G90", SAFE_Z, "G0 X10.0 Y20.0", "G1 Z-3.0 F12.8", "G91"]);
+}
+
+const XY_UNKNOWN: &str = "Cannot return to this line: the file moves X or Y relatively (G91)";
+
+#[test]
+fn resume_and_play_mid_file_are_refused_before_a_g91_file_sets_x_and_y() {
+    let mut rig = Rig::connected();
+    pause_at(&mut rig, &["G91", "G0 X10 Y20", "G1 Z-3", "G1 X5", "G1 X1"], 3);
+    rig.clear_written();
+    let refused = alerts(&rig.act("resumeRun"));
+    assert!(refused.len() == 1 && refused[0].starts_with(XY_UNKNOWN), "{refused:?}");
+    assert!(rig.run_to_quiet().is_empty(), "no `~`, no restart");
+    assert_eq!(flags(&rig).0, 2, "still paused");
+    rig.act("stopRun");
+    rig.run_to_quiet();
+    rig.act_with("moveGcodeGoto", json!(3), json!(""));
+    rig.clear_written();
+    assert!(alerts(&rig.act("startRun"))[0].starts_with(XY_UNKNOWN));
+    assert_eq!((rig.run_to_quiet(), rig.machine.snapshot().gcode_index), (Vec::<String>::new(), 3));
+}
+
+#[test]
+fn resume_is_refused_before_a_g91_file_first_moves_x_or_y() {
+    let mut rig = Rig::connected();
+    pause_at(&mut rig, &["G91", "G1 Z-1", "G1 Z-1", "G1 X5", "G1 X1"], 2);
+    rig.clear_written();
+    assert!(alerts(&rig.act("resumeRun"))[0].starts_with(XY_UNKNOWN));
+    assert!(rig.run_to_quiet().is_empty(), "the sled would travel to home, not where the file started");
 }
 
 #[test]
