@@ -178,6 +178,7 @@ pub(crate) enum Queued {
 pub struct Snapshot {
     pub link: LinkStatus,
     pub port: String,
+    pub fake_servo: bool,
     pub upload_flag: i32,
     pub job_in_progress: bool,
     pub manual_z_axis_adjust: bool,
@@ -209,6 +210,11 @@ pub struct Snapshot {
 }
 
 impl Snapshot {
+    /// What `connectionStatus` would push now.
+    pub fn connection_status(&self) -> ConnectionStatus {
+        ConnectionStatus { status: self.link, port: self.port.clone(), fake_servo_status: self.fake_servo }
+    }
+
     pub fn status(&self) -> StatusMessage {
         StatusMessage {
             upload_flag: self.upload_flag,
@@ -541,6 +547,7 @@ impl Machine {
         Snapshot {
             link,
             port,
+            fake_servo: self.fake_servo,
             upload_flag: self.job.flow.upload_flag(),
             job_in_progress: self.job.flow.in_job(),
             manual_z_axis_adjust: self.job.manual_z.is_some(),
