@@ -8,8 +8,8 @@ commit as the Rust change, changing only the values the change explains; never p
 
 Hand-edited since: the firmware upper-cases every line before it parses it (`spec/firmware.md` §1), and Python did
 not, so where a line is lower case (`g1 x10 y20` in `comments_mixed.nc`, `n60 g1 x20 y10 f500` in
-`crlf_numbered.nc`, and the lower-case rows of `stream.json`) its `sanitised` text and the lines built from it are
-upper case, `m0` pauses, `t3 g0 x1` names tool 3, and the restart states and positions after it count its X, Y and F.
+`crlf_numbered.nc`, the lower-case rows of `stream.json`, and the lower-case text an unclosed comment, a stray `)`
+or realtime characters leave in a line) its `sanitised` text and the lines built from it are upper case, `m0` pauses, `t3 g0 x1` names tool 3, and the restart states and positions after it count its X, Y and F.
 
 Every file has a `tolerance` (1e-9): the largest absolute difference allowed for a float. Strings, booleans, `null`
 and integers must match exactly. Every gcode string (loaded lines, shifted lines, restart lines) is compared exactly.
