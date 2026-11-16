@@ -10,7 +10,7 @@ use wc_firmware::settings::reinitialises_axes;
 use wc_gcode::firmware_gcode::{only_selects_tool, pauses_firmware, tool_change_line};
 use wc_gcode::position::{Position, line_target, word};
 use wc_gcode::restart::{GcodeState, Options, Restart, sequence, state_at};
-use wc_gcode::sanitise::{sanitise, stream_problem};
+use wc_gcode::sanitise::{LineProblem, problem_with, sanitise};
 use wc_gcode::shift::{HomeShift, positioning_set_by, shift_to_home};
 use wc_gcode::{Positioning, py};
 use wc_protocol::main::{ActivateModal, ClearAlarm, GcodePositionMessage, PauseButton, RequestedSetting, Units};
@@ -348,21 +348,28 @@ impl Machine {
         HomeShift::from_home(home("homeX"), home("homeY"), self.truncate)
     }
 
+    /// A file line as it goes out (home shift, then its arc rewritten), or why it cannot.
+    fn as_written(&self, to_send: &str) -> Result<String, LineProblem> {
+        let line = self.sled.convert(&shift_to_home(to_send, self.positioning, &self.home_shift()))?;
+        match problem_with(&line).filter(|_| !py::isspace(&line)) {
+            Some(problem) => Err(problem),
+            None => Ok(line),
+        }
+    }
+
     /// The next line as it would go out, or `None` when nothing of it is written.
-    fn next_line_written(&self) -> Option<String> {
+    fn next_line_written(&self) -> Option<Result<String, LineProblem>> {
         let line = sanitise(self.gcode.get(self.index)?);
         let to_send = tool_change_line(&line, self.job.next_tool, self.job.tool).line;
         let written =
             !line.is_empty() && !py::isspace(&line) && !only_selects_tool(&line) && !reinitialises_axes(&line);
-        written.then(|| shift_to_home(&to_send, self.positioning, &self.home_shift()))
+        written.then(|| self.as_written(&to_send))
     }
 
     /// Buffered streaming: the next line fits the controller's free bytes, or is refused or skipped without them.
     pub(crate) fn next_line_fits(&self) -> bool {
         match self.next_line_written() {
-            Some(line) if wc_gcode::sanitise::problem_with(&line).is_none() => {
-                self.controller.accounting.space() > line.len() as i64
-            }
+            Some(Ok(line)) => self.controller.accounting.space() > line.len() as i64,
             _ => true,
         }
     }
@@ -400,16 +407,16 @@ impl Machine {
         };
         let line = sanitise(raw);
         let to_send = tool_change_line(&line, self.job.next_tool, self.job.tool).line;
-        if let Some(problem) = stream_problem(&to_send, self.positioning, &self.home_shift()) {
-            return self.refuse_line(problem.alert(self.index), effects);
-        }
+        let shifted = match self.as_written(&to_send) {
+            Ok(shifted) => shifted,
+            Err(problem) => return self.refuse_line(problem.alert(self.index), effects),
+        };
         self.manage_pause(&line, effects);
         let line = self.manage_tool_change(&line);
         if reinitialises_axes(&line) {
             effects.push(alert(&format!("Line {} {SKIPPED_REINIT}", self.index + 1)));
         } else if !line.is_empty() && !py::isspace(&line) && !only_selects_tool(&line) {
             let positioning = positioning_set_by(&line).unwrap_or(self.positioning);
-            let shifted = shift_to_home(&line, self.positioning, &self.home_shift());
             let id = self.write(&shifted, Some(self.index), now, effects);
             self.track_probe(&shifted, id, Some(self.index));
             self.after_line_sent(&shifted, positioning, effects);

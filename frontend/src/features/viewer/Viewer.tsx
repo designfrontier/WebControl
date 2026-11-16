@@ -3,6 +3,7 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import { useClient, useFetch, useMachine, useServerMessage } from "../../app/context";
 import { useTheme } from "../../app/themePreference";
 import { selectGcodeLocked, selectProbing, selectRunState } from "../../state/machine";
+import { LoadedFile } from "../files/LoadedFile";
 import { getViewerSnapshot } from "./api";
 import { CameraOverlay } from "./CameraOverlay";
 import { createViewerEngine } from "./engine";
@@ -284,6 +285,7 @@ export const Viewer = ({ currentLine = "" }: { currentLine?: string }) => {
       </div>
 
       <figcaption className="viewer-caption">
+        <LoadedFile className="viewer-file" />
         <span>{data.gcode ? `${cutSegments} cut and ${rapidSegments} rapid moves` : "No gcode loaded"}</span>
         {data.error ? <span role="alert">{data.error}</span> : null}
       </figcaption>

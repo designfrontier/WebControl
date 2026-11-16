@@ -68,8 +68,9 @@ impl CommandedZ {
         };
         let scale = if units == Units::Inches { 25.4 } else { 1.0 };
         let followed = !probe && codes.iter().all(|code| FOLLOWED.contains(code));
-        // G10 sets where the bit already is, in either positioning mode.
-        let relative = self.positioning == Positioning::Relative && !codes.contains(&10.0);
+        // G10 sets where the bit already is, and the firmware's G2 and G3 read Z as absolute even under G91.
+        let absolute_anyway = codes.iter().any(|code| [2.0, 3.0, 10.0].contains(code));
+        let relative = self.positioning == Positioning::Relative && !absolute_anyway;
         self.z_mm = z
             .filter(|_| followed)
             .and_then(|z| if relative { self.z_mm.map(|from| from + z * scale) } else { Some(z * scale) });
@@ -151,6 +152,12 @@ mod tests {
         assert!(!z.written("G20 "));
         assert!(z.written("G21 "));
         assert!(!z.written("B05 "));
+    }
+
+    #[test]
+    fn an_arcs_z_is_absolute_under_g91_as_the_firmware_reads_it() {
+        assert_eq!(after(&["G0 Z5 ", "G91 ", "G2 X1 Y1 I1 J0 Z-1 "]).z_mm(), Some(-1.0));
+        assert_eq!(after(&["G0 Z5 ", "G91 ", "G03 X1 Z2 "]).z_mm(), Some(2.0));
     }
 
     #[test]

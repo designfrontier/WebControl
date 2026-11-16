@@ -58,6 +58,11 @@ ends it. **The Rust backend differs from Python here on purpose:**
 - `GET /api/state` carries `version`, the webcontrol-rs release, which `webcontrol-update` checks after a restart,
   and `commit`, the git commit it was built from; the status bar shows both.
   Python never sends either; the schema lists both as optional.
+- `GET /api/state` carries `gcodeFile`, the loaded file's path in the gcode library (`"mancala/part.nc"`; only the
+  file name for one outside it), or `null` when no gcode is loaded, as after Clear GCode or a failed save. The
+  `gcodeFile` message `{"file": ...}` broadcasts the same value whenever it changes, so every open screen shows which
+  file a job is cutting; a resync resends it. An edit keeps the name. Python sends neither; the field defaults to
+  `null`.
 - `GET /api/state` carries `connectionStatus`, the same object the `connectionStatus` push carries, so a client that
   missed the connect-time push still learns the link state; a push that arrives first wins. Python never sends it.
 

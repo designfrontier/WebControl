@@ -1,7 +1,7 @@
 //! The loaded gcode and the board (`File/gcodeFile.py`, `Boards/boardManager.py`): what the file routes load, the
 //! preview the viewer draws, and the actions that move through the file or mark the board.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use serde_json::Value;
@@ -11,7 +11,7 @@ use wc_gcode::preview::{self, Move};
 use wc_gcode::{GcodeError, load, py};
 use wc_protocol::boards::BoardDataUpdate;
 use wc_protocol::files::UpdateDirectories;
-use wc_protocol::main::{ActivateModal, Units};
+use wc_protocol::main::{ActivateModal, GcodeFile, Units};
 use wc_protocol::{Envelope, Push};
 
 use crate::machine::{Effect, Machine, alert, broadcast};
@@ -205,6 +205,25 @@ impl Machine {
         effects.push(Effect::Push(Push::message(Envelope::base64("gcodeUpdateCompressed", compressed))));
     }
 
+    /// The loaded file's path in the library, with `/` between its parts; `None` while no gcode is loaded.
+    pub(crate) fn gcode_name(&self) -> Option<String> {
+        let file = self.gcode_file.as_deref().filter(|_| !self.gcode.is_empty())?;
+        let relative = self.library.as_deref().and_then(|root| file.strip_prefix(root).ok());
+        let parts = relative.unwrap_or_else(|| file.file_name().map_or(file, Path::new));
+        let name = parts.iter().map(|part| part.to_string_lossy()).collect::<Vec<_>>().join("/");
+        (!name.is_empty()).then_some(name)
+    }
+
+    pub(crate) fn push_gcode_name(&self, effects: &mut Vec<Effect>) {
+        effects.push(broadcast(&GcodeFile { file: self.gcode_name() }));
+    }
+
+    fn push_gcode_name_if_changed(&self, before: Option<String>, effects: &mut Vec<Effect>) {
+        if self.gcode_name() != before {
+            self.push_gcode_name(effects);
+        }
+    }
+
     pub(crate) fn push_board(&self, effects: &mut Vec<Effect>) {
         effects.push(broadcast(&BoardDataUpdate(self.workpiece.info())));
         effects.push(Effect::Push(Push::message(Envelope::int("showFPSpinner", 1))));
@@ -271,7 +290,7 @@ impl Machine {
         if let Some(text) = &gcode.too_large {
             effects.push(alert(text));
         }
-        let index = self.index;
+        let (index, name) = (self.index, self.gcode_name());
         self.install(gcode);
         self.index = match origin {
             Origin::Edit => index.min(self.gcode.len().saturating_sub(1)),
@@ -284,6 +303,7 @@ impl Machine {
         if origin != Origin::Open {
             self.push_gcode(effects);
         }
+        self.push_gcode_name_if_changed(name, effects);
         Reply::Done
     }
 
@@ -291,9 +311,11 @@ impl Machine {
         if self.gcode_locked() {
             return Some(GCODE_LOCKED.into());
         }
+        let name = self.gcode_name();
         self.install(Gcode::empty(self.units()));
         self.index = 0;
         self.push_gcode(effects);
+        self.push_gcode_name_if_changed(name, effects);
         None
     }
 
@@ -361,7 +383,9 @@ impl Machine {
             }
         };
         if matches!(problem, Problem::GcodeUnreadable | Problem::GcodeUnsaved) {
+            let name = self.gcode_name();
             self.gcode_file = None;
+            self.push_gcode_name_if_changed(name, effects);
         }
         effects.push(alert(text));
     }

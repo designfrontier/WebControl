@@ -1,6 +1,7 @@
 //! What a streamed line goes through before it is written (`SerialPortThread._sanitise` and `_problemWith`): its
 //! comments and realtime characters removed, and a refusal for a line the controller cannot safely take.
 
+use crate::arc::ArcProblem;
 use crate::shift::{HomeShift, shift_to_home};
 use crate::{Positioning, py, words};
 
@@ -25,6 +26,8 @@ pub enum LineProblem {
     UnclosedComment,
     /// The ring overflows and the firmware then runs the line's unread tail as a command.
     TooLong { written: usize },
+    /// An arc that cannot be rewritten as I and J with absolute X and Y.
+    Arc(ArcProblem),
 }
 
 impl LineProblem {
@@ -32,6 +35,7 @@ impl LineProblem {
         match self {
             LineProblem::UnclosedComment => "Unclosed Comment",
             LineProblem::TooLong { .. } => "Too Long",
+            LineProblem::Arc(problem) => problem.title(),
         }
     }
 
@@ -42,6 +46,7 @@ impl LineProblem {
             LineProblem::TooLong { written } => {
                 format!("is {written} characters; the controller accepts at most {BUFFER_SIZE}.")
             }
+            LineProblem::Arc(problem) => problem.reason().to_string(),
         }
     }
 
@@ -53,6 +58,7 @@ impl LineProblem {
                 "Resume stops here again: stop the job, fix the file (e.g. enable Truncate Floating Point Numbers) \
                  and load it again."
             }
+            LineProblem::Arc(problem) => problem.advice(),
         };
         (format!("Line {}", self.title()), format!("Line {} {} {advice}", index + 1, self.reason()))
     }
@@ -139,6 +145,15 @@ mod tests {
             LineProblem::TooLong { written: 127 }.alert(0).1,
             "Line 1 is 127 characters; the controller accepts at most 126. Resume stops here again: stop the job, \
              fix the file (e.g. enable Truncate Floating Point Numbers) and load it again."
+        );
+        assert_eq!(
+            LineProblem::Arc(ArcProblem::RadiusTooSmall).alert(2),
+            (
+                "Line Impossible Arc".to_string(),
+                "Line 3 is an arc whose radius (R) is shorter than half the distance to its end. Resume stops here \
+                 again: stop the job, fix the file and load it again."
+                    .to_string()
+            )
         );
     }
 }

@@ -202,10 +202,11 @@ impl Machine {
         effects.push(broadcast(&ActivateModal::titled_alert(NOT_RECEIVED, &message)));
     }
 
-    /// WebControl followed the lost lines' Z and probe as if they ran.
+    /// WebControl followed the lost lines' Z, XY and probe as if they ran.
     fn forget_lost_moves(&mut self) {
         self.controller.probe = None;
         self.probing = false;
         self.bit.lost();
+        self.sled.lost();
     }
 }

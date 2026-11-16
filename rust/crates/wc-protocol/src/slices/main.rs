@@ -292,6 +292,17 @@ impl Macro {
     }
 }
 
+/// Broadcast when the loaded gcode file changes; `None` once nothing is loaded.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct GcodeFile {
+    /// The file's path in the gcode library, such as `jobs/leg.nc`.
+    pub file: Option<String>,
+}
+
+impl Message for GcodeFile {
+    const COMMAND: &'static str = "gcodeFile";
+}
+
 /// `GET /api/state`.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -318,4 +329,6 @@ pub struct StartupState {
     pub version: String,
     /// The git commit the binary was built from (Rust only), shown beside the release version.
     pub commit: String,
+    /// The loaded gcode file's path in the gcode library; `None` when nothing is loaded.
+    pub gcode_file: Option<String>,
 }
