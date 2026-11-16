@@ -330,7 +330,7 @@ to an int, so G91.1 and G90.1 switch G0/G1 to relative and absolute like G91 and
     51.27: it reads R but drops its sign (§9), and one path keeps what is cut independent of the version. The start
     is where WebControl last commanded the sled, following the controller's own parse (segments split at G and M,
     the modal G, G20/G21, G90/G91 with G91.1 truncated to G91 for G0/G1; G2/G3 X/Y absolute); after a Stop, an
-    alarm, a `B` or `$` line, or with no absolute move yet, it is the last status report's MPos read while nothing
+    alarm, a line lost twice (B18), a `B` or `$` line, or with no absolute move yet, it is the last status report's MPos read while nothing
     that moves is unacknowledged. G91.1 and G90.1 (arc-centre modes) do not make an arc relative. Refused like an
     unclosed comment (a job pauses before the line with an alert; a typed line is dropped with one): |R| shorter
     than half the chord by over 0.05 mm, an R arc with no X/Y change, an R arc under G18/G19, a G91 arc with a Z

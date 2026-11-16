@@ -8,7 +8,8 @@ use std::time::Duration;
 
 use rig::{Rig, alerts, pushed, settings, written};
 use serde_json::json;
-use wc_machine::Effect;
+use wc_machine::files::Request;
+use wc_machine::{Effect, Event};
 
 const ARC: &str = "G3 X-126.4777 Y29.5677 I0.548 J21.8";
 const STILL: &str = "<Idle,MPos:-140.22,25.13,-6.01,WPos:0.000,0.000,0.000>";
@@ -438,4 +439,22 @@ fn a_garbled_report_or_a_ring_holding_bytes_starts_the_count_over() {
         assert!(written(&effects).is_empty(), "{line}");
         assert_eq!(written(&report(&mut rig, 200)), [ARC], "{line}");
     });
+}
+
+#[test]
+fn an_arc_after_a_dropped_jog_starts_where_the_report_puts_the_sled() {
+    let mut rig = Rig::connected();
+    assert_eq!(jog(&mut rig), ["G91"]);
+    rig.rx("G91");
+    assert_eq!(ok(&mut rig), ["G00 X1.0"]);
+    resent_after_three_reports(&mut rig, "G00 X1.0");
+    assert_eq!(written(&reports(&mut rig, 600, STILL, EMPTY)), ["G21"]);
+    rig.rx("G21");
+    assert_eq!(ok(&mut rig), ["G90"]);
+    rig.rx("G90");
+    assert!(ok(&mut rig).is_empty());
+    reports(&mut rig, 200, STILL, EMPTY);
+    let mut effects = rig.send(Event::Request { id: 1, request: Request::SendGcode("G2 X-130.22 Y25.13 R5".into()) });
+    effects.extend(rig.advance(100));
+    assert_eq!(written(&effects), ["G2 X-130.22 Y25.13 I5.0000 J0.0000"], "{:?}", alerts(&effects));
 }
