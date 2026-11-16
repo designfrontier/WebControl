@@ -27,6 +27,11 @@ impl Target {
         }
     }
 
+    /// The target as it should print: the printer scale is an error to measure, not to copy.
+    pub fn nominal(settings: &OpticalSettings) -> Target {
+        Target::from_settings(&OpticalSettings { scale_x: 1.0, scale_y: 1.0, ..settings.clone() })
+    }
+
     /// The square nearest a point, clamped to the grid, as its centre in mm.
     pub fn nearest_square(&self, point_mm: (f64, f64)) -> (f64, f64) {
         let snap = |value: f64, pitch: f64, half: f64| (value / pitch).round().clamp(-half, half) * pitch;
@@ -79,10 +84,8 @@ impl Default for Scene {
 impl Scene {
     /// The pixel under the camera's axis; pixel `n`'s centre is at `n`, as in OpenCV, so 640 wide gives 320.
     pub fn optical_centre(&self) -> PixelPoint {
-        PixelPoint {
-            x: f64::from(self.width) / 2.0 + self.centre_offset_px.0,
-            y: f64::from(self.height) / 2.0 + self.centre_offset_px.1,
-        }
+        let centre = crate::measure::image_centre(self.width, self.height);
+        PixelPoint { x: centre.x + self.centre_offset_px.0, y: centre.y + self.centre_offset_px.1 }
     }
 
     /// Where a point `offset_mm` from the camera (machine axes, +Y up) appears; +rotation turns it clockwise.

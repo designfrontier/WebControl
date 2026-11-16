@@ -10,7 +10,7 @@ use wc_optical::measure::{self, FRAMES};
 use wc_optical::{Frame, OpticalError, OpticalSettings, Orientation, PixelPoint};
 
 const PX_PER_MM: f64 = 4.0;
-const CENTRE: (f64, f64) = (159.5, 119.5);
+const CENTRE: (f64, f64) = (160.0, 120.0);
 
 /// `support::settings()`'s marker is 0.6" x 0.5" with a 0.99 printer scale that only the pitch uses.
 fn marker_px() -> (f64, f64) {
@@ -119,10 +119,10 @@ fn frames_without_the_square_count_against_a_majority() {
 fn a_set_optical_centre_is_the_reference() {
     let shifted = OpticalSettings { optical_center_x: 150.0, optical_center_y: 130.0, ..settings() };
     let found = measure::measure(&frames((0.0, 0.0), 0.0, false), &shifted, None).unwrap();
-    close((found.dx_mm, found.dy_mm), (9.5 / PX_PER_MM, 10.5 / PX_PER_MM), 0.05);
+    close((found.dx_mm, found.dy_mm), (10.0 / PX_PER_MM, 10.0 / PX_PER_MM), 0.05);
     assert_eq!(measure::optical_centre(&shifted, 320, 240), PixelPoint { x: 150.0, y: 130.0 });
     let half = OpticalSettings { optical_center_y: 0.0, ..shifted };
-    assert_eq!(measure::optical_centre(&half, 640, 480), PixelPoint { x: 319.5, y: 239.5 });
+    assert_eq!(measure::optical_centre(&half, 640, 480), PixelPoint { x: 320.0, y: 240.0 });
 }
 
 #[test]

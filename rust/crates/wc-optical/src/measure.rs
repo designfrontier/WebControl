@@ -9,10 +9,16 @@ use crate::{Frame, Measurement, OpticalError, OpticalSettings, Orientation, Pixe
 /// Frames averaged per measurement, as Python.
 pub const FRAMES: usize = 10;
 
+/// The middle pixel in OpenCV terms, where pixel `n`'s centre is at `n`: (320, 240) for 640x480, as Python's
+/// `int(width / 2)`. The renderer and the detector share this convention.
+pub fn image_centre(width: u32, height: u32) -> PixelPoint {
+    PixelPoint { x: f64::from(width) / 2.0, y: f64::from(height) / 2.0 }
+}
+
 /// The settings' optical centre, or the image centre while either coordinate is 0 (Python's convention).
 pub fn optical_centre(settings: &OpticalSettings, width: u32, height: u32) -> PixelPoint {
     if settings.optical_center_x == 0.0 || settings.optical_center_y == 0.0 {
-        PixelPoint { x: (f64::from(width) - 1.0) / 2.0, y: (f64::from(height) - 1.0) / 2.0 }
+        image_centre(width, height)
     } else {
         PixelPoint { x: settings.optical_center_x, y: settings.optical_center_y }
     }

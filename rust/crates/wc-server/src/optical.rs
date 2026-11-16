@@ -1,7 +1,6 @@
 //! `/api/calibration/optical*`: 409 while the setting is off. A scan's camera work is served here, off the machine
 //! task, for as long as the scan runs.
 
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use axum::Json;
@@ -15,21 +14,18 @@ use base64::Engine;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use tokio::sync::broadcast;
-use wc_config::Settings;
 use wc_machine::optical::{self, Seen, Vision};
 use wc_machine::{Event, MachineHandle, Request};
-use wc_optical::camera::{self, Camera, CameraConfig, Source};
 use wc_optical::detect::{DetectParams, Mode};
 use wc_optical::measure::FRAMES;
 use wc_optical::{Frame, Measurement, OpticalSettings, Orientation, PixelPoint};
-use wc_protocol::optical::{
-    CameraStatus, CaptureRequest, CenterFound, OpticalState, ScanRequest, TargetQuery, TestImage,
-};
+use wc_protocol::optical::{CaptureRequest, CenterFound, OpticalState, ScanRequest, TargetQuery, TestImage};
 
 use crate::AppState;
+use crate::camera::{Cameras, Lease};
 
-/// How long one frame may take to arrive.
-const FRAME_WAIT: Duration = Duration::from_secs(5);
+/// How long a measurement's frames may take to arrive.
+const CAPTURE_WAIT: Duration = Duration::from_secs(10);
 /// How often a scan's camera server checks that its scan still runs.
 const POLL: Duration = Duration::from_millis(250);
 
@@ -75,80 +71,70 @@ async fn edit(state: &AppState, request: Request) -> (StatusCode, Value) {
     }
 }
 
-/// The camera the `cameraSource` setting names, at the Camera Settings' size and rate, started.
-pub(crate) type Opener = Arc<dyn Fn() -> wc_optical::Result<Box<dyn Camera>> + Send + Sync>;
-
-fn opener(state: &AppState, settings: &Settings) -> Opener {
-    let (source, sled) = (settings.text_or_empty("Camera Settings", "cameraSource"), state.cameras().sled());
-    let (width, height) = settings
-        .text_or_empty("Camera Settings", "videoSize")
-        .split_once('x')
-        .map_or((640, 480), |(w, h)| (w.trim().parse().unwrap_or(640), h.trim().parse().unwrap_or(480)));
-    let config = CameraConfig { width, height, fps: settings.number("Camera Settings", "fps").max(1.0) };
-    Arc::new(move || {
-        let mut camera = camera::open(&source.parse::<Source>()?, sled.clone())?;
-        camera.start(&config)?;
-        Ok(camera)
-    })
-}
-
-/// `FRAMES` frames captured after this call.
-fn capture(camera: &mut dyn Camera) -> wc_optical::Result<Vec<Frame>> {
-    (0..FRAMES).map(|_| camera.next_frame(Instant::now() + FRAME_WAIT)).collect()
-}
-
-/// The pixel the sled reference is at; 0 means the image centre, as Python had it.
-fn optical_centre(settings: &OpticalSettings, frame: &Frame) -> PixelPoint {
-    let or_half = |value: f64, size: u32| if value == 0.0 { f64::from(size) / 2.0 } else { value };
-    PixelPoint {
-        x: or_half(settings.optical_center_x, frame.width),
-        y: or_half(settings.optical_center_y, frame.height),
-    }
+/// `FRAMES` frames begun after this call, from the capture task's shared camera.
+async fn capture(lease: &mut Lease) -> wc_optical::Result<Vec<Frame>> {
+    let frames = lease.frames_after(FRAMES, Instant::now(), CAPTURE_WAIT).await?;
+    Ok(frames.iter().map(|frame| Frame::clone(frame)).collect())
 }
 
 /// The last frame with its square and crosshairs, base64 PNG.
 fn annotated(frames: &[Frame], settings: &OpticalSettings) -> wc_optical::Result<String> {
     let frame = frames.last().ok_or(wc_optical::OpticalError::NoFrame)?;
     let square = wc_optical::detect::find_square(frame, &DetectParams::from_settings(settings, Mode::Calibrate)).ok();
-    let png = wc_optical::overlay::annotate(frame, square.as_ref(), optical_centre(settings, frame))?;
+    let centre = wc_optical::measure::optical_centre(settings, frame.width, frame.height);
+    let png = wc_optical::overlay::annotate(frame, square.as_ref(), centre)?;
     Ok(base64::engine::general_purpose::STANDARD.encode(png))
 }
 
-/// The vision a scan needs; tests stand in for the camera and the image maths.
+type MeasureFn = fn(&[Frame], &OpticalSettings, Option<&Orientation>) -> wc_optical::Result<Measurement>;
+type OrientFn = fn(PixelPoint, PixelPoint, PixelPoint, f64) -> wc_optical::Result<Orientation>;
+
+/// The vision a scan needs; tests stand in for the image maths.
 pub(crate) struct Eyes {
-    pub open: Opener,
-    pub measure: fn(&[Frame], &OpticalSettings, Option<&Orientation>) -> wc_optical::Result<Measurement>,
-    pub orientation: fn(PixelPoint, PixelPoint, PixelPoint, f64) -> wc_optical::Result<Orientation>,
+    pub measure: MeasureFn,
+    pub orientation: OrientFn,
+}
+
+impl Default for Eyes {
+    fn default() -> Eyes {
+        Eyes { measure: wc_optical::measure::measure, orientation: wc_optical::measure::orientation }
+    }
 }
 
 impl Eyes {
-    fn real(open: Opener) -> Eyes {
-        Eyes { open, measure: wc_optical::measure::measure, orientation: wc_optical::measure::orientation }
-    }
-
-    /// One request, on the blocking pool; the camera opens on the first and stays open for the next.
-    fn answer(&self, camera: &mut Option<Box<dyn Camera>>, request: &Vision) -> Seen {
+    async fn answer(&self, lease: &mut Lease, request: Vision) -> Seen {
         match request {
             Vision::Measure { id, settings, orientation, .. } => {
-                let frames = match camera.take().map_or_else(|| (self.open)(), Ok) {
-                    Ok(mut open) => capture(open.as_mut()).inspect(|_| *camera = Some(open)),
-                    Err(error) => Err(error),
+                let measure = self.measure;
+                let (result, png) = match capture(lease).await {
+                    Ok(frames) => tokio::task::spawn_blocking(move || {
+                        let measured = measure(&frames, &settings, orientation.as_ref());
+                        let png = measured.as_ref().ok().and_then(|_| annotated(&frames, &settings).ok());
+                        (measured, png)
+                    })
+                    .await
+                    .expect("vision does not panic"),
+                    Err(error) => (Err(error), None),
                 };
-                let measured = frames.and_then(|f| Ok(((self.measure)(&f, settings, orientation.as_ref())?, f)));
-                let png = measured.as_ref().ok().and_then(|(_, frames)| annotated(frames, settings).ok());
-                Seen::Measured { id: *id, result: measured.map(|(m, _)| m).map_err(|e| e.to_string()), png }
+                Seen::Measured { id, result: result.map_err(|e| e.to_string()), png }
             }
             Vision::Orient { id, start, after_x, after_y, step_mm, .. } => Seen::Oriented {
-                id: *id,
-                result: (self.orientation)(*start, *after_x, *after_y, *step_mm).map_err(|e| e.to_string()),
+                id,
+                result: (self.orientation)(start, after_x, after_y, step_mm).map_err(|e| e.to_string()),
             },
         }
     }
 }
 
-/// Answers scan `id`'s camera requests until that scan ends, then stops the camera.
-pub(crate) async fn serve(machine: MachineHandle, id: u64, mut requests: broadcast::Receiver<Vision>, eyes: Eyes) {
-    let (eyes, mut camera, started) = (Arc::new(eyes), None::<Box<dyn Camera>>, Instant::now());
+/// Answers scan `id`'s camera requests until that scan ends; the camera closes with the last lease.
+pub(crate) async fn serve(
+    machine: MachineHandle,
+    id: u64,
+    mut requests: broadcast::Receiver<Vision>,
+    cameras: Cameras,
+    eyes: Eyes,
+) {
+    let (mut lease, started) = (None::<Lease>, Instant::now());
     // The snapshot may lag the scan's start by a step.
     while machine.snapshot().optical.scan == Some(id) || started.elapsed() < POLL {
         let request = match tokio::time::timeout(POLL, requests.recv()).await {
@@ -156,18 +142,8 @@ pub(crate) async fn serve(machine: MachineHandle, id: u64, mut requests: broadca
             Ok(Err(broadcast::error::RecvError::Closed)) => break,
             _ => continue,
         };
-        let eyes = eyes.clone();
-        let (seen, back) = tokio::task::spawn_blocking(move || {
-            let seen = eyes.answer(&mut camera, &request);
-            (seen, camera)
-        })
-        .await
-        .expect("vision does not panic");
-        camera = back;
-        machine.send(Event::Seen(seen));
-    }
-    if let Some(mut camera) = camera {
-        tokio::task::spawn_blocking(move || camera.stop());
+        let lease = lease.get_or_insert_with(|| cameras.lease(&machine.snapshot().settings));
+        machine.send(Event::Seen(eyes.answer(lease, request).await));
     }
 }
 
@@ -176,15 +152,10 @@ async fn current(State(state): State<AppState>) -> Response {
         return refused;
     }
     let snapshot = state.machine.snapshot();
-    let source = snapshot.settings.text_or_empty("Camera Settings", "cameraSource");
-    let available = match source.parse::<Source>() {
-        Ok(Source::Synthetic) => state.cameras().sled().is_some(),
-        parsed => parsed.is_ok(),
-    };
     Json(OpticalState {
         settings: optical::settings(&snapshot.settings),
         session: snapshot.optical.session.clone(),
-        camera: CameraStatus { source, available },
+        camera: state.cameras().status(&snapshot.settings),
     })
     .into_response()
 }
@@ -215,12 +186,10 @@ async fn scan(State(state): State<AppState>, body: Bytes) -> Response {
         Ok(cells) => cells,
         Err(problem) => return error(StatusCode::BAD_REQUEST, &problem.to_string()),
     };
-    let snapshot = state.machine.snapshot();
-    let eyes = Eyes::real(opener(&state, &snapshot.settings));
     let requests = state.machine.vision();
     let (code, mut body) = edit(&state, Request::OpticalScan { settings: request.settings, cells }).await;
     if let Some(id) = body.as_object_mut().and_then(|body| body.remove(optical::SCAN_ID)).and_then(|id| id.as_u64()) {
-        tokio::spawn(serve(state.machine.clone(), id, requests, eyes));
+        tokio::spawn(serve(state.machine.clone(), id, requests, state.cameras().clone(), Eyes::default()));
     }
     reply((code, body))
 }
@@ -237,15 +206,7 @@ async fn frames_now(state: &AppState, body: &Bytes) -> Result<(OpticalSettings, 
     if let Some(busy) = busy {
         return Err(error(StatusCode::CONFLICT, busy));
     }
-    let open = opener(state, &snapshot.settings);
-    let captured = tokio::task::spawn_blocking(move || {
-        let mut camera = open()?;
-        let frames = capture(camera.as_mut());
-        camera.stop();
-        frames
-    })
-    .await
-    .expect("capture does not panic");
+    let captured = capture(&mut state.cameras().lease(&snapshot.settings)).await;
     captured
         .map(|frames| (request.settings, frames))
         .map_err(|e| error(StatusCode::UNPROCESSABLE_ENTITY, &e.to_string()))
@@ -331,7 +292,7 @@ async fn target(State(state): State<AppState>, Query(query): Query<TargetQuery>)
     }
     let settings = optical::settings(&state.machine.snapshot().settings);
     let name = format!("optical-target-{}.pdf", if query.paper == wc_optical::Paper::A4 { "a4" } else { "letter" });
-    match wc_optical::target::pdf(&wc_optical::render::Target::from_settings(&settings), query.paper) {
+    match wc_optical::target::pdf(&wc_optical::render::Target::nominal(&settings), query.paper) {
         Ok(pdf) => download("application/pdf", &name, pdf),
         Err(problem) => error(StatusCode::INTERNAL_SERVER_ERROR, &problem.to_string()),
     }
@@ -341,16 +302,17 @@ async fn target(State(state): State<AppState>, Query(query): Query<TargetQuery>)
 mod tests {
     //! The scan's camera server with a stand-in camera and image maths, against the simulated controller.
 
-    use std::sync::Mutex;
+    use std::sync::{Arc, Mutex};
 
+    use wc_config::Settings;
     use wc_machine::{Machine, NoHost, Snapshot, spawn};
     use wc_optical::OpticalError;
-    use wc_optical::camera::SledPosition;
+    use wc_optical::camera::{Camera, CameraConfig, SledPosition, Source};
     use wc_protocol::main::LinkStatus;
     use wc_protocol::optical::{Cell, ScanState};
-    use wc_sim::{Build, Sim};
 
     use super::*;
+    use crate::camera::Opener;
     use crate::serial::SimOpener;
 
     /// Each frame carries the simulated sled's true X and Y; `running` tells whether it is started.
@@ -385,13 +347,25 @@ mod tests {
     }
 
     fn machine() -> (MachineHandle, SledPosition) {
-        let opener = SimOpener::new(Build::holey_51_27());
+        let opener = SimOpener::new(wc_sim::Build::holey_51_27());
         let sled = crate::cli::sled_position(opener.sim());
         let mut settings = Settings::defaults();
         settings.set_value(optical::ENABLED_SECTION, optical::ENABLED_KEY, json!(1));
         settings.set_value("Maslow Settings", "zAxis", json!(1));
+        settings.set_value("Camera Settings", "fps", json!(50));
         let machine = Machine::new("h", settings).on_port("simulator");
         (spawn(machine, Box::new(opener), Arc::new(NoHost)).0, sled)
+    }
+
+    /// Cameras whose opener counts opens and whose camera reports whether it runs.
+    fn cameras(sled: SledPosition) -> (Cameras, Arc<Mutex<u32>>, Arc<Mutex<bool>>) {
+        let (opened, running) = (Arc::new(Mutex::new(0)), Arc::new(Mutex::new(false)));
+        let (count, started) = (opened.clone(), running.clone());
+        let opener: Opener = Arc::new(move |_: &Source, _: Option<SledPosition>| {
+            *count.lock().unwrap() += 1;
+            Ok(Box::new(SledCamera(sled.clone(), started.clone())) as Box<dyn Camera>)
+        });
+        (Cameras::with_opener(None, opener), opened, running)
     }
 
     async fn until(machine: &MachineHandle, done: impl Fn(&Snapshot) -> bool) {
@@ -405,7 +379,7 @@ mod tests {
         assert!(!late, "{:?} {:?}", snapshot.link, snapshot.optical.session.as_ref().map(|s| s.state));
     }
 
-    async fn scan(machine: &MachineHandle, eyes: Eyes) {
+    async fn scan(machine: &MachineHandle, cameras: Cameras, eyes: Eyes) {
         until(machine, |s| s.link == LinkStatus::Connected).await;
         // The boot handshake and its settings sync go first.
         tokio::time::sleep(Duration::from_millis(1500)).await;
@@ -415,43 +389,51 @@ mod tests {
         let answer = machine.edit(Request::OpticalScan { settings, cells }).await.unwrap();
         assert_eq!(answer.status, 200, "{}", answer.body);
         let id = answer.body[optical::SCAN_ID].as_u64().unwrap();
-        tokio::spawn(serve(machine.clone(), id, requests, eyes));
+        tokio::spawn(serve(machine.clone(), id, requests, cameras, eyes));
     }
 
     fn state(snapshot: &Snapshot) -> Option<ScanState> {
         snapshot.optical.session.as_ref().map(|session| session.state)
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn the_camera_server_answers_a_whole_scan_then_lets_the_camera_go() {
         let (machine, sled) = machine();
-        let (opened, running) = (Arc::new(Mutex::new(0)), Arc::new(Mutex::new(false)));
-        let (count, started) = (opened.clone(), running.clone());
-        let open: Opener = Arc::new(move || {
-            *count.lock().unwrap() += 1;
-            let mut camera = SledCamera(sled.clone(), started.clone());
-            camera.start(&CameraConfig { width: 16, height: 1, fps: 5.0 })?;
-            Ok(Box::new(camera) as Box<dyn Camera>)
-        });
-        scan(&machine, Eyes { open, measure: seen, orientation: upright }).await;
+        let (cameras, opened, running) = cameras(sled);
+        scan(&machine, cameras.clone(), Eyes { measure: seen, orientation: upright }).await;
         until(&machine, |s| state(s) == Some(ScanState::Done)).await;
         let grid = machine.snapshot().optical.grid.clone();
         let (x, y) = grid.get(Cell { i: 1, j: 1 }).expect("measured");
         assert!((x - 0.5).abs() < 1e-6 && (y + 0.3).abs() < 1e-6, "{x}, {y}");
         assert_eq!(*opened.lock().unwrap(), 1, "the camera opened once and stayed open");
         let stopped = async {
-            while *running.lock().unwrap() {
+            while *running.lock().unwrap() || cameras.running() {
                 tokio::time::sleep(Duration::from_millis(20)).await;
             }
         };
         tokio::time::timeout(Duration::from_secs(2), stopped).await.expect("the camera stops with the scan");
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn the_scan_shares_the_open_camera_with_the_live_overlay() {
+        let (machine, sled) = machine();
+        let (cameras, opened, running) = cameras(sled);
+        let overlay = cameras.lease(&machine.snapshot().settings);
+        scan(&machine, cameras.clone(), Eyes { measure: seen, orientation: upright }).await;
+        until(&machine, |s| state(s) == Some(ScanState::Done)).await;
+        tokio::time::sleep(Duration::from_millis(400)).await;
+        assert_eq!(*opened.lock().unwrap(), 1, "one camera serves both");
+        assert!(*running.lock().unwrap(), "the overlay still holds it");
+        drop(overlay);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn a_camera_that_will_not_open_fails_the_square_and_stop_ends_the_server() {
         let (machine, _) = machine();
-        let open: Opener = Arc::new(|| Err(OpticalError::Camera("unplugged".into())));
-        scan(&machine, Eyes { open, measure: seen, orientation: upright }).await;
+        let opener: Opener =
+            Arc::new(|_: &Source, _: Option<SledPosition>| Err(OpticalError::Camera("unplugged".into())));
+        let cameras = Cameras::with_opener(None, opener);
+        scan(&machine, cameras, Eyes { measure: seen, orientation: upright }).await;
         until(&machine, |s| state(s) == Some(ScanState::Failed)).await;
         machine.send(Event::Action(wc_protocol::Action::new("stopRun", json!(""), json!(""))));
         until(&machine, |s| state(s) == Some(ScanState::Stopped)).await;
@@ -466,8 +448,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn stop_does_not_wait_for_a_measurement() {
         let (machine, sled) = machine();
-        let open: Opener = Arc::new(move || Ok(Box::new(SledCamera(sled.clone(), Arc::default())) as Box<dyn Camera>));
-        scan(&machine, Eyes { open, measure: slow, orientation: upright }).await;
+        scan(&machine, cameras(sled).0, Eyes { measure: slow, orientation: upright }).await;
         until(&machine, |s| state(s) == Some(ScanState::Measuring)).await;
         let pressed = Instant::now();
         machine.send(Event::Action(wc_protocol::Action::new("stopRun", json!(""), json!(""))));
@@ -476,13 +457,8 @@ mod tests {
     }
 
     #[test]
-    fn the_centre_defaults_to_the_middle_and_capture_takes_frames_frames() {
-        let frame = Frame { width: 640, height: 480, luma: vec![0; 640 * 480] };
-        let settings = OpticalSettings { optical_center_y: 100.0, ..optical::settings(&Settings::defaults()) };
-        assert_eq!(optical_centre(&settings, &frame), PixelPoint { x: 320.0, y: 100.0 });
+    fn annotating_needs_a_frame() {
+        let settings = optical::settings(&Settings::defaults());
         assert_eq!(annotated(&[], &settings), Err(OpticalError::NoFrame));
-        let sim = Arc::new(Mutex::new(Sim::new(Build::holey_51_27())));
-        let mut camera = SledCamera(crate::cli::sled_position(sim), Arc::default());
-        assert_eq!(capture(&mut camera).unwrap().len(), FRAMES);
     }
 }
