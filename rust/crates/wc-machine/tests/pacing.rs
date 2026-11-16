@@ -375,3 +375,16 @@ fn a_pacing_change_while_a_line_waits_for_its_ack_leaves_the_lost_line_watch_alo
     rig.rx(ARC);
     assert_eq!(written(&rig.rx("ok")), ["G1 X3"], "then the next line, at once with no gap");
 }
+
+#[test]
+fn the_wait_before_a_job_is_not_a_short_line_gap() {
+    let mut rig = Rig::connected();
+    rig.advance(3000);
+    rig.machine.load_gcode(&file(&["G0 X1"]));
+    rig.act("startRun");
+    rig.advance(10);
+    rig.rx("ok");
+    rig.advance(100);
+    let job = rig.machine.snapshot().pacing.0.job.clone().unwrap();
+    assert_eq!((job.lines, job.median_short_gap_ms), (1, None), "the line followed no write of the job's");
+}

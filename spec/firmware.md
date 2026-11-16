@@ -266,7 +266,8 @@ to an int, so G91.1 and G90.1 switch G0/G1 to relative and absolute like G91 and
    a change and ends with a change, the job's end or Stop. Its lines (job lines written, not resends), losses (B18
    detections, so a line lost twice counts twice), lines lost twice, streaming time (pauses excluded, recoveries
    included), recovery time (from a lost line's write to its resend), lines/min, s/line and the median gap before
-   each write whose line was acked within the gap plus 100 ms (pacing overhead apart from long moves) are pushed
+   each write whose line was acked within the gap plus 100 ms (pacing overhead apart from long moves; a gap from
+   before the job or a pause is not counted) are pushed
    as `pacingStats` (every 2 s during a job) and kept for the last 10 segments. Each end writes one line, in this
    stable form, to the serial log, the service log and the console:
    `PACING SEGMENT mode=v0.94 gap_ms=50 lines=2284 lost=9 lost_twice=0 lost_pct=0.39 lines_per_min=507.2

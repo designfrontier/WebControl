@@ -370,7 +370,9 @@ impl Machine {
             tally.first_line = tally.first_line.or(Some(index));
             tally.last_line = Some(index);
         });
-        let gap = previous.map(|at| now.saturating_sub(at));
+        // Only a write in this stretch of streaming: the wait before a job or across a pause is no pacing.
+        let since = self.stats.job.as_ref().and_then(|job| job.streaming_since);
+        let gap = previous.filter(|at| since.is_some_and(|since| *at >= since)).map(|at| now.saturating_sub(at));
         self.stats.pending.push_back(Pending { id, written: now, gap });
         if self.stats.pending.len() > PENDING_LIMIT {
             self.stats.pending.pop_front();
