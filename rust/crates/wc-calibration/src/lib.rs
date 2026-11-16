@@ -31,6 +31,10 @@ pub enum CalibrationError {
     NotFinite,
     /// Step 0's stub for a calculation a later track builds (`spec/optical-calibration.md`).
     NotImplemented(&'static str),
+    /// The optical error grid cannot support a geometry fit (too few, colinear or invalid squares).
+    OpticalGrid(String),
+    /// The optical geometry fit converged but fails its quality checks.
+    OpticalFit(String),
 }
 
 impl fmt::Display for CalibrationError {
@@ -49,6 +53,7 @@ impl fmt::Display for CalibrationError {
                 write!(f, "The calibration result is not a finite number, so it was not saved. Calculate it again.")
             }
             CalibrationError::NotImplemented(what) => write!(f, "{what} is not built yet."),
+            CalibrationError::OpticalGrid(reason) | CalibrationError::OpticalFit(reason) => write!(f, "{reason}"),
             CalibrationError::NotCalibrated => write!(
                 f,
                 "The machine was not able to be calibrated. Please ensure the work area dimensions are correct and try again."
