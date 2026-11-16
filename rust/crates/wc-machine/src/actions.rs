@@ -19,6 +19,7 @@ const NOT_CONNECTED: &str = "The controller is not connected.";
 const Z_LIMITS_UNSUPPORTED: &str = "Z-axis limits need holey firmware 51.292 or later.";
 const JOB_LINES_HELD: &str = "The controller paused with lines of the job still in its buffer, which would run before \
                               this move. Press Resume or STOP first.";
+const NO_JOG_DISTANCE: &str = "Enter a jog distance that is a number other than zero.";
 const ADJUST_Z_FIRST: &str = "The controller is waiting for Z to be adjusted by hand. Adjust it, then press Resume.";
 const GCODE_LOADING: &str = "Gcode is still loading. Start the job when the preview appears.";
 const CLEARED_Z_LIMIT_MM: i32 = 9999;
@@ -197,7 +198,9 @@ impl Machine {
     }
 
     fn jog(&mut self, action: &Action) -> Option<String> {
-        let distance = float(&action.arg1)?;
+        let Some(distance) = float(&action.arg1).filter(|d| commands::round4(*d) != 0.0) else {
+            return Some(format!("{NO_JOG_DISTANCE} It was \"{}\".", python_str(&action.arg1)));
+        };
         let diagonal =
             matches!(self.settings.value("WebControl Settings", "diagonalMove"), Some(v) if v == 1 || v == true);
         let Some(lines) = commands::jog(&action.arg_text(), distance, diagonal) else {

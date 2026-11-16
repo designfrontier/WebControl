@@ -37,8 +37,37 @@ fn a_jog_is_a_relative_rapid_and_remembers_the_distance() {
 fn a_bad_jog_sends_nothing() {
     let mut rig = Rig::connected();
     assert_eq!(alerts(&rig.act_with("move", json!("sideways"), json!(10))), ["Error with initiating move."]);
-    assert!(messages(&rig.act_with("move", json!("up"), json!("far"))).is_empty(), "Python fails quietly on float()");
     assert!(rig.run_to_quiet().is_empty());
+}
+
+/// Python failed quietly on a distance `float()` refused, and sent `G00 Y0.0` for zero.
+#[test]
+fn a_jog_distance_that_is_no_number_or_zero_is_refused() {
+    let mut rig = Rig::connected();
+    [
+        (json!("far"), "far"),
+        (json!("inf"), "inf"),
+        (json!("nan"), "nan"),
+        (json!(0), "0"),
+        (json!("0.00004"), "0.00004"),
+    ]
+    .iter()
+    .for_each(|(distance, shown)| {
+        let refusal = format!("Enter a jog distance that is a number other than zero. It was \"{shown}\".");
+        assert_eq!(alerts(&rig.act_with("move", json!("up"), distance.clone())), [refusal]);
+    });
+    assert!(rig.run_to_quiet().is_empty());
+}
+
+#[test]
+fn a_jog_is_rounded_to_four_places_like_z_jogs_and_move_to() {
+    let mut rig = Rig::connected();
+    rig.act_with("move", json!("left"), json!("0.123456789"));
+    rig.act_with("move", json!("up"), json!(0.1 + 0.2));
+    assert_eq!(rig.run_to_quiet(), ["G91", "G00 X-0.1235", "G90", "G91", "G00 Y0.3", "G90"]);
+    let mut diagonal = Rig::connected_with(settings(&[("WebControl Settings", "diagonalMove", json!(1))]));
+    diagonal.act_with("move", json!("upRight"), json!("1.23456"));
+    assert_eq!(diagonal.run_to_quiet(), ["G91", "G00 X0.873 Y0.873", "G90"]);
 }
 
 #[test]
