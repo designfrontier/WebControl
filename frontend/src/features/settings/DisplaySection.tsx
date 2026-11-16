@@ -22,7 +22,7 @@ export const DisplaySection = () => {
     setFailed(false);
     show(theme);
     saveTheme(fetch, theme).catch(() => {
-      show(preference);
+      if (store.getState().theme === theme) show(preference);
       setFailed(true);
     });
   };

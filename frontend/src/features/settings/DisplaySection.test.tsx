@@ -83,4 +83,24 @@ describe("Display settings", () => {
     expect(choice("Light")).toBeChecked();
     expect(theme()).toBe("light");
   });
+
+  it("keeps a later choice when an earlier one is refused after it", async () => {
+    const answers: ((status: number) => void)[] = [];
+    const fetch = fakeFetch({
+      "GET /api/state": startupState({ theme: "system" }),
+      "PUT /api/display/theme": (init) =>
+        new Promise<Response>((resolve) =>
+          answers.push((status) => resolve(jsonResponse(JSON.parse(String(init?.body)), status))),
+        ),
+    });
+    const { user } = renderApp("/settings/display", { fetch });
+    await waitFor(() => expect(choice("System")).toBeChecked());
+    await user.click(choice("Dark"));
+    await user.click(choice("Light"));
+    answers[1](200);
+    answers[0](400);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not save the theme.");
+    expect(choice("Light")).toBeChecked();
+    expect(theme()).toBe("light");
+  });
 });
