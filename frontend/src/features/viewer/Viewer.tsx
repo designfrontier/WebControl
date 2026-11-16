@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useEffectEvent, useMemo, useReducer, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { useClient, useFetch, useMachine, useServerMessage } from "../../app/context";
 import { useTheme } from "../../app/themePreference";
 import { selectGcodeLocked, selectProbing, selectRunState } from "../../state/machine";
@@ -14,7 +14,7 @@ import { createViewerScene, readPalette } from "./scene";
 import type { ViewerScene } from "./scene";
 import { ScreenActionDialog } from "./ScreenActionDialog";
 import type { ScreenAction } from "./ScreenActionDialog";
-import { fitKey, isOnBed, viewFrame } from "./shapes";
+import { fitKey, isOnBed, stageAspect, viewFrame } from "./shapes";
 import type { Point } from "./shapes";
 import { fromInches, roundForAction, toInches, unitLabel } from "./units";
 import { decodeCutPayload, decodeGcodePayload, decodeSnapshot, initialViewerData, viewerReducer } from "./viewerState";
@@ -230,6 +230,7 @@ export const Viewer = ({ currentLine = "" }: { currentLine?: string }) => {
       aria-label="Gcode and board viewer"
       data-cut-segments={cutSegments}
       data-rapid-segments={rapidSegments}
+      style={{ "--stage-aspect": stageAspect(data.machine) } as CSSProperties}
     >
       <div className="viewer-toolbar" role="toolbar" aria-label="View">
         <ToggleButton pressed={view3D} onToggle={() => setView3D((on) => !on)}>

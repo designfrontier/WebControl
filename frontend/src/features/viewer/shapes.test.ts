@@ -14,6 +14,7 @@ import {
   machineFromSnapshot,
   motorPositions,
   polylineSegments,
+  stageAspect,
   viewFrame,
 } from "./shapes";
 import type { Segments } from "./shapes";
@@ -174,6 +175,14 @@ describe("cutCellTriangles", () => {
 
   it("rounds fractional boards up to whole cells", () => {
     expect(cutCellTriangles({ ...board, width: 2.5, height: 1.2 }, Array(6).fill(1))).toHaveLength(6 * 18);
+  });
+});
+
+describe("stageAspect", () => {
+  it("is the bed's width over height, held between 1.2 and 3", () => {
+    expect(stageAspect(DEFAULT_MACHINE)).toBe(2);
+    expect(stageAspect({ ...DEFAULT_MACHINE, bedWidth: 48, bedHeight: 48 })).toBe(1.2);
+    expect(stageAspect({ ...DEFAULT_MACHINE, bedWidth: 192, bedHeight: 48 })).toBe(3);
   });
 });
 

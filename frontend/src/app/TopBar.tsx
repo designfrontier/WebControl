@@ -100,10 +100,8 @@ export const TopBar = () => {
         <Menu label="Boards" items={boards} />
         <Menu label="Help" items={help} badge={updateAvailable ? "New" : undefined} />
       </nav>
-      <div className="topbar-end">
-        <StatusBar />
-        <ThemeToggle />
-      </div>
+      <StatusBar />
+      <ThemeToggle />
       {confirm && (
         <ConfirmDialog
           title={CONFIRMS[confirm].title}

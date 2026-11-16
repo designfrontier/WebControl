@@ -174,6 +174,9 @@ export const viewFrame = (
   return { x: (left + right) / 2, y: (bottom + top) / 2, width: right - left, height: top - bottom };
 };
 
+/** The viewer stage's width over height: the bed's, kept within reason for odd beds. */
+export const stageAspect = ({ bedWidth, bedHeight }: MachineGeometry) => clamp(bedWidth / bedHeight, 1.2, 3);
+
 export const bedViewFrame = ({ bedWidth, bedHeight }: MachineGeometry): ViewFrame => ({
   x: 0,
   y: 0,

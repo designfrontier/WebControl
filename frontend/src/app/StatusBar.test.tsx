@@ -5,43 +5,64 @@ import { createFakeSocket } from "../test/fakeSocket";
 import { renderApp } from "../test/render";
 
 const status = () => within(screen.getByRole("list", { name: "Status" }));
+/** The chip whose full text this is. */
+const chip = (text: string) => status().getByText(text).closest("li");
 
 describe("StatusBar", () => {
   it("shows connecting before the socket connects", () => {
     renderApp("/", { connect: false });
-    expect(status().getByText("Server: connecting…")).not.toHaveAttribute("data-tone");
-    expect(status().getByText("Controller: unknown")).not.toHaveAttribute("data-tone");
+    expect(chip("Server: connecting…")).not.toHaveAttribute("data-tone");
+    expect(chip("Controller: unknown")).not.toHaveAttribute("data-tone");
   });
 
   it("shows the host address from /api/state once connected", async () => {
     renderApp("/");
-    await waitFor(() =>
-      expect(status().getByText("Server: connected")).toHaveAttribute("title", "WebControl at 192.168.1.20:5000"),
-    );
+    await waitFor(() => expect(chip("Server: connected")).toHaveAttribute("title", "WebControl at 192.168.1.20:5000"));
   });
 
   it("omits the placeholder host address the server uses before it knows its own", () => {
     const socket = createFakeSocket();
     renderApp("/", { socket, machine: { hostAddress: "-" }, fetch: () => new Promise(() => {}) });
-    expect(status().getByText("Server: connected")).not.toHaveAttribute("title");
+    expect(chip("Server: connected")).not.toHaveAttribute("title");
   });
 
   it("shows not connected after the socket drops", () => {
     const { socket } = renderApp("/");
     socket.serverDisconnect();
-    expect(status().getByText("Server: not connected")).toHaveAttribute("data-tone", "bad");
+    expect(chip("Server: not connected")).toHaveAttribute("data-tone", "bad");
   });
 
   it("follows the controller connection", () => {
     const { socket } = renderApp("/");
     socket.serverMessage("connectionStatus", { status: "disconnected", port: "none", fakeServoStatus: false });
-    expect(status().getByText("Controller: not connected")).toHaveAttribute("data-tone", "bad");
+    expect(chip("Controller: not connected")).toHaveAttribute("data-tone", "bad");
 
     socket.serverMessage("connectionStatus", { status: "connected", port: "COM3", fakeServoStatus: false });
-    expect(status().getByText("Controller: COM3")).toHaveAttribute("data-tone", "ok");
+    expect(chip("Controller: COM3")).toHaveAttribute("data-tone", "ok");
 
     socket.serverMessage("connectionStatus", { status: "connected", port: "COM3", fakeServoStatus: true });
-    expect(status().getByText("Controller: COM3 / fake servo on")).toBeInTheDocument();
+    expect(chip("Controller: COM3 / fake servo on")).toBeInTheDocument();
+  });
+
+  it("gives narrow headers short forms that keep the build commit, hidden from screen readers", async () => {
+    const { socket } = renderApp("/", {
+      fetch: fakeFetch({
+        "GET /api/state": startupState({ version: "0.2.0", commit: "7dd5305", controllerFirmwareVersion: 51.27 }),
+      }),
+    });
+    socket.serverMessage("connectionStatus", { status: "connected", port: "COM3", fakeServoStatus: true });
+    socket.serverMessage("healthMessage", { cpuUsage: 7.6, bufferSize: -1, controllerFirmwareVersion: 51.27 });
+    await status().findByText("WebControl 0.2.0 · 7dd5305");
+    const list = screen.getByRole("list", { name: "Status" });
+    const texts = (selector: string) => Array.from(list.querySelectorAll(selector)).map((form) => form.textContent);
+    expect(texts(".chip-short")).toEqual(["Server", "COM3 / fake servo on", "v0.2.0·7dd5305"]);
+    expect(texts(".chip-shortest")).toEqual(["51.27", "7dd5305", "8%"]);
+    list
+      .querySelectorAll(".chip-short, .chip-shortest")
+      .forEach((form) => expect(form).toHaveAttribute("aria-hidden", "true"));
+
+    socket.serverMessage("connectionStatus", { status: "disconnected", port: "none", fakeServoStatus: false });
+    expect(chip("Controller: not connected")?.querySelector(".chip-short")).toHaveTextContent("Controller");
   });
 
   it("shows CPU, and buffer only when the controller is buffering", () => {
@@ -76,14 +97,16 @@ describe("firmware chip", () => {
 describe("software chip", () => {
   it("shows the WebControl version and build commit beside the firmware", async () => {
     renderApp("/", { fetch: fakeFetch({ "GET /api/state": startupState({ version: "0.2.0", commit: "7dd5305" }) }) });
-    const chip = await status().findByText("WebControl 0.2.0 · 7dd5305");
-    expect(chip).toHaveAttribute("title", "WebControl version and build");
-    expect(chip.previousElementSibling).toHaveTextContent("Firmware: unknown");
+    const software = (await status().findByText("WebControl 0.2.0 · 7dd5305")).closest("li");
+    expect(software).toHaveAttribute("title", "WebControl 0.2.0 · 7dd5305: the WebControl version and build");
+    expect(software?.previousElementSibling).toHaveTextContent("Firmware: unknown");
   });
 
   it("shows the version alone when the backend sends no commit", async () => {
     renderApp("/", { fetch: fakeFetch({ "GET /api/state": startupState({ version: "0.2.0" }) }) });
-    expect(await status().findByText("WebControl 0.2.0")).toBeInTheDocument();
+    const software = (await status().findByText("WebControl 0.2.0")).closest("li");
+    expect(software?.querySelector(".chip-short")).toHaveTextContent(/^v0\.2\.0$/);
+    expect(software?.querySelector(".chip-shortest")).toHaveTextContent(/^v0\.2\.0$/);
   });
 
   it("is absent until a backend reports its version", async () => {

@@ -9,7 +9,7 @@ import { Readouts } from "./Readouts";
 import { RunPanel } from "./RunPanel";
 import "./main.css";
 
-/** The one screen: the viewer takes most of the width and the compact controls sit beside it. */
+/** The one screen: main.css arranges the viewer, the controls, the readouts and the messages for each window shape. */
 export const MainPage = () => {
   const loaded = useMainScreenState();
   const available = controlsFor(useMachine(selectRunState), useMachine(selectGcodeLocked), useMachine(selectProbing));
@@ -21,13 +21,15 @@ export const MainPage = () => {
     <div className="control-screen">
       <h1 className="visually-hidden">Control</h1>
       <Viewer currentLine={line} />
-      <section className="control-panel" aria-labelledby="controls-title">
-        <h2 id="controls-title">Controls</h2>
-        <JogPanel available={available} />
+      <div className="control-panel">
+        <section className="control-jog" aria-labelledby="controls-title">
+          <h2 id="controls-title">Controls</h2>
+          <JogPanel available={available} />
+        </section>
         <RunPanel available={available} lineIndex={lineIndex ?? 0} />
         <Readouts lineIndex={lineIndex} />
-        <ControllerConsole />
-      </section>
+      </div>
+      <ControllerConsole />
     </div>
   );
 };
