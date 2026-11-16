@@ -223,3 +223,110 @@
   stroke: var(--danger);
   stroke-width: 0.3;
 }
+
+.optical-settings {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+.optical-note,
+.optical-failure {
+  padding: var(--space-3);
+  border: 1px solid var(--warn);
+  border-radius: var(--radius);
+}
+
+.optical-note p,
+.optical-failure p {
+  margin: 0;
+}
+
+.optical-failure {
+  display: grid;
+  gap: var(--space-2);
+  border-color: var(--danger);
+}
+
+.experimental-badge {
+  display: inline-block;
+  margin-right: var(--space-2);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius);
+  background: var(--caution);
+  color: var(--caution-ink);
+}
+
+.camera-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.camera-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+}
+
+.heat-map {
+  margin: 0;
+}
+
+.optical-sled {
+  max-width: 360px;
+}
+
+.heat-map svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.heat-map figcaption {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.heat {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.heat-empty {
+  fill: var(--surface-2);
+}
+
+.heat-0 {
+  fill: color-mix(in srgb, var(--accent) 15%, var(--surface));
+}
+
+.heat-1 {
+  fill: color-mix(in srgb, var(--accent) 35%, var(--surface));
+}
+
+.heat-2 {
+  fill: color-mix(in srgb, var(--accent) 55%, var(--surface));
+}
+
+.heat-3 {
+  fill: color-mix(in srgb, var(--accent) 75%, var(--surface));
+}
+
+.heat-4 {
+  fill: var(--accent);
+}
+
+.heat-current,
+.heat-failed {
+  stroke-width: 3;
+}
+
+.heat-current {
+  stroke: var(--text);
+}
+
+.heat-failed {
+  stroke: var(--danger);
+}

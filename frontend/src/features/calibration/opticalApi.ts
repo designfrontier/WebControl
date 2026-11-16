@@ -1,5 +1,8 @@
-import { getJson } from "../../api/http";
+import { useEffect, useState } from "react";
+import { ApiError, getJson } from "../../api/http";
 import type { Fetch } from "../../api/http";
+import { getStartupState } from "../../api/state";
+import { useFetch } from "../../app/context";
 import {
   holeyParametersSchema,
   opticalCenterSchema,
@@ -9,12 +12,44 @@ import {
   opticalStateSchema,
   opticalTestImageSchema,
 } from "../../protocol";
-import type { OpticalCell, OpticalSettings } from "../../protocol";
+import type { OpticalCell, OpticalSettings, OpticalState } from "../../protocol";
 import { submit } from "./api";
+import type { Outcome } from "./api";
 
 const OPTICAL = "/calibration/optical";
 
 export const getOptical = (fetchImpl: Fetch) => getJson(fetchImpl, OPTICAL, opticalStateSchema);
+
+const errorBody = (error: unknown) =>
+  error instanceof ApiError && typeof (error.body as { error?: unknown } | undefined)?.error === "string"
+    ? (error.body as { error: string }).error
+    : "Could not load optical calibration.";
+
+/** getOptical as an Outcome, keeping the server's reason (409 names the setting that turns it on). */
+export const loadOptical = (fetchImpl: Fetch): Promise<Outcome<OpticalState>> =>
+  getOptical(fetchImpl).then(
+    (data) => ({ ok: true, data }),
+    (error: unknown) => ({ ok: false, error: errorBody(error) }),
+  );
+
+export const OPTICAL_FEATURE = "optical";
+
+/** GET /api/state's experimental features, fetched on every mount so a Settings save shows at the next screen. */
+export const useExperimental = (): readonly string[] => {
+  const fetchImpl = useFetch();
+  const [features, setFeatures] = useState<readonly string[]>([]);
+  useEffect(() => {
+    let live = true;
+    getStartupState(fetchImpl).then(
+      (state) => live && setFeatures(state.experimental),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [fetchImpl]);
+  return features;
+};
 
 export const saveOpticalSettings = (fetchImpl: Fetch, settings: OpticalSettings) =>
   submit(fetchImpl, `${OPTICAL}/settings`, settings, opticalSettingsSavedSchema, "PUT");

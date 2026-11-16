@@ -10,7 +10,8 @@ import { downloadUrl } from "./api";
 import { FakeServoDialog } from "./FakeServoDialog";
 import { FirmwareUpgradeDialog } from "./FirmwareUpgradeDialog";
 import { RestoreDialog } from "./RestoreDialog";
-import { SETUP_LINKS } from "./setupLinks";
+import { useExperimental } from "../calibration/opticalApi";
+import { listedSetupLinks } from "./setupLinks";
 import type { SetupLink } from "./setupLinks";
 
 type Open =
@@ -61,6 +62,7 @@ export const ActionsPanel = ({ info }: { info: SystemInfo | null }) => {
   const gcodeLocked = useMachine(selectGcodeLocked);
   const [open, setOpen] = useState<Open>(null);
   const [notice, setNotice] = useState("");
+  const setupLinks = listedSetupLinks(useExperimental());
 
   const send = (item: ActionItem) => {
     client.sendAction(item.command, item.arg);
@@ -113,7 +115,7 @@ export const ActionsPanel = ({ info }: { info: SystemInfo | null }) => {
                 </button>
               </>
             )}
-            {group.id === "setup" && SETUP_LINKS.map((link) => <SetupEntry key={link.to} link={link} info={info} />)}
+            {group.id === "setup" && setupLinks.map((link) => <SetupEntry key={link.to} link={link} info={info} />)}
             {group.id === "controller" && (
               <>
                 <Link className="button-link" to="/pid">

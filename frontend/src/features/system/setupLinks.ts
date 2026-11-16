@@ -5,6 +5,8 @@ export interface SetupLink {
   label: string;
   /** Why the controller's firmware can't use this screen, or null when it can. */
   blockedBy?: (info: SystemInfo | null) => string | null;
+  /** Listed only while GET /api/state's experimental names this feature. */
+  experimental?: string;
 }
 
 /** The firmware family by version, as the classic UI decides it: stock below 50, holey below 100, custom above. */
@@ -42,4 +44,8 @@ export const SETUP_LINKS: SetupLink[] = [
     label: "Holey calibration",
     blockedBy: (info) => (version(info) >= 50 ? null : needs("holey firmware", info)),
   },
+  { to: "/calibration/optical", label: "Optical calibration (experimental)", experimental: "optical" },
 ];
+
+export const listedSetupLinks = (experimental: readonly string[]) =>
+  SETUP_LINKS.filter((link) => !link.experimental || experimental.includes(link.experimental));
