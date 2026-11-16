@@ -201,3 +201,20 @@ it (step 8), and look at this card later.
 Without a published release, install a build with the commands in step 5 and then
 `sudo systemctl restart webcontrol-rs` (the install never restarts a running service, so a job in progress carries
 on), or run `rust/deploy.sh push` from the Mac, which refuses while a job is running and restarts the service itself.
+
+## Behind a reverse proxy or HTTPS
+
+Not needed for direct use at `http://maslow.local:5000/`. If you ever put WebControl behind a reverse proxy such as
+nginx, or behind HTTPS, the proxy must pass the browser's `Host` header through unchanged and forward the WebSocket
+upgrade. The server accepts a WebSocket only when its `Origin` matches `Host`, so without these the page loads but
+stays disconnected:
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:5000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+}
+```
