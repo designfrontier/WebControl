@@ -13,10 +13,6 @@ fn typed(rig: &mut Rig, text: &str) -> Vec<String> {
     rig.run_to_quiet()
 }
 
-fn upper(lines: Vec<String>) -> Vec<String> {
-    lines.into_iter().map(|line| line.to_ascii_uppercase()).collect()
-}
-
 fn job(rig: &mut Rig, lines: &[&str]) {
     rig.machine.load_gcode(&lines.join("\n"));
 }
@@ -24,9 +20,15 @@ fn job(rig: &mut Rig, lines: &[&str]) {
 #[test]
 fn a_typed_r_arc_goes_to_51_27_with_i_and_j_from_the_reported_position() {
     let mut rig = Rig::connected();
-    assert_eq!(upper(typed(&mut rig, "g2 x10 y10 r10")), ["G2 X10 Y10 I10.0000 J0.0000"]);
+    assert_eq!(typed(&mut rig, "g2 x10 y10 r10"), ["G2 X10 Y10 I10.0000 J0.0000"]);
     assert_eq!(typed(&mut rig, "G3 X0 Y0 R-10"), ["G3 X0 Y0 I-10.0000 J0.0000"]);
     assert_eq!(typed(&mut rig, "G91\nG2 X10 Y10 R10\nG90"), ["G91", "G2 X10.0000 Y10.0000 I10.0000 J0.0000", "G90"]);
+}
+
+#[test]
+fn a_typed_lower_case_r_arc_is_converted() {
+    let mut rig = Rig::connected();
+    assert_eq!(typed(&mut rig, "g0 x0 y0\ng2 x10 y0 r5"), ["G0 X0 Y0", "G2 X10 Y0 I5.0000 J0.0000"]);
 }
 
 #[test]
@@ -146,4 +148,39 @@ fn a_buffered_job_pauses_before_an_r_arc_it_cannot_convert() {
     assert_eq!(rig.run_to_quiet(), ["G21", "G0 X0 Y0"]);
     assert_eq!(rig.machine.snapshot().upload_flag, 2);
     assert_eq!(rig.machine.snapshot().gcode_index, 2);
+}
+
+#[test]
+fn a_lower_case_file_has_its_r_arc_converted_and_its_g91_arc_written_absolute() {
+    let mut rig = Rig::connected();
+    job(&mut rig, &["g21", "g90", "g0 x0 y0", "g2 x10 y0 r5", "g91", "g2 x10 y0 i5 j0", "g90", "g0 x0"]);
+    rig.act("startRun");
+    assert_eq!(
+        rig.run_to_quiet(),
+        ["G21", "G90", "G0 X0 Y0", "G2 X10 Y0 I5.0000 J0.0000", "G91", "G2 X20.0000 Y0.0000 I5 J0", "G90", "G0 X0"]
+    );
+}
+
+#[test]
+fn play_mid_file_in_a_lower_case_g91_file_writes_the_arc_from_the_restart() {
+    let mut rig = Rig::connected();
+    job(&mut rig, &["g21", "g0 x10 y10", "g91", "g1 z-1 f100", "g2 x10 y-10 i0 j-10", "g1 x1"]);
+    rig.act_with("moveGcodeGoto", json!(4), json!(""));
+    rig.act("startRun");
+    let sent = rig.run_to_quiet();
+    assert!(sent.contains(&"G0 X10.0 Y10.0".to_string()), "{sent:?}");
+    assert_eq!(sent[sent.len() - 2..], ["G2 X20.0000 Y0.0000 I0 J-10", "G1 X1"]);
+}
+
+#[test]
+fn play_mid_file_is_refused_at_a_lower_case_g91_arc_no_absolute_move_places() {
+    let mut rig = Rig::connected();
+    job(&mut rig, &["g21", "g91", "g1 z-1 f100", "g2 x10 y-10 i0 j-10", "g90", "g0 x0 y0"]);
+    rig.act_with("moveGcodeGoto", json!(3), json!(""));
+    rig.clear_written();
+    let mut effects = rig.act("startRun");
+    (0..10).for_each(|_| effects.extend(rig.advance(100)));
+    assert!(written(&effects).is_empty(), "{:?}", written(&effects));
+    assert!(alerts(&effects).iter().any(|alert| alert.starts_with("Cannot return to this line")), "{effects:?}");
+    assert_eq!(rig.machine.snapshot().gcode_index, 3);
 }

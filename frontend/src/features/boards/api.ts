@@ -2,6 +2,7 @@ import { getJson, sendJson } from "../../api/http";
 import type { Fetch } from "../../api/http";
 import { boardDetailsSchema, createdDirectorySchema, librarySchema } from "../../protocol";
 import type { BoardUnits, LibraryFile } from "../../protocol";
+import { decimalPoint } from "../../numbers/decimal";
 import { postForm } from "../files/api";
 import { libraryPath } from "../files/library";
 
@@ -18,6 +19,9 @@ export const openBoard = (fetchImpl: Fetch, file: LibraryFile) =>
 export const saveBoard = (fetchImpl: Fetch, directory: string, fileName: string) =>
   postForm(fetchImpl, "/saveBoard", { selectedDirectory: directory, fileName });
 
+const withPoints = <T extends object>(fields: T) =>
+  Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, decimalPoint(String(value))])) as T;
+
 export interface BoardFields {
   boardID: string;
   material: string;
@@ -28,8 +32,8 @@ export interface BoardFields {
   centerY: string;
 }
 
-export const editBoard = (fetchImpl: Fetch, fields: BoardFields, units: BoardUnits) =>
-  postForm(fetchImpl, "/editBoard", { ...fields, units });
+export const editBoard = (fetchImpl: Fetch, { boardID, material, ...measures }: BoardFields, units: BoardUnits) =>
+  postForm(fetchImpl, "/editBoard", { boardID, material, ...withPoints(measures), units });
 
 export interface Trims {
   trimTop: string;
@@ -39,4 +43,4 @@ export interface Trims {
 }
 
 export const trimBoard = (fetchImpl: Fetch, trims: Trims, units: BoardUnits) =>
-  postForm(fetchImpl, "/trimBoard", { ...trims, units });
+  postForm(fetchImpl, "/trimBoard", { ...withPoints(trims), units });

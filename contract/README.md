@@ -58,6 +58,8 @@ ends it. **The Rust backend differs from Python here on purpose:**
 - `GET /api/state` carries `version`, the webcontrol-rs release, which `webcontrol-update` checks after a restart,
   and `commit`, the git commit it was built from; the status bar shows both.
   Python never sends either; the schema lists both as optional.
+- `GET /api/state` carries `connectionStatus`, the same object the `connectionStatus` push carries, so a client that
+  missed the connect-time push still learns the link state; a push that arrives first wins. Python never sends it.
 
 HTTP `family` is `api` (JSON for this UI), `classic` (old form routes
 the UI reuses, with their old shapes) or `static`.
@@ -132,7 +134,8 @@ Every `/MaslowCNC` push is a `message` event carrying `{"command": ..., "data": 
 Pushes are broadcast to every client. A payload with a `client` field is meant only for the socket with that id
 (`"all"` means everyone); clients drop the rest. A connection's id is its sid.
 
-On connect the server broadcasts `hostAddress`, then the client calls `GET /api/state` and emits
+On connect the server broadcasts `hostAddress` and `connectionStatus`, then the client calls `GET /api/state` (which
+also carries both) and emits
 `settingRequest {"section": "Computed Settings", "setting": "units"}` (the server resends the sled position only
 after that).
 
@@ -236,6 +239,25 @@ allow both.
   (`kinematicsTypeComputed`, `distPerRot`, the PID gains, `chainOverSprocketComputed`, `fPWMComputed`), writes the
   derived values that changed to the controller, then sends `$$`, as both backends already do after `/importFile`
   and `/importRestoreWebControl`. Python's `importWebControlJSON` keeps the imported computed values as they are.
+- **Imported values are checked** (upstream #90, #135). `/importFile` takes a bool as on for any non-zero number
+  (GroundControl writes `zAxis = 1.0`) or `true`/`on`/`yes`, and off for zero or `false`/`off`/`no`, in any case;
+  Python took only `on` and `1` as on and anything else as off. A numeric setting (float, int, or text whose default
+  is a number or that the controller holds) given a decimal comma (`0,01`) is stored with a point, in both imports;
+  one that is still no number, or whose comma could be a thousands separator (`1,250`), keeps its current value.
+  Either way an `activateModal` alert lists what was converted or kept. Python stored such text as it came.
+- **A settings sync says what it rewrote** (upstream #23). Each `$n=` line a connect (or a later `$$`) writes over a
+  different value the controller reported is announced as a `controllerMessage`, `Settings sync: $3 (motorOffsetY)
+  was 478 on the controller; WebControl wrote 463.`, and one alert lists any PID weight or gain it repaired because
+  the firmware ignores it. The `$13` every boot writes is announced only when the controller held another value.
+  Python wrote silently.
+- **Stored options take the defaults' metadata** (upstream #70). On load every option `defaultwebcontrol.json` also
+  has gets its `default`, `desc`, `firmwareKey`, `section`, `title`, `type` and `options` from there (a field the
+  defaults lack is dropped); its `value` and any other field stay. That alone never saves the file. Python kept
+  whatever metadata the file held, so a `firmwareKey` changed in the defaults never reached an existing file.
+- **Jogs are checked and rounded.** An X/Y jog distance that is no number or rounds to zero is refused with an
+  alert naming it, and the distance goes out rounded to four places, as Z jogs and `moveTo` already were. Python
+  dropped an unreadable distance silently and sent `0.1 + 0.2` as `0.30000000000000004`. Home and Return to Center
+  name `zAxisSafeHeight` and what it holds when it is no number, where Python answered `Error with returning to home.`
 - **Resume after an ALARM or overflow** (same as Python): the job rewinds to the oldest unacknowledged line and Play
   resumes from there, returning at safe height (`serial/transcripts/alarm_mid_cut_rewinds_and_resumes.json`). Stop
   also clears it.

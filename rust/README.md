@@ -34,7 +34,9 @@ recorded outputs.
   `wc-sim`
 - `cargo test -p wc-config --test python_roundtrip`: a v0.94-written `webcontrol.json` is written back byte for byte,
   and typical edits give `fixtures/rust_settings/rust-written.json`; `WC_REGENERATE=1` rewrites that file after a
-  deliberate format change
+  deliberate format change. Loading gives every stored option that the defaults also have their metadata (all but
+  `value`: `title`, `desc`, `type`, `options`, `firmwareKey`, ...), so `python-written.json`'s metadata must match
+  `defaultwebcontrol.json`; that alone never rewrites the file, but the next save writes it
 - `cargo test -p wc-firmware --test compute`: the derived settings and their `$` lines against
   `fixtures/compute/cases.json`, recorded from Python's `computeSettings`
 - `cargo run -p wc-calibration --example calibrate -- <home> holey M1 … M12`: a calibration against a copy of
@@ -69,6 +71,11 @@ service run `systemctl poweroff` (the UI's Turn Off Raspberry Pi) and nothing el
 `spec/rust-checklists/`. The firmware upgrade (Actions → Upgrade holey firmware to 51.292…) runs `avrdude`, which
 `install-pi.sh` installs, and keeps each backup in `~/.WebControl/firmware-backups/<time>/`; `M6.md` rehearses an
 upgrade and a rollback before the real one.
+
+Behind a reverse proxy (nginx) or HTTPS, the proxy must forward the original `Host` (`proxy_set_header Host $host;`)
+and the WebSocket `Upgrade`/`Connection` headers: `wc-server` refuses a WebSocket whose `Origin` does not match
+`Host` (`crates/wc-server/src/ws.rs`). `spec/INSTALL-PI.md` has an nginx example. Direct `http://maslow.local:5000`
+use needs none of this.
 
 ## Releases
 

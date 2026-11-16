@@ -4,7 +4,7 @@
 mod rig;
 
 use rig::sim::SimRig;
-use rig::{Rig, alerts, settings, written};
+use rig::{Rig, alerts, pushed, settings, written};
 use serde_json::json;
 use wc_machine::{Effect, Event, Request};
 use wc_protocol::main::LinkStatus;
@@ -93,6 +93,35 @@ fn one_differing_setting_is_written_with_r_then_read_back() {
     // This controller never takes the write, so the read-back rewrites it once more and reads nothing again.
     assert_eq!(sent, handshake_then(&["$3=463", "$13=63.5", "$$", "$3=463"]));
     assert!(!restarted(&rig));
+}
+
+/// Upstream #23: a boot that rewrites a setting says so on the console; the routine `$13` goes unannounced.
+#[test]
+fn a_boot_announces_each_setting_it_rewrites() {
+    let mut rig = Rig::new();
+    rig.boot_reporting("51.27", &report(&[]));
+    assert!(pushed(&rig.take_effects(), "controllerMessage").iter().all(|m| !m.to_string().contains("Settings sync")));
+    let mut rig = Rig::new();
+    rig.boot_reporting("51.27", &report(&[(3, "478.00000000")]));
+    let effects = rig.take_effects();
+    let announced = "Settings sync: $3 (motorOffsetY) was 478 on the controller; WebControl wrote 463.";
+    let messages = pushed(&effects, "controllerMessage");
+    assert_eq!(messages.iter().filter(|m| **m == json!(announced)).count(), 2, "the write and the read-back's");
+    assert!(alerts(&effects).is_empty(), "no PID value was repaired");
+}
+
+#[test]
+fn a_boot_that_repairs_a_pid_value_alerts() {
+    let mut rig = Rig::new();
+    let sent = rig.boot_reporting("51.27", &report(&[(24, "1.00000012"), (22, "-1.00000000")]));
+    assert_eq!(sent, handshake_then(&["$13=63.5", "$22=0", "$24=1", "$$", "$22=0", "$24=1"]));
+    let effects = rig.take_effects();
+    let messages = pushed(&effects, "controllerMessage");
+    let line = "Settings sync: $24 (propWeightMain) was 1.00000012 on the controller; WebControl wrote 1.";
+    assert!(messages.contains(&json!(line)), "{messages:?}");
+    let alert = "The controller held PID values its firmware ignores, which leave the motors unable to move, so \
+                 WebControl wrote its own: $22 (KiPosMain) was -1, now 0. $24 (propWeightMain) was 1.00000012, now 1.";
+    assert_eq!(alerts(&effects)[0], alert);
 }
 
 /// The owner's machine on 2026-11-15: every connect wrote `$38`, and no motor moved afterwards.

@@ -6,6 +6,7 @@ use std::time::Duration;
 use serde_json::{Map, Value};
 use wc_config::{Settings, python_str};
 use wc_machine::calibration::{Kind, calculate};
+use wc_machine::files::{Reply, Request as FileRequest};
 use wc_machine::{Effect, Event, Machine, Request};
 use wc_protocol::{Action, Namespace};
 use wc_testkit::contract::Contract;
@@ -29,6 +30,22 @@ impl MachineBackend {
     fn new() -> MachineBackend {
         let machine = Machine::new("127.0.0.1:5000", Settings::defaults());
         MachineBackend { machine, now: Duration::ZERO, unread: Vec::new(), written: Vec::new(), messages: Vec::new() }
+    }
+
+    /// The `/sendGCode` form route, answered as wc-server answers it.
+    fn send_gcode(&mut self, text: &str) -> u16 {
+        let request = Event::Request { id: 1, request: FileRequest::SendGcode(text.into()) };
+        let effects = self.machine.handle_inline(request, self.now);
+        let reply = effects.iter().find_map(|effect| match effect {
+            Effect::Reply { reply, .. } => Some(reply.clone()),
+            _ => None,
+        });
+        self.collect(effects);
+        match reply.expect("every request is answered") {
+            Reply::Done => 200,
+            Reply::Refused(_) => 409,
+            _ => 500,
+        }
     }
 
     fn settings(&self) -> Settings {
@@ -92,7 +109,10 @@ impl SerialBackend for MachineBackend {
     }
 
     /// The machine's HTTP writes, routed as wc-server routes them.
-    fn http(&mut self, method: &str, path: &str, json: Option<&Value>, _: Option<&BTreeMap<String, String>>) -> u16 {
+    fn http(&mut self, method: &str, path: &str, json: Option<&Value>, form: Option<&BTreeMap<String, String>>) -> u16 {
+        if (method, path) == ("POST", "/sendGCode") {
+            return self.send_gcode(form.and_then(|form| form.get("gcode")).map_or("", |text| text.trim_end()));
+        }
         let body = json.cloned().unwrap_or(Value::Null);
         let request = match (method, path) {
             ("PUT", _) if path.starts_with("/api/settings/") => {

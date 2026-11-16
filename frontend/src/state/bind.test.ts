@@ -68,6 +68,20 @@ describe("bindMachineStore", () => {
     expect(store.getState().alarm).toBe("Alarm: Sled Not Keeping Up");
   });
 
+  it("keeps the link state the server pushed before the store was bound", async () => {
+    const socket = createFakeSocket();
+    const client = createClient(socket);
+    socket.serverConnect("me");
+    socket.serverMessage("hostAddress", { hostAddress: "10.0.0.5:5000" });
+    socket.serverMessage("connectionStatus", { status: "connected", port: "/dev/ttyACM0", fakeServoStatus: false });
+
+    const store = createMachineStore();
+    bindMachineStore(store, client, () => Promise.resolve(startupState()));
+    await flush();
+
+    expect(store.getState().controller).toEqual({ status: "connected", port: "/dev/ttyACM0", fakeServo: false });
+  });
+
   it("warns and keeps going when /api/state fails", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const { socket, store } = setup(vi.fn(() => Promise.reject(new Error("503"))));

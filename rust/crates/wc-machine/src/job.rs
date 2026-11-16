@@ -9,7 +9,7 @@ use wc_config::python_float;
 use wc_firmware::settings::reinitialises_axes;
 use wc_gcode::firmware_gcode::{only_selects_tool, pauses_firmware, tool_change_line};
 use wc_gcode::position::{Position, line_target, word};
-use wc_gcode::restart::{Options, Restart, sequence, state_at};
+use wc_gcode::restart::{GcodeState, Options, Restart, sequence, state_at};
 use wc_gcode::sanitise::{LineProblem, problem_with, sanitise};
 use wc_gcode::shift::{HomeShift, positioning_set_by, shift_to_home};
 use wc_gcode::{Positioning, py};
@@ -21,6 +21,9 @@ use crate::machine::{Effect, Machine, alert, broadcast};
 
 const SKIPPED_REINIT: &str = "sets chain-over-sprocket ($38), which re-initialises the motors mid-job, so it was \
                               skipped. Change it in Advanced Settings instead.";
+const XY_UNKNOWN: &str = "Cannot return to this line: the file moves X or Y relatively (G91) before it sets \
+                          them absolutely, so where the sled belongs depends on where the file started. Stop, then \
+                          run the file from its first line.";
 
 /// Where the job is; `uploadFlag` on the wire.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -109,6 +112,14 @@ impl Job {
     }
 }
 
+/// Why a restart at the index cannot be built.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Unbuilt {
+    /// No home, or a word the file cannot read.
+    Unreadable,
+    XyUnknown,
+}
+
 pub(crate) fn pause_button(button: PauseButton) -> Effect {
     let value = serde_json::to_value(button).unwrap_or(Value::Null);
     broadcast(&RequestedSetting { setting: "pauseButtonSetting".into(), value })
@@ -171,12 +182,21 @@ impl Machine {
         self.realtime("~", now, effects);
     }
 
+    /// The file's state before the index, which a restart returns to.
+    fn restart_state(&self) -> Result<GcodeState, Unbuilt> {
+        let number = |key: &str| self.settings.value("Advanced Settings", key).and_then(python_float);
+        let home = number("homeX").zip(number("homeY"));
+        let state = home.and_then(|(x, y)| state_at(&self.gcode, self.index, x, y, self.units()).ok());
+        match state {
+            Some(state) if state.xy_unknown => Err(Unbuilt::XyUnknown),
+            Some(state) => Ok(state),
+            None => Err(Unbuilt::Unreadable),
+        }
+    }
+
     /// Queues the restart, whose height is settled once the lines before it are answered; `None` if it cannot be built.
-    fn queue_restart(&mut self, z_target: Option<f64>, change_tool: bool) -> Option<Restart> {
-        let number = |section: &str, key: &str| self.settings.value(section, key).and_then(python_float);
-        let (home_x, home_y) = (number("Advanced Settings", "homeX")?, number("Advanced Settings", "homeY")?);
-        let safe_height = number("Maslow Settings", "zAxisSafeHeight")?;
-        let state = state_at(&self.gcode, self.index, home_x, home_y, self.units()).ok()?;
+    fn queue_restart(&mut self, state: GcodeState, z_target: Option<f64>, change_tool: bool) -> Option<Restart> {
+        let safe_height = self.settings.value("Maslow Settings", "zAxisSafeHeight").and_then(python_float)?;
         let version = self.firmware_version;
         let options = Options {
             z_target,
@@ -202,7 +222,12 @@ impl Machine {
         self.job.z_target = self.position.z;
         let mut flow = Flow::Streaming;
         if self.index > 0 {
-            let Some(restart) = self.queue_restart(None, true) else {
+            let restart = match self.restart_state() {
+                Ok(state) => self.queue_restart(state, None, true),
+                Err(Unbuilt::XyUnknown) => return Some(XY_UNKNOWN.into()),
+                Err(Unbuilt::Unreadable) => None,
+            };
+            let Some(restart) = restart else {
                 self.index = 0;
                 return Some("Error with starting run.".into());
             };
@@ -238,16 +263,25 @@ impl Machine {
             // A second Resume must not lift and replunge mid-cut.
             return None;
         }
+        let restarts = !manual && self.job.flow.in_job();
+        let state = match restarts.then(|| self.restart_state()) {
+            // Refused before the `~`, so the job stays paused where it is.
+            Some(Err(Unbuilt::XyUnknown)) => return Some(XY_UNKNOWN.into()),
+            state => state,
+        };
         self.job.manual_z = None;
         self.release_firmware(now, effects);
         if manual {
             self.job.flow = if self.job.flow.in_job() { Flow::Streaming } else { Flow::Idle };
-        } else if self.job.flow.in_job() {
+        } else if let Some(mut state) = state {
             if let Some(units) = self.job.paused_units.filter(|&units| units != self.units()) {
                 self.follow_units(units == Units::Inches, effects);
+                // The state's numbers are in the units it was read in.
+                state = self.restart_state();
             }
             let paused_here = self.job.paused_at.filter(|&(index, _)| index == self.index && !tool_change);
-            if self.queue_restart(paused_here.map(|(_, z)| z), false).is_none() {
+            let z_target = paused_here.map(|(_, z)| z);
+            if state.ok().and_then(|state| self.queue_restart(state, z_target, false)).is_none() {
                 return Some("Error with resuming run.".into());
             }
             self.job.paused_units = None;

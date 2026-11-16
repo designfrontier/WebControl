@@ -8,19 +8,19 @@ use regex::Regex;
 use crate::py;
 
 static TOOL_WORD: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"T[\s\x1c-\x1f]*([0-9]+(?:\.[0-9]*)?)").expect("pattern"));
+    LazyLock::new(|| Regex::new(r"(?i)T[\s\x1c-\x1f]*([0-9]+(?:\.[0-9]*)?)").expect("pattern"));
 static FIRMWARE_NUMBER: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)").expect("pattern"));
 static ONLY_TOOL_WORD: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^[\s\x1c-\x1f]*(N[0-9]+[\s\x1c-\x1f]*)?T[\s\x1c-\x1f]*[0-9]+(\.[0-9]*)?[\s\x1c-\x1f]*$")
+    Regex::new(r"(?i)^[\s\x1c-\x1f]*(N[0-9]+[\s\x1c-\x1f]*)?T[\s\x1c-\x1f]*[0-9]+(\.[0-9]*)?[\s\x1c-\x1f]*$")
         .expect("pattern")
 });
 
-/// Python's `M0*[<last>](?![0-9.])` searched anywhere in the line.
+/// Python's `M0*[<last>](?![0-9.])` searched anywhere in the line, in either case as the firmware upper-cases it.
 fn has_m_word(line: &str, last: &[u8]) -> bool {
     let bytes = line.as_bytes();
     let continues = |at: Option<&u8>| at.is_some_and(|&b| b.is_ascii_digit() || b == b'.');
-    bytes.iter().enumerate().filter(|&(_, &b)| b == b'M').any(|(index, _)| {
+    bytes.iter().enumerate().filter(|&(_, &b)| b.eq_ignore_ascii_case(&b'M')).any(|(index, _)| {
         let rest = &bytes[index + 1..];
         let zeros = rest.iter().take_while(|&&b| b == b'0').count();
         (0..=zeros).any(|k| rest.get(k).is_some_and(|b| last.contains(b)) && !continues(rest.get(k + 1)))
@@ -38,7 +38,7 @@ pub fn changes_tool(line: &str) -> bool {
 }
 
 fn is_machine_command(line: &str) -> bool {
-    py::lstrip(line).starts_with(['B', '$'])
+    py::lstrip(line).starts_with(['B', 'b', '$'])
 }
 
 /// A line with nothing but a T word, which the firmware runs as an empty modal move.
@@ -125,18 +125,21 @@ mod tests {
         ["M0 ", "M00", "M01 ", "M1", "G1 X1 M0", "M2 M1 ", "M001. M1"]
             .iter()
             .for_each(|l| assert!(pauses_firmware(l), "{l}"));
-        ["M10 ", "M0.5 ", "M001. ", "M30", "m0 ", "G1 X1"].iter().for_each(|l| assert!(!pauses_firmware(l), "{l}"));
+        ["M10 ", "M0.5 ", "M001. ", "M30", "m30 ", "G1 X1"].iter().for_each(|l| assert!(!pauses_firmware(l), "{l}"));
+        ["m0 ", "g1 x1 m1"].iter().for_each(|l| assert!(pauses_firmware(l), "{l}"));
     }
 
     #[test]
     fn m6_and_m06_change_tool_but_m60_does_not() {
-        ["M6", "M06 ", "M006 ", "T2 M6"].iter().for_each(|line| assert!(changes_tool(line), "{line}"));
+        ["M6", "M06 ", "M006 ", "T2 M6", "m6", "t2 m06"].iter().for_each(|line| assert!(changes_tool(line), "{line}"));
         ["M60 ", "M6.1 ", "M16 ", "G6"].iter().for_each(|line| assert!(!changes_tool(line), "{line}"));
     }
 
     #[test]
     fn a_line_that_only_selects_a_tool() {
-        ["T2 ", "T 3 ", "N10 T2 ", "T2.0 ", " T2\n"].iter().for_each(|line| assert!(only_selects_tool(line), "{line}"));
+        ["T2 ", "T 3 ", "N10 T2 ", "T2.0 ", " T2\n", "t2 ", "n10 t2 "]
+            .iter()
+            .for_each(|line| assert!(only_selects_tool(line), "{line}"));
         ["T2 M6 ", "G0 T2", "T", "TX"].iter().for_each(|line| assert!(!only_selects_tool(line), "{line}"));
     }
 
@@ -147,6 +150,8 @@ mod tests {
         assert_eq!(tool_named_by("B14 L1 T2"), None);
         assert_eq!(tool_named_by("$13=T2"), None);
         assert_eq!(tool_named_by("G1 X1"), None);
+        assert_eq!(tool_named_by("m6 t4"), Some(4));
+        assert_eq!(tool_named_by("b14 l1 t2"), None);
     }
 
     #[test]
@@ -157,6 +162,7 @@ mod tests {
         assert_eq!(with_tool_first("T2 M6 ", 2), "T2 M6 ");
         assert_eq!(with_tool_first("G1 X1 ", 2), "G1 X1 ");
         assert_eq!(with_tool_first("B14 M6", 2), "B14 M6");
+        assert_eq!(with_tool_first("m6 t2 ", 2), "T2 m6 ");
     }
 
     #[test]

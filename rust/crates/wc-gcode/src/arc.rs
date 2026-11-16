@@ -388,6 +388,13 @@ mod tests {
     }
 
     #[test]
+    fn lower_case_units_and_g91_written_before_an_arc_are_followed() {
+        let at = after(&["g20", "g0 x1 y1", "g91"]);
+        assert_eq!(at.convert("g2 x1 y-1 r1").unwrap(), "g2 X2.0000 Y0.0000 I0.0000 J-1.0000");
+        assert_eq!(at.convert("g3 x1 y1 i0 j1 z-1").unwrap_err(), ArcProblem::RelativeZ);
+    }
+
+    #[test]
     fn each_command_on_a_line_is_read_in_turn() {
         let at = after(&["G21 "]);
         assert_eq!(

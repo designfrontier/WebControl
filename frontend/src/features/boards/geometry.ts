@@ -1,3 +1,4 @@
+import { decimalPoint } from "../../numbers/decimal";
 import type { Point } from "../../state/machine";
 
 export type Vertical = "top" | "middle" | "bottom";
@@ -32,8 +33,9 @@ export const alignedCenter = (router: Point, size: { width: number; height: numb
 
 /** A finite number from a text field, or null; blank is not zero. */
 export const parseNumber = (text: string) => {
-  const value = Number(text.trim());
-  return text.trim() !== "" && Number.isFinite(value) ? value : null;
+  const trimmed = decimalPoint(text.trim());
+  const value = Number(trimmed);
+  return trimmed !== "" && Number.isFinite(value) ? value : null;
 };
 
 export const formatNumber = (value: number) => String(Math.round(value * 100) / 100);

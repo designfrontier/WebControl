@@ -158,7 +158,9 @@ async fn api_state_reports_the_settings_and_the_rust_backend() {
         reply.json(),
         json!({"units": "MM", "distToMove": 2.5, "unitsZ": "MM", "distToMoveZ": 1.0,
             "homePosition": {"x": 12.5, "y": -3.0}, "pauseButtonSetting": "Pause", "jobInProgress": false,
-            "manualZAxisAdjust": false, "probing": false, "hostAddress": "10.0.0.5:5000", "controllerFirmwareVersion": 0.0,
+            "manualZAxisAdjust": false, "probing": false, "hostAddress": "10.0.0.5:5000",
+            "connectionStatus": {"status": "disconnected", "port": "none", "fakeServoStatus": false},
+            "controllerFirmwareVersion": 0.0,
             "controllerBoard": null, "firmwareBuild": null,
             "macros": [{"command": "macro1", "title": "Spindle on"}, {"command": "macro2", "title": ""}],
             "backend": "rust", "version": wc_server::VERSION,
@@ -334,14 +336,14 @@ async fn api_settings_describes_each_section() {
 #[tokio::test]
 async fn api_settings_marks_blank_numbers_numeric_and_keeps_unknown_fields_out() {
     let file = json!({"Advanced Settings": [
-        {"key": "homeX", "value": "", "default": "0", "type": "string", "custom": 1, "extra": true},
+        {"key": "pluginOffset", "value": "", "default": "0", "type": "string", "custom": 1, "extra": true},
         {"key": "odd", "value": 3}]});
     let advanced = request_with(settings(Some(file)).1, "GET", "/api/settings/advanced").await;
     advanced.checked("GET", "/api/settings/advanced");
     let list = advanced.json()["settings"].clone();
     assert_eq!(
         list[0],
-        json!({"key": "homeX", "title": "homeX", "desc": "", "type": "string", "value": "",
+        json!({"key": "pluginOffset", "title": "pluginOffset", "desc": "", "type": "string", "value": "",
         "custom": true, "numeric": true})
     );
     assert_eq!(list[1]["type"], "string");
@@ -385,6 +387,10 @@ async fn the_state_follows_the_machine() {
     let state = request_machine(on_51_292(Settings::defaults()), "GET", "/api/state").await;
     state.checked("GET", "/api/state");
     assert_eq!(state.json()["firmwareBuild"], "51.292");
+    assert_eq!(
+        state.json()["connectionStatus"],
+        json!({"status": "connected", "port": "/dev/ttyACM0", "fakeServoStatus": false})
+    );
 }
 
 #[test]

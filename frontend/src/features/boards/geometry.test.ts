@@ -49,6 +49,8 @@ describe("parseNumber", () => {
     ["  ", null],
     ["abc", null],
     ["1e999", null],
+    ["-3,25", -3.25],
+    ["1,234.5", null],
   ])("%j -> %s", (text, value) => {
     expect(parseNumber(text)).toBe(value);
   });

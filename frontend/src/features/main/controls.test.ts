@@ -39,11 +39,13 @@ describe("parseDistance", () => {
     ["5.", 5],
     [".5", 0.5],
     ["0", 0],
+    ["1,5", 1.5],
+    [",25", 0.25],
   ])("accepts %j", (text, value) => {
     expect(parseDistance(text, 3)).toBe(value);
   });
 
-  it.each(["", ".", "-1", "1.2345", "abc", "1e3", "1,5"])("rejects %j", (text) => {
+  it.each(["", ".", "-1", "1.2345", "abc", "1e3", "1,2345", "1,234.5", "1.234,5"])("rejects %j", (text) => {
     expect(parseDistance(text, 3)).toBeNull();
   });
 

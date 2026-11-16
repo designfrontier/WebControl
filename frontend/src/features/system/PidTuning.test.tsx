@@ -87,6 +87,21 @@ describe("PidTuning", () => {
     expect(velocity().getByRole("alert")).toHaveTextContent("Enter numbers for Start, Stop, Steps.");
   });
 
+  it("sends decimal commas as points and refuses mixed separators", async () => {
+    const fetch = systemFetch({ "POST /api/system/pid-test": () => jsonResponse({ status: "sent" }, 202) });
+    const { user } = renderPid({ fetch });
+    await loaded();
+    await fill(user, velocity, { Start: "0,5", Stop: "1.234,5", Steps: "4" });
+    await user.click(velocity().getByRole("button", { name: "Run velocity test" }));
+    expect(velocity().getByRole("alert")).toHaveTextContent("Enter numbers for Stop.");
+
+    await fill(user, velocity, { Stop: "2,25", Kp: "1,5" });
+    await user.click(velocity().getByRole("button", { name: "Run velocity test" }));
+    expect(await velocity().findByText(/Test sent/)).toBeInTheDocument();
+    const [, init] = fetch.mock.calls.find(([url]) => url === "/api/system/pid-test")!;
+    expect(JSON.parse(String(init?.body))).toMatchObject({ start: "0.5", stop: "2.25", steps: "4", kp: "1.5" });
+  });
+
   it("posts a position test with the chosen motor and version", async () => {
     const fetch = systemFetch({ "POST /api/system/pid-test": () => jsonResponse({ status: "sent" }, 202) });
     const { user } = renderPid({ fetch });
