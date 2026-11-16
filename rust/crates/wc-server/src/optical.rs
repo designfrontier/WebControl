@@ -353,18 +353,21 @@ mod tests {
     use super::*;
     use crate::serial::SimOpener;
 
-    /// Each frame carries the simulated sled's true X and Y.
-    struct SledCamera(SledPosition);
+    /// Each frame carries the simulated sled's true X and Y; `running` tells whether it is started.
+    struct SledCamera(SledPosition, Arc<Mutex<bool>>);
 
     impl Camera for SledCamera {
         fn start(&mut self, _: &CameraConfig) -> wc_optical::Result<()> {
+            *self.1.lock().unwrap() = true;
             Ok(())
         }
         fn next_frame(&mut self, _: Instant) -> wc_optical::Result<Frame> {
             let (x, y) = (self.0)();
             Ok(Frame { width: 16, height: 1, luma: [x.to_le_bytes(), y.to_le_bytes()].concat() })
         }
-        fn stop(&mut self) {}
+        fn stop(&mut self) {
+            *self.1.lock().unwrap() = false;
+        }
     }
 
     /// The target's squares sit 0.5 mm right of and 0.3 mm below their nominal places.
@@ -422,11 +425,13 @@ mod tests {
     #[tokio::test]
     async fn the_camera_server_answers_a_whole_scan_then_lets_the_camera_go() {
         let (machine, sled) = machine();
-        let opened = Arc::new(Mutex::new(0));
-        let count = opened.clone();
+        let (opened, running) = (Arc::new(Mutex::new(0)), Arc::new(Mutex::new(false)));
+        let (count, started) = (opened.clone(), running.clone());
         let open: Opener = Arc::new(move || {
             *count.lock().unwrap() += 1;
-            Ok(Box::new(SledCamera(sled.clone())) as Box<dyn Camera>)
+            let mut camera = SledCamera(sled.clone(), started.clone());
+            camera.start(&CameraConfig { width: 16, height: 1, fps: 5.0 })?;
+            Ok(Box::new(camera) as Box<dyn Camera>)
         });
         scan(&machine, Eyes { open, measure: seen, orientation: upright }).await;
         until(&machine, |s| state(s) == Some(ScanState::Done)).await;
@@ -434,6 +439,12 @@ mod tests {
         let (x, y) = grid.get(Cell { i: 1, j: 1 }).expect("measured");
         assert!((x - 0.5).abs() < 1e-6 && (y + 0.3).abs() < 1e-6, "{x}, {y}");
         assert_eq!(*opened.lock().unwrap(), 1, "the camera opened once and stayed open");
+        let stopped = async {
+            while *running.lock().unwrap() {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        };
+        tokio::time::timeout(Duration::from_secs(2), stopped).await.expect("the camera stops with the scan");
     }
 
     #[tokio::test]
@@ -447,6 +458,23 @@ mod tests {
         assert!(machine.snapshot().optical.scan.is_none());
     }
 
+    fn slow(frames: &[Frame], settings: &OpticalSettings, at: Option<&Orientation>) -> wc_optical::Result<Measurement> {
+        std::thread::sleep(Duration::from_secs(3));
+        seen(frames, settings, at)
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn stop_does_not_wait_for_a_measurement() {
+        let (machine, sled) = machine();
+        let open: Opener = Arc::new(move || Ok(Box::new(SledCamera(sled.clone(), Arc::default())) as Box<dyn Camera>));
+        scan(&machine, Eyes { open, measure: slow, orientation: upright }).await;
+        until(&machine, |s| state(s) == Some(ScanState::Measuring)).await;
+        let pressed = Instant::now();
+        machine.send(Event::Action(wc_protocol::Action::new("stopRun", json!(""), json!(""))));
+        until(&machine, |s| state(s) == Some(ScanState::Stopped)).await;
+        assert!(pressed.elapsed() < Duration::from_millis(100), "{:?}", pressed.elapsed());
+    }
+
     #[test]
     fn the_centre_defaults_to_the_middle_and_capture_takes_frames_frames() {
         let frame = Frame { width: 640, height: 480, luma: vec![0; 640 * 480] };
@@ -454,7 +482,7 @@ mod tests {
         assert_eq!(optical_centre(&settings, &frame), PixelPoint { x: 320.0, y: 100.0 });
         assert_eq!(annotated(&[], &settings), Err(OpticalError::NoFrame));
         let sim = Arc::new(Mutex::new(Sim::new(Build::holey_51_27())));
-        let mut camera = SledCamera(crate::cli::sled_position(sim));
+        let mut camera = SledCamera(crate::cli::sled_position(sim), Arc::default());
         assert_eq!(capture(&mut camera).unwrap().len(), FRAMES);
     }
 }
