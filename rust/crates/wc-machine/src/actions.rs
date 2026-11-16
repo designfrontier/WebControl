@@ -71,6 +71,13 @@ impl Machine {
         if self.upgrade.holds_link() && !crate::upgrade::allowed_while_flashing(command) {
             return effects.push(alert("Wait for the firmware upgrade to finish."));
         }
+        // Resume confirms a Z adjusted by hand, which the scan's raise asks for on a machine without a Z motor.
+        let optical_allowed = SAFE_WHILE_PROBING.contains(&command)
+            || crate::optical::COMMANDS.contains(&command)
+            || command == "resumeRun";
+        if self.optical_holds() && !optical_allowed {
+            return effects.push(alert(crate::optical::RUNNING));
+        }
         if self.probing && !SAFE_WHILE_PROBING.contains(&command) {
             return effects.push(alert(PROBING));
         }
@@ -177,10 +184,14 @@ impl Machine {
             _ if crate::setup::COMMANDS.contains(&command) => self.setup_action(action, effects),
             _ if crate::pid::COMMANDS.contains(&command) => self.pid_action(action),
             _ if crate::calibration::COMMANDS.contains(&command) => self.calibration_action(command),
+            _ if crate::optical::COMMANDS.contains(&command) => self.optical_action(command, now, effects),
             _ => Some(format!("Function not currently implemented.. Sorry.[{command}]")),
         };
         if let Some(text) = failure {
             effects.push(alert(&text));
+        }
+        if matches!(command, "stopRun" | "stopZ") {
+            self.optical_stopped(None, effects);
         }
     }
 

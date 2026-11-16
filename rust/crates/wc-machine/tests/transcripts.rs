@@ -6,7 +6,9 @@ use std::time::Duration;
 use serde_json::{Map, Value};
 use wc_config::{Settings, python_str};
 use wc_machine::calibration::{Kind, calculate};
+use wc_machine::optical::{Seen, Vision};
 use wc_machine::{Effect, Event, Machine, Request};
+use wc_protocol::optical::{Cell, Measurement, Orientation, PixelPoint, ScanRequest};
 use wc_protocol::{Action, Namespace};
 use wc_testkit::contract::Contract;
 use wc_testkit::runner::{SerialBackend, replay};
@@ -45,6 +47,7 @@ impl MachineBackend {
             Effect::Write(bytes) | Effect::Realtime(bytes) => self.written.extend(bytes),
             // The shell opens the port at once; the controller's banner then comes as the transcript's rx.
             Effect::OpenPort(port) => self.apply(Event::PortOpened { port }),
+            Effect::Vision(request) => self.apply(Event::Seen(camera(&request))),
             Effect::Push(push) if push.ns == Namespace::MaslowCnc => {
                 Contract::shared().validate_frame(&push.frame().encode()).unwrap();
                 let data = push.data["data"].as_str().and_then(|t| serde_json::from_str(t).ok());
@@ -105,6 +108,7 @@ impl SerialBackend for MachineBackend {
                 "holey" => Request::Calibrated(calculate(Kind::Holey, &self.settings(), &body)),
                 "triangular/accept" => Request::AcceptCalibration(Kind::Triangular),
                 "holey/accept" => Request::AcceptCalibration(Kind::Holey),
+                "optical/scan" => optical_scan(&body),
                 _ => return 404,
             },
             _ => return 404,
@@ -142,6 +146,34 @@ impl SerialBackend for MachineBackend {
     fn setting(&self, section: &str, key: &str) -> Option<String> {
         self.machine.snapshot().settings.text(section, key)
     }
+}
+
+/// The optical transcripts' target lies this far right of and above its nominal place, in mm.
+const TARGET_OFFSET: (f64, f64) = (0.8, -0.4);
+
+/// A camera that sees the sled where it was sent: square-on, 10 px per mm, the square `TARGET_OFFSET` away.
+fn camera(request: &Vision) -> Seen {
+    match request {
+        Vision::Measure { id, cell, target_mm, .. } => {
+            let (x, y) = wc_optical::grid::nominal_mm(*cell);
+            let (dx, dy) = (x + TARGET_OFFSET.0 - target_mm.0, y + TARGET_OFFSET.1 - target_mm.1);
+            let centre_px = PixelPoint { x: 320.0 + 10.0 * dx, y: 240.0 - 10.0 * dy };
+            let measurement = Measurement { dx_mm: dx, dy_mm: dy, centre_px, angle_deg: 0.0, frames_used: 10 };
+            Seen::Measured { id: *id, result: Ok(measurement), png: None }
+        }
+        Vision::Orient { id, .. } => {
+            Seen::Oriented { id: *id, result: Ok(Orientation { rotation_deg: 0.0, mirrored: false, px_per_mm: 10.0 }) }
+        }
+    }
+}
+
+/// The route's squares: the one `cell`, else the extents by rows (track A's `scan_order` once it lands).
+fn optical_scan(body: &Value) -> Request {
+    let scan: ScanRequest = serde_json::from_value(body.clone()).expect("a scan request");
+    let s = &scan.settings;
+    let rows = (s.br_y..=s.tl_y).rev().flat_map(|j| (s.tl_x..=s.br_x).map(move |i| Cell { i, j }));
+    let order = wc_optical::grid::scan_order(s).unwrap_or_else(|_| rows.collect());
+    Request::OpticalScan { cells: scan.cell.map_or(order, |cell| vec![cell]), settings: scan.settings }
 }
 
 fn corpus() -> Vec<Transcript> {

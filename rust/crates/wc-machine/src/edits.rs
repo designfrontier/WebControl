@@ -8,6 +8,7 @@ use serde_json::{Value, json};
 use wc_config::python_float_str;
 use wc_protocol::machine::{QuickConfigureForm, SettingsUpdate};
 use wc_protocol::main::{HomePositionMessage, RequestedSetting};
+use wc_protocol::optical::{Cell, GeometryFit, OpticalSettings};
 use wc_protocol::system::PidTest;
 
 use crate::calibration::{Calculated, Kind};
@@ -34,6 +35,14 @@ pub enum Request {
     Calibrated(Calculated),
     /// `POST /api/calibration/{kind}/accept`.
     AcceptCalibration(Kind),
+    /// `POST /api/calibration/optical/scan`, with the squares in scan order.
+    OpticalScan { settings: OpticalSettings, cells: Vec<Cell> },
+    /// `PUT /api/calibration/optical/settings`.
+    OpticalSettings(OpticalSettings),
+    /// `POST /api/calibration/optical/fit`'s answer, kept for Accept.
+    OpticalFitted(Box<GeometryFit>),
+    /// `POST /api/calibration/optical/accept`.
+    OpticalAccept,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -71,12 +80,26 @@ impl Machine {
         if settings_write && self.gcode_locked() {
             return Response::error(409, SETTINGS_LOCKED);
         }
+        let optical = matches!(
+            request,
+            Request::OpticalScan { .. }
+                | Request::OpticalSettings(_)
+                | Request::OpticalFitted(_)
+                | Request::OpticalAccept
+        );
+        if let Some(refused) = self.optical_edit_refused().filter(|_| !optical) {
+            return refused;
+        }
         match request {
             Request::UpdateSettings { section, body } => self.update_section(&section, &body, now, effects),
             Request::QuickConfigure(body) => self.quick_configure(&body),
             Request::PidTest(body) => self.pid_test(&body, now, effects),
             Request::Calibrated(calculated) => self.calibrated(calculated),
             Request::AcceptCalibration(kind) => self.accept_calibration(kind),
+            Request::OpticalScan { settings, cells } => self.optical_scan(settings, cells, now, effects),
+            Request::OpticalSettings(settings) => self.optical_save(settings),
+            Request::OpticalFitted(fit) => self.optical_fitted(*fit),
+            Request::OpticalAccept => self.optical_accept(),
         }
     }
 
@@ -163,6 +186,9 @@ impl Machine {
         let units = matches!(setting, "toInches" | "toMM" | "toInchesZ" | "toMMZ");
         if units && self.gcode_locked() {
             return effects.push(alert(SETTINGS_LOCKED));
+        }
+        if units && self.optical_holds() {
+            return effects.push(alert(crate::optical::RUNNING));
         }
         let done = match setting {
             "toInches" | "toMM" => self.switch_units(setting == "toInches", value, true, effects),

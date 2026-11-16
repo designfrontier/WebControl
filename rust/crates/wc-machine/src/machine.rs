@@ -90,6 +90,8 @@ pub enum Event {
     Computed(Done),
     /// From the server's capture task, while [`Snapshot::camera`] holds.
     Camera(crate::camera::CameraReport),
+    /// The camera's answer to an [`Effect::Vision`].
+    Seen(crate::optical::Seen),
 }
 
 /// What the shell must do after an event, in order.
@@ -126,6 +128,8 @@ pub enum Effect {
     Leds(Leds),
     /// Run off the machine task, then report `Event::Computed`.
     Compute(Work),
+    /// Capture or vision work for the optical scan, answered by `Event::Seen`.
+    Vision(crate::optical::Vision),
 }
 
 /// An `Arc` whose equality is identity, so comparing snapshots never walks the settings.
@@ -210,6 +214,7 @@ pub struct Snapshot {
     pub firmware_upgrade: FirmwareUpgrade,
     /// The live camera overlay is on; the server's capture task streams to it while this holds.
     pub camera: bool,
+    pub optical: Shared<crate::optical::View>,
 }
 
 impl Snapshot {
@@ -374,6 +379,7 @@ pub struct Machine {
     pub(crate) lanes: Lanes,
     /// `toggleCamera` turned the overlay on.
     pub(crate) camera_on: bool,
+    pub(crate) optical: crate::optical::Optical,
 }
 
 pub(crate) fn broadcast<M: Message>(message: &M) -> Effect {
@@ -431,6 +437,7 @@ impl Machine {
             restart: crate::sync::Restart::None,
             lanes: Lanes::default(),
             camera_on: false,
+            optical: crate::optical::Optical::default(),
         }
     }
 
@@ -484,6 +491,9 @@ impl Machine {
             Event::CheckForGcodeUpdate => self.gcode_update_requested(&mut effects),
             Event::CheckForBoardUpdate => self.push_board(&mut effects),
             Event::DirectoryCreated(name) => self.directory_created(name, &mut effects),
+            Event::Request { id, request } if self.optical_holds() && crate::optical::refuses(&request) => {
+                effects.push(Effect::Reply { id, reply: Reply::Refused(crate::optical::RUNNING.into()) });
+            }
             Event::Request { id, request } => {
                 let reply = self.request(request, &mut effects);
                 effects.push(Effect::Reply { id, reply });
@@ -495,8 +505,11 @@ impl Machine {
             }
             Event::Computed(done) => self.computed(done, &mut effects),
             Event::Camera(report) => self.camera_report(report, &mut effects),
+            Event::Seen(seen) => self.optical_seen(seen, now, &mut effects),
         }
+        self.optical_tick(now, &mut effects);
         self.pump(now, &mut effects);
+        self.optical_refresh();
         self.status_if_changed(&mut effects);
         let changed = !Arc::ptr_eq(&self.settings, &self.saved) && *self.settings != *self.saved;
         if std::mem::take(&mut self.settings_dirty) || changed {
@@ -574,6 +587,7 @@ impl Machine {
             settings: Shared(self.settings.clone()),
             firmware_upgrade: self.upgrade.view(),
             camera: self.camera_wanted(),
+            optical: Shared(self.optical.view()),
         }
     }
 }

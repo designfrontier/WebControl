@@ -1,0 +1,60 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "optical_alarm_mid_scan",
+    "description": "The controller raises an alarm during an optical scan's move: the scan ends at once as stopped with the alarm's message, its B10 L and every later move are dropped, and only the G90 it restores goes out once the controller has resynced. A jog stays refused until Stop clears the alarm.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "1770dab"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    },
+    "sled": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "bootBanner": [
+      "PCB v1.1 Detected",
+      "Grbl v1.00",
+      "ready",
+      "ok",
+      "[Forward Calculating Position]",
+      "position loaded at:",
+      "0.00",
+      "0.00"
+    ]
+  },
+  "events": [
+    {"type": "http", "method": "POST", "path": "/api/calibration/optical/scan", "json": {"settings": {"markerX": 0.6, "markerY": 0.6, "scaleX": 1.0, "scaleY": 1.0, "opticalCenterX": 0.0, "opticalCenterY": 0.0, "positionTolerance": 0.125, "tlX": -15, "tlY": 7, "brX": 15, "brY": -7, "calibrationExtents": "Full Area", "autoScanDirection": 0, "gaussianBlurValue": 5, "cannyLowValue": 50.0, "cannyHighValue": 100.0, "feedRate": 500.0, "settleTime": 1.0}, "cell": {"i": 3, "j": 0}}, "status": 200},
+    {"type": "tx", "bytes": "G21 \n"},
+    {"type": "rx", "line": "G21"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90 \n"},
+    {"type": "rx", "line": "G90"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 Z5.0  \n"},
+    {"type": "rx", "line": "G0 Z5.0"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 X228.6 Y0.0 F500.0 \n"},
+    {"type": "rx", "line": "G1 X228.6 Y0.0 F500.0"},
+    {"type": "rx", "line": "ALARM: The sled is not keeping up with its expected position and has halted. Click the 'Stop' button to clear the alarm. More information at: https://github.com/MaslowCNC/Firmware/wiki/Keeping-Up  ", "comment": "sys.stop: the move is flushed without an ok"},
+    {"type": "expect", "emitted": [{"command": "alarm", "data": {"message": "Alarm: Sled Not Keeping Up"}}, {"command": "opticalScanProgress", "data": {"state": "stopped", "error": "Alarm: Sled Not Keeping Up"}}]},
+    {"type": "tick", "seconds": 0.3},
+    {"type": "rx", "line": "<Idle,MPos:3.10,0.00,5.00,WPos:0.000,0.000,0.000>"},
+    {"type": "tx", "bytes": "G90 \n", "comment": "moves nothing, so it survives the alarm"},
+    {"type": "rx", "line": "G90"},
+    {"type": "rx", "line": "ok"},
+    {"type": "ui", "action": {"command": "move", "arg": "right", "arg1": "10"}},
+    {"type": "expect", "alerts": [{"message": "The controller raised an alarm and halted."}]},
+    {"type": "ui", "action": {"command": "stopRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "!\n", "realtime": true},
+    {"type": "expect", "emitted": [{"command": "clearAlarm"}], "notEmitted": [{"command": "opticalScanProgress"}]}
+  ]
+}
