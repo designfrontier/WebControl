@@ -498,6 +498,11 @@ until a transcript and this list change together.
    about 1 line in 290 (each written 0–40 ms after the previous `ok`), where v0.94 lost none in 165,876; it returned
    to v0.94's pacing on 2026-11-15 (`spec/firmware.md` B3). The runner checks only that a line comes after what
    releases it and within `txTimeout`, so no transcript changed; `wc-machine`'s `tests/link.rs` pins the timing.
+   Since 2026-11-16 the pacing is two settings, `linePacingMode` (`v0.94`, the default, or `minimum gap`: wait only
+   for the rest of the gap since the last write) and `linePacingGapMs` (0–500, default 50), changeable mid-job from
+   the run panel (`PUT /api/run/pacing`) and in effect from the next line. Transcripts run with the defaults, so
+   every one replays as before; `wc-machine`'s `tests/pacing.rs` pins each mode at 0, 25, 50 and 100 ms. Each
+   change, job start and job end writes a `PACING` line to the serial log (B3).
 
 ## Rust-intended deviations
 

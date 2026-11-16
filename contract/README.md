@@ -63,6 +63,11 @@ ends it. **The Rust backend differs from Python here on purpose:**
   `gcodeFile` message `{"file": ...}` broadcasts the same value whenever it changes, so every open screen shows which
   file a job is cutting; a resync resends it. An edit keeps the name. Python sends neither; the field defaults to
   `null`.
+- `GET /api/state` carries `pacing`, the line pacing and its statistics (`spec/firmware.md` B3) as the `pacingStats`
+  push last sent them; `GET /api/run/pacing` returns the same. `pacingStats` is broadcast when the pacing changes, a
+  job starts or ends, and every 2 s during a job, and a resync resends it. `PUT /api/run/pacing` takes
+  `{"values": {"linePacingMode", "linePacingGapMs"}}`, checked as the WebControl Settings screen checks them, and
+  answers the new `pacingStats`; unlike the settings screens it is not refused during a job. Python has none of it.
 - `GET /api/state` carries `connectionStatus`, the same object the `connectionStatus` push carries, so a client that
   missed the connect-time push still learns the link state; a push that arrives first wins. Python never sends it.
 

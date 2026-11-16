@@ -258,6 +258,23 @@ to an int, so G91.1 and G90.1 switch G0/G1 to relative and absolute like G91 and
    not the rest of the 50 ms; `!` and `~` are never paced. On the owner's cuts (51.27, router on) waiting
    only for the rest lost about 1 line in 290 (B18 sent each again), every one written 0–40 ms after the previous
    `ok`; v0.94's pacing lost none in 165,876 lines, and an air cut lost none under either.
+   Adjustable for the loss-rate experiment (2026-11-16): `linePacingMode` (WebControl Settings) is `v0.94` (the
+   above, default) or `minimum gap` (wait only until `linePacingGapMs` has passed since the last write), and
+   `linePacingGapMs` is 0–500 (default 50; 0 never waits). Both apply from the next line, also mid-job through the
+   run panel's `PUT /api/run/pacing`, which the job lock does not refuse; `!` and `~` are never paced (Rust never
+   sends `?`: the firmware reports on its own). A segment is a job's stretch at one pacing: it starts with the job or
+   a change and ends with a change, the job's end or Stop. Its lines (job lines written, not resends), losses (B18
+   detections, so a line lost twice counts twice), lines lost twice, streaming time (pauses excluded, recoveries
+   included), recovery time (from a lost line's write to its resend), lines/min, s/line and the median gap before
+   each write whose line was acked within the gap plus 100 ms (pacing overhead apart from long moves) are pushed
+   as `pacingStats` (every 2 s during a job) and kept for the last 10 segments. Each end writes one line, in this
+   stable form, to the serial log, the service log and the console:
+   `PACING SEGMENT mode=v0.94 gap_ms=50 lines=2284 lost=9 lost_twice=0 lost_pct=0.39 lines_per_min=507.2
+   s_per_line=0.118 recovery_s=7.1 median_short_gap_ms=62 duration_s=270.3 file_line_start=1 file_line_end=2284
+   ended_by=job_end` (`mode` is `v0.94` or `minimum_gap`; `ended_by` is `pacing_change`, `job_end` or `stop`;
+   unknown numbers are `none`), then for a change `PACING CHANGE at file line N: v0.94 50 ms -> minimum gap 25 ms`.
+   A job writes `PACING JOB START at file line N: <pacing>` and, at its end, a `PACING JOB` line with the same keys
+   (its first pacing) and `PACING JOB END after file line N (<why>): <pacing>`.
 4. Realtime: `!` resets accounting (immediate `ok`, no ack for the aborted line); `~` immediate `ok`.
 5. Sanitise outgoing lines: strip comments, reject an unclosed `(`, remove `!`, `~`, backtick, `?` and control
    characters, and upper-case the rest (§1); read every line WebControl inspects (file, typed, restart, preview)
