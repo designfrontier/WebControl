@@ -45,6 +45,11 @@ describe("parseOpticalForm", () => {
     });
   });
 
+  it("reads a decimal comma as a point", () => {
+    const form = { ...toForm(opticalSettings()), markerX: "0,5", settleTime: "1,5" };
+    expect(parseOpticalForm(form)).toEqual({ settings: opticalSettings({ markerX: 0.5, settleTime: 1.5 }) });
+  });
+
   it("reports non-numbers and corners outside the 31 x 15 grid", () => {
     const form = { ...toForm(opticalSettings()), scaleX: "big", tlX: "-16", brY: "1.5", tlY: "7", feedRate: "" };
     expect(parseOpticalForm(form)).toEqual({
