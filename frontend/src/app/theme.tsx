@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import { useMachine } from "./context";
-import { ThemeContext, applyPreference, forgetPreference, readPreference } from "./themePreference";
+import { ThemeContext, applyPreference, readPreference, rememberPreference } from "./themePreference";
 import type { Theme } from "./themePreference";
 
 const DARK_QUERY = "(prefers-color-scheme: dark)";
@@ -19,12 +19,12 @@ const systemTheme = (): Theme => (darkQuery()?.matches ? "dark" : "light");
 /** Shows the server's uiTheme, which every client shares; "system" follows this device. */
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const server = useMachine((state) => state.theme);
-  const [legacy] = useState(readPreference);
-  const preference = server ?? legacy;
+  const [remembered] = useState(readPreference);
+  const preference = server ?? remembered;
   const system = useSyncExternalStore(subscribeToSystem, systemTheme);
   useLayoutEffect(() => applyPreference(preference), [preference]);
   useEffect(() => {
-    if (server) forgetPreference();
+    if (server) rememberPreference(server);
   }, [server]);
 
   return (

@@ -166,10 +166,16 @@ test.describe("the display theme", () => {
     });
   });
 
-  test("replaces an older build's per-browser choice once the server's theme loads", async ({ page }) => {
+  test("starts each load in the theme last seen, then follows the server's", async ({ page, request }) => {
     await page.evaluate(() => localStorage.setItem("webcontrol.theme", "dark"));
     await page.reload();
     await expect(page.locator("html")).not.toHaveAttribute("data-theme");
     await expect.poll(() => page.evaluate(() => localStorage.getItem("webcontrol.theme"))).toBeNull();
+
+    await setTheme(request, "light");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await page.route("**/api/state", (route) => route.abort());
+    await page.reload();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   });
 });

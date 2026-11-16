@@ -6,7 +6,7 @@ import { ThemeProvider } from "./theme";
 import { useTheme } from "./themePreference";
 
 const theme = () => document.documentElement.getAttribute("data-theme");
-const LEGACY_KEY = "webcontrol.theme";
+const STORAGE_KEY = "webcontrol.theme";
 
 afterEach(() => {
   localStorage.clear();
@@ -32,27 +32,39 @@ describe("theme", () => {
     expect(store.getState().theme).toBe("system");
   });
 
-  it("shows an older build's per-browser choice only until the server's theme arrives, then forgets it", async () => {
-    localStorage.setItem(LEGACY_KEY, "dark");
-    renderApp("/", { fetch: fakeFetch({ "GET /api/state": startupState({ theme: "system" }) }) });
+  it("starts a load with the theme this browser last saw, before the server answers", async () => {
+    const first = renderApp("/", { fetch: fakeFetch({ "GET /api/state": startupState({ theme: "dark" }) }) });
+    await waitFor(() => expect(localStorage.getItem(STORAGE_KEY)).toBe("dark"));
+    first.unmount();
+    document.documentElement.removeAttribute("data-theme");
+
+    renderApp("/", { fetch: fakeFetch({ "GET /api/state": () => new Promise<Response>(() => {}) }) });
+    expect(theme()).toBe("dark");
+  });
+
+  it("replaces a stored choice with the server's theme once it arrives", async () => {
+    localStorage.setItem(STORAGE_KEY, "dark");
+    const { socket } = renderApp("/", { fetch: fakeFetch({ "GET /api/state": startupState({ theme: "system" }) }) });
     expect(theme()).toBe("dark");
     await waitFor(() => expect(theme()).toBeNull());
-    expect(localStorage.getItem(LEGACY_KEY)).toBeNull();
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+    socket.serverMessage("theme", { theme: "light" });
+    expect(localStorage.getItem(STORAGE_KEY)).toBe("light");
   });
 
   it("keeps the per-browser choice while the server names no theme", async () => {
-    localStorage.setItem(LEGACY_KEY, "light");
+    localStorage.setItem(STORAGE_KEY, "light");
     const { store } = renderApp("/");
     await waitFor(() => expect(store.getState().hostAddress).toBe("192.168.1.20:5000"));
     expect(theme()).toBe("light");
-    expect(localStorage.getItem(LEGACY_KEY)).toBe("light");
+    expect(localStorage.getItem(STORAGE_KEY)).toBe("light");
   });
 
   it("applies the server's theme when the browser blocks storage", async () => {
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
       throw new Error("blocked");
     });
-    vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
       throw new Error("blocked");
     });
     renderApp("/", { fetch: fakeFetch({ "GET /api/state": startupState({ theme: "light" }) }) });

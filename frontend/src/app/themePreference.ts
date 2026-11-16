@@ -4,23 +4,24 @@ import type { ThemePreference } from "../protocol";
 export type { ThemePreference };
 export type Theme = "light" | "dark";
 
-const LEGACY_KEY = "webcontrol.theme";
+const STORAGE_KEY = "webcontrol.theme";
 
-/** The per-browser choice older builds stored, shown only until the server's uiTheme arrives. */
+/** The server's uiTheme as this browser last saw it, shown only until /api/state loads. */
 export const readPreference = (): ThemePreference => {
   try {
-    const stored = localStorage.getItem(LEGACY_KEY);
+    const stored = localStorage.getItem(STORAGE_KEY);
     return stored === "light" || stored === "dark" ? stored : "system";
   } catch {
     return "system";
   }
 };
 
-export const forgetPreference = () => {
+export const rememberPreference = (preference: ThemePreference) => {
   try {
-    localStorage.removeItem(LEGACY_KEY);
+    if (preference === "system") localStorage.removeItem(STORAGE_KEY);
+    else localStorage.setItem(STORAGE_KEY, preference);
   } catch {
-    // Blocked storage has nothing to forget.
+    // Blocked storage only costs the next load its head start.
   }
 };
 
