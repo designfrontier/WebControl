@@ -133,6 +133,20 @@ fn fake_rpicam(dir: &Path, body: &str) -> RpicamCamera {
     rpicam
 }
 
+/// Linux refuses to run a script another test's fork still holds open for writing ("Text file busy"); retry.
+#[cfg(unix)]
+fn start(rpicam: &mut RpicamCamera, config: &CameraConfig) {
+    let busy = |error: &OpticalError| error.to_string().contains("Text file busy");
+    let started = (0..50).find_map(|_| match rpicam.start(config) {
+        Err(error) if busy(&error) => {
+            std::thread::sleep(Duration::from_millis(20));
+            None
+        }
+        other => Some(other),
+    });
+    started.expect("the fake rpicam-vid stayed busy").unwrap();
+}
+
 #[cfg(unix)]
 #[test]
 fn rpicam_streams_whole_jpegs_then_reports_that_it_stopped() {
@@ -143,7 +157,7 @@ fn rpicam_streams_whole_jpegs_then_reports_that_it_stopped() {
     let body = "sleep 0.3; cat \"$D/1.jpg\"; sleep 0.5; cat \"$D/2.jpg\"; printf '\\377\\330cut'; \
                 echo 'camera unplugged' >&2";
     let mut rpicam = fake_rpicam(&scratch.0, body);
-    rpicam.start(&CameraConfig { width: 320, height: 240, fps: 5.0 }).unwrap();
+    start(&mut rpicam, &CameraConfig { width: 320, height: 240, fps: 5.0 });
     let soon = || Instant::now() + Duration::from_secs(5);
     assert_eq!(rpicam.next_jpeg(soon()).unwrap(), first);
     assert_eq!(rpicam.next_jpeg(soon()).unwrap(), second);
@@ -160,7 +174,7 @@ fn rpicam_decodes_frames_waits_until_the_deadline_and_stops_its_process() {
     let scratch = Scratch::new("rpicam-wait");
     std::fs::write(scratch.0.join("1.jpg"), jpeg(90)).unwrap();
     let mut rpicam = fake_rpicam(&scratch.0, "sleep 0.3; cat \"$D/1.jpg\"; exec sleep 30");
-    rpicam.start(&CameraConfig { width: 32, height: 24, fps: 5.0 }).unwrap();
+    start(&mut rpicam, &CameraConfig { width: 32, height: 24, fps: 5.0 });
     let frame = rpicam.next_frame(Instant::now() + Duration::from_secs(5)).unwrap();
     assert_eq!((frame.width, frame.height), (32, 24));
     let waited = Instant::now();
