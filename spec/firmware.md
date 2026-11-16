@@ -272,9 +272,10 @@ to an int, so G91.1 and G90.1 switch G0/G1 to relative and absolute like G91 and
    `PACING SEGMENT mode=v0.94 gap_ms=50 lines=2284 lost=9 lost_twice=0 lost_pct=0.39 lines_per_min=507.2
    s_per_line=0.118 recovery_s=7.1 median_short_gap_ms=62 duration_s=270.3 file_line_start=1 file_line_end=2284
    ended_by=job_end` (`mode` is `v0.94` or `minimum_gap`; `ended_by` is `pacing_change`, `job_end` or `stop`;
-   unknown numbers are `none`), then for a change `PACING CHANGE at file line N: v0.94 50 ms -> minimum gap 25 ms`.
-   A job writes `PACING JOB START at file line N: <pacing>` and, at its end, a `PACING JOB` line with the same keys
-   (its first pacing) and `PACING JOB END after file line N (<why>): <pacing>`.
+   unknown numbers are `none`), then for a change `PACING CHANGE file_line=N mode=minimum_gap gap_ms=25
+   from_mode=v0.94 from_gap_ms=50`. A job writes `PACING JOB START file_line=N mode=... gap_ms=...` and, at its end,
+   a `PACING JOB` line with the segment keys (its first pacing) and `PACING JOB END file_line_end=N mode=... gap_ms=...
+   ended_by=...`. Every word after the upper-case label is a `key=value` pair.
 4. Realtime: `!` resets accounting (immediate `ok`, no ack for the aborted line); `~` immediate `ok`.
 5. Sanitise outgoing lines: strip comments, reject an unclosed `(`, remove `!`, `~`, backtick, `?` and control
    characters, and upper-case the rest (§1); read every line WebControl inspects (file, typed, restart, preview)

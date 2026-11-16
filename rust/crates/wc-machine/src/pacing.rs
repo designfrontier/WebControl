@@ -64,13 +64,12 @@ impl Default for Pacing {
     }
 }
 
-impl std::fmt::Display for Pacing {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {} ms", self.mode.setting(), self.gap.as_millis())
-    }
-}
-
 impl Pacing {
+    /// `mode=minimum_gap gap_ms=25`, as every `PACING` log line names a pacing.
+    fn fields(self) -> String {
+        format!("mode={} gap_ms={}", self.mode.slug(), self.gap.as_millis())
+    }
+
     /// The settings' pacing; a value the settings screens would refuse reads as its default.
     pub fn read(settings: &Settings) -> Pacing {
         let mode = match settings.value(SECTION, MODE_KEY).and_then(|v| v.as_str()) {
@@ -187,11 +186,10 @@ impl Tally {
         let number = |value: Option<f64>| value.map_or("none".to_string(), |n| n.to_string());
         let line = |index: Option<usize>| index.map_or("none".to_string(), |i| (i + 1).to_string());
         format!(
-            "PACING {label} mode={} gap_ms={} lines={} lost={} lost_twice={} lost_pct={} lines_per_min={} \
+            "PACING {label} {} lines={} lost={} lost_twice={} lost_pct={} lines_per_min={} \
              s_per_line={} recovery_s={} median_short_gap_ms={} duration_s={} file_line_start={} file_line_end={} \
              ended_by={}",
-            self.pacing.mode.slug(),
-            report.gap_ms,
+            self.pacing.fields(),
             report.lines,
             report.lost,
             report.lost_twice,
@@ -203,9 +201,13 @@ impl Tally {
             report.elapsed_s,
             line(self.first_line),
             line(self.last_line),
-            ended_by.replace(' ', "_").to_lowercase(),
+            slug(ended_by),
         )
     }
+}
+
+fn slug(text: &str) -> String {
+    text.replace(' ', "_").to_lowercase()
 }
 
 fn round(value: f64, scale: f64) -> f64 {
@@ -304,12 +306,13 @@ impl Machine {
             self.stats.dirty = true;
             if self.stats.in_job && in_job {
                 self.end_segment("pacing change", now, effects);
-                announce(format!("PACING CHANGE at file line {file_line}: {old} -> {pacing}"), effects);
+                let from = format!("from_mode={} from_gap_ms={}", old.mode.slug(), old.gap.as_millis());
+                announce(format!("PACING CHANGE file_line={file_line} {} {from}", pacing.fields()), effects);
                 self.stats.segment = Some(Tally::new(pacing));
             }
         }
         if in_job && !self.stats.in_job {
-            announce(format!("PACING JOB START at file line {file_line}: {pacing}"), effects);
+            announce(format!("PACING JOB START file_line={file_line} {}", pacing.fields()), effects);
             self.stats.job = Some(Tally::new(pacing));
             self.stats.segment = Some(Tally::new(pacing));
             self.stats.pending.clear();
@@ -327,7 +330,8 @@ impl Machine {
             if let Some(job) = &self.stats.job {
                 announce(job.summary("JOB", now, why), effects);
             }
-            announce(format!("PACING JOB END after file line {last} ({why}): {pacing}"), effects);
+            let fields = pacing.fields();
+            announce(format!("PACING JOB END file_line_end={last} {fields} ended_by={}", slug(why)), effects);
             self.stats.dirty = true;
         }
     }

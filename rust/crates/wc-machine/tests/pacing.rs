@@ -5,6 +5,7 @@ mod rig;
 
 use std::collections::HashMap;
 
+use rig::sim::SimRig;
 use rig::{Rig, pushed, settings, written};
 use serde_json::{Value, json};
 use wc_machine::{Effect, Event, Request, Response};
@@ -146,13 +147,14 @@ fn the_pacing_endpoint_works_during_a_job_where_the_settings_screens_are_locked(
     assert_eq!((response.body["mode"].clone(), response.body["gapMs"].clone()), (json!("minimum gap"), json!(25)));
 }
 
-/// `PACING <label> key=value ...` as a log reader would split it.
+/// `PACING <LABEL WORDS> key=value ...` as a log reader would split it: every word after the label is a pair.
 fn parse(line: &str) -> (String, HashMap<String, String>) {
-    let mut words = line.split(' ');
-    assert_eq!(words.next(), Some("PACING"));
-    let label = words.next().unwrap().to_string();
-    let fields = words.map(|word| word.split_once('=').expect(word)).map(|(k, v)| (k.into(), v.into())).collect();
-    (label, fields)
+    let words: Vec<&str> = line.split(' ').collect();
+    assert_eq!(words[0], "PACING");
+    let label = words[1..].iter().take_while(|word| !word.contains('=')).copied().collect::<Vec<_>>().join(" ");
+    let pairs = &words[1 + label.split(' ').count()..];
+    let fields = pairs.iter().map(|word| word.split_once('=').expect(line)).map(|(k, v)| (k.into(), v.into()));
+    (label, fields.collect())
 }
 
 fn logged(effects: &[Effect]) -> Vec<String> {
@@ -200,26 +202,28 @@ fn a_pacing_change_ends_the_segment_with_a_parsable_summary_and_marks_the_new_on
     effects.extend(stream(&mut rig, 1000));
     effects.extend(rig.advance(100));
     let log = logged(&effects);
-    assert_eq!(log[0], "PACING JOB START at file line 1: v0.94 50 ms");
-    let (label, first) = parse(&log[1]);
-    assert_eq!(label, "SEGMENT");
+    let parsed: Vec<_> = log.iter().map(|line| parse(line)).collect();
+    let labels: Vec<&str> = parsed.iter().map(|(label, _)| label.as_str()).collect();
+    assert_eq!(labels, ["JOB START", "SEGMENT", "CHANGE", "SEGMENT", "JOB", "JOB END"]);
+    assert_eq!(log[0], "PACING JOB START file_line=1 mode=v0.94 gap_ms=50");
+    let first = &parsed[1].1;
     let field = |fields: &HashMap<String, String>, key: &str| fields[key].clone();
     assert_eq!(
         ["mode", "gap_ms", "lines", "lost", "lost_twice", "file_line_start", "file_line_end", "ended_by"]
-            .map(|key| field(&first, key)),
+            .map(|key| field(first, key)),
         ["v0.94", "50", "3", "0", "0", "1", "3", "pacing_change"]
     );
-    assert_eq!(field(&first, "median_short_gap_ms"), "60", "a 10 ms ack, then a full 50 ms");
-    assert_eq!(log[2], "PACING CHANGE at file line 4: v0.94 50 ms -> minimum gap 25 ms");
-    let (_, second) = parse(&log[3]);
+    assert_eq!(field(first, "median_short_gap_ms"), "60", "a 10 ms ack, then a full 50 ms");
+    assert_eq!(log[2], "PACING CHANGE file_line=4 mode=minimum_gap gap_ms=25 from_mode=v0.94 from_gap_ms=50");
+    let second = &parsed[3].1;
     assert_eq!(
-        ["mode", "gap_ms", "lines", "file_line_start", "file_line_end", "ended_by"].map(|key| field(&second, key)),
+        ["mode", "gap_ms", "lines", "file_line_start", "file_line_end", "ended_by"].map(|key| field(second, key)),
         ["minimum_gap", "25", "5", "4", "8", "job_end"]
     );
-    assert_eq!(field(&second, "median_short_gap_ms"), "30", "a 10 ms ack, then 25 ms since the write in 10 ms ticks");
-    let (label, job) = parse(&log[4]);
-    assert_eq!((label.as_str(), field(&job, "lines"), field(&job, "mode")), ("JOB", "8".into(), "v0.94".into()));
-    assert_eq!(log[5], "PACING JOB END after file line 8 (job end): minimum gap 25 ms");
+    assert_eq!(field(second, "median_short_gap_ms"), "30", "a 10 ms ack, then 25 ms since the write in 10 ms ticks");
+    let job = &parsed[4].1;
+    assert_eq!((field(job, "lines"), field(job, "mode")), ("8".into(), "v0.94".into()));
+    assert_eq!(log[5], "PACING JOB END file_line_end=8 mode=minimum_gap gap_ms=25 ended_by=job_end");
     assert_eq!(
         console(&effects).iter().filter(|text| text.starts_with("PACING")).collect::<Vec<_>>(),
         log.iter().collect::<Vec<_>>()
@@ -285,4 +289,89 @@ fn the_stats_are_pushed_every_2_s_during_a_job_and_resent_on_resync() {
     assert!(pushed(&rig.send(Event::ClientResync { sid: "s1".into() }), "pacingStats").len() == 1);
     rig.act("stopRun");
     assert!(pushed(&rig.advance(4000), "pacingStats").is_empty(), "nothing outside a job");
+}
+
+fn buffered_sim(mode: &str, gap: u64) -> SimRig {
+    let mut rig = SimRig::with(settings(&[
+        ("Maslow Settings", "zAxis", json!(1)),
+        ("Maslow Settings", "bufferOn", json!(1)),
+        ("WebControl Settings", "linePacingMode", json!(mode)),
+        ("WebControl Settings", "linePacingGapMs", json!(gap)),
+    ]));
+    rig.sim.move_ms = 200;
+    rig
+}
+
+fn job_lines(count: usize) -> Vec<String> {
+    let mut lines: Vec<String> = (0..count).map(|n| format!("G1 X{n} Y{} F800", n % 7)).collect();
+    lines.insert(count / 2, ARC.to_string());
+    lines
+}
+
+/// What the simulator received of the job, in order, realtime and setup lines aside.
+fn job_written(rig: &SimRig, lines: &[String]) -> Vec<String> {
+    rig.written.iter().map(|line| line.trim_end().to_string()).filter(|line| lines.contains(line)).collect()
+}
+
+#[test]
+fn a_zero_gap_still_fills_the_ring_only_as_far_as_the_byte_accounting_allows() {
+    let mut rig = buffered_sim("minimum gap", 0);
+    let lines = job_lines(60);
+    rig.machine.load_gcode(&lines.join("\n"));
+    rig.take();
+    rig.act("startRun");
+    rig.run(30_000);
+    assert!(!rig.machine.snapshot().job_in_progress);
+    assert_eq!(rig.sim.overflows(), 0);
+    assert!((61..=127).contains(&rig.sim.max_unread()), "full but never over: {}", rig.sim.max_unread());
+    assert_eq!(job_written(&rig, &lines), lines, "each line once, in order");
+}
+
+#[test]
+fn pacing_changes_every_few_hundred_ms_mid_job_neither_skip_nor_repeat_a_line() {
+    let mut rig = buffered_sim("v0.94", 50);
+    let lines = job_lines(80);
+    rig.machine.load_gcode(&lines.join("\n"));
+    rig.take();
+    rig.act("startRun");
+    let pacings = [("minimum gap", 0), ("v0.94", 100), ("minimum gap", 25), ("v0.94", 0), ("minimum gap", 500)];
+    (0..40).for_each(|n| {
+        let (mode, gap) = pacings[n % pacings.len()];
+        let body = json!({"values": {"linePacingMode": mode, "linePacingGapMs": gap}});
+        rig.send(Event::Edit { id: 9, request: Request::Pacing(body) });
+        rig.run(300);
+    });
+    rig.run(60_000);
+    assert!(!rig.machine.snapshot().job_in_progress);
+    assert_eq!(rig.sim.overflows(), 0);
+    assert_eq!(job_written(&rig, &lines), lines);
+    assert!(!rig.written.iter().any(|line| line.starts_with('$')), "no setting reached the controller mid-job");
+    let segments = (*rig.machine.snapshot().pacing.0).clone();
+    assert_eq!(segments.job.unwrap().lines, lines.len() as u64);
+}
+
+#[test]
+fn stop_goes_out_at_once_at_every_gap_in_both_modes() {
+    [("v0.94", 0), ("v0.94", 500), ("minimum gap", 0), ("minimum gap", 500)].into_iter().for_each(|(mode, gap)| {
+        let mut rig = paced(mode, gap);
+        rig.machine.load_gcode(&file(&["G0 X1", "G0 X2", "G0 X3"]));
+        rig.act("startRun");
+        assert_eq!(written(&rig.act("stopRun")), ["!"], "{mode} {gap}");
+    });
+}
+
+#[test]
+fn a_pacing_change_while_a_line_waits_for_its_ack_leaves_the_lost_line_watch_alone() {
+    let mut rig = Rig::connected();
+    rig.machine.load_gcode(&file(&["G1 X1", ARC, "G1 X3"]));
+    rig.act("startRun");
+    rig.rx("G1 X1");
+    rig.rx("ok");
+    assert_eq!(written(&rig.advance(100)), [ARC]);
+    let (_, effects) = set_pacing(&mut rig, "minimum gap", json!(0));
+    assert!(written(&effects).is_empty(), "the arc still waits for its ack");
+    assert_eq!(written(&reports(&mut rig, 400)), Vec::<String>::new(), "two empty reports are not enough");
+    assert_eq!(written(&reports(&mut rig, 200)), [ARC], "the third sends it again, as with no change");
+    rig.rx(ARC);
+    assert_eq!(written(&rig.rx("ok")), ["G1 X3"], "then the next line, at once with no gap");
 }

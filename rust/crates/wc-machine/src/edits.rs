@@ -155,9 +155,11 @@ impl Machine {
         if !errors.is_empty() {
             return Response { status: 400, body: json!({ "errors": errors }) };
         }
+        // Stored without the recompute a settings save runs, so no `$` line can join a running job.
+        let settings = Arc::make_mut(&mut self.settings);
         section.settings.iter().for_each(|field| {
             if let Some(value) = update.values.get(&field.key) {
-                self.write_setting(pacing::SECTION, &field.key, &forms::form_value(field, value));
+                settings.store(pacing::SECTION, &field.key, &forms::form_value(field, value));
             }
         });
         self.pacing_observe(now, effects);
