@@ -317,9 +317,9 @@ fn a_simulated_eeprom_restore_leaves_a_controller_that_still_moves_after_a_power
     let sim = Sim::new(Build::holey_51_27()).with_eeprom_reset();
     let mut rig = SimRig::on(settings(&[("Maslow Settings", "zAxis", json!(1))]), sim);
     rig.run(3000);
-    assert_eq!(rig.sim.setting(24), Some(1.0), "written as text readFloat reads as exactly 1");
+    [24, 28, 32, 36].iter().for_each(|&key| assert_eq!(rig.sim.setting(key), Some(1.0), "${key} reads as exactly 1"));
     power_cycle(&mut rig);
-    assert!(rig.sim.main_axes_tuned());
+    assert!(rig.sim.main_axes_tuned() && rig.sim.z_axis_tuned());
     assert!(jogs(&mut rig), "the sled moved: {:?}", rig.sim.position());
 }
 

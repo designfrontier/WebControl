@@ -248,6 +248,17 @@ fn a_boot_repairs_pid_values_the_firmware_refuses_even_when_they_compare_equal()
     assert_eq!(boot_sync(&settings, 51.27, &reported).lines, ["$13=63.5", "$24=1", "$32=1"]);
 }
 
+/// A stored weight above 1 goes out as `$24=1`, so a later boot that reads 1 back leaves it alone.
+#[test]
+fn a_stored_pid_value_out_of_range_is_compared_as_it_was_written() {
+    let settings = settings_with("Computed Settings", "propWeightMain", json!(1.5));
+    assert_eq!(sync_reported(&settings, 51.27, 24, 1.0), Sync::Agrees);
+    assert_eq!(sync_reported(&settings, 51.27, 24, 0.5), Sync::Rewrite("$24=1".into()));
+    let settings = settings_with("Advanced Settings", "propWeightV", json!("-2"));
+    assert_eq!(sync_reported(&settings, 51.27, 28, 0.0), Sync::Agrees);
+    assert_eq!(boot_sync(&settings, 51.27, &[(24, 1.0), (28, 0.0)]).lines, ["$13=63.5"]);
+}
+
 #[test]
 fn a_negative_gain_is_repaired_and_an_unknown_weight_out_of_range_is_adopted_in_range_and_written() {
     let settings = Settings::defaults();

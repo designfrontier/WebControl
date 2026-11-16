@@ -185,6 +185,15 @@ fn adopt(option: FirmwareOption, reported: f64) -> Sync {
     Sync::Adopt { section: option.section, key: option.key, value, repair }
 }
 
+/// The stored value as the firmware gets it: brought into the key's range, as `setting_line` writes it.
+fn in_range(key: u32, stored: Value) -> Value {
+    let range = firmware_range(key).map(|(low, high)| (f64::from(low), f64::from(high)));
+    match (range, stored_number(&stored)) {
+        (Some((low, high)), Some(number)) if !(low..=high).contains(&number) => Value::from(number.clamp(low, high)),
+        _ => stored,
+    }
+}
+
 pub fn sync_reported(settings: &Settings, firmware: f64, key: u32, reported: f64) -> Sync {
     let Some(option) = settings.firmware_options().find(|o| o.firmware_key == key && sendable(o, firmware)) else {
         return Sync::Agrees;
@@ -193,7 +202,7 @@ pub fn sync_reported(settings: &Settings, firmware: f64, key: u32, reported: f64
         return if reported.is_nan() { Sync::Agrees } else { adopt(option, reported) };
     }
     let stored = if option.key == "spindleAutomate" { spindle_code(&option.value) } else { option.value.clone() };
-    let held = values_match(key, &stored, reported) && in_firmware_range(key, reported);
+    let held = values_match(key, &in_range(key, stored), reported) && in_firmware_range(key, reported);
     match (held, written_value(&option, &option.value)) {
         (false, Some(written)) => Sync::Rewrite(setting_line(key, &written)),
         _ => Sync::Agrees,

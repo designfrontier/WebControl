@@ -139,6 +139,11 @@ fn invalid_updates_are_refused_without_saving_anything() {
             json!({"chainOverSprocket": "Must be one of the listed options"}),
         ),
         ("webcontrol", json!({"webPort": "50.5"}), json!({"webPort": "Must be a whole number"})),
+        (
+            "advanced",
+            json!({"propWeight": "1.5", "propWeightVZ": "-0.1", "KdV": "-1", "KpPosZ": "1300"}),
+            json!({"propWeight": "Must be between 0 and 1", "propWeightVZ": "Must be between 0 and 1", "KdV": "Must be 0 or more"}),
+        ),
         ("gpio", json!({"gpio4": "Explode"}), json!({"gpio4": "Must be one of the listed options"})),
         (
             "maslow",

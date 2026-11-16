@@ -10,6 +10,9 @@ use wc_protocol::system::{PidGains, PidSettings};
 
 /// The settings screens disable custom-flagged settings below firmware 100.
 pub const CUSTOM_FIRMWARE_VERSION: f64 = 100.0;
+const PID_WEIGHTS: [&str; 4] = ["propWeight", "propWeightZ", "propWeightV", "propWeightVZ"];
+const PID_GAINS: [&str; 12] =
+    ["KpPos", "KiPos", "KdPos", "KpPosZ", "KiPosZ", "KdPosZ", "KpV", "KiV", "KdV", "KpVZ", "KiVZ", "KdVZ"];
 pub const SECTIONS: [(&str, &str); 5] = [
     ("maslow", "Maslow Settings"),
     ("advanced", "Advanced Settings"),
@@ -143,7 +146,17 @@ fn setting_error(field: &SettingField, value: &Value, enable_custom: bool, ports
     } else if field.numeric && !is_number(Some(value)) {
         Some("Must be a number")
     } else {
-        None
+        pid_error(&field.key, value)
+    }
+}
+
+/// `PID::SetTunings` ignores a tuning with a weight outside [0, 1] or a negative gain.
+fn pid_error(key: &str, value: &Value) -> Option<&'static str> {
+    let number = wc_config::python_float(value)?;
+    if PID_WEIGHTS.contains(&key) {
+        (!(0.0..=1.0).contains(&number)).then_some("Must be between 0 and 1")
+    } else {
+        (PID_GAINS.contains(&key) && number < 0.0).then_some("Must be 0 or more")
     }
 }
 

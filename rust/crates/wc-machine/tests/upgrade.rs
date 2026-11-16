@@ -381,6 +381,21 @@ fn an_eeprom_reset_after_the_flash_is_answered_by_the_settings_migration() {
     assert_eq!(bench.sim.setting(18), Some(f64::from(12.6_f32)));
 }
 
+/// The migration rewrites every PID weight; text that reads above 1 would leave the motors without gains next boot.
+#[test]
+fn the_migrated_controller_still_has_every_pid_after_the_next_boot() {
+    let mut bench = Bench::owners();
+    bench.upgrade();
+    let written = bench.take_written();
+    ["$24=1", "$28=1", "$32=1", "$36=1"].iter().for_each(|l| assert!(written.contains(&l.to_string()), "{l}"));
+    [24, 28, 32, 36].iter().for_each(|&key| assert_eq!(bench.sim.setting(key), Some(1.0), "${key}"));
+    let boot = bench.sim.boot(bench.ms());
+    assert!(bench.sim.main_axes_tuned() && bench.sim.z_axis_tuned());
+    bench.controller_says(boot);
+    bench.run(5_000);
+    assert!(bench.sim.main_axes_tuned() && bench.sim.z_axis_tuned());
+}
+
 #[test]
 fn a_sync_failure_is_retried_once() {
     let mut bench = Bench::owners();

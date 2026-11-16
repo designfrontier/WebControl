@@ -235,7 +235,11 @@ impl Sim {
     /// `setPIDValues()` after a write of `$21`-`$36`: a refused tuning leaves the gains the PID had.
     fn set_pid_values(&mut self, key: u32) {
         let accepted = TUNINGS.map(|tuning| self.accepts(&tuning));
-        let group = if key <= 28 { 0..2 } else { 2..4 };
+        let group = match key {
+            21..=28 => 0..2,
+            29..=36 => 2..4,
+            _ => 0..0,
+        };
         group.for_each(|i| self.tuned[i] |= accepted[i]);
     }
 

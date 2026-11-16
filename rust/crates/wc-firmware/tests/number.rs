@@ -95,6 +95,24 @@ fn out_of_range_pid_values_are_brought_into_range() {
     assert_eq!(firmware_text(40, -3.0, "legacy"), "-3", "chain tolerance may be negative");
 }
 
+/// Above 2^24 the long's conversion to float32 rounds, so digits that stay below it win among equally short texts.
+#[test]
+fn digits_that_convert_exactly_are_preferred() {
+    assert_eq!(read_float("1677.7217"), read_float("1677.7216"));
+    assert_eq!(firmware_text(0, 1677.72166, "legacy"), "1677.7216");
+    assert_eq!(firmware_text(0, 2438.4, "legacy"), "2438.3998", "no text below 2^24 reads 2438.4 exactly");
+}
+
+/// A tenth digit can be what reads exactly; some values have no exact text that fits the long.
+#[test]
+fn every_digit_the_long_holds_is_searched() {
+    assert_eq!(firmware_text(0, 14.0836, "legacy"), "14.08359827");
+    assert_exact(0, 14.0836);
+    let closest = firmware_text(0, 3.3565, "legacy");
+    assert_ne!(read_float(&closest), Some(3.3565));
+    assert_eq!(closest, "3.3565");
+}
+
 #[test]
 fn a_value_no_text_reads_exactly_falls_back_to_the_closest_in_range() {
     assert_eq!(firmware_text(0, f64::NAN, "nan"), "nan");

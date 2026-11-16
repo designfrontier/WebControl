@@ -5,8 +5,8 @@
 pub const PROPORTIONAL_WEIGHT_KEYS: [u32; 4] = [24, 28, 32, 36];
 /// Every PID setting: `$21`-`$36`, the gains and the weights above.
 pub const PID_KEYS: std::ops::RangeInclusive<u32> = 21..=36;
-/// Nine significant digits pin down any float32.
-const SIGNIFICANT_DIGITS: i32 = 9;
+/// Nine significant digits pin down any float32, but `readFloat`'s drifting scale can need the tenth a long holds.
+const SIGNIFICANT_DIGITS: i32 = 10;
 
 /// The parse in progress, field for field the locals of `readFloat`.
 #[derive(Clone, Copy)]
@@ -83,29 +83,38 @@ fn scale(decimals: usize) -> f32 {
     (0..decimals).fold(1.0, |scale: f32, _| scale * 0.1)
 }
 
-/// Texts with `decimals` fraction digits around `target` as written and as `readFloat`'s drifting scale sees it.
-fn candidates(target: f32, decimals: usize) -> impl Iterator<Item = String> {
+/// Below this a long converts to float32 exactly; above it the result rests on AVR rounding as Rust does.
+const EXACT_LONG: u32 = 1 << 24;
+/// How far either estimate of the digits may be from a text that reads exactly.
+const WINDOW: i32 = 64;
+const MOST_DECIMALS: i32 = 20;
+
+/// The digits as a long, and the text, with `decimals` fraction digits around `target` as written and as
+/// `readFloat`'s drifting scale sees it.
+fn candidates(target: f32, decimals: usize) -> Vec<(u32, String)> {
     let magnitude = f64::from(target.abs());
     let written = (magnitude * 10f64.powi(decimals as i32)).round();
     let scaled = (magnitude / f64::from(scale(decimals))).round();
     let negative = target.is_sign_negative();
     let mut numbers: Vec<f64> =
-        [written, scaled].iter().flat_map(|n| (-3..=3).map(move |s| n + f64::from(s))).collect();
+        [written, scaled].iter().flat_map(|n| (-WINDOW..=WINDOW).map(move |s| n + f64::from(s))).collect();
     numbers.sort_by(f64::total_cmp);
     numbers.dedup();
     numbers
         .into_iter()
         .filter(|n| (0.0..=f64::from(i32::MAX)).contains(n))
-        .map(move |n| render(negative, n as u32, decimals))
+        .map(|n| (n as u32, render(negative, n as u32, decimals)))
+        .collect()
 }
 
 fn most_decimals(target: f32) -> usize {
     let whole_digits = if target == 0.0 { 1 } else { f64::from(target.abs()).log10().floor() as i32 + 1 };
-    (SIGNIFICANT_DIGITS - whole_digits).clamp(0, 45) as usize
+    (SIGNIFICANT_DIGITS - whole_digits).clamp(0, MOST_DECIMALS) as usize
 }
 
-/// The shortest text `readFloat` turns into the float32 nearest `intended` (kept within the key's range); when
-/// none does, whichever of those texts and `fallback` reads closest to it without leaving the range.
+/// The shortest text of at most ten significant digits within `WINDOW` of either estimate that `readFloat` turns
+/// into the float32 nearest `intended` (kept within the key's range), digits up to `EXACT_LONG` first; when none
+/// does, whichever of those texts and `fallback` reads closest to it without leaving the range.
 pub fn firmware_text(key: u32, intended: f64, fallback: &str) -> String {
     let (low, high) = firmware_range(key).unwrap_or((f32::MIN, f32::MAX));
     let nearest = intended as f32;
@@ -114,16 +123,20 @@ pub fn firmware_text(key: u32, intended: f64, fallback: &str) -> String {
     }
     let target = nearest.clamp(low, high);
     let distance = |text: &String| text.parse::<f64>().map_or(f64::INFINITY, |v| (v - intended).abs());
-    let by_decimals = (0..=most_decimals(target)).map(|decimals| candidates(target, decimals).collect::<Vec<_>>());
-    let exact = by_decimals.clone().find_map(|texts| {
-        let mut exact: Vec<String> = texts.into_iter().filter(|t| read_float(t) == Some(target)).collect();
-        exact.sort_by(|a, b| distance(a).total_cmp(&distance(b)));
-        exact.into_iter().next()
-    });
-    exact.unwrap_or_else(|| {
+    let by_decimals: Vec<Vec<(u32, String)>> =
+        (0..=most_decimals(target)).map(|decimals| candidates(target, decimals)).collect();
+    let exact = |largest: u32| {
+        by_decimals.iter().find_map(|texts| {
+            let exact = texts.iter().filter(|(n, text)| *n <= largest && read_float(text) == Some(target));
+            exact.map(|(_, text)| text).min_by(|a, b| distance(a).total_cmp(&distance(b))).cloned()
+        })
+    };
+    exact(EXACT_LONG).or_else(|| exact(u32::MAX)).unwrap_or_else(|| {
         let in_range = |text: &String| read_float(text).is_some_and(|v| (low..=high).contains(&v));
         let off = |text: &String| (f64::from(read_float(text).unwrap_or(f32::NAN)) - f64::from(target)).abs();
-        let texts = by_decimals.flatten().chain([fallback.trim().to_string()]).filter(in_range);
+        let texts = by_decimals.into_iter().flatten().map(|(_, text)| text);
+        let texts = texts.chain([fallback.trim().to_string()]).filter(in_range);
+        // Empty only when no candidate fits in a long and `fallback` is not a number.
         texts.min_by(|a, b| off(a).total_cmp(&off(b)).then(a.len().cmp(&b.len()))).unwrap_or(fallback.to_string())
     })
 }
