@@ -2,11 +2,12 @@ import { useState } from "react";
 import { useFetch } from "../../app/context";
 import { Dialog } from "../../app/Dialog";
 import { PACING_GAP_MAX_MS, PACING_MODES } from "../../protocol";
-import type { PacingMode, PacingSegment } from "../../protocol";
+import type { PacingMode, PacingSegment, PacingStats } from "../../protocol";
 import {
   CUSTOM,
   PRESETS,
   describe,
+  fixed,
   pacingLabel,
   presetFor,
   refusal,
@@ -17,48 +18,64 @@ import {
 import type { Pacing } from "./pacing";
 import "./pacing.css";
 
-const fixed = (value: number | null, digits: number) => (value === null ? "–" : value.toFixed(digits));
+const Summary = ({ label, segment }: { label: string; segment: PacingSegment }) => {
+  const { rate, detail } = describe(segment);
+  return (
+    <p>
+      {label}: <strong>{rate}</strong> · {detail}
+    </p>
+  );
+};
 
-const HistoryDialog = ({ history, onClose }: { history: PacingSegment[]; onClose: () => void }) => (
-  <Dialog title="Pacing history" onClose={onClose} size="medium">
-    {history.length === 0 ? (
-      <p>No pacing segment has ended yet. A segment ends when the pacing changes, the job ends or Stop.</p>
-    ) : (
-      <div className="pacing-history">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">Pacing</th>
-              <th scope="col">Lines/min</th>
-              <th scope="col">Lines</th>
-              <th scope="col">Lost</th>
-              <th scope="col">s/line</th>
-              <th scope="col">Recovery s</th>
-              <th scope="col">Short gap ms</th>
-              <th scope="col">Minutes</th>
-              <th scope="col">Ended by</th>
+const HistoryTable = ({ history }: { history: PacingSegment[] }) =>
+  history.length === 0 ? (
+    <p>No pacing segment has ended yet. A segment ends when the pacing changes, the job ends or Stop.</p>
+  ) : (
+    <div className="pacing-history">
+      <table>
+        <caption>Ended segments, newest first</caption>
+        <thead>
+          <tr>
+            <th scope="col">Pacing</th>
+            <th scope="col">Lines/min</th>
+            <th scope="col">Lines</th>
+            <th scope="col">Lost</th>
+            <th scope="col">s/line</th>
+            <th scope="col">Recovery s</th>
+            <th scope="col">Short gap ms</th>
+            <th scope="col">Minutes</th>
+            <th scope="col">Ended by</th>
+          </tr>
+        </thead>
+        <tbody>
+          {history.map((segment, index) => (
+            <tr key={index}>
+              <th scope="row">{pacingLabel(segment)}</th>
+              <td>{fixed(segment.linesPerMinute, 0)}</td>
+              <td>{segment.lines}</td>
+              <td>
+                {segment.lost} ({fixed(segment.lostPercent, 2)}%)
+              </td>
+              <td>{fixed(segment.secondsPerLine, 3)}</td>
+              <td>{segment.recoveryS.toFixed(1)}</td>
+              <td>{fixed(segment.medianShortGapMs, 0)}</td>
+              <td>{(segment.elapsedS / 60).toFixed(1)}</td>
+              <td>{segment.endedBy}</td>
             </tr>
-          </thead>
-          <tbody>
-            {history.map((segment, index) => (
-              <tr key={index}>
-                <th scope="row">{pacingLabel(segment)}</th>
-                <td>{fixed(segment.linesPerMinute, 0)}</td>
-                <td>{segment.lines}</td>
-                <td>
-                  {segment.lost} ({fixed(segment.lostPercent, 2)}%)
-                </td>
-                <td>{fixed(segment.secondsPerLine, 3)}</td>
-                <td>{segment.recoveryS.toFixed(1)}</td>
-                <td>{fixed(segment.medianShortGapMs, 0)}</td>
-                <td>{(segment.elapsedS / 60).toFixed(1)}</td>
-                <td>{segment.endedBy}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    )}
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
+const StatsDialog = ({ stats, onClose }: { stats: PacingStats; onClose: () => void }) => (
+  <Dialog title="Line pacing" onClose={onClose} size="medium">
+    <div className="pacing-details">
+      <p>Pacing now: {pacingLabel(stats)}</p>
+      {stats.segment && <Summary label="This segment" segment={stats.segment} />}
+      {stats.job && <Summary label={stats.segment ? "This job" : "Last job"} segment={stats.job} />}
+      <HistoryTable history={stats.history} />
+    </div>
   </Dialog>
 );
 
@@ -99,12 +116,12 @@ const CustomPacing = ({ current, onApply }: { current: Pacing; onApply: (pacing:
   );
 };
 
-/** Line pacing for the loss-rate experiment: changeable before Play and mid-job, with the running segment's rate. */
+/** Line pacing for the loss-rate experiment, changeable before Play and mid-job, in one row beside its rate. */
 export const PacingControl = () => {
   const fetch = useFetch();
   const [stats, setStats] = usePacingStats();
   const [custom, setCustom] = useState(false);
-  const [history, setHistory] = useState(false);
+  const [details, setDetails] = useState(false);
   const [error, setError] = useState<string | null>(null);
   if (stats === null) return null;
 
@@ -125,9 +142,8 @@ export const PacingControl = () => {
   return (
     <div className="pacing" role="group" aria-label="Line pacing">
       <div className="pacing-row">
-        <label htmlFor="line-pacing">Pacing</label>
         <select
-          id="line-pacing"
+          aria-label="Pacing"
           value={preset}
           onChange={(event) => {
             const chosen = PRESETS.find((option) => option.id === event.target.value);
@@ -144,8 +160,22 @@ export const PacingControl = () => {
             {preset === CUSTOM && !custom ? `Custom · ${pacingLabel(current)}` : "Custom…"}
           </option>
         </select>
-        <button type="button" onClick={() => setHistory(true)}>
-          History
+        <button
+          type="button"
+          className="pacing-stats"
+          title={summary ? `${summary.rate} · ${summary.detail}` : undefined}
+          onClick={() => setDetails(true)}
+        >
+          {summary ? (
+            <>
+              <strong>{summary.rate}</strong>
+              <span>
+                {stats.segment ? "" : "last job · "}Sent {shown.lines} · Lost {fixed(shown.lostPercent, 2)}%
+              </span>
+            </>
+          ) : (
+            "Pacing stats"
+          )}
         </button>
       </div>
       {custom && <CustomPacing current={current} onApply={(pacing) => void apply(pacing)} />}
@@ -154,17 +184,7 @@ export const PacingControl = () => {
           {error}
         </p>
       )}
-      <p className="pacing-stats" aria-live="polite">
-        {summary ? (
-          <>
-            <strong>{summary.rate}</strong> {stats.segment ? "" : "Last job: "}
-            {summary.detail}
-          </>
-        ) : (
-          "No job yet"
-        )}
-      </p>
-      {history && <HistoryDialog history={stats.history} onClose={() => setHistory(false)} />}
+      {details && <StatsDialog stats={stats} onClose={() => setDetails(false)} />}
     </div>
   );
 };

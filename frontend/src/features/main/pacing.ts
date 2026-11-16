@@ -29,7 +29,7 @@ export const validGap = (text: string) => {
   return text.trim() !== "" && Number.isInteger(gap) && gap >= 0 && gap <= PACING_GAP_MAX_MS ? gap : null;
 };
 
-const fixed = (value: number | null, digits: number) => (value === null ? "–" : value.toFixed(digits));
+export const fixed = (value: number | null, digits: number) => (value === null ? "–" : value.toFixed(digits));
 
 /** "507 lines/min" and the rest, as the run panel shows a segment. */
 export const describe = (segment: PacingSegment) => ({

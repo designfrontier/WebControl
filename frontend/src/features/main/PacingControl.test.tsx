@@ -84,17 +84,23 @@ describe("PacingControl", () => {
   });
 
   it("shows the current preset and the running segment's rate", async () => {
-    await renderControl(stats({ segment: segment(), job: segment() }));
+    const { user } = await renderControl(stats({ segment: segment(), job: segment() }));
     expect(screen.getByLabelText("Pacing")).toHaveValue("v094-50");
-    expect(screen.getByText("507 lines/min")).toBeInTheDocument();
-    expect(screen.getByText(/Sent 2284 · Lost 9 \(0\.39%\) · 0\.118 s\/line/)).toBeInTheDocument();
+    const button = screen.getByRole("button", { name: /507 lines\/min/ });
+    expect(button).toHaveTextContent("Sent 2284 · Lost 0.39%");
+    expect(button).toHaveAttribute("title", expect.stringContaining("Lost 9 (0.39%) · 0.118 s/line"));
+    await user.click(button);
+    const dialog = screen.getByRole("dialog", { name: "Line pacing" });
+    expect(dialog).toHaveTextContent("This segment: 507 lines/min · Sent 2284 · Lost 9 (0.39%) · 0.118 s/line");
+    expect(dialog).toHaveTextContent("This job: 507 lines/min");
   });
 
-  it("shows the last job outside a job, and says when there is none", async () => {
-    const { socket } = await renderControl(stats({ job: segment({ endedBy: "job end" }) }));
-    expect(screen.getByText(/Last job:/)).toBeInTheDocument();
+  it("shows the last job outside a job, and nothing before the first", async () => {
+    const { socket, user } = await renderControl(stats({ job: segment({ endedBy: "job end" }) }));
+    await user.click(screen.getByRole("button", { name: /last job · Sent 2284/ }));
+    expect(screen.getByRole("dialog", { name: "Line pacing" })).toHaveTextContent("Last job: 507 lines/min");
     socket.serverMessage("pacingStats", stats());
-    expect(screen.getByText("No job yet")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Pacing stats" })).not.toHaveAttribute("title");
   });
 
   it("follows the pacingStats pushes", async () => {
@@ -104,7 +110,7 @@ describe("PacingControl", () => {
       stats({ mode: "minimum gap", gapMs: 25, segment: segment({ linesPerMinute: 612 }) }),
     );
     expect(screen.getByLabelText("Pacing")).toHaveValue("min-25");
-    expect(screen.getByText("612 lines/min")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /612 lines\/min/ })).toBeInTheDocument();
   });
 
   it("saves a preset at once", async () => {
@@ -160,8 +166,8 @@ describe("PacingControl", () => {
       segment({ endedBy: "pacing change", medianShortGapMs: null }),
     ];
     const { user } = await renderControl(stats({ history }));
-    await user.click(screen.getByRole("button", { name: "History" }));
-    const dialog = screen.getByRole("dialog", { name: "Pacing history" });
+    await user.click(screen.getByRole("button", { name: "Pacing stats" }));
+    const dialog = screen.getByRole("dialog", { name: "Line pacing" });
     const rows = within(dialog).getAllByRole("row");
     expect(within(rows[1]).getByRole("rowheader")).toHaveTextContent("min gap 25 ms");
     expect(rows[1]).toHaveTextContent("612");
@@ -172,7 +178,7 @@ describe("PacingControl", () => {
 
   it("says when no segment has ended yet", async () => {
     const { user } = await renderControl();
-    await user.click(screen.getByRole("button", { name: "History" }));
+    await user.click(screen.getByRole("button", { name: "Pacing stats" }));
     expect(screen.getByText(/No pacing segment has ended yet/)).toBeInTheDocument();
   });
 });

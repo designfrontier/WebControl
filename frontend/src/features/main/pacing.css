@@ -7,15 +7,40 @@
 .pacing-row,
 .pacing-custom {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-1);
 }
 
+.pacing-custom {
+  flex-wrap: wrap;
+}
+
 .pacing-row select {
-  flex: 1 1 10rem;
+  flex: 0 1 10rem;
   min-width: 0;
   min-height: var(--control);
+}
+
+/* Two short lines inside one control's height, so the row adds no height to the run panel. */
+.control-panel .pacing-stats {
+  display: grid;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 var(--space-1);
+  font-size: 0.8rem;
+  line-height: 1.15;
+  text-align: left;
+}
+
+.pacing-stats strong,
+.pacing-stats span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pacing-stats strong {
+  font-size: 0.9rem;
 }
 
 .pacing-custom input {
@@ -27,18 +52,19 @@
   min-height: var(--control);
 }
 
-.pacing-stats,
-.pacing-error {
+.pacing-error,
+.pacing-details p {
   margin: 0;
   overflow-wrap: anywhere;
 }
 
-.pacing-stats strong {
-  font-size: 1rem;
-}
-
 .pacing-error {
   color: var(--danger);
+}
+
+.pacing-details {
+  display: grid;
+  gap: var(--space-2);
 }
 
 .pacing-history {
@@ -49,6 +75,10 @@
   border-collapse: collapse;
   font-size: 0.9rem;
   white-space: nowrap;
+}
+
+.pacing-history caption {
+  text-align: left;
 }
 
 .pacing-history th,
