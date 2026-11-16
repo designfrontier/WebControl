@@ -14,6 +14,7 @@ use wc_gcode::shift::positioning_set_by;
 use wc_protocol::main::{ActivateModal, Alarm, ControllerMessage, PauseButton, Units};
 
 use crate::alarm::survives_alarm;
+use crate::arcs::Sled;
 use crate::clearance::BitHeight;
 use crate::gpio::Led;
 use crate::job::{Flow, pause_button};
@@ -52,6 +53,7 @@ impl Machine {
         self.controller.buffering = self.settings.number("Maslow Settings", "bufferOn") != 0.0;
         self.job.controller_reset();
         self.bit = BitHeight::new();
+        self.sled = Sled::new();
         effects.push(controller_message(&format!("Connected on port {port}")));
         self.link = Link::Connected { port };
         effects.push(broadcast(&self.connection_status()));
@@ -136,6 +138,7 @@ impl Machine {
         self.rewrite_notice = false;
         self.job.controller_reset();
         self.bit = BitHeight::new();
+        self.sled = Sled::new();
         self.probing = false;
         self.restart_booted();
         self.handshake(now);
@@ -214,6 +217,7 @@ impl Machine {
         controller.watch.acked(acked.as_ref());
         if controller.accounting.is_empty() {
             self.bit.settled();
+            self.sled.settled();
         }
         // Identity, not position: a `~` sent mid-probe is acked first with an entry of its own.
         let answered = controller.probe.take_if(|probe| acked.as_ref().is_some_and(|sent| sent.id == probe.id));
@@ -359,6 +363,7 @@ impl Machine {
         controller.caught_up = false;
         self.probing = false;
         self.bit.lost();
+        self.sled.lost();
     }
 
     pub(crate) fn realtime(&mut self, text: &str, now: Duration, effects: &mut Vec<Effect>) {
@@ -389,6 +394,7 @@ impl Machine {
             self.positioning = mode;
         }
         self.bit.written(text);
+        self.sled.written(text);
         let setting = text.strip_prefix('$').and_then(|setting| setting.split_once('='));
         if let Some((key, value)) = setting.and_then(|(key, value)| Some((key.parse().ok()?, value.trim()))) {
             self.kinematics.update_setting(key, value);
@@ -474,13 +480,18 @@ impl Machine {
         }
         let command = format!("{command} ");
         let to_send = tool_change_line(&command, self.job.next_tool, self.job.tool).line;
-        if let Some(problem) = problem_with(&to_send) {
-            let reason = format!("That command {}", problem.reason());
-            effects.push(broadcast(&ActivateModal::titled_alert(&format!("Command {}", problem.title()), &reason)));
-            self.probing = self.probing && !command.contains("G38.2");
-            return false;
-        }
-        let command = self.manage_tool_change(&command);
+        let checked = self.sled.convert(&to_send).and_then(|line| problem_with(&line).map_or(Ok(line), Err));
+        let to_send = match checked {
+            Ok(line) => line,
+            Err(problem) => {
+                let reason = format!("That command {}", problem.reason());
+                effects.push(broadcast(&ActivateModal::titled_alert(&format!("Command {}", problem.title()), &reason)));
+                self.probing = self.probing && !command.contains("G38.2");
+                return false;
+            }
+        };
+        self.manage_tool_change(&command);
+        let command = to_send;
         if only_selects_tool(&command) || !self.may_reinitialise(&command, effects) {
             return false;
         }

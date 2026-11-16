@@ -3,6 +3,7 @@
 
 mod actions;
 mod alarm;
+mod arcs;
 pub mod calibration;
 mod clearance;
 pub mod commands;

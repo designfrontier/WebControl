@@ -207,6 +207,11 @@ the backend had been quiet for `quiet` seconds, one line per settle.
 | `buffer_overflow_halts_streaming` | `Buffer overflow!` and its buffer dump: halt, rewind, Stop |
 | `line_too_long_pauses_the_job` | a line over 126 bytes as written is never sent; the job pauses with an alert |
 | `unclosed_comment_pauses_the_job` | an unclosed `(` is never sent; the job pauses with an alert |
+| `r_arc_converted_to_i_j_on_51_27` | R arcs go to 51.27 with I and J (negative R over 180°, a G91 arc written absolute) |
+| `r_arc_impossible_radius_pauses_the_job` | an R shorter than half the chord is never sent; the job pauses with an alert |
+| `r_arc_converted_on_51_292` | 51.29x gets R arcs as I and J too, since it drops R's sign |
+| `g91_arc_written_absolute` | a G91 I/J arc goes out with the absolute X and Y it ends at; G1 under G91 as written |
+| `g91_arc_with_z_pauses_the_job` | a G91 arc with Z (which the firmware takes as absolute) is never sent; the job pauses |
 | `realtime_characters_stripped_from_lines` | `!`, `~`, backtick, `?`, control characters and comments removed from lines |
 | `typed_lower_case_g20_switches_units_then_jog` | A `g20` sent with `/sendGCode` goes out as `G20` and switches WebControl to inches (home, jog step); the mm Z panel then moves in inches |
 | `lower_case_file_g91_g90_m0_then_resume` | A lower-case file goes out upper-cased: `g91` stops the home shift, `g90` resumes it, `m0` pauses, Resume returns |
@@ -572,3 +577,12 @@ Where the Rust backend writes something different from Python by owner decision.
    and Y absolutely, even one before its first X or Y move, with an alert, sends nothing (no `~`; a paused job stays
    paused) and keeps the index; Stop and Play from the first line still run the file. A file that sets X and Y absolutely before its relative passes restarts as before. No transcript has such a
    file (`wc-machine` tests `resume_and_play_mid_file_are_refused_before_a_g91_file_sets_x_and_y`).
+9. **Arcs go out as the file means them** (upstream #120, 2026-11-15). Python streamed G2/G3 untouched. 51.27 has
+   no R word, so an R arc sent the sled straight to its end at PID speed; 51.29x reads R but drops its sign; and
+   every version runs an arc's X, Y and Z as absolute under G91 (`spec/firmware.md` §9, A18, A19, B19). On every version
+   Rust rewrites, as the line is written and from where it last commanded the sled (or the last status report),
+   each R arc (no I or J) with I and J at 4 decimals and each arc under a real G91 with the absolute X and Y it ends
+   at. An arc it cannot rewrite (radius short of half the chord, an R arc with no X/Y change or under G18/G19, a
+   G91 arc with Z, no known start) is refused as an unclosed comment is (B19). Transcripts:
+   `r_arc_converted_to_i_j_on_51_27`, `r_arc_impossible_radius_pauses_the_job`, `r_arc_converted_on_51_292`,
+   `g91_arc_written_absolute`, `g91_arc_with_z_pauses_the_job`.

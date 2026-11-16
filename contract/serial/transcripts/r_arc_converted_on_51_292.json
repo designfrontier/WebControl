@@ -1,0 +1,41 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "r_arc_converted_on_51_292",
+    "description": "51.29x reads R but squares it, so a negative R cuts the short arc instead of the one over 180 degrees (spec/firmware.md §9). R arcs go to it with I and J as they go to 51.27, so every version cuts the arc the file means.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.29",
+      "build": "51.292"
+    },
+    "webcontrolCommit": "rust"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    },
+    "gcode": {
+      "lines": [
+        "G21",
+        "G0 X10 Y10",
+        "G2 X20 Y0 R10 F300",
+        "G3 X10 Y-10 R-10"
+      ]
+    }
+  },
+  "events": [
+    {"type": "expect", "state": {"firmwareBuild": "51.292"}},
+    {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 X10 Y10  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G2 X20 Y0 I0.0000 J-10.0000 F300  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G3 X10 Y-10 I-10.0000 J0.0000  \n", "comment": "R-10, which 51.292 would cut as the quarter about (20, -10)"},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "state": {"uploadFlag": 0, "jobInProgress": false, "gcodeIndex": 0}}
+  ]
+}
