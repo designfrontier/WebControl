@@ -69,6 +69,10 @@
                 "schema": "schemas/messages/closeAlertModals.json",
                 "dataFormat": "json"
               },
+              "gcodeFile": {
+                "schema": "schemas/messages/gcodeFile.json",
+                "dataFormat": "json"
+              },
               "showFPSpinner": {
                 "schema": "schemas/messages/showFPSpinner.json",
                 "dataFormat": "int"

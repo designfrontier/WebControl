@@ -1,8 +1,8 @@
 use serde_json::{Value, json};
 use wc_protocol::main::{
-    ActivateModal, Alarm, Backend, ClearAlarm, ConnectionStatus, ControllerMessage, ErrorValueMessage, GcodeLine,
-    HealthMessage, HomePositionMessage, HostAddress, Macro, MainScreen, PauseButton, PositionMessage, RequestedSetting,
-    StartupState, StatusMessage, Units,
+    ActivateModal, Alarm, Backend, ClearAlarm, ConnectionStatus, ControllerMessage, ErrorValueMessage, GcodeFile,
+    GcodeLine, HealthMessage, HomePositionMessage, HostAddress, Macro, MainScreen, PauseButton, PositionMessage,
+    RequestedSetting, StartupState, StatusMessage, Units,
 };
 use wc_protocol::settings::UpdatePorts;
 use wc_protocol::{Action, ClientEvent, Envelope, Frame, Namespace, Push, float};
@@ -32,6 +32,7 @@ fn startup_state() -> StartupState {
         backend: Backend::Rust,
         version: "1.2.3".into(),
         commit: "abc1234".into(),
+        gcode_file: None,
     }
 }
 
@@ -96,6 +97,21 @@ fn the_startup_state_fits_get_api_state() {
     assert_eq!(body["unitsZ"], "INCHES");
     assert_eq!(body["controllerBoard"], Value::Null);
     assert_eq!(body["macros"][0], json!({"command": "macro1", "title": "Spindle on"}));
+}
+
+#[test]
+fn the_loaded_file_is_in_the_startup_state_and_its_own_push() {
+    let state = StartupState { gcode_file: Some("jobs/leg.nc".into()), ..startup_state() };
+    let body = serde_json::to_value(state).unwrap();
+    contract().validate_response("GET", "/api/state", 200, &ResponseBody::Json(body.clone())).unwrap();
+    assert_eq!(body["gcodeFile"], "jobs/leg.nc");
+    assert_eq!(serde_json::to_value(startup_state()).unwrap()["gcodeFile"], Value::Null);
+    [Some("jobs/leg.nc".to_string()), None].into_iter().for_each(|file| {
+        let envelope = serde_json::to_value(Envelope::json(&GcodeFile { file: file.clone() })).unwrap();
+        contract().validate_envelope(&envelope).unwrap();
+        assert_eq!(envelope["command"], "gcodeFile");
+        assert_eq!(serde_json::from_str::<Value>(envelope["data"].as_str().unwrap()).unwrap(), json!({"file": file}));
+    });
 }
 
 #[test]

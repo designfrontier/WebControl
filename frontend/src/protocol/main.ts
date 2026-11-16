@@ -74,6 +74,8 @@ export const mainMessages = {
   activateModal: modalSchema,
   closeModals: z.object({ title: z.string() }),
   closeAlertModals: z.object({ title: z.string() }),
+  /** Broadcast when the loaded gcode file changes: its path in the gcode library, or null once none is loaded. */
+  gcodeFile: z.object({ file: z.string().nullable() }),
 } satisfies MessageSchemas;
 
 /** processAction commands the front page issues. */
@@ -135,6 +137,8 @@ export const startupStateSchema = z.object({
   version: z.string().optional(),
   /** The git commit the webcontrol-rs binary was built from. Rust only. */
   commit: z.string().optional(),
+  /** The loaded gcode file's path in the gcode library, such as "jobs/leg.nc"; null when none is loaded. */
+  gcodeFile: z.string().nullable().default(null),
 });
 export type StartupState = z.infer<typeof startupStateSchema>;
 

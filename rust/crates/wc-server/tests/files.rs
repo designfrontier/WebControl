@@ -113,6 +113,25 @@ async fn opening_a_listed_file_loads_it_and_names_where_it_came_from() {
 }
 
 #[tokio::test]
+async fn every_client_hears_which_file_is_loaded_and_the_state_names_it() {
+    let server = Server::new();
+    assert_eq!(server.get("/api/state").await.json()["gcodeFile"], Value::Null);
+    server.write("gcode/mancala/mancala.frd.roughing.25.endmill.nc", "G21\nG0 X1 Y1\n");
+    let mut pushes = server.machine.subscribe();
+    let selected = Part::Field("selectedGCode", "mancala/mancala.frd.roughing.25.endmill.nc");
+    assert_eq!(server.post_form("/openGCode", &[selected]).await.status, StatusCode::OK);
+    server.settle().await;
+    let named = json!("{\"file\":\"mancala/mancala.frd.roughing.25.endmill.nc\"}");
+    assert_eq!(drain(&mut pushes, "gcodeFile"), [named]);
+    let state = server.get("/api/state").await.json();
+    assert_eq!(state["gcodeFile"], "mancala/mancala.frd.roughing.25.endmill.nc");
+    server.machine.send(Event::Action(Action::new("clearGCode", json!(""), json!(""))));
+    server.settle().await;
+    assert_eq!(drain(&mut pushes, "gcodeFile"), [json!("{\"file\":null}")]);
+    assert_eq!(server.get("/api/state").await.json()["gcodeFile"], Value::Null);
+}
+
+#[tokio::test]
 async fn opening_needs_a_directory_and_a_readable_parsable_file() {
     let server = Server::new();
     server.write("gcode/top.nc", "G0 X1\n");

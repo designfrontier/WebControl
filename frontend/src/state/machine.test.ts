@@ -47,6 +47,15 @@ describe("machineReducer socket and startup", () => {
       macros: startupState().macros,
     });
   });
+
+  it("knows the loaded gcode file from /api/state, follows gcodeFile pushes and forgets it when cleared", () => {
+    expect(initialMachineState.gcodeFile).toBeNull();
+    const loaded = apply([{ type: "startup", state: startupState({ gcodeFile: "jobs/leg.nc" }) }]);
+    expect(loaded.gcodeFile).toBe("jobs/leg.nc");
+    const replaced = machineReducer(loaded, message("gcodeFile", { file: "mancala/top.nc" }));
+    expect(replaced.gcodeFile).toBe("mancala/top.nc");
+    expect(machineReducer(replaced, message("gcodeFile", { file: null })).gcodeFile).toBeNull();
+  });
 });
 
 describe("machineReducer link state from /api/state", () => {
