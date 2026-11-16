@@ -242,6 +242,11 @@ allow both.
   is a number or that the controller holds) given a decimal comma (`0,01`) is stored with a point, in both imports;
   one that is still no number, or whose comma could be a thousands separator (`1,250`), keeps its current value.
   Either way an `activateModal` alert lists what was converted or kept. Python stored such text as it came.
+- **A settings sync says what it rewrote** (upstream #23). Each `$n=` line a connect (or a later `$$`) writes over a
+  different value the controller reported is announced as a `controllerMessage`, `Settings sync: $3 (motorOffsetY)
+  was 478 on the controller; WebControl wrote 463.`, and one alert lists any PID weight or gain it repaired because
+  the firmware ignores it. The `$13` every boot writes is announced only when the controller held another value.
+  Python wrote silently.
 - **Resume after an ALARM or overflow** (same as Python): the job rewinds to the oldest unacknowledged line and Play
   resumes from there, returning at safe height (`serial/transcripts/alarm_mid_cut_rewinds_and_resumes.json`). Stop
   also clears it.

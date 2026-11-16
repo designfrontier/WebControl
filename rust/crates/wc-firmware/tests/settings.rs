@@ -1,8 +1,8 @@
 use serde_json::{Value, json};
 use wc_config::Settings;
 use wc_firmware::settings::{
-    Push, Sync, adopted_text, boot_push, boot_sync, firmware_key_value, parse_setting_reply, reinitialises_axes,
-    setting_key, setting_line, skip_held_reinit_keys, sync_reported, values_match,
+    Correction, Push, Sync, adopted_text, boot_push, boot_sync, corrections, firmware_key_value, parse_setting_reply,
+    reinitialises_axes, setting_key, setting_line, skip_held_reinit_keys, sync_reported, values_match,
 };
 
 #[test]
@@ -277,4 +277,29 @@ fn a_negative_gain_is_repaired_and_an_unknown_weight_out_of_range_is_adopted_in_
     let push = boot_sync(&settings, 51.27, &[(36, -2.0)]);
     assert_eq!(push.lines, ["$13=63.5", "$36=0"]);
     assert_eq!(push.adopted, [("Advanced Settings".into(), "propWeightVZ".into(), json!("0"))]);
+}
+
+fn correction(key: u32, setting: &str, controller: f64, written: &str, repair: bool) -> Correction {
+    Correction { key, setting: setting.into(), controller, written: written.into(), repair }
+}
+
+/// Upstream #23: what a boot's writes change, for the user; the routine `$13` changes nothing.
+#[test]
+fn a_boots_corrections_are_the_writes_that_change_a_reported_value() {
+    let settings = Settings::defaults();
+    let reported = [(3, 478.0), (13, 63.5), (24, 1.00000011), (22, -0.5), (36, -2.0), (39, 3.0)];
+    let push = boot_sync(&settings, 51.27, &reported);
+    assert_eq!(push.lines, ["$3=463", "$13=63.5", "$22=0", "$24=1", "$36=0"]);
+    assert_eq!(
+        corrections(&settings, 51.27, &push.lines, &reported),
+        [
+            correction(3, "motorOffsetY", 478.0, "463", false),
+            correction(22, "KiPosMain", -0.5, "0", true),
+            correction(24, "propWeightMain", 1.00000011, "1", true),
+            correction(36, "propWeightVZ", -2.0, "0", true),
+        ]
+    );
+    let moved_r = corrections(&settings, 51.27, &["$13=63.5".into()], &[(13, 10.1)]);
+    assert_eq!(moved_r, [correction(13, "distPerRot", 10.1, "63.5", false)]);
+    assert!(corrections(&settings, 51.27, &["$13=63.5".into(), "$$".into()], &[]).is_empty(), "nothing reported");
 }
