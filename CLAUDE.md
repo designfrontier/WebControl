@@ -94,7 +94,8 @@ endpoint), then `npm run contract`, then the Rust side (`wc-protocol`, the route
   `npm run typecheck`, `npm test` (Vitest + v8 coverage, 95% floor), `npm run build` (to `frontend/dist`, which the
   Rust binary embeds), `npm run format`, `npm run contract` (after any `src/protocol` change)
 - E2E: `npm run test:e2e` in `frontend/` builds the app and `webcontrol-rs`, then serves it on port 5055 (override
-  with `E2E_BACKEND_PORT`) from a temporary home. First time: `npx playwright install chromium`
+  with `E2E_BACKEND_PORT`) from a temporary home, plus a `--simulate` one on the next port (`E2E_SIM_PORT`) for the
+  optical end-to-end spec. First time: `npx playwright install chromium`
 - Rust (in `rust/`, after `npm run build`): `cargo test --workspace`, `scripts/coverage.sh` (95% lines per crate),
   `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
   `cargo zigbuild --release --target aarch64-unknown-linux-gnu.2.36 -p wc-server` (zig from `pip install ziglang`),
