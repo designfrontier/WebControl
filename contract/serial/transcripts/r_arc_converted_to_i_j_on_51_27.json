@@ -1,0 +1,73 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "r_arc_converted_to_i_j_on_51_27",
+    "description": "51.27 has no R word (spec/firmware.md §9, B18): a G2/G3 with R and no I/J would run an arc centred on its start. Each R arc goes out with I and J worked out from where the sled is, at 4 decimals; the negative R is the arc over 180 degrees, and the relative arc is written absolute because the firmware's G2 ignores G91.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "rust"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    },
+    "gcode": {
+      "lines": [
+        "G21",
+        "G90",
+        "G0 X10 Y10",
+        "G2 X20 Y0 R10 F300",
+        "G3 X10 Y-10 R-10",
+        "G91",
+        "G2 X-10 Y10 R10",
+        "G90",
+        "G0 X0"
+      ]
+    },
+    "bootBanner": [
+      "PCB v1.1 Detected",
+      "Grbl v1.00",
+      "ready",
+      "ok",
+      "[Forward Calculating Position]",
+      "position loaded at:",
+      "247.79",
+      "-5.88"
+    ]
+  },
+  "events": [
+    {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "G21"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "G90"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 X10 Y10  \n"},
+    {"type": "rx", "line": "G0 X10 Y10"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G2 X20 Y0 I0.0000 J-10.0000 F300  \n", "comment": "a quarter circle about (10, 0)"},
+    {"type": "rx", "line": "G2 X20 Y0 I0.0000 J-10.0000 F300"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G3 X10 Y-10 I-10.0000 J0.0000  \n", "comment": "R-10: three quarters about (10, 0)"},
+    {"type": "rx", "line": "G3 X10 Y-10 I-10.0000 J0.0000"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G91 \n"},
+    {"type": "rx", "line": "G91"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G2 X0.0000 Y0.0000 I0.0000 J10.0000 \n", "comment": "relative X-10 Y10 from (10, -10), written absolute"},
+    {"type": "rx", "line": "G2 X0.0000 Y0.0000 I0.0000 J10.0000"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "G90"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 X0  \n"},
+    {"type": "rx", "line": "G0 X0"},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "state": {"uploadFlag": 0, "jobInProgress": false, "gcodeIndex": 0}}
+  ]
+}

@@ -182,10 +182,20 @@ a plunge the plunge's 12.8 mm/min stays the modal feed, so the file's next F-les
 ## 9. What 51.29x adds
 
 A standalone `S` line sets spindle speed (only with the spindle on; `M3 S…` ignores S, and M3 leaves PWM at 0 until
-an S line). R-format arcs. `$60`/`$61` spindle min/max; `$63`/`$64` Z limits (51.292). TB6643 boards. Text quirks:
+an S line). R-format arcs (below). `$60`/`$61` spindle min/max; `$63`/`$64` Z limits (51.292). TB6643 boards. Text quirks:
 ` prescaler to ` appended to the boot line, `the value received:` after each `$` write, `ok` glued to a line after
 `$60`/`$61` on 51.291, `Change in setting, rewriting EEPROM` on 51.292. Comments no longer hang the firmware (51.27
 loops forever on one, so WebControl's comment stripping is load-bearing).
+
+**R-format arcs.** 51.27, 51.28 and stock 1.26 never read R: `G2()` takes the centre as the start plus I and J, each
+0 when absent, so an R arc has radius 0; `arc()` then takes no steps and `endMove()` sends the sled straight to the end
+point at whatever speed the PID reaches (GCode.cpp `G2`, Motion.cpp `arc` on H27). 51.29x reads R only when it is
+non-zero and X or Y differs from the start: centre = midpoint + e·√(R² − (d/2)²)·(−dy, dx)/d, with e = −1 for G2 and
+1 for G3. `sq(R)` drops R's sign, so a negative R cuts the short arc, not the one over 180°; an R shorter than half
+the chord gives a NaN centre; with no X/Y change it falls back to I and J. Every version's G2/G3 reads X, Y and Z as
+absolute even under G91 (only G0/G1 honour it), ignores G17/G18/G19 (`Command G17 unsupported and ignored.`) and
+cuts in XY. Like every word, R is found by the first `R` in the segment (the line is split at each G and M and upper-
+cased first), and its number is the digits and punctuation after it, so `R 5` reads as R0.
 
 ## Implications
 
@@ -209,6 +219,7 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
 | A14 | Low | `$86`, `$144` rejected; `$43` unused on holey; G17 ignored. |
 | A15 | Info | `bufferSize = 126` is right; PWR:/F: parsing is dead code; PE lines are mis-parsed until B05 is parsed. |
 | A16 | Fixed | After a touching probe WebControl queued `G10 Z0` behind anything already queued; behind a Resume's restart it zeroed Z at the restart's height. The firmware zeroes Z on a touch, so none is sent. Resume and other moving actions pressed mid-probe are now refused until the probe answers or Stop. |
+| A17 | Fixed | R-format arcs (upstream #120) were streamed untouched, so 51.27 sent the sled straight to the end at PID speed (§9); now converted (B18). |
 
 ### B. Rust backend requirements
 
@@ -279,6 +290,18 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
     reply shows the alarm again instead of clearing it. The unplaceable-sled message that ends Stop's own reload is
     shown but does not hold again, however long the 200 failed guesses take. After it the firmware takes the sled to
     be at 0, 0, so a job it held resumes only from Stop. `alarm_mid_home_holds_the_plunge_until_stop`.
+18. R-format arcs (upstream #120): below 51.29 (or before B05 answers), every line as it is written (a job line
+    after the home shift, a typed line, a restart's) has each G2/G3 segment with an R and no I or J rewritten with
+    I and J at 4 decimals, R removed. The centre is the standard one: G2 clockwise, G3 counter-clockwise, a
+    negative R the arc over 180°. The start is where WebControl last commanded the sled, following the controller's
+    own parse (segments split at G and M, the modal G, G20/G21, G90/G91; G2/G3 X/Y absolute); after a Stop, an
+    alarm, a `B` or `$` line, or with no absolute move yet, it is the last status report's MPos read while nothing
+    that moves is unacknowledged. A relative (G91) R arc is written with absolute X and Y, since the firmware's G2
+    reads them so. Refused like an unclosed comment (a job pauses before the line with an alert; a typed line is
+    dropped with one): |R| shorter than half the chord by over 0.05 mm, no X/Y change, G18/G19 in effect, G91 with a
+    Z word, or no known start. The rewritten line must still fit B3. On 51.29x R lines go out untouched (§9: they
+    lose R's sign there). The preview draws R arcs with the same centre. `r_arc_converted_to_i_j_on_51_27`,
+    `r_arc_impossible_radius_pauses_the_job`, `r_arc_untouched_on_51_292`.
 
 ### C. One-click firmware upgrade
 

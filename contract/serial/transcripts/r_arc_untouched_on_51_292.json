@@ -1,0 +1,41 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "r_arc_untouched_on_51_292",
+    "description": "51.29x reads R (spec/firmware.md §9), so on a controller reporting 51.29 R arcs go out as the file has them, negative R included.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.29",
+      "build": "51.292"
+    },
+    "webcontrolCommit": "rust"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    },
+    "gcode": {
+      "lines": [
+        "G21",
+        "G0 X10 Y10",
+        "G2 X20 Y0 R10 F300",
+        "G3 X10 Y-10 R-10"
+      ]
+    }
+  },
+  "events": [
+    {"type": "expect", "state": {"firmwareBuild": "51.292"}},
+    {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 X10 Y10  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G2 X20 Y0 R10 F300  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G3 X10 Y-10 R-10  \n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "state": {"uploadFlag": 0, "jobInProgress": false, "gcodeIndex": 0}}
+  ]
+}

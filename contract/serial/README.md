@@ -203,6 +203,9 @@ the backend had been quiet for `quiet` seconds, one line per settle.
 | `buffer_overflow_halts_streaming` | `Buffer overflow!` and its buffer dump: halt, rewind, Stop |
 | `line_too_long_pauses_the_job` | a line over 126 bytes as written is never sent; the job pauses with an alert |
 | `unclosed_comment_pauses_the_job` | an unclosed `(` is never sent; the job pauses with an alert |
+| `r_arc_converted_to_i_j_on_51_27` | R arcs go to 51.27 with I and J (negative R over 180°, a G91 arc written absolute) |
+| `r_arc_impossible_radius_pauses_the_job` | an R shorter than half the chord is never sent; the job pauses with an alert |
+| `r_arc_untouched_on_51_292` | on 51.29x R arcs go out as the file has them |
 | `realtime_characters_stripped_from_lines` | `!`, `~`, backtick, `?`, control characters and comments removed from lines |
 | `z_limits_refused_on_51_27` | Z-limit actions alert and send nothing below 51.292 |
 | `z_limits_on_51_292` | `$63`/`$64` in mm, clear, `B20`, with 51.292's replies to each |
@@ -539,3 +542,11 @@ Where the Rust backend writes something different from Python by owner decision.
    machine. The transcript runner reopens the port as the shell does; the banner after a reset is an `rx`.
    Transcripts: `connect_chain_over_sprocket_differs_restarts_the_controller`,
    `connect_eeprom_read_fail_restores_settings`.
+6. **R-format arcs are converted below 51.29** (upstream #120, 2026-11-15). Python streamed `G2/G3 … R…` untouched,
+   and 51.27 has no R word, so it sent the sled straight to the arc's end at PID speed (`spec/firmware.md` §9, A17).
+   Rust rewrites each R arc (no I or J) on a controller reporting below 51.29, or before B05 answers, with I and J
+   at 4 decimals as the line is written, from where it last commanded the sled (or the last status report), and
+   writes a G91 one with absolute X and Y. An arc no I and J can give (radius short of half the chord, no X/Y
+   change, G18/G19, G91 with Z, no known start) is refused as an unclosed comment is (B18). 51.29x gets R lines as
+   before. Transcripts: `r_arc_converted_to_i_j_on_51_27`, `r_arc_impossible_radius_pauses_the_job`,
+   `r_arc_untouched_on_51_292`.
