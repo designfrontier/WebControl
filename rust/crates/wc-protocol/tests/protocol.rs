@@ -24,6 +24,7 @@ fn startup_state() -> StartupState {
         manual_z_axis_adjust: false,
         probing: false,
         host_address: "10.0.0.5:5000".into(),
+        connection_status: ConnectionStatus::disconnected(),
         controller_firmware_version: 0.0,
         controller_board: None,
         firmware_build: None,

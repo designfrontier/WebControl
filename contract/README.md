@@ -58,6 +58,8 @@ ends it. **The Rust backend differs from Python here on purpose:**
 - `GET /api/state` carries `version`, the webcontrol-rs release, which `webcontrol-update` checks after a restart,
   and `commit`, the git commit it was built from; the status bar shows both.
   Python never sends either; the schema lists both as optional.
+- `GET /api/state` carries `connectionStatus`, the same object the `connectionStatus` push carries, so a client that
+  missed the connect-time push still learns the link state; a push that arrives first wins. Python never sends it.
 
 HTTP `family` is `api` (JSON for this UI), `classic` (old form routes
 the UI reuses, with their old shapes) or `static`.
@@ -132,7 +134,8 @@ Every `/MaslowCNC` push is a `message` event carrying `{"command": ..., "data": 
 Pushes are broadcast to every client. A payload with a `client` field is meant only for the socket with that id
 (`"all"` means everyone); clients drop the rest. A connection's id is its sid.
 
-On connect the server broadcasts `hostAddress`, then the client calls `GET /api/state` and emits
+On connect the server broadcasts `hostAddress` and `connectionStatus`, then the client calls `GET /api/state` (which
+also carries both) and emits
 `settingRequest {"section": "Computed Settings", "setting": "units"}` (the server resends the sled position only
 after that).
 
