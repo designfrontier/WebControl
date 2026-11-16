@@ -40,10 +40,7 @@ test("optical calibration stays hidden until its setting is saved, then appears 
     "href",
     "/api/calibration/optical/target.pdf?paper=a4",
   );
-  // Until the scan backend lands the state route answers 501, which the screen reports.
-  await expect(
-    page.getByRole("form", { name: "Optical calibration settings" }).or(page.getByRole("alert")),
-  ).toBeVisible();
+  await expect(page.getByRole("form", { name: "Optical calibration settings" })).toBeVisible();
 });
 
 test("its address explains how to turn it on while the setting is off", async ({ page }) => {
