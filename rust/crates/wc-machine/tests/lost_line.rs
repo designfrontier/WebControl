@@ -1,5 +1,6 @@
 //! A line the controller never received (`spec/firmware.md` B18): no echo, no `ok`, an empty ring and a still sled
-//! in three reports past the 150 ms grace after the write. It is sent again once; lost again, the job pauses at it. Nothing that runs a line is taken for one.
+//! in three reports past the 150 ms grace after the write. It is sent again once; lost again, the job pauses at it.
+//! Nothing that runs a line is taken for one.
 
 mod rig;
 
@@ -304,7 +305,8 @@ fn a_tilde_waiting_for_its_ok_holds_the_check() {
     assert_eq!(written(&rig.act("resumeRun")), ["~"]);
     assert!(written(&reports(&mut rig, 4000, STILL, EMPTY)).is_empty());
     rig.rx("ok");
-    assert_eq!(written(&reports(&mut rig, 600, STILL, EMPTY)), [ARC]);
+    assert!(written(&reports(&mut rig, 400, STILL, EMPTY)).is_empty(), "the count starts at the `~`'s ok");
+    assert_eq!(written(&reports(&mut rig, 200, STILL, EMPTY)), [ARC]);
 }
 
 #[test]
@@ -421,4 +423,19 @@ fn a_late_echo_never_sends_the_line_again() {
     report(&mut late, 200);
     late.rx(ARC);
     assert!(written(&reports(&mut late, 4000, STILL, EMPTY)).is_empty(), "echoed after two empty reports");
+}
+
+#[test]
+fn a_garbled_report_or_a_ring_holding_bytes_starts_the_count_over() {
+    ["<Idle,MPos:-140.2", "[PE:-0.00,-0.0", "[PE:-0.00,-0.01,89,1590.41,1822.64]"].iter().for_each(|line| {
+        let mut rig = Rig::connected();
+        start(&mut rig);
+        let mut effects = report(&mut rig, 200);
+        effects.extend(report(&mut rig, 200));
+        effects.extend(rig.rx(line));
+        effects.extend(report(&mut rig, 200));
+        effects.extend(report(&mut rig, 200));
+        assert!(written(&effects).is_empty(), "{line}");
+        assert_eq!(written(&report(&mut rig, 200)), [ARC], "{line}");
+    });
 }
