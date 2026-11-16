@@ -87,14 +87,15 @@ pub fn find_centre(frames: &[Frame], settings: &OpticalSettings) -> Result<Pixel
     Ok(PixelPoint { x, y })
 }
 
-/// From the square's pixel centre before and after a `step_mm` move in +X, then in +Y.
+/// From the square's pixel centre at the start and after `step_mm` moves from there in +X and in +Y, as the scan's
+/// camera check makes them.
 pub fn orientation(start: PixelPoint, after_x: PixelPoint, after_y: PixelPoint, step_mm: f64) -> Result<Orientation> {
     if !(step_mm.is_finite() && step_mm > 0.0) {
         return Err(OpticalError::Invalid(format!("The orientation step must be positive, got {step_mm}")));
     }
     // Moving the camera +X moves the square -X relative to it; columns are image +y up per machine mm.
     let x_col = ((start.x - after_x.x) / step_mm, (after_x.y - start.y) / step_mm);
-    let y_col = ((after_x.x - after_y.x) / step_mm, (after_y.y - after_x.y) / step_mm);
+    let y_col = ((start.x - after_y.x) / step_mm, (after_y.y - start.y) / step_mm);
     let det = x_col.0 * y_col.1 - x_col.1 * y_col.0;
     if det.abs() < 1e-6 {
         return Err(OpticalError::Invalid("The square did not move with the machine".into()));

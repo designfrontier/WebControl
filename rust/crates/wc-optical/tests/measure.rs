@@ -145,7 +145,7 @@ fn orientation_reads_rotation_mirroring_and_scale_from_two_moves() {
         |(rotation, mirrored)| {
             let start = PixelPoint { x: 300.0, y: 200.0 };
             let after_x = after_move(start, (5.0, 0.0), *rotation, *mirrored);
-            let after_y = after_move(after_x, (0.0, 5.0), *rotation, *mirrored);
+            let after_y = after_move(start, (0.0, 5.0), *rotation, *mirrored);
             let found = measure::orientation(start, after_x, after_y, 5.0).unwrap();
             let turn = (found.rotation_deg - rotation + 540.0).rem_euclid(360.0) - 180.0;
             assert!(turn.abs() < 1e-9 && found.mirrored == *mirrored, "{rotation} {mirrored}: {found:?}");
@@ -158,7 +158,7 @@ fn orientation_reads_rotation_mirroring_and_scale_from_two_moves() {
 fn orientation_and_measure_agree_on_a_mirrored_turned_camera() {
     let start = PixelPoint { x: 300.0, y: 200.0 };
     let after_x = after_move(start, (5.0, 0.0), 20.0, true);
-    let orientation = measure::orientation(start, after_x, after_move(after_x, (0.0, 5.0), 20.0, true), 5.0).unwrap();
+    let orientation = measure::orientation(start, after_x, after_move(start, (0.0, 5.0), 20.0, true), 5.0).unwrap();
     let found = measure::measure(&frames((3.0, 2.0), 20.0, true), &settings(), Some(&orientation)).unwrap();
     close((found.dx_mm, found.dy_mm), (3.0, 2.0), 0.05);
 }

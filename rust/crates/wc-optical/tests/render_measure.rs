@@ -61,7 +61,7 @@ fn the_measured_mounting_undoes_a_turned_or_mirrored_camera() {
         let scene = Scene { rotation_deg, mirrored, ..Scene::default() };
         let centre = |camera| measure::measure(&shots(&scene, camera), &settings(), None).unwrap().centre_px;
         let orientation =
-            measure::orientation(centre((0.0, 0.0)), centre((5.0, 0.0)), centre((5.0, 5.0)), 5.0).unwrap();
+            measure::orientation(centre((0.0, 0.0)), centre((5.0, 0.0)), centre((0.0, 5.0)), 5.0).unwrap();
         assert_eq!(orientation.mirrored, mirrored);
         assert!((orientation.rotation_deg + rotation_deg).abs() < 0.5, "{orientation:?}");
         assert!((orientation.px_per_mm - scene.px_per_mm).abs() < 0.05, "{orientation:?}");
