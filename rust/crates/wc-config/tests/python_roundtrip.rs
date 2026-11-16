@@ -21,12 +21,35 @@ fn opened_python_file() -> (tempfile::TempDir, Paths, Settings) {
     (home, paths, settings)
 }
 
+/// Options added to the defaults since v0.94, in the order opening a v0.94 file appends them to their sections.
+const ADDED_SINCE_V094: [(&str, &str); 4] = [
+    ("Optical Calibration Settings", "feedRate"),
+    ("Optical Calibration Settings", "settleTime"),
+    ("WebControl Settings", "opticalCalibrationEnabled"),
+    ("Camera Settings", "cameraSource"),
+];
+
+/// Python's text with one option appended to the end of its section, laid out as `json.dumps(indent=4)` does.
+fn appended(python: String, (section, key): (&str, &str)) -> String {
+    let option = Settings::defaults().option(section, key).unwrap().clone();
+    let fields: Vec<String> =
+        option.iter().map(|(k, v)| format!("            \"{k}\": {}", serde_json::to_string(v).unwrap())).collect();
+    let start = python.find(&format!("\"{section}\": [")).unwrap();
+    let end = start + python[start..].find("\n    ]").unwrap();
+    format!("{},\n        {{\n{}\n        }}{}", &python[..end], fields.join(",\n"), &python[end..])
+}
+
 #[test]
-fn a_python_written_file_is_written_back_byte_for_byte() {
+fn a_python_written_file_is_written_back_byte_for_byte_with_only_the_new_options_added() {
     let (_home, paths, settings) = opened_python_file();
     assert_eq!(settings.source(), Source::File);
     let python = fs::read_to_string(fixtures().join("python-written.json")).unwrap();
-    assert_eq!(settings.to_python_json(), python);
+    let expected = ADDED_SINCE_V094.into_iter().fold(python.clone(), appended);
+    assert_eq!(settings.to_python_json(), expected);
+    assert_eq!(fs::read_to_string(paths.settings_file()).unwrap(), expected, "open saves the added options");
+    assert_eq!(fs::read_to_string(paths.settings_backup()).unwrap(), python, "the v0.94 file is the backup");
+    fs::remove_file(paths.settings_backup()).unwrap();
+    Settings::open(&paths).unwrap();
     assert!(!paths.settings_backup().exists(), "a complete file is not rewritten on open");
 }
 

@@ -38,6 +38,8 @@ pub(crate) enum Measure {
     },
     /// adjustChain extends the chain until it is measured, then stops it.
     Stop,
+    /// The optical scan's move is done.
+    Optical,
 }
 
 /// Python's `%`, whose result takes the divisor's sign.
@@ -173,6 +175,7 @@ impl Machine {
                 self.realtime("!", now, effects);
                 self.drop_user_commands();
             }
+            Some(Measure::Optical) => self.optical_arrived(now, effects),
             None => tracing::debug!(mm, "a measurement nobody asked for"),
         }
     }

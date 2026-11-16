@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "post-api-calibration-optical-test-image.200",
+  "type": "object",
+  "properties": {
+    "png": {
+      "type": "string",
+      "description": "Base64 PNG"
+    },
+    "measurement": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "dxMm": {
+              "type": "number"
+            },
+            "dyMm": {
+              "type": "number"
+            },
+            "centrePx": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "number"
+                },
+                "y": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "x",
+                "y"
+              ]
+            },
+            "angleDeg": {
+              "type": "number"
+            },
+            "framesUsed": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "dxMm",
+            "dyMm",
+            "centrePx",
+            "angleDeg",
+            "framesUsed"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "png",
+    "measurement"
+  ]
+}

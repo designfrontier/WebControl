@@ -50,6 +50,7 @@ pub(crate) async fn state(State(state): State<AppState>) -> Json<StartupState> {
         backend: Backend::Rust,
         version: crate::VERSION.into(),
         commit: crate::COMMIT.into(),
+        experimental: wc_machine::optical::experimental(settings),
         gcode_file: snapshot.gcode_name.clone(),
     })
 }

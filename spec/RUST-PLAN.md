@@ -27,8 +27,9 @@ These override anything below that disagrees:
 - **No self-update;** deploy from the Mac.
 - **Power-off kept. GPIO kept:** port `Actions/gpioActions.py` behaviour (pin factory, button actions routed
   through the job state machine with debounce, LEDs) using `rppal`, with a no-op fallback off-Pi.
-- **Camera and optical calibration dropped:** M7 is out of scope; no `wc-optical` crate, and the UI and `contract/`
-  no longer carry optical calibration.
+- **Optical calibration returns as an experimental feature** (2026-11-15, replacing "camera and optical calibration
+  dropped"): `spec/optical-calibration.md` is the plan and its §5 the decisions. It is off unless the
+  `opticalCalibrationEnabled` setting is on, and its result feeds a holey geometry fit.
 - **OS:** Raspberry Pi OS Lite 64-bit (trixie) recommended, bookworm supported; target glibc 2.36.
 - **Warts cleaned up after parity,** with a `contract/VERSION` bump.
 - **Coverage: 95% lines for every crate** (not the 90/80 below), enforced in CI.

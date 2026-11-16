@@ -33,6 +33,7 @@ export const startupState = (over: Partial<StartupState> = {}): StartupState => 
     { command: "macro1", title: "Macro 1" },
     { command: "macro2", title: "Macro 2" },
   ],
+  experimental: [],
   ...over,
 });
 

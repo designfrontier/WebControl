@@ -13,6 +13,8 @@ mod frame;
 pub mod machine;
 #[path = "slices/main.rs"]
 pub mod main;
+#[path = "slices/optical.rs"]
+pub mod optical;
 #[path = "slices/settings.rs"]
 pub mod settings;
 #[path = "slices/system.rs"]

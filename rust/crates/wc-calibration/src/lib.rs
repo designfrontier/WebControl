@@ -4,6 +4,7 @@
 
 mod accept;
 pub mod holey;
+pub mod optical_fit;
 mod python;
 mod settings;
 mod trf;
@@ -28,6 +29,10 @@ pub enum CalibrationError {
     NotCalibrated,
     /// A value Accept would save or send is NaN or infinite.
     NotFinite,
+    /// The optical error grid cannot support a geometry fit (too few, colinear or invalid squares).
+    OpticalGrid(String),
+    /// The optical geometry fit converged but fails its quality checks.
+    OpticalFit(String),
 }
 
 impl fmt::Display for CalibrationError {
@@ -45,6 +50,7 @@ impl fmt::Display for CalibrationError {
             CalibrationError::NotFinite => {
                 write!(f, "The calibration result is not a finite number, so it was not saved. Calculate it again.")
             }
+            CalibrationError::OpticalGrid(reason) | CalibrationError::OpticalFit(reason) => write!(f, "{reason}"),
             CalibrationError::NotCalibrated => write!(
                 f,
                 "The machine was not able to be calibrated. Please ensure the work area dimensions are correct and try again."

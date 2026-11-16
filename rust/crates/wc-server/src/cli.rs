@@ -4,15 +4,17 @@ use std::future::Future;
 use std::io::Write;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use tokio::sync::Notify;
 use wc_config::{Paths, Settings};
 use wc_firmware::image::Image;
 use wc_machine::gpio::{Gpio, Plan};
 use wc_machine::{Event, Machine, MachineHandle, PortOpener, spawn};
-use wc_sim::Build;
+use wc_optical::camera::SledPosition;
+use wc_sim::{Build, Sim};
 
+use crate::camera::Cameras;
 use crate::firmware::{SimFlasher, simulated_target};
 use crate::host::SystemHost;
 use crate::serial::{SerialOpener, SimOpener};
@@ -113,21 +115,25 @@ pub async fn serve(options: Options, shutdown: impl Future<Output = ()> + Send +
     let host = SystemHost::new(&paths.dir(), exit.clone());
     let host = if saving { host.saving_to(paths.clone()) } else { host };
     let machine = Machine::new(&format!("{}:{}", local_ip(), bound.port()), settings).with_library(paths.gcode_dir());
-    let (machine, opener, host): (Machine, Box<dyn PortOpener>, SystemHost) = match options.simulate {
+    type Started = (Machine, Box<dyn PortOpener>, SystemHost, Option<Arc<Mutex<Sim>>>);
+    let (machine, opener, host, sim): Started = match options.simulate {
         true => {
             let opener = SimOpener::new(Build::holey_51_27().on_board(SIMULATED_BOARD));
             let host = host.with_flasher(Box::new(SimFlasher { sim: opener.sim() }));
             let machine = machine.on_port(SIMULATED_PORT).with_firmware(Image::embedded().or(Some(simulated_target())));
-            (machine, Box::new(opener), host)
+            let sim = opener.sim();
+            (machine, Box::new(opener), host, Some(sim))
         }
-        false => (machine, Box::new(SerialOpener), host),
+        false => (machine, Box::new(SerialOpener), host, None),
     };
     let host = Arc::new(host);
     let (machine, task) = spawn(machine, opener, host.clone());
+    let cameras = Cameras::new(sim.map(|sim| true_sled_position(sim, machine.clone())));
     host.attach_gpio(Some(start_gpio(&machine)));
     println!("webcontrol-rs listening on {bound}");
     std::io::stdout().flush()?;
-    let state = AppState::new(machine, PingConfig::default(), paths);
+    let streaming = cameras.stream_to(machine.clone());
+    let state = AppState::new(machine, PingConfig::default(), paths).with_cameras(cameras);
     let closing = state.clone();
     let stopped = async move {
         tokio::select! {
@@ -138,9 +144,28 @@ pub async fn serve(options: Options, shutdown: impl Future<Output = ()> + Send +
     };
     axum::serve(listener, router(state)).with_graceful_shutdown(stopped).await?;
     host.attach_gpio(None);
+    drop(streaming);
     // The machine task ends with the last handle, once its final settings save is on disk.
     let _ = tokio::time::timeout(SAVE_ON_EXIT, task).await;
     Ok(())
+}
+
+/// The simulated sled's X and Y in mm, for the synthetic camera.
+pub fn sled_position(sim: Arc<Mutex<Sim>>) -> SledPosition {
+    Arc::new(move || {
+        let [x, y, _] = sim.lock().expect("the simulator does not panic").position();
+        (x, y)
+    })
+}
+
+/// Where the simulated machine, built to the default geometry, really puts its sled: its firmware drives the chains
+/// with the settings' geometry, so a setting off its default misplaces the sled as a wrong measurement would.
+pub fn true_sled_position(sim: Arc<Mutex<Sim>>, machine: MachineHandle) -> SledPosition {
+    let (commanded, built) = (sled_position(sim), Settings::defaults());
+    Arc::new(move || {
+        let at = commanded();
+        wc_calibration::optical_fit::misplaced(&machine.snapshot().settings, &built, at).unwrap_or(at)
+    })
 }
 
 /// The buttons and LEDs `GPIO Settings` names; a press reaches the machine as the UI's action would.

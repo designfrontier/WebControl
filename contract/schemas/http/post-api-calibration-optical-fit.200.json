@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "post-api-calibration-optical-fit.200",
+  "type": "object",
+  "properties": {
+    "current": {
+      "type": "object",
+      "properties": {
+        "motorYoffset": {
+          "type": "number"
+        },
+        "distanceBetweenMotors": {
+          "type": "number"
+        },
+        "leftChainTolerance": {
+          "type": "number"
+        },
+        "rightChainTolerance": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "motorYoffset",
+        "distanceBetweenMotors",
+        "leftChainTolerance",
+        "rightChainTolerance"
+      ]
+    },
+    "fitted": {
+      "type": "object",
+      "properties": {
+        "motorYoffset": {
+          "type": "number"
+        },
+        "distanceBetweenMotors": {
+          "type": "number"
+        },
+        "leftChainTolerance": {
+          "type": "number"
+        },
+        "rightChainTolerance": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "motorYoffset",
+        "distanceBetweenMotors",
+        "leftChainTolerance",
+        "rightChainTolerance"
+      ]
+    },
+    "sheet": {
+      "type": "object",
+      "properties": {
+        "xMm": {
+          "type": "number"
+        },
+        "yMm": {
+          "type": "number"
+        },
+        "rotationDeg": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "xMm",
+        "yMm",
+        "rotationDeg"
+      ]
+    },
+    "rmsMm": {
+      "type": "number"
+    },
+    "cells": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    }
+  },
+  "required": [
+    "current",
+    "fitted",
+    "sheet",
+    "rmsMm",
+    "cells"
+  ]
+}

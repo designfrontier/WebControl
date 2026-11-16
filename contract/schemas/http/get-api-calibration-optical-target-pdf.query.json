@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get-api-calibration-optical-target-pdf.query",
+  "type": "object",
+  "properties": {
+    "paper": {
+      "type": "string",
+      "enum": [
+        "letter",
+        "a4"
+      ]
+    }
+  }
+}

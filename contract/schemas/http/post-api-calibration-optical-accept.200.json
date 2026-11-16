@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "post-api-calibration-optical-accept.200",
+  "type": "object",
+  "properties": {
+    "motorYoffset": {
+      "type": "number"
+    },
+    "distanceBetweenMotors": {
+      "type": "number"
+    },
+    "leftChainTolerance": {
+      "type": "number"
+    },
+    "rightChainTolerance": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "motorYoffset",
+    "distanceBetweenMotors",
+    "leftChainTolerance",
+    "rightChainTolerance"
+  ]
+}

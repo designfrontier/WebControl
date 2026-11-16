@@ -329,6 +329,8 @@ pub struct StartupState {
     pub version: String,
     /// The git commit the binary was built from (Rust only), shown beside the release version.
     pub commit: String,
+    /// The experimental features turned on in the settings, such as `"optical"` (Rust only).
+    pub experimental: Vec<String>,
     /// The loaded gcode file's path in the gcode library; `None` when nothing is loaded.
     pub gcode_file: Option<String>,
 }

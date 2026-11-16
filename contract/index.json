@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "generatedFrom": "frontend/src/protocol (npm run contract)",
   "socket": {
     "path": "/socket.io",
@@ -103,6 +103,18 @@
               },
               "updatePIDData": {
                 "schema": "schemas/messages/updatePIDData.json",
+                "dataFormat": "json"
+              },
+              "opticalScanProgress": {
+                "schema": "schemas/messages/opticalScanProgress.json",
+                "dataFormat": "json"
+              },
+              "opticalOrientation": {
+                "schema": "schemas/messages/opticalOrientation.json",
+                "dataFormat": "json"
+              },
+              "opticalImage": {
+                "schema": "schemas/messages/opticalImage.json",
                 "dataFormat": "json"
               },
               "pyinstallUpdate": {
@@ -370,6 +382,24 @@
       "allowedDuring": "idle",
       "via": "action",
       "schema": "schemas/actions/acceptHoleyCalibrationResults.json"
+    },
+    "opticalRetryCell": {
+      "summary": "Measure the optical square that failed again",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/opticalRetryCell.json"
+    },
+    "opticalSkipCell": {
+      "summary": "Leave the optical square that failed unmeasured and go on",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/opticalSkipCell.json"
+    },
+    "opticalClearSession": {
+      "summary": "Forget the optical scan's measurements",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/opticalClearSession.json"
     },
     "resetChainLengths": {
       "summary": "Tell the controller the chains are at their default lengths",
@@ -866,6 +896,221 @@
           "contentType": "application/json",
           "description": "Nothing calculated yet",
           "schema": "schemas/http/post-api-calibration-holey-accept.409.json"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/calibration/optical",
+      "family": "api",
+      "summary": "Optical settings, the scan session and the camera",
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/get-api-calibration-optical.200.json"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "Optical calibration is turned off in Settings > WebControl Settings",
+          "schema": "schemas/http/get-api-calibration-optical.409.json"
+        }
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/calibration/optical/settings",
+      "family": "api",
+      "summary": "Save the optical calibration settings",
+      "body": {
+        "contentType": "application/json",
+        "schema": "schemas/http/put-api-calibration-optical-settings.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/put-api-calibration-optical-settings.200.json"
+        },
+        "400": {
+          "contentType": "application/json",
+          "description": "Missing or non-numeric field",
+          "schema": "schemas/http/put-api-calibration-optical-settings.400.json"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "Optical calibration is turned off in Settings > WebControl Settings; or a job, a scan or another calibration is running",
+          "schema": "schemas/http/put-api-calibration-optical-settings.409.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/calibration/optical/scan",
+      "family": "api",
+      "summary": "Start a scan of the extents, or of one square; progress arrives as opticalScanProgress",
+      "body": {
+        "contentType": "application/json",
+        "schema": "schemas/http/post-api-calibration-optical-scan.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/post-api-calibration-optical-scan.200.json"
+        },
+        "400": {
+          "contentType": "application/json",
+          "description": "Invalid settings or extents",
+          "schema": "schemas/http/post-api-calibration-optical-scan.400.json"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "Optical calibration is turned off in Settings > WebControl Settings; or a job, a scan or another calibration is running",
+          "schema": "schemas/http/post-api-calibration-optical-scan.409.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/calibration/optical/test-image",
+      "family": "api",
+      "summary": "Capture and annotate one frame without moving",
+      "body": {
+        "contentType": "application/json",
+        "schema": "schemas/http/post-api-calibration-optical-test-image.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/post-api-calibration-optical-test-image.200.json"
+        },
+        "400": {
+          "contentType": "application/json",
+          "description": "Invalid settings",
+          "schema": "schemas/http/post-api-calibration-optical-test-image.400.json"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "Optical calibration is turned off in Settings > WebControl Settings; or a job, a scan or another calibration is running",
+          "schema": "schemas/http/post-api-calibration-optical-test-image.409.json"
+        },
+        "422": {
+          "contentType": "application/json",
+          "description": "No camera or no frame",
+          "schema": "schemas/http/post-api-calibration-optical-test-image.422.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/calibration/optical/find-center",
+      "family": "api",
+      "summary": "Suggest the optical centre from the square under the camera",
+      "body": {
+        "contentType": "application/json",
+        "schema": "schemas/http/post-api-calibration-optical-find-center.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/post-api-calibration-optical-find-center.200.json"
+        },
+        "400": {
+          "contentType": "application/json",
+          "description": "Invalid settings",
+          "schema": "schemas/http/post-api-calibration-optical-find-center.400.json"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "Optical calibration is turned off in Settings > WebControl Settings; or a job, a scan or another calibration is running",
+          "schema": "schemas/http/post-api-calibration-optical-find-center.409.json"
+        },
+        "422": {
+          "contentType": "application/json",
+          "description": "No camera, no frame or no square",
+          "schema": "schemas/http/post-api-calibration-optical-find-center.422.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/calibration/optical/fit",
+      "family": "api",
+      "summary": "Fit the holey geometry to the measured grid, unsaved",
+      "body": {
+        "contentType": "application/json",
+        "description": "{}",
+        "schema": "schemas/http/post-api-calibration-optical-fit.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/post-api-calibration-optical-fit.200.json"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "Optical calibration is turned off in Settings > WebControl Settings; or too few squares measured",
+          "schema": "schemas/http/post-api-calibration-optical-fit.409.json"
+        },
+        "422": {
+          "contentType": "application/json",
+          "description": "No fit",
+          "schema": "schemas/http/post-api-calibration-optical-fit.422.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/calibration/optical/accept",
+      "family": "api",
+      "summary": "Store the last fit's geometry and send it to the controller",
+      "body": {
+        "contentType": "application/json",
+        "description": "{}",
+        "schema": "schemas/http/post-api-calibration-optical-accept.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/post-api-calibration-optical-accept.200.json"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "Optical calibration is turned off in Settings > WebControl Settings; or a job, a scan or another calibration is running; or nothing fitted yet",
+          "schema": "schemas/http/post-api-calibration-optical-accept.409.json"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/calibration/optical/csv",
+      "family": "api",
+      "summary": "The measured grid as Python's CSV",
+      "responses": {
+        "200": {
+          "contentType": "application/octet-stream",
+          "description": "text/csv"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "Optical calibration is turned off in Settings > WebControl Settings; or nothing measured",
+          "schema": "schemas/http/get-api-calibration-optical-csv.409.json"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/calibration/optical/target.pdf",
+      "family": "api",
+      "summary": "The printable target, tiled on pages with registration marks",
+      "query": "schemas/http/get-api-calibration-optical-target-pdf.query.json",
+      "responses": {
+        "200": {
+          "contentType": "application/octet-stream",
+          "description": "application/pdf"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "Optical calibration is turned off in Settings > WebControl Settings",
+          "schema": "schemas/http/get-api-calibration-optical-target-pdf.409.json"
         }
       }
     },

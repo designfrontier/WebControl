@@ -86,6 +86,7 @@ impl Machine {
         self.controller.hold_until = None;
         self.controller.raise_deadline = None;
         effects.push(broadcast(&Alarm { message: message.clone() }));
+        self.optical_stopped(Some(&message), effects);
         let job_resumes = job_resumes && self.alarm.as_ref().is_none_or(|hold| hold.job_resumes);
         self.alarm = Some(Hold { message, job_resumes });
     }

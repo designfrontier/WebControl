@@ -98,6 +98,9 @@ export const actionSpecs = {
   acceptTriangularCalibrationResults: idle("Store the last triangular calibration result"),
   cutHoleyCalibrationPattern: idle("Cut the holey calibration pattern"),
   acceptHoleyCalibrationResults: idle("Store the last holey calibration result"),
+  opticalRetryCell: idle("Measure the optical square that failed again"),
+  opticalSkipCell: idle("Leave the optical square that failed unmeasured and go on"),
+  opticalClearSession: idle("Forget the optical scan's measurements"),
   resetChainLengths: idle("Tell the controller the chains are at their default lengths"),
   defineHome: noJob("Define home at a point, or at the sled when both args are empty", {
     arg: z.union([z.number(), z.literal("")]).describe('X in inches, or "" for the sled position'),

@@ -17,6 +17,7 @@ wc-config.workspace = true
 wc-firmware.workspace = true
 wc-gcode.workspace = true
 wc-kinematics.workspace = true
+wc-optical.workspace = true
 wc-protocol.workspace = true
 
 [dev-dependencies]

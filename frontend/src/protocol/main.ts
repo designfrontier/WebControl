@@ -137,6 +137,8 @@ export const startupStateSchema = z.object({
   version: z.string().optional(),
   /** The git commit the webcontrol-rs binary was built from. Rust only. */
   commit: z.string().optional(),
+  /** Experimental features turned on in the settings: "optical" for optical calibration. Rust only. */
+  experimental: z.array(z.string()).default([]),
   /** The loaded gcode file's path in the gcode library, such as "jobs/leg.nc"; null when none is loaded. */
   gcodeFile: z.string().nullable().default(null),
 });

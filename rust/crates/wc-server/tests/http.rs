@@ -164,7 +164,7 @@ async fn api_state_reports_the_settings_and_the_rust_backend() {
             "controllerBoard": null, "firmwareBuild": null,
             "macros": [{"command": "macro1", "title": "Spindle on"}, {"command": "macro2", "title": ""}],
             "backend": "rust", "version": wc_server::VERSION,
-            "commit": wc_server::COMMIT, "gcodeFile": null})
+            "commit": wc_server::COMMIT, "experimental": [], "gcodeFile": null})
     );
 }
 

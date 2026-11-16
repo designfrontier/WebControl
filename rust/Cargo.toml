@@ -14,6 +14,8 @@ base64 = "0.22"
 flate2 = "1"
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 http-body-util = "0.1"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+imageproc = { version = "0.25", default-features = false }
 jsonschema = { version = "0.61", default-features = false }
 libc = "0.2"
 nalgebra = "0.33"
@@ -40,6 +42,7 @@ wc-firmware = { path = "crates/wc-firmware" }
 wc-gcode = { path = "crates/wc-gcode" }
 wc-kinematics = { path = "crates/wc-kinematics" }
 wc-machine = { path = "crates/wc-machine" }
+wc-optical = { path = "crates/wc-optical" }
 wc-protocol = { path = "crates/wc-protocol" }
 wc-sim = { path = "crates/wc-sim" }
 wc-testkit = { path = "crates/wc-testkit" }
@@ -50,3 +53,7 @@ lto = "thin"
 codegen-units = 1
 panic = "abort"
 strip = true
+
+# The image maths in the optical scan is too slow unoptimised for the simulator end-to-end tests.
+[profile.dev.package."*"]
+opt-level = 2
