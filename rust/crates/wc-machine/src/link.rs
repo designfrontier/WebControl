@@ -381,7 +381,7 @@ impl Machine {
         let id = self.controller.accounting.sent(&message, index);
         self.controller.ready = false;
         self.controller.last_write = Some(now);
-        self.controller.watch.written(idle);
+        self.controller.watch.written(idle, now);
         if let Some(mode) = positioning_set_by(&message) {
             self.positioning = mode;
         }

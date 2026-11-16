@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "meta": {
     "name": "stream_lost_line_is_sent_again",
-    "description": "The owner's cut (51.27, PCB v1.1, buffering off, 2026-11-15): the controller acked an arc, the next arc went out, and the controller never echoed or acked it while every report showed an empty ring (PE space 127) and the same MPos. After 2 s of that the arc goes out again, once, with a controller message naming it, and the job carries on. The file is the job's lines from the last plunge to the lost arc, then a G0 Z5 the log never reached.",
+    "description": "The owner's cut (51.27, PCB v1.1, buffering off, 2026-11-15): the controller acked an arc, the next arc went out, and the controller never echoed or acked it while every report showed an empty ring (PE space 127) and the same MPos. After three such reports, 0.6 s after the write, the arc goes out again, once, with a controller message naming it, and the job carries on. The file is the job's lines from the last plunge to the lost arc, then a G0 Z5 the log never reached.",
     "firmware": {
       "variant": "holey",
       "version": "51.27"
@@ -121,13 +121,7 @@
     {"type": "tick", "seconds": 0.2},
     {"type": "rx", "line": "<Idle,MPos:-140.22,25.13,-6.01,WPos:0.000,0.000,0.000>"},
     {"type": "rx", "line": "[PE:-0.00,0.01,127,1590.41,1822.66]"},
-    {"type": "tick", "seconds": 0.2},
-    {"type": "rx", "line": "<Idle,MPos:-140.22,25.13,-6.01,WPos:0.000,0.000,0.000>"},
-    {"type": "rx", "line": "[PE:-0.00,0.01,127,1590.41,1822.66]"},
-    {"type": "tick", "seconds": 0.2},
-    {"type": "rx", "line": "<Idle,MPos:-140.22,25.13,-6.01,WPos:0.000,0.000,0.000>"},
-    {"type": "rx", "line": "[PE:-0.00,0.01,127,1590.41,1822.66]"},
-    {"type": "tx", "bytes": "G3 X-126.4777 Y29.5677 I0.548 J21.8  \n", "comment": "2 s of status reports with an empty ring at one MPos since the write, and no echo or ok"},
+    {"type": "tx", "bytes": "G3 X-126.4777 Y29.5677 I0.548 J21.8  \n", "comment": "three status reports past the 150 ms grace after the write, each with an empty ring at one MPos, and no echo or ok"},
     {"type": "rx", "line": "G3 X-126.4777 Y29.5677 I0.548 J21.8"},
     {"type": "rx", "line": "ok"},
     {"type": "tx", "bytes": "G0 Z5  \n"},
