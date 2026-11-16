@@ -1,3 +1,4 @@
+import { decimalPoint } from "../../numbers/decimal";
 import type { Units } from "../../protocol";
 import type { RunState } from "../../state/machine";
 
@@ -47,7 +48,7 @@ const MM_PER_INCH = 25.4;
 
 /** Parses a jog distance the way the old inputs' pattern did: digits with at most `decimals` decimal places. */
 export const parseDistance = (text: string, decimals: number): number | null => {
-  const trimmed = text.trim();
+  const trimmed = decimalPoint(text.trim());
   const pattern = new RegExp(`^(\\d+(\\.\\d{0,${decimals}})?|\\.\\d{1,${decimals}})$`);
   return pattern.test(trimmed) ? Number(trimmed) : null;
 };

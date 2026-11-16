@@ -92,17 +92,21 @@ describe("validation", () => {
   const numeric = setting({ key: "homeX", numeric: true });
   const whole = setting({ key: "webPort", type: "int", numeric: true });
 
-  it.each(["12", "-3.5", ".5", "1e-6", " 7 ", "+2"])("accepts number %j", (value) => {
+  it.each(["12", "-3.5", ".5", "1e-6", " 7 ", "+2", "2,5", "-0,5"])("accepts number %j", (value) => {
     expect(validateValue(numeric, value)).toBeUndefined();
   });
 
-  it.each(["", "abc", "1.2.3", "1,5", "-", "1e999", "-1e400", "\u0663"])("rejects number %j", (value) => {
-    expect(validateValue(numeric, value)).toBe("Enter a number");
-  });
+  it.each(["", "abc", "1.2.3", "1,234.5", "1.234,5", "1,2,3", "-", "1e999", "-1e400", "\u0663"])(
+    "rejects number %j",
+    (value) => {
+      expect(validateValue(numeric, value)).toBe("Enter a number");
+    },
+  );
 
   it("wants whole numbers for int settings", () => {
     expect(validateValue(whole, "5000")).toBeUndefined();
     expect(validateValue(whole, "50.5")).toBe("Enter a whole number");
+    expect(validateValue(whole, "50,5")).toBe("Enter a whole number");
   });
 
   it("accepts any text or bool otherwise", () => {
