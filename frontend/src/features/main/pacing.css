@@ -1,0 +1,136 @@
+/* Beside the alarm status, so the run panel gains no row; an alarm, or the custom form, takes a row of its own. */
+.run-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.run-status > .alarm-status {
+  flex: 1 0 auto;
+  padding: 0 var(--space-2);
+}
+
+.run-status > .alarm-status[data-alarm="true"],
+.pacing:has(.pacing-custom, .pacing-error) {
+  flex-basis: 100%;
+}
+
+.pacing {
+  display: grid;
+  flex: 1000 1 12rem;
+  gap: var(--space-1);
+  min-width: 0;
+  font-size: 0.9rem;
+}
+
+.pacing-row,
+.pacing-custom {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.pacing-custom {
+  flex-wrap: wrap;
+}
+
+.pacing select,
+.pacing-custom input {
+  min-height: var(--control);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.pacing-row select {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* Two short lines inside one control's height, so the row adds no height to the run panel. */
+.control-panel .pacing-stats {
+  display: grid;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 var(--space-1);
+  container-type: inline-size;
+  font-size: 0.8rem;
+  line-height: 1.15;
+  text-align: left;
+}
+
+.pacing-stats strong,
+.pacing-stats span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pacing-stats strong {
+  font-size: 0.85rem;
+}
+
+@container (max-width: 7rem) {
+  .pacing-lines {
+    display: none;
+  }
+}
+
+.pacing-custom input {
+  width: 5rem;
+}
+
+.pacing-custom input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.pacing-error,
+.pacing-details p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.pacing-error {
+  color: var(--danger);
+}
+
+.pacing-details {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+}
+
+.pacing-history {
+  overflow-x: auto;
+}
+
+.pacing-history table {
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.pacing-history caption {
+  text-align: left;
+}
+
+.pacing-history th,
+.pacing-history td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+}
+
+/* Headings wrap so the table fits a portrait iPad; narrower, it scrolls sideways. */
+.pacing-history thead th {
+  white-space: normal;
+  vertical-align: bottom;
+}
+
+.pacing-history th[scope="row"],
+.pacing-history thead th:first-child {
+  text-align: left;
+}

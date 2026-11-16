@@ -198,6 +198,7 @@ impl Machine {
         self.gcode_update_requested(&mut pushes);
         self.push_gcode_name(&mut pushes);
         self.push_board(&mut pushes);
+        pushes.push(self.pacing_shown());
         effects.extend(pushes.into_iter().map(|effect| match effect {
             Effect::Push(push) => Effect::Push(push.to_client(sid)),
             other => other,

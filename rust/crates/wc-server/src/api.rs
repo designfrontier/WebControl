@@ -13,7 +13,7 @@ use wc_machine::forms::{self, CUSTOM_FIRMWARE_VERSION};
 use wc_machine::{Request, Response as Answer};
 use wc_protocol::calibration::{HoleyParameters, TriangularParameters};
 use wc_protocol::machine::{MachineSetup, QuickConfigure};
-use wc_protocol::main::{Backend, GcodeLine, Macro, MainScreen, Point, StartupState, Units};
+use wc_protocol::main::{Backend, GcodeLine, Macro, MainScreen, PacingStats, Point, StartupState, Units};
 use wc_protocol::system::{BundledFirmware, PidSettings, SystemInfo, UpdateStatus};
 use wc_protocol::viewer::{MachineFrame, ViewerSnapshot};
 
@@ -52,7 +52,18 @@ pub(crate) async fn state(State(state): State<AppState>) -> Json<StartupState> {
         commit: crate::COMMIT.into(),
         experimental: wc_machine::optical::experimental(settings),
         gcode_file: snapshot.gcode_name.clone(),
+        pacing: (*snapshot.pacing).clone(),
     })
+}
+
+/// `GET /api/run/pacing`: as last pushed, at most 2 s old during a job.
+pub(crate) async fn pacing(State(state): State<AppState>) -> Json<PacingStats> {
+    Json((*state.machine.snapshot().pacing).clone())
+}
+
+/// `PUT /api/run/pacing`.
+pub(crate) async fn update_pacing(State(state): State<AppState>, body: Bytes) -> Response {
+    answer(&state, Request::Pacing(json_body(&body))).await
 }
 
 /// `api/main.py`'s `_flag`: a number's truth, else the text `true`.

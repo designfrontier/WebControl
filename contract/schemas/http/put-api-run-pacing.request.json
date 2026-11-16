@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "put-api-run-pacing.request",
+  "type": "object",
+  "properties": {
+    "values": {
+      "type": "object",
+      "properties": {
+        "linePacingMode": {
+          "type": "string",
+          "enum": [
+            "v0.94",
+            "minimum gap"
+          ]
+        },
+        "linePacingGapMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 500
+        }
+      },
+      "required": [
+        "linePacingMode",
+        "linePacingGapMs"
+      ]
+    }
+  },
+  "required": [
+    "values"
+  ]
+}

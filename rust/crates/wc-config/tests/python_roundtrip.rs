@@ -22,18 +22,22 @@ fn opened_python_file() -> (tempfile::TempDir, Paths, Settings) {
 }
 
 /// Options added to the defaults since v0.94, in the order opening a v0.94 file appends them to their sections.
-const ADDED_SINCE_V094: [(&str, &str); 4] = [
+const ADDED_SINCE_V094: [(&str, &str); 6] = [
     ("Optical Calibration Settings", "feedRate"),
     ("Optical Calibration Settings", "settleTime"),
     ("WebControl Settings", "opticalCalibrationEnabled"),
+    ("WebControl Settings", "linePacingMode"),
+    ("WebControl Settings", "linePacingGapMs"),
     ("Camera Settings", "cameraSource"),
 ];
 
 /// Python's text with one option appended to the end of its section, laid out as `json.dumps(indent=4)` does.
 fn appended(python: String, (section, key): (&str, &str)) -> String {
     let option = Settings::defaults().option(section, key).unwrap().clone();
-    let fields: Vec<String> =
-        option.iter().map(|(k, v)| format!("            \"{k}\": {}", serde_json::to_string(v).unwrap())).collect();
+    let fields: Vec<String> = option
+        .iter()
+        .map(|(k, v)| format!("            \"{k}\": {}", wc_config::python_json(v).replace('\n', "\n            ")))
+        .collect();
     let start = python.find(&format!("\"{section}\": [")).unwrap();
     let end = start + python[start..].find("\n    ]").unwrap();
     format!("{},\n        {{\n{}\n        }}{}", &python[..end], fields.join(",\n"), &python[end..])

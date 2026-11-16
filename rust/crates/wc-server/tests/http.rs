@@ -164,7 +164,8 @@ async fn api_state_reports_the_settings_and_the_rust_backend() {
             "controllerBoard": null, "firmwareBuild": null,
             "macros": [{"command": "macro1", "title": "Spindle on"}, {"command": "macro2", "title": ""}],
             "backend": "rust", "version": wc_server::VERSION,
-            "commit": wc_server::COMMIT, "experimental": [], "gcodeFile": null})
+            "commit": wc_server::COMMIT, "experimental": [], "gcodeFile": null,
+            "pacing": {"mode": "v0.94", "gapMs": 50, "job": null, "segment": null, "history": []}})
     );
 }
 
@@ -207,6 +208,7 @@ const ROUTED: &[(&str, &str)] = &[
     ("GET", "/api/state"),
     ("GET", "/api/main"),
     ("GET", "/api/viewer"),
+    ("GET", "/api/run/pacing"),
     ("GET", "/api/settings/{sectionId}"),
     ("GET", "/api/system/info"),
     ("GET", "/api/machine/setup"),

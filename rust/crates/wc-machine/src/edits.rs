@@ -16,6 +16,7 @@ use crate::commands::round4;
 use crate::files::SETTINGS_LOCKED;
 use crate::forms;
 use crate::machine::{Effect, Link, Machine, alert, broadcast};
+use crate::pacing;
 
 const COMPUTED: &str = "Computed Settings";
 const ADVANCED: &str = "Advanced Settings";
@@ -43,6 +44,8 @@ pub enum Request {
     OpticalFitted(Box<GeometryFit>),
     /// `POST /api/calibration/optical/accept`.
     OpticalAccept,
+    /// `PUT /api/run/pacing`: the line pacing settings, which a job does not lock.
+    Pacing(Value),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -100,6 +103,7 @@ impl Machine {
             Request::OpticalSettings(settings) => self.optical_save(settings),
             Request::OpticalFitted(fit) => self.optical_fitted(*fit),
             Request::OpticalAccept => self.optical_accept(),
+            Request::Pacing(body) => self.update_pacing(&body, now, effects),
         }
     }
 
@@ -131,6 +135,35 @@ impl Machine {
             self.reopen_port(now, effects);
         }
         Response::ok(200, &self.section_now(id))
+    }
+
+    /// Checked as the WebControl Settings screen checks them, then in effect from the next line on.
+    fn update_pacing(&mut self, body: &Value, now: Duration, effects: &mut Vec<Effect>) -> Response {
+        let Some(section) = self.section_now("webcontrol") else {
+            return Response::error(404, "Not found");
+        };
+        let update = match SettingsUpdate::parse(body) {
+            Ok(update) => update,
+            Err(message) => return Response::error(400, &message),
+        };
+        let mut errors = forms::errors(&section, &update.values, &self.ports);
+        update.values.keys().filter(|key| ![pacing::MODE_KEY, pacing::GAP_KEY].contains(&key.as_str())).for_each(
+            |key| {
+                errors.insert(key.clone(), Value::from("Not a line pacing setting"));
+            },
+        );
+        if !errors.is_empty() {
+            return Response { status: 400, body: json!({ "errors": errors }) };
+        }
+        // Stored without the recompute a settings save runs, so no `$` line can join a running job.
+        let settings = Arc::make_mut(&mut self.settings);
+        section.settings.iter().for_each(|field| {
+            if let Some(value) = update.values.get(&field.key) {
+                settings.store(pacing::SECTION, &field.key, &forms::form_value(field, value));
+            }
+        });
+        self.pacing_observe(now, effects);
+        Response::ok(200, &self.pacing_report(now))
     }
 
     /// The port setting changed while connected, never mid-job: close, and the next tick opens the new one.

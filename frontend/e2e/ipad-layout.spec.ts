@@ -98,7 +98,9 @@ const measure = (page: Page) =>
       panelOverflow: panel.scrollHeight - panel.clientHeight,
       controlsSpare: Math.round(Math.max(0, panel.clientHeight - panel.scrollHeight) + jogSlack + aboveLog),
       logSpare: Math.round(logSpare),
-      smallTargets: Array.from(document.querySelectorAll<HTMLElement>(".shell button, .shell input, .shell a[href]"))
+      smallTargets: Array.from(
+        document.querySelectorAll<HTMLElement>(".shell button, .shell input, .shell select, .shell a[href]"),
+      )
         .filter((target) => target.offsetParent !== null && target.getBoundingClientRect().height < 44)
         .map((target) => target.getAttribute("aria-label") ?? target.textContent),
     };
@@ -129,6 +131,7 @@ test("a job at its tool change fits every iPad without scrolling, with run, stat
     run.getByRole("button", { name: /^(Pause|Resume)$/ }),
     run.getByRole("button", { name: "Stop", exact: true }),
     run.getByText("File:").locator(".."),
+    run.getByRole("group", { name: "Line pacing" }),
     readouts.filter({ hasText: /^Job/ }),
     readouts.filter({ hasText: /^Line/ }),
     readouts.filter({ hasText: /^Complete/ }),

@@ -333,4 +333,49 @@ pub struct StartupState {
     pub experimental: Vec<String>,
     /// The loaded gcode file's path in the gcode library; `None` when nothing is loaded.
     pub gcode_file: Option<String>,
+    /// The line pacing and its statistics as last pushed (Rust only).
+    pub pacing: PacingStats,
+}
+
+/// One stretch of a job streamed at one line pacing (`spec/firmware.md` B3), or a whole job's totals.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PacingSegment {
+    /// `"v0.94"` or `"minimum gap"`; for a job's totals, the pacing it started with.
+    pub mode: String,
+    pub gap_ms: u64,
+    /// Job lines written, not counting resends.
+    pub lines: u64,
+    /// Job lines the controller never received (B18): each sent again or, lost twice, paused at.
+    pub lost: u64,
+    pub lost_twice: u64,
+    /// Wall-clock time spent streaming, recoveries included and pauses not.
+    pub elapsed_s: f64,
+    /// From writing each lost line to sending it again.
+    pub recovery_s: f64,
+    pub lines_per_minute: Option<f64>,
+    pub seconds_per_line: Option<f64>,
+    pub lost_percent: Option<f64>,
+    /// The median gap before a write whose line was acked within the pacing gap plus 100 ms.
+    pub median_short_gap_ms: Option<f64>,
+    /// `"pacing change"`, `"job end"` or `"Stop"`; `None` while it runs.
+    pub ended_by: Option<String>,
+}
+
+/// The line pacing and its statistics; pushed on every change and every 2 s during a job.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PacingStats {
+    pub mode: String,
+    pub gap_ms: u64,
+    /// The running or last job's totals.
+    pub job: Option<PacingSegment>,
+    /// The running segment; `None` outside a job.
+    pub segment: Option<PacingSegment>,
+    /// The latest ended segments since WebControl started, newest first.
+    pub history: Vec<PacingSegment>,
+}
+
+impl Message for PacingStats {
+    const COMMAND: &'static str = "pacingStats";
 }

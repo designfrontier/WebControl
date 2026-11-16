@@ -218,6 +218,8 @@ pub struct Snapshot {
     /// The live camera overlay is on; the server's capture task streams to it while this holds.
     pub camera: bool,
     pub optical: Shared<crate::optical::View>,
+    /// The line pacing and its statistics as last pushed.
+    pub pacing: Shared<wc_protocol::main::PacingStats>,
 }
 
 impl Snapshot {
@@ -301,7 +303,7 @@ pub(crate) struct Controller {
     pub reinit_suppressed: bool,
     /// A `Delay` holds writes until then.
     pub hold_until: Option<Duration>,
-    /// The line due under `MIN_TIME_PER_LINE` after the last write goes then (`link.rs`).
+    /// In v0.94 pacing, the line due under the gap after the last write goes then (`pacing.rs`).
     pub paced_until: Option<Duration>,
     /// `bufferOn` as the port opened: job lines go out while they fit, not one per `ok`.
     pub buffering: bool,
@@ -397,6 +399,7 @@ pub struct Machine {
     /// `toggleCamera` turned the overlay on.
     pub(crate) camera_on: bool,
     pub(crate) optical: crate::optical::Optical,
+    pub(crate) stats: crate::pacing::Stats,
 }
 
 pub(crate) fn broadcast<M: Message>(message: &M) -> Effect {
@@ -412,6 +415,7 @@ impl Machine {
         let units = Units::from_setting(&settings.text_or_empty("Computed Settings", "units"));
         let workpiece = Arc::new(bed_board(&settings));
         let kinematics = crate::ui::computed_model(&settings);
+        let stats = crate::pacing::Stats::new(crate::pacing::Pacing::read(&settings));
         let settings = Arc::new(settings);
         Machine {
             host_address: host_address.into(),
@@ -457,6 +461,7 @@ impl Machine {
             lanes: Lanes::default(),
             camera_on: false,
             optical: crate::optical::Optical::default(),
+            stats,
         }
     }
 
@@ -532,7 +537,10 @@ impl Machine {
             Event::Seen(seen) => self.optical_seen(seen, now, &mut effects),
         }
         self.optical_tick(now, &mut effects);
+        self.pacing_observe(now, &mut effects);
         self.pump(now, &mut effects);
+        self.pacing_observe(now, &mut effects);
+        self.push_pacing(now, &mut effects);
         self.optical_refresh();
         self.status_if_changed(&mut effects);
         let changed = !Arc::ptr_eq(&self.settings, &self.saved) && *self.settings != *self.saved;
@@ -614,6 +622,7 @@ impl Machine {
             firmware_upgrade: self.upgrade.view(),
             camera: self.camera_wanted(),
             optical: Shared(self.optical.view()),
+            pacing: Shared(self.stats.shown.clone()),
         }
     }
 }

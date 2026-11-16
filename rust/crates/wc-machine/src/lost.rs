@@ -117,6 +117,8 @@ impl Machine {
         let again = lost.iter().any(|sent| self.controller.watch.resent.contains(&sent.id));
         self.controller.watch.resent.clear();
         let index = lost.iter().find_map(|sent| sent.index);
+        let held = matches!(self.job.flow, Flow::Paused | Flow::Held);
+        self.pacing_lost(&lost, !again && !held, again, now);
         match index {
             Some(index) if again => {
                 let message = format!(
@@ -128,7 +130,7 @@ impl Machine {
                 effects.push(broadcast(&ActivateModal::titled_alert(NOT_RECEIVED, &message)));
                 self.hold_at_lost_line(index, effects);
             }
-            Some(index) if matches!(self.job.flow, Flow::Paused | Flow::Held) => {
+            Some(index) if held => {
                 let note = format!("Line {} did not reach the controller; Resume sends it again.", index + 1);
                 effects.push(broadcast(&ControllerMessage(note)));
                 self.hold_at_lost_line(index, effects);

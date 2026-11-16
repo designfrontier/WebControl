@@ -23,9 +23,6 @@ use crate::machine::{Controller, Effect, Link, Machine, Probe, Queued, alert, br
 
 /// The 5 s poller Python used to reopen the port.
 pub const RECONNECT: Duration = Duration::from_secs(5);
-/// v0.94's `MINTimePerLine`: its `_write` slept this long in full, not the remainder, after a write under this long
-/// ago. On the owner's cuts that pacing lost no line where waiting out only the remainder lost 1 in 290.
-pub const MIN_TIME_PER_LINE: Duration = Duration::from_millis(50);
 pub const RESYNC_DELAY: Duration = Duration::from_millis(250);
 /// Longer than a reset takes to print its banner, shorter than the link timeout.
 pub const BOOT_WAIT: Duration = Duration::from_secs(3);
@@ -195,12 +192,12 @@ impl Machine {
             self.controller.stop_reload = false;
         }
         let reply = classify(line);
-        self.acknowledge(line, &reply, effects);
+        self.acknowledge(line, &reply, now, effects);
         self.watch_for_lost_line(&reply, now, effects);
         self.react(line, reply, now, effects);
     }
 
-    fn acknowledge(&mut self, line: &str, reply: &Reply, effects: &mut Vec<Effect>) {
+    fn acknowledge(&mut self, line: &str, reply: &Reply, now: Duration, effects: &mut Vec<Effect>) {
         let controller = &mut self.controller;
         if controller.resync_after.is_some() {
             if line.starts_with('<') && controller.caught_up {
@@ -220,8 +217,9 @@ impl Machine {
             self.bit.settled();
             self.sled.settled();
         }
+        self.pacing_acked(acked.as_ref(), now);
         // Identity, not position: a `~` sent mid-probe is acked first with an entry of its own.
-        let answered = controller.probe.take_if(|probe| acked.as_ref().is_some_and(|sent| sent.id == probe.id));
+        let answered = self.controller.probe.take_if(|probe| acked.as_ref().is_some_and(|sent| sent.id == probe.id));
         if let Some(probe) = answered {
             self.probe_answered(probe, matches!(reply, Reply::Ok), effects);
         }
@@ -389,6 +387,9 @@ impl Machine {
         let message = format!("{text}\n");
         let idle = self.controller.accounting.is_empty();
         let id = self.controller.accounting.sent(&message, index);
+        if let Some(index) = index {
+            self.pacing_written(id, index, self.controller.last_write, now);
+        }
         self.controller.ready = false;
         self.controller.last_write = Some(now);
         self.controller.paced_until = None;
@@ -415,13 +416,10 @@ impl Machine {
             && controller.hold_until.is_none_or(|until| now >= until)
     }
 
-    /// A line due under `MIN_TIME_PER_LINE` after the last write waits a full `MIN_TIME_PER_LINE` from now.
+    /// The `linePacingMode` and `linePacingGapMs` settings decide (`pacing.rs`).
     fn paced(&mut self, now: Duration) -> bool {
         let controller = &mut self.controller;
-        if controller.paced_until.is_none() && controller.last_write.is_some_and(|at| now < at + MIN_TIME_PER_LINE) {
-            controller.paced_until = Some(now + MIN_TIME_PER_LINE);
-        }
-        controller.paced_until.is_none_or(|until| now >= until)
+        self.stats.pacing().due(controller.last_write, &mut controller.paced_until, now)
     }
 
     /// The controller has acked everything: a queued command, or an unbuffered job line, may go.

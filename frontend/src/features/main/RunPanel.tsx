@@ -4,6 +4,7 @@ import { StopButton } from "../../app/StopButton";
 import { LoadedFile } from "../files/LoadedFile";
 import type { ControlAvailability } from "./controls";
 import { useDraft } from "./hooks";
+import { PacingControl } from "./PacingControl";
 
 const STEPS = [
   { command: "moveGcodeZ", delta: -1, label: "Previous Z move", text: "<Z" },
@@ -41,17 +42,20 @@ export const RunPanel = ({ available, lineIndex }: Props) => {
 
   return (
     <section className="run" aria-label="Run">
-      <div className="alarm-status" role="status" data-alarm={alarm !== null}>
-        {alarm === null ? (
-          <span>No alarms</span>
-        ) : (
-          <>
-            <span>{alarm}</span>
-            <button type="button" onClick={() => client.sendAction("stopRun")}>
-              Stop and clear alarm
-            </button>
-          </>
-        )}
+      <div className="run-status">
+        <div className="alarm-status" role="status" data-alarm={alarm !== null}>
+          {alarm === null ? (
+            <span>No alarms</span>
+          ) : (
+            <>
+              <span>{alarm}</span>
+              <button type="button" onClick={() => client.sendAction("stopRun")}>
+                Stop and clear alarm
+              </button>
+            </>
+          )}
+        </div>
+        <PacingControl />
       </div>
       <div className="run-dock">
         <LoadedFile className="run-file" />
