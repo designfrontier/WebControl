@@ -216,7 +216,8 @@ fn a_buffered_line_lost_ahead_of_one_that_ran_never_makes_that_one_run_twice() {
     rig.machine.load_gcode(&file(&["G1 X1", "G91 G1 X2", "G91 G1 X3 G90"]));
     assert_eq!(written(&rig.act("startRun")), ["G1 X1"]);
     rig.rx("G1 X1");
-    assert_eq!(ok(&mut rig), ["G91 G1 X2", "G91 G1 X3 G90"]);
+    rig.rx("ok");
+    assert_eq!(written(&rig.advance(110)), ["G91 G1 X2", "G91 G1 X3 G90"], "50 ms, then the next tick's 50 ms");
     rig.rx("G91 G1 X3 G90");
     rig.rx("ok");
     let effects = reports(&mut rig, 4000, STILL, EMPTY);
