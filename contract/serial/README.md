@@ -549,6 +549,7 @@ Where the Rust backend writes something different from Python by owner decision.
    controller printed only status reports and for 2 s each showed an empty ring, an unchanged MPos and `Idle`
    (`spec/firmware.md` B18), and writes the same bytes again once, with a `controllerMessage` naming the line. Lost
    again, a job line pauses the job at it with a `Line Not Received` alert, and Resume returns to the file there as
-   after any pause; a lost command is dropped with what was queued after it. A job paused by the user waits at the
+   after any pause; a lost command is dropped with what was queued after it. Only a line written to an idle
+   controller is checked, since an `ok` behind a lost buffered line is counted for the lost one. A job paused by the user waits at the
    lost line for Resume. Transcripts: `stream_lost_line_is_sent_again`, built from the owner's
    `webcontrol-rs.log` lines, and `stream_line_lost_twice_pauses_until_resume`.

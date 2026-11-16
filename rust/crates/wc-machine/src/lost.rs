@@ -25,6 +25,8 @@ pub(crate) struct Watch {
     still_at: Option<(f64, f64, f64)>,
     /// The first report of the current run with an empty ring, a still sled and nothing written.
     since: Option<Duration>,
+    /// A line went out while another waited for its ack, so an `ok` may belong to a line it is not counted for.
+    crowded: bool,
     /// Lines sent again once, by the id they went out with the second time.
     resent: Vec<u64>,
 }
@@ -35,6 +37,11 @@ impl Watch {
     pub fn written(&mut self, idle: bool) {
         self.since = None;
         self.heard &= !idle;
+        self.crowded = !idle;
+    }
+
+    pub fn realtime_written(&mut self) {
+        self.since = None;
     }
 
     /// A `~`'s ack says nothing about the line the firmware runs.
@@ -76,14 +83,16 @@ fn shown(sent: &Sent) -> &str {
 }
 
 impl Machine {
-    /// Nothing else explains the silence: no boot, resync, firmware pause or `~` waiting for its ack.
+    /// Nothing else explains the silence: no boot, resync, firmware pause, `~` waiting for its ack, or line that
+    /// went out behind another.
     fn lost_lines(&self) -> Option<Vec<Sent>> {
         let controller = &self.controller;
         let quiet = controller.resync_after.is_none()
             && !controller.boot_in_progress
             && controller.boot_deadline.is_none()
             && !self.job.firmware_paused
-            && self.job.manual_z.is_none();
+            && self.job.manual_z.is_none()
+            && !controller.watch.crowded;
         let lines = controller.accounting.lines().filter(|lines| quiet && !lines.is_empty())?;
         Some(lines.into_iter().cloned().collect())
     }

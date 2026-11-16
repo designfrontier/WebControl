@@ -191,7 +191,7 @@ fn a_probe_is_never_taken_for_a_lost_line() {
 }
 
 #[test]
-fn buffered_lines_behind_a_running_line_are_resent_only_once_it_finishes() {
+fn buffered_lines_behind_a_running_line_are_never_resent() {
     let mut rig = buffered();
     rig.machine.load_gcode(&file(&["G1 X500", "G1 X2", "G1 X3", "G1 X4"]));
     assert_eq!(written(&rig.act("startRun")), ["G1 X500"]);
@@ -200,17 +200,31 @@ fn buffered_lines_behind_a_running_line_are_resent_only_once_it_finishes() {
     assert!(written(&reports(&mut rig, 4000, STILL, EMPTY)).is_empty(), "the first line runs");
     assert!(ok(&mut rig).is_empty());
     rig.rx("G1 X2");
-    assert!(written(&reports(&mut rig, 4000, STILL, "[PE:-0.00,-0.01,113,1590.41,1822.64]")).is_empty());
     rig.rx("ok");
-    let effects = reports(&mut rig, 2400, STILL, EMPTY);
-    assert_eq!(written(&effects), ["G1 X3", "G1 X4"], "only the lines never echoed, in order");
-    assert_eq!(controller_messages(&effects).len(), 2);
-    rig.rx("G1 X3");
+    let effects = reports(&mut rig, 4000, STILL, EMPTY);
+    assert!(written(&effects).is_empty(), "the echo and ok may have been G1 X3's, after G1 X2 was lost");
+    assert!(controller_messages(&effects).is_empty());
+}
+
+#[test]
+fn a_buffered_line_lost_ahead_of_one_that_ran_never_makes_that_one_run_twice() {
+    let mut rig = buffered();
+    rig.machine.load_gcode(&file(&["G1 X1", "G91 G1 X2", "G91 G1 X3 G90"]));
+    assert_eq!(written(&rig.act("startRun")), ["G1 X1"]);
+    rig.rx("G1 X1");
+    assert_eq!(ok(&mut rig), ["G91 G1 X2", "G91 G1 X3 G90"]);
+    rig.rx("G91 G1 X3 G90");
     rig.rx("ok");
-    rig.rx("G1 X4");
-    rig.rx("ok");
-    assert_eq!(rig.machine.snapshot().upload_flag, 0, "every byte answered: the job is done");
-    assert_eq!(jog(&mut rig), ["G91"], "the accounting is whole again");
+    let effects = reports(&mut rig, 4000, STILL, EMPTY);
+    assert!(written(&effects).is_empty(), "the ok counted for G1 X2 was G1 X3's");
+}
+
+#[test]
+fn a_buffered_line_written_to_an_idle_controller_is_still_resent() {
+    let mut rig = buffered();
+    rig.machine.load_gcode(&file(&["G1 X1"]));
+    assert_eq!(written(&rig.act("startRun")), ["G1 X1"]);
+    resent_after_two_seconds(&mut rig, "G1 X1");
 }
 
 #[test]

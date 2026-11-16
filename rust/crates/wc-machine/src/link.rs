@@ -366,7 +366,7 @@ impl Machine {
         effects.push(Effect::Realtime(message.clone().into_bytes()));
         effects.push(Effect::Log(format!("Sent: {text}")));
         self.controller.last_write = Some(now);
-        self.controller.watch.written(false);
+        self.controller.watch.realtime_written();
         if text == "!" {
             self.await_resync(now);
         } else {

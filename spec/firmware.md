@@ -299,7 +299,8 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
     lost again pauses the job at it (`Line Not Received`) and Resume returns to the file there and sends it; a
     command lost again is dropped with the commands queued after it, `G20`/`G21` and `G90` are written to put
     the firmware back in step, and a job in progress pauses. A job the user paused waits at the lost line for
-    Resume instead. Not covered: a line whose `\n` alone was lost (the ring keeps its bytes, space stays under
+    Resume instead. A line written while another awaited its `ok` (buffered mode) is never taken for lost: with
+    an earlier line lost, the next line's echo and `ok` would be counted for it. Not covered: a line whose `\n` alone was lost (the ring keeps its bytes, space stays under
     127) and a line that ran while both its echo and `ok` were lost on the way back.
     `stream_lost_line_is_sent_again`, `stream_line_lost_twice_pauses_until_resume`.
 
