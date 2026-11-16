@@ -1,0 +1,290 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "pacingStats",
+  "type": "object",
+  "properties": {
+    "mode": {
+      "type": "string",
+      "enum": [
+        "v0.94",
+        "minimum gap"
+      ]
+    },
+    "gapMs": {
+      "type": "number"
+    },
+    "job": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "v0.94",
+                "minimum gap"
+              ]
+            },
+            "gapMs": {
+              "type": "number"
+            },
+            "lines": {
+              "type": "number"
+            },
+            "lost": {
+              "type": "number"
+            },
+            "lostTwice": {
+              "type": "number"
+            },
+            "elapsedS": {
+              "type": "number"
+            },
+            "recoveryS": {
+              "type": "number"
+            },
+            "linesPerMinute": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "secondsPerLine": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "lostPercent": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "medianShortGapMs": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "endedBy": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "pacing change",
+                    "job end",
+                    "Stop"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "mode",
+            "gapMs",
+            "lines",
+            "lost",
+            "lostTwice",
+            "elapsedS",
+            "recoveryS",
+            "linesPerMinute",
+            "secondsPerLine",
+            "lostPercent",
+            "medianShortGapMs",
+            "endedBy"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "segment": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "v0.94",
+                "minimum gap"
+              ]
+            },
+            "gapMs": {
+              "type": "number"
+            },
+            "lines": {
+              "type": "number"
+            },
+            "lost": {
+              "type": "number"
+            },
+            "lostTwice": {
+              "type": "number"
+            },
+            "elapsedS": {
+              "type": "number"
+            },
+            "recoveryS": {
+              "type": "number"
+            },
+            "linesPerMinute": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "secondsPerLine": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "lostPercent": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "medianShortGapMs": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "endedBy": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "pacing change",
+                    "job end",
+                    "Stop"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "mode",
+            "gapMs",
+            "lines",
+            "lost",
+            "lostTwice",
+            "elapsedS",
+            "recoveryS",
+            "linesPerMinute",
+            "secondsPerLine",
+            "lostPercent",
+            "medianShortGapMs",
+            "endedBy"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "v0.94",
+              "minimum gap"
+            ]
+          },
+          "gapMs": {
+            "type": "number"
+          },
+          "lines": {
+            "type": "number"
+          },
+          "lost": {
+            "type": "number"
+          },
+          "lostTwice": {
+            "type": "number"
+          },
+          "elapsedS": {
+            "type": "number"
+          },
+          "recoveryS": {
+            "type": "number"
+          },
+          "linesPerMinute": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "secondsPerLine": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "lostPercent": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "medianShortGapMs": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "endedBy": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "pacing change",
+                  "job end",
+                  "Stop"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "mode",
+          "gapMs",
+          "lines",
+          "lost",
+          "lostTwice",
+          "elapsedS",
+          "recoveryS",
+          "linesPerMinute",
+          "secondsPerLine",
+          "lostPercent",
+          "medianShortGapMs",
+          "endedBy"
+        ]
+      }
+    }
+  },
+  "required": [
+    "mode",
+    "gapMs",
+    "job",
+    "segment",
+    "history"
+  ]
+}

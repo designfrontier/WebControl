@@ -1061,6 +1061,28 @@
             "title": "Optical calibration (experimental)",
             "type": "bool",
             "value": 0
+        },
+        {
+            "default": "v0.94",
+            "desc": "How each line waits after the line before it is written. v0.94: a line due less than the gap after the last write waits a full gap from when it was due, as WebControl v0.94 did. minimum gap: it waits only until the gap has passed since the last write. Stop's ! and Resume's ~ never wait. Takes effect at the next line, also during a job.\ndefault setting: v0.94",
+            "key": "linePacingMode",
+            "options": [
+                "v0.94",
+                "minimum gap"
+            ],
+            "section": "WebControl Settings",
+            "title": "Line pacing",
+            "type": "options",
+            "value": "v0.94"
+        },
+        {
+            "default": 50,
+            "desc": "The line pacing gap in milliseconds, 0 to 500. 0 sends each line as soon as the controller has room for it. Takes effect at the next line, also during a job.\ndefault setting: 50",
+            "key": "linePacingGapMs",
+            "section": "WebControl Settings",
+            "title": "Line pacing gap (ms)",
+            "type": "int",
+            "value": 50
         }
     ],
     "Camera Settings": [

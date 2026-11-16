@@ -297,6 +297,7 @@ impl Machine {
 
     /// Stop: `!` at once, the queue dropped, and every pause and the job forgotten.
     pub(crate) fn stopped(&mut self, now: Duration, effects: &mut Vec<Effect>) {
+        self.stats.stopping();
         self.probing = false;
         self.measure = None;
         self.pid.end_tests();

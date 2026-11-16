@@ -146,8 +146,14 @@ fn setting_error(field: &SettingField, value: &Value, enable_custom: bool, ports
     } else if field.numeric && !is_number(Some(value)) {
         Some("Must be a number")
     } else {
-        pid_error(&field.key, value)
+        pid_error(&field.key, value).or_else(|| pacing_error(&field.key, value))
     }
+}
+
+fn pacing_error(key: &str, value: &Value) -> Option<&'static str> {
+    let ms = wc_config::python_float(value)?;
+    (key == crate::pacing::GAP_KEY && !(0.0..=crate::pacing::MAX_GAP_MS as f64).contains(&ms))
+        .then_some("Must be between 0 and 500")
 }
 
 /// `PID::SetTunings` ignores a tuning with a weight outside [0, 1] or a negative gain.

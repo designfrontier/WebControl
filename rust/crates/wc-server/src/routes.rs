@@ -35,6 +35,7 @@ pub fn router(state: AppState) -> Router {
         .route("/static/{*filename}", get(|Path(name): Path<String>| async move { assets::image(&name) }))
         .route("/api/state", get(api::state))
         .route("/api/main", get(api::main_screen))
+        .route("/api/run/pacing", get(api::pacing).put(api::update_pacing))
         .route("/api/viewer", get(api::viewer))
         .route("/api/settings/{section}", get(api::settings_section).put(api::update_settings))
         .route("/api/machine/setup", get(api::machine_setup))

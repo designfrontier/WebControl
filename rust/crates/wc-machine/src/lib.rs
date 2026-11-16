@@ -18,6 +18,7 @@ mod link;
 mod lost;
 mod machine;
 pub mod optical;
+pub mod pacing;
 mod pid;
 mod setup;
 mod shell;

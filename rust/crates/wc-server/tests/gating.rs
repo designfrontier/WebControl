@@ -86,3 +86,23 @@ async fn the_lock_lifts_when_the_job_is_stopped() {
     let reply = server.send_json("PUT", "/api/settings/maslow", json!({"values": {"motorSpacingX": "3000"}})).await;
     assert_eq!(reply.status, StatusCode::OK);
 }
+
+#[tokio::test]
+async fn the_line_pacing_changes_during_a_job_and_takes_effect_at_once() {
+    let server = Server::with(streaming());
+    let body = json!({"values": {"linePacingMode": "minimum gap", "linePacingGapMs": 25}});
+    let reply = server.send_json("PUT", "/api/run/pacing", body).await;
+    assert_eq!(reply.status, StatusCode::OK);
+    assert_eq!((reply.json()["mode"].clone(), reply.json()["gapMs"].clone()), (json!("minimum gap"), json!(25)));
+    assert_eq!(reply.json()["history"][0]["endedBy"], "pacing change");
+    let pacing = server.get("/api/run/pacing").await.json();
+    assert_eq!(
+        (pacing["segment"]["mode"].clone(), pacing["segment"]["gapMs"].clone()),
+        (json!("minimum gap"), json!(25))
+    );
+    server.settle().await;
+    let saved = server.saved_settings();
+    let webcontrol = saved["WebControl Settings"].as_array().unwrap();
+    let value = |key: &str| webcontrol.iter().find(|option| option["key"] == key).unwrap()["value"].clone();
+    assert_eq!((value("linePacingMode"), value("linePacingGapMs")), (json!("minimum gap"), json!(25)));
+}

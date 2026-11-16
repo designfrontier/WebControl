@@ -1,8 +1,8 @@
 use serde_json::{Value, json};
 use wc_protocol::main::{
     ActivateModal, Alarm, Backend, ClearAlarm, ConnectionStatus, ControllerMessage, ErrorValueMessage, GcodeFile,
-    GcodeLine, HealthMessage, HomePositionMessage, HostAddress, Macro, MainScreen, PauseButton, PositionMessage,
-    RequestedSetting, StartupState, StatusMessage, Units,
+    GcodeLine, HealthMessage, HomePositionMessage, HostAddress, Macro, MainScreen, PacingSegment, PacingStats,
+    PauseButton, PositionMessage, RequestedSetting, StartupState, StatusMessage, Units,
 };
 use wc_protocol::settings::UpdatePorts;
 use wc_protocol::{Action, ClientEvent, Envelope, Frame, Namespace, Push, float};
@@ -34,6 +34,34 @@ fn startup_state() -> StartupState {
         commit: "abc1234".into(),
         experimental: vec!["optical".into()],
         gcode_file: None,
+        pacing: pacing_stats(None),
+    }
+}
+
+fn segment(ended_by: Option<&str>) -> PacingSegment {
+    PacingSegment {
+        mode: "minimum gap".into(),
+        gap_ms: 25,
+        lines: 2284,
+        lost: 9,
+        lost_twice: 1,
+        elapsed_s: 270.3,
+        recovery_s: 7.1,
+        lines_per_minute: Some(507.0),
+        seconds_per_line: Some(0.118),
+        lost_percent: Some(0.39),
+        median_short_gap_ms: None,
+        ended_by: ended_by.map(String::from),
+    }
+}
+
+fn pacing_stats(running: Option<PacingSegment>) -> PacingStats {
+    PacingStats {
+        mode: "v0.94".into(),
+        gap_ms: 50,
+        job: running.clone(),
+        segment: running,
+        history: vec![segment(Some("pacing change"))],
     }
 }
 
@@ -114,6 +142,18 @@ fn the_loaded_file_is_in_the_startup_state_and_its_own_push() {
         assert_eq!(envelope["command"], "gcodeFile");
         assert_eq!(serde_json::from_str::<Value>(envelope["data"].as_str().unwrap()).unwrap(), json!({"file": file}));
     });
+}
+
+#[test]
+fn the_pacing_stats_are_in_the_startup_state_and_their_own_push() {
+    let body = serde_json::to_value(startup_state()).unwrap();
+    contract().validate_response("GET", "/api/state", 200, &ResponseBody::Json(body.clone())).unwrap();
+    assert_eq!(body["pacing"]["history"][0]["linesPerMinute"], 507.0);
+    let envelope = serde_json::to_value(Envelope::json(&pacing_stats(Some(segment(None))))).unwrap();
+    contract().validate_envelope(&envelope).unwrap();
+    assert_eq!(envelope["command"], "pacingStats");
+    let data: Value = serde_json::from_str(envelope["data"].as_str().unwrap()).unwrap();
+    assert_eq!((data["gapMs"].clone(), data["segment"]["endedBy"].clone()), (json!(50), Value::Null));
 }
 
 #[test]

@@ -15,6 +15,56 @@ const modalSchema = z.looseObject({
   client: z.string().optional(),
 });
 
+export const PACING_MODES = ["v0.94", "minimum gap"] as const;
+export const PACING_GAP_MAX_MS = 500;
+export const pacingModeSchema = z.enum(PACING_MODES);
+export type PacingMode = z.infer<typeof pacingModeSchema>;
+
+/** One stretch of a job streamed at one line pacing, or a whole job's totals. */
+export const pacingSegmentSchema = z.object({
+  /** For a job's totals, the pacing it started with. */
+  mode: pacingModeSchema,
+  gapMs: z.number(),
+  /** Job lines written, not counting resends. */
+  lines: z.number(),
+  /** Lines the controller never received: each sent again or, lost twice, paused at. */
+  lost: z.number(),
+  lostTwice: z.number(),
+  /** Wall-clock streaming time, recoveries included and pauses not. */
+  elapsedS: z.number(),
+  /** From writing each lost line to sending it again. */
+  recoveryS: z.number(),
+  linesPerMinute: z.number().nullable(),
+  secondsPerLine: z.number().nullable(),
+  lostPercent: z.number().nullable(),
+  /** The median gap before a write whose line was acked within the pacing gap plus 100 ms. */
+  medianShortGapMs: z.number().nullable(),
+  /** Null while it runs. */
+  endedBy: z.enum(["pacing change", "job end", "Stop"]).nullable(),
+});
+export type PacingSegment = z.infer<typeof pacingSegmentSchema>;
+
+/** The line pacing and its statistics, pushed on every change and every 2 s during a job. Rust only. */
+export const pacingStatsSchema = z.object({
+  mode: pacingModeSchema,
+  gapMs: z.number(),
+  job: pacingSegmentSchema.nullable(),
+  /** Null outside a job. */
+  segment: pacingSegmentSchema.nullable(),
+  /** The latest ended segments since the backend started, newest first. */
+  history: z.array(pacingSegmentSchema),
+});
+export type PacingStats = z.infer<typeof pacingStatsSchema>;
+
+/** PUT /api/run/pacing body; allowed during a job, unlike the settings screens. */
+export const pacingUpdateSchema = z.object({
+  values: z.object({
+    linePacingMode: pacingModeSchema,
+    linePacingGapMs: z.number().int().min(0).max(PACING_GAP_MAX_MS),
+  }),
+});
+export type PacingUpdate = z.infer<typeof pacingUpdateSchema>;
+
 /** Server -> client commands for the front page and the shared machine state. */
 export const mainMessages = {
   hostAddress: z.object({ hostAddress: z.string() }),
@@ -76,6 +126,7 @@ export const mainMessages = {
   closeAlertModals: z.object({ title: z.string() }),
   /** Broadcast when the loaded gcode file changes: its path in the gcode library, or null once none is loaded. */
   gcodeFile: z.object({ file: z.string().nullable() }),
+  pacingStats: pacingStatsSchema,
 } satisfies MessageSchemas;
 
 /** processAction commands the front page issues. */
@@ -141,6 +192,8 @@ export const startupStateSchema = z.object({
   experimental: z.array(z.string()).default([]),
   /** The loaded gcode file's path in the gcode library, such as "jobs/leg.nc"; null when none is loaded. */
   gcodeFile: z.string().nullable().default(null),
+  /** The line pacing and its statistics as last pushed. Rust only. */
+  pacing: pacingStatsSchema.optional(),
 });
 export type StartupState = z.infer<typeof startupStateSchema>;
 

@@ -42,7 +42,7 @@ import {
   uploadGcodeFormSchema,
 } from "./files";
 import { machineSetupSchema, quickConfigureSchema } from "./machine";
-import { mainScreenStateSchema, startupStateSchema } from "./main";
+import { mainScreenStateSchema, pacingStatsSchema, pacingUpdateSchema, startupStateSchema } from "./main";
 import { settingsRejectionSchema, settingsSectionIds, settingsSectionSchema, settingsUpdateSchema } from "./settings";
 import {
   helpPageSchema,
@@ -238,6 +238,18 @@ export const httpEndpoints: HttpEndpoint[] = [
   get("/api/state", "What a client needs on (re)connect", startupStateSchema),
   get("/api/main", "Run status and current gcode line for the control screen", mainScreenStateSchema),
   get("/api/viewer", "What the viewer draws", viewerSnapshotSchema),
+  get("/api/run/pacing", "The line pacing and its statistics as last pushed (Rust only)", pacingStatsSchema),
+  api({
+    method: "PUT",
+    path: "/api/run/pacing",
+    summary: "Change the line pacing, also during a job; it applies from the next line (Rust only)",
+    body: json(pacingUpdateSchema),
+    responses: {
+      200: json(pacingStatsSchema, "The pacing and statistics after the change"),
+      400: json(z.union([settingsRejectionSchema, errorBodySchema]), "Per-setting errors, or a malformed body"),
+      409: error("An optical scan is running"),
+    },
+  }),
   api({
     method: "GET",
     path: "/api/settings/{sectionId}",

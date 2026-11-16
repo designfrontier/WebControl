@@ -73,6 +73,10 @@
                 "schema": "schemas/messages/gcodeFile.json",
                 "dataFormat": "json"
               },
+              "pacingStats": {
+                "schema": "schemas/messages/pacingStats.json",
+                "dataFormat": "json"
+              },
               "showFPSpinner": {
                 "schema": "schemas/messages/showFPSpinner.json",
                 "dataFormat": "int"
@@ -562,6 +566,45 @@
         "200": {
           "contentType": "application/json",
           "schema": "schemas/http/get-api-viewer.200.json"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/run/pacing",
+      "family": "api",
+      "summary": "The line pacing and its statistics as last pushed (Rust only)",
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/get-api-run-pacing.200.json"
+        }
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/run/pacing",
+      "family": "api",
+      "summary": "Change the line pacing, also during a job; it applies from the next line (Rust only)",
+      "body": {
+        "contentType": "application/json",
+        "schema": "schemas/http/put-api-run-pacing.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "description": "The pacing and statistics after the change",
+          "schema": "schemas/http/put-api-run-pacing.200.json"
+        },
+        "400": {
+          "contentType": "application/json",
+          "description": "Per-setting errors, or a malformed body",
+          "schema": "schemas/http/put-api-run-pacing.400.json"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "An optical scan is running",
+          "schema": "schemas/http/put-api-run-pacing.409.json"
         }
       }
     },
