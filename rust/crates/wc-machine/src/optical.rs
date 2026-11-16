@@ -29,6 +29,7 @@ pub const SECTION: &str = "Optical Calibration Settings";
 pub const RUNNING: &str = "Optical calibration is running; press Stop first";
 pub const NOTHING_MEASURED: &str = "Nothing has been measured yet. Scan the target first.";
 pub const NOTHING_TO_ACCEPT: &str = "There is no fitted geometry to accept. Scan the target and press Fit first.";
+pub const GEOMETRY_CHANGED: &str = "The geometry changed after the fit. Press Fit again before accepting.";
 pub const JOB_RUNNING: &str = "Stop the job before running optical calibration.";
 pub const NOT_CONNECTED: &str = "The controller is not connected.";
 /// A measurement that is not a number would reach the controller as `G1 Xnan`.
@@ -655,6 +656,19 @@ impl Machine {
         let Some(fit) = self.optical.fit.take() else {
             return Response::error(409, NOTHING_TO_ACCEPT);
         };
+        let now = crate::calibration::holey_parameters(&self.settings);
+        let (was, is) = (fit.current, now);
+        let pairs = [
+            (was.motor_yoffset, is.motor_yoffset),
+            (was.distance_between_motors, is.distance_between_motors),
+            (was.left_chain_tolerance, is.left_chain_tolerance),
+            (was.right_chain_tolerance, is.right_chain_tolerance),
+        ];
+        // The fit rounds to five decimals.
+        let close = |(was, is): &(f64, f64)| (was - is).abs().partial_cmp(&1e-4) == Some(std::cmp::Ordering::Less);
+        if !pairs.iter().all(close) {
+            return Response::error(409, GEOMETRY_CHANGED);
+        }
         let fitted = fit.fitted;
         let accept = HoleyResult {
             motor_y_offset: fitted.motor_yoffset,

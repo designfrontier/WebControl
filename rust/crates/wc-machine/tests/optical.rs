@@ -507,9 +507,25 @@ fn accept_writes_the_fitted_geometry_through_the_exact_setting_lines_once() {
     assert_eq!(world.written, ["$3=458", "$2=2981.3998", "$40=0.1"], "the f32 the firmware stores, exactly");
     assert_eq!(world.rig.machine.snapshot().settings.text("Maslow Settings", "motorOffsetY").unwrap(), "458.0");
     assert_eq!(world.edit(Request::OpticalAccept), nothing, "Accept forgets the fit");
-    let not_finite = GeometryFit { fitted: HoleyParameters { motor_yoffset: f64::NAN, ..fit().fitted }, ..fit() };
+    let current = fit().fitted;
+    let fitted = HoleyParameters { motor_yoffset: f64::NAN, ..current.clone() };
+    let not_finite = GeometryFit { current, fitted, ..fit() };
     world.edit(Request::OpticalFitted(Box::new(not_finite)));
     assert_eq!(world.edit(Request::OpticalAccept).0, 409);
+}
+
+#[test]
+fn accept_refuses_a_fit_made_against_other_geometry() {
+    let mut world = World::new();
+    world.edit(Request::OpticalFitted(Box::new(fit())));
+    let section =
+        Request::UpdateSettings { section: "maslow".into(), body: json!({"values": {"motorOffsetY": "470"}}) };
+    assert_eq!(world.edit(section).0, 200);
+    world.run(500);
+    world.written.clear();
+    assert_eq!(world.edit(Request::OpticalAccept), (409, json!({"error": optical::GEOMETRY_CHANGED})));
+    world.run(500);
+    assert!(world.written.is_empty(), "{:?}", world.written);
 }
 
 #[test]
