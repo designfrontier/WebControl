@@ -419,7 +419,9 @@ impl Sim {
             out.push("ALARM: The sled is not keeping up with its expected position and has halted.".into());
             return None;
         }
-        axes.iter().enumerate().for_each(|(i, value)| {
+        // Only L and R raise the keeping-up alarm (Report.cpp); a Z with zero gains just stays where it is.
+        let z_follows = self.tuned[2] && self.tuned[3];
+        axes.iter().enumerate().filter(|(i, _)| *i < 2 || z_follows).for_each(|(i, value)| {
             if let Some(value) = value {
                 self.position[i] = if self.absolute { value * scale } else { self.position[i] + value * scale };
             }
@@ -506,6 +508,11 @@ impl Sim {
     /// Whether the main (L and R) position and velocity PIDs hold gains, so the sled follows moves.
     pub fn main_axes_tuned(&self) -> bool {
         self.tuned[0] && self.tuned[1]
+    }
+
+    /// Whether the Z position and velocity PIDs hold gains, so Z follows moves.
+    pub fn z_axis_tuned(&self) -> bool {
+        self.tuned[2] && self.tuned[3]
     }
 
     pub fn setting(&self, key: u32) -> Option<f64> {
