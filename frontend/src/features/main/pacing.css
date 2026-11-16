@@ -1,0 +1,64 @@
+.pacing {
+  display: grid;
+  gap: var(--space-1);
+  font-size: 0.9rem;
+}
+
+.pacing-row,
+.pacing-custom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.pacing-row select {
+  flex: 1 1 10rem;
+  min-width: 0;
+  min-height: var(--control);
+}
+
+.pacing-custom input {
+  width: 5rem;
+  min-height: var(--control);
+}
+
+.pacing-custom select {
+  min-height: var(--control);
+}
+
+.pacing-stats,
+.pacing-error {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.pacing-stats strong {
+  font-size: 1rem;
+}
+
+.pacing-error {
+  color: var(--danger);
+}
+
+.pacing-history {
+  overflow-x: auto;
+}
+
+.pacing-history table {
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.pacing-history th,
+.pacing-history td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+}
+
+.pacing-history th[scope="row"],
+.pacing-history thead th:first-child {
+  text-align: left;
+}

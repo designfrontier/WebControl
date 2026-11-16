@@ -4,6 +4,7 @@ import { StopButton } from "../../app/StopButton";
 import { LoadedFile } from "../files/LoadedFile";
 import type { ControlAvailability } from "./controls";
 import { useDraft } from "./hooks";
+import { PacingControl } from "./PacingControl";
 
 const STEPS = [
   { command: "moveGcodeZ", delta: -1, label: "Previous Z move", text: "<Z" },
@@ -106,6 +107,7 @@ export const RunPanel = ({ available, lineIndex }: Props) => {
         </button>
         <CameraToggle />
       </form>
+      <PacingControl />
     </section>
   );
 };
