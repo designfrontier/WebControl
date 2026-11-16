@@ -71,7 +71,10 @@ impl Machine {
         if self.upgrade.holds_link() && !crate::upgrade::allowed_while_flashing(command) {
             return effects.push(alert("Wait for the firmware upgrade to finish."));
         }
-        let optical_allowed = SAFE_WHILE_PROBING.contains(&command) || crate::optical::COMMANDS.contains(&command);
+        // Resume confirms a Z adjusted by hand, which the scan's raise asks for on a machine without a Z motor.
+        let optical_allowed = SAFE_WHILE_PROBING.contains(&command)
+            || crate::optical::COMMANDS.contains(&command)
+            || command == "resumeRun";
         if self.optical_holds() && !optical_allowed {
             return effects.push(alert(crate::optical::RUNNING));
         }

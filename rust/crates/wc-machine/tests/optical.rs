@@ -517,3 +517,15 @@ fn stop_z_ends_the_scan_too() {
     world.act("stopZ");
     assert_eq!(world.last_state(), "stopped");
 }
+
+#[test]
+fn on_a_machine_without_a_z_motor_resume_confirms_the_raise_and_the_scan_goes_on() {
+    let mut world = World::on(SimRig::with(settings(&[(ENABLED_SECTION, ENABLED_KEY, json!(1))])));
+    world.scan(&[(0, 0)]);
+    world.run(1000);
+    assert!(world.rig.machine.snapshot().manual_z_axis_adjust, "the raise waits for Z by hand");
+    assert!(world.moves().is_empty());
+    world.act("resumeRun");
+    world.run(3000);
+    assert_eq!(world.last_state(), "done");
+}
