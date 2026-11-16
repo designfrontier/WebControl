@@ -1,0 +1,23 @@
+{
+  "source": "rust/crates/wc-firmware/tests/fixtures/owner_webcontrol.json: the geometry settings the holey model reads",
+  "geometry": {
+    "Maslow Settings": {
+      "bedWidth": "2438.4",
+      "bedHeight": "1219.2",
+      "motorSpacingX": "3011.16237",
+      "motorOffsetY": "433.68186",
+      "sledWeight": 97.9
+    },
+    "Advanced Settings": {
+      "rotationRadius": "138.4",
+      "chainSagCorrection": "33",
+      "leftChainTolerance": "-0.06495",
+      "rightChainTolerance": "-0.02111",
+      "chainOverSprocket": "Bottom",
+      "gearTeeth": "10",
+      "chainPitch": "6.35",
+      "chainElasticity": 0.0000051685,
+      "kinematicsType": "Triangular"
+    }
+  }
+}
