@@ -520,6 +520,17 @@ fn settings_are_saved_as_numbers_and_refused_when_invalid_or_during_a_job() {
 }
 
 #[test]
+fn an_idle_machine_keeps_one_view_of_optical_calibration() {
+    let mut world = World::new();
+    world.run(200);
+    let before = world.rig.machine.snapshot().optical;
+    world.run(500);
+    assert!(std::sync::Arc::ptr_eq(&before.0, &world.rig.machine.snapshot().optical.0), "unchanged, not rebuilt");
+    world.scan(&[(0, 0)]);
+    assert_ne!(world.view().scan, None, "a change shows at once");
+}
+
+#[test]
 fn stop_z_ends_the_scan_too() {
     let mut world = World::new();
     world.scan(&[(0, 0)]);

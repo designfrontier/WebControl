@@ -205,7 +205,26 @@ impl Optical {
         self.scan.is_some()
     }
 
+    /// The view already shows this state, compared without building a new one.
+    fn shown(&self) -> bool {
+        let view = &*self.view;
+        let session = match (&view.session, &self.settings) {
+            (None, None) => true,
+            (Some(shown), Some(settings)) => {
+                shown.state == self.state.unwrap_or(ScanState::Idle)
+                    && shown.settings == *settings
+                    && shown.orientation == self.orientation
+            }
+            _ => false,
+        };
+        session && view.grid == self.grid && view.scan == self.scan.as_ref().map(|s| s.id) && view.fit == self.fit
+    }
+
+    /// Runs on every machine step, so it builds a view only when something changed.
     fn refresh(&mut self) {
+        if self.shown() {
+            return;
+        }
         let (error_x, error_y) = self.grid.columns();
         let session = self.settings.clone().map(|settings| Session {
             state: self.state.unwrap_or(ScanState::Idle),
@@ -216,9 +235,7 @@ impl Optical {
         });
         let view =
             View { session, grid: self.grid.clone(), scan: self.scan.as_ref().map(|s| s.id), fit: self.fit.clone() };
-        if *self.view != view {
-            self.view = Arc::new(view);
-        }
+        self.view = Arc::new(view);
     }
 }
 
