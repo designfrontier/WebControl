@@ -333,7 +333,7 @@ button.caution:not(:disabled) {
 @media (orientation: portrait) and (min-width: 701px) {
   .control-screen {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: minmax(0, auto) auto auto minmax(7rem, 1fr);
+    grid-template-rows: minmax(0, auto) auto auto minmax(8.5rem, 1fr);
     grid-template-areas:
       "viewer viewer"
       "jog run"

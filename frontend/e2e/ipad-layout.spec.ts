@@ -69,8 +69,9 @@ const measure = (page: Page) =>
     const log = document.querySelector(".console ol")!;
     const logStyle = getComputedStyle(log);
     const twoLines = 2 * parseFloat(logStyle.lineHeight) + parseFloat(logStyle.paddingTop) * 2;
-    // The jog pad grows into spare height and gives it back first, down to three 36 px rows.
-    const jogSlack = box(".jog-grid").height - (3 * 36 + 2 * 4);
+    // The jog pad grows into spare height and gives it back first, down to three rows of the control height.
+    const control = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--control"));
+    const jogSlack = box(".jog-grid").height - (3 * control + 2 * 4);
     const logSpare = log.clientHeight - twoLines;
     // Where the log runs under the controls, taller controls take its height instead.
     const aboveLog = panel.getBoundingClientRect().bottom <= log.getBoundingClientRect().top ? logSpare : 0;
@@ -97,6 +98,9 @@ const measure = (page: Page) =>
       panelOverflow: panel.scrollHeight - panel.clientHeight,
       controlsSpare: Math.round(Math.max(0, panel.clientHeight - panel.scrollHeight) + jogSlack + aboveLog),
       logSpare: Math.round(logSpare),
+      smallTargets: Array.from(document.querySelectorAll<HTMLElement>(".shell button, .shell input, .shell a[href]"))
+        .filter((target) => target.offsetParent !== null && target.getBoundingClientRect().height < 44)
+        .map((target) => target.getAttribute("aria-label") ?? target.textContent),
     };
   });
 
@@ -151,7 +155,8 @@ test("a job at its tool change fits every iPad without scrolling, with run, stat
 
     const m = await measure(page);
     console.log(size, JSON.stringify(m));
-    expect(m.header, `header on ${size}`).toBeLessThanOrEqual(portrait ? 90 : 52);
+    expect(m.header, `header on ${size}`).toBeLessThanOrEqual(portrait ? 90 : 54);
+    expect(m.smallTargets, `touch targets under 44 px on ${size}`).toEqual([]);
     if (!portrait) expect(m.oneRow, `menus, status and theme share a row on ${size}`).toBe(true);
     expect(m.headerSpare, `header room on ${size}`).toBeGreaterThanOrEqual(SPARE_PX);
     expect(m.stageAspect, `viewer stage shape on ${size}`).toBeGreaterThanOrEqual(1.6);
@@ -188,4 +193,19 @@ test("the build commit shows beside the firmware on a phone and on desktops", as
     await page.setViewportSize(viewport);
     await expectCommitShown(page, `${viewport.width}x${viewport.height}`);
   }, Promise.resolve());
+});
+
+test("a mouse keeps the cursor readout and compact controls that touch gives up", async ({ page, browser }) => {
+  await page.setViewportSize(IPADS[0]);
+  await page.goto("/");
+  await waitForServer(page);
+  await expect(page.getByRole("status", { name: "Cursor position" })).toBeHidden();
+
+  const mouse = await browser.newContext({ baseURL: simulatorURL, viewport: IPADS[0], hasTouch: false });
+  const desk = await mouse.newPage();
+  await desk.goto("/");
+  await waitForServer(desk);
+  await expect(desk.getByRole("status", { name: "Cursor position" })).toBeVisible();
+  await expect(desk.getByRole("button", { name: "Play" })).toHaveCSS("min-height", "40px");
+  await mouse.close();
 });

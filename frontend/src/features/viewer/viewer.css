@@ -27,8 +27,8 @@
   white-space: nowrap;
 }
 
-/* A finger leaves no cursor to report. */
-@media (hover: none) {
+/* No cursor to report unless some pointer can hover, like an iPad's trackpad. */
+@media (any-hover: none) {
   .viewer-readout:not(.viewer-line) {
     display: none;
   }

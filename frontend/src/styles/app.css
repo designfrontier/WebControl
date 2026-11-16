@@ -17,6 +17,9 @@
 }
 
 .brand {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control);
   color: var(--text);
   font-size: 1.15rem;
   font-weight: 600;

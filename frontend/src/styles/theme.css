@@ -62,6 +62,13 @@
   --control: 36px;
 }
 
+/* A finger needs the full tap size everywhere, tablets included. */
+@media (pointer: coarse) {
+  :root {
+    --control: var(--tap);
+  }
+}
+
 /* Dark: the OS preference unless the toggle chose light, or the toggle chose dark. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
