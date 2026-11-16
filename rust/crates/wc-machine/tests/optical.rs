@@ -423,6 +423,9 @@ fn a_scan_needs_the_setting_a_connected_idle_machine_and_squares_on_the_bed() {
     assert_eq!(world.scan_with(bad, &[(0, 0)]), (400, json!({"error": "feedRate must be a number above 0."})));
     let bad = OpticalSettings { settle_time: -1.0, ..scan_settings() };
     assert_eq!(world.scan_with(bad, &[(0, 0)]).0, 400);
+    let forever = OpticalSettings { settle_time: 1e30, ..scan_settings() };
+    let refused = json!({"error": format!("settleTime must be at most {} seconds.", optical::MAX_SETTLE_S)});
+    assert_eq!(world.scan_with(forever, &[(0, 0)]), (400, refused), "a settle past Duration's range");
     assert_eq!(world.scan(&[(16, 0)]), (400, json!({"error": "Square (16, 0) is outside the work area."})));
     assert_eq!(world.scan(&[]), (400, json!({"error": "The extents hold no squares."})));
     let mut narrow = World::on(rig_with(&[("Maslow Settings", "bedWidth", json!(1000.0))]));
