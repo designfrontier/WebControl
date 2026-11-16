@@ -484,6 +484,15 @@
             "title": "Camera Thread Sleep Interval",
             "type": "float",
             "value": 0.001
+        },
+        {
+            "default": "auto",
+            "desc": "Where optical calibration's frames come from: auto (the Pi camera, else the first USB webcam), rpicam (the Pi camera module), /dev/videoN (a USB webcam), dir:PATH (looping PNG files) or synthetic (a rendered target, with --simulate only). Read each time the camera starts.\ndefault setting: auto",
+            "key": "cameraSource",
+            "section": "Camera Settings",
+            "title": "Camera Source",
+            "type": "string",
+            "value": "auto"
         }
     ],
     "Computed Settings": [
@@ -1250,6 +1259,18 @@
             "key": "positionTolerance",
             "type": "float",
             "value": 0.125
+        },
+        {
+            "default": 500.0,
+            "key": "feedRate",
+            "type": "float",
+            "value": 500.0
+        },
+        {
+            "default": 1.0,
+            "key": "settleTime",
+            "type": "float",
+            "value": 1.0
         }
     ],
     "Some Plugin": [
@@ -1336,6 +1357,15 @@
             "key": "experimentalReleases",
             "section": "WebControl Settings",
             "title": "Enable Experimental Releases",
+            "type": "bool",
+            "value": 0
+        },
+        {
+            "default": 0,
+            "desc": "Show the experimental optical calibration screen, which measures positioning error with a camera on the sled over a printed grid. Takes effect at once.\ndefault setting: disabled",
+            "key": "opticalCalibrationEnabled",
+            "section": "WebControl Settings",
+            "title": "Optical calibration (experimental)",
             "type": "bool",
             "value": 0
         }
