@@ -5,13 +5,18 @@ use std::collections::VecDeque;
 /// Bytes WebControl lets the controller hold; it counts the trailing space and `\n` as stored.
 pub const BUFFER_SIZE: i64 = 126;
 
+/// `[PE:]`'s space when nothing waits in the firmware's ring.
+pub const EMPTY_RING: i64 = 127;
+
 /// A line written and not yet acknowledged.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sent {
     pub id: u64,
     pub len: i64,
     /// The file line it came from, so a halt can rewind to it.
     pub index: Option<usize>,
+    /// The bytes written, `None` for `~`.
+    pub text: Option<String>,
 }
 
 /// Unacknowledged lines, newest first, and the space they leave in the controller's buffer.
@@ -29,25 +34,27 @@ impl Default for Accounting {
 }
 
 impl Accounting {
-    fn record(&mut self, len: usize, index: Option<usize>) -> Sent {
+    fn record(&mut self, len: usize, index: Option<usize>, text: Option<String>) -> Sent {
         self.next_id += 1;
-        let sent = Sent { id: self.next_id, len: len as i64, index };
+        let sent = Sent { id: self.next_id, len: len as i64, index, text };
         self.space -= sent.len;
         sent
     }
 
-    /// A line through the buffer, with its `\n`.
-    pub fn sent(&mut self, len: usize, index: Option<usize>) -> Sent {
-        let sent = self.record(len, index);
+    /// A line through the buffer, with its `\n`; returns its id.
+    pub fn sent(&mut self, line: &str, index: Option<usize>) -> u64 {
+        let sent = self.record(line.len(), index, Some(line.into()));
+        let id = sent.id;
         self.unacked.push_front(sent);
-        sent
+        id
     }
 
     /// `~` is acknowledged at once, ahead of every line still in the buffer.
-    pub fn realtime_sent(&mut self, len: usize) -> Sent {
-        let sent = self.record(len, None);
+    pub fn realtime_sent(&mut self, len: usize) -> u64 {
+        let sent = self.record(len, None, None);
+        let id = sent.id;
         self.unacked.push_back(sent);
-        sent
+        id
     }
 
     /// An `ok` or `error:` frees the oldest line.
@@ -60,6 +67,17 @@ impl Accounting {
     pub fn clear(&mut self) {
         self.unacked.clear();
         self.space = BUFFER_SIZE;
+    }
+
+    /// Takes every unacknowledged entry, oldest first, as if the controller had answered them all.
+    pub fn take(&mut self) -> Vec<Sent> {
+        self.space = BUFFER_SIZE;
+        self.unacked.drain(..).rev().collect()
+    }
+
+    /// The unacknowledged lines, oldest first, unless a `~` is among them.
+    pub fn lines(&self) -> Option<Vec<&Sent>> {
+        self.unacked.iter().rev().map(|sent| sent.text.as_ref().map(|_| sent)).collect()
     }
 
     pub fn space(&self) -> i64 {
