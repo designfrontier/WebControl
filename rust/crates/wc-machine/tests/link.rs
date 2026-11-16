@@ -337,3 +337,115 @@ fn writes_are_paced_50_ms_apart() {
     assert!(written(&rig.advance(40)).is_empty());
     assert_eq!(written(&rig.advance(10)), ["G00 Y1.0"]);
 }
+
+/// v0.94 slept a full 50 ms from the moment a line was due, not what was left of the 50 ms since the last write.
+#[test]
+fn a_line_due_10_ms_after_a_write_goes_50_ms_after_it_was_due() {
+    let mut rig = Rig::connected();
+    assert_eq!(written(&rig.act_with("move", json!("up"), json!("1"))), ["G91"]);
+    rig.advance(10);
+    assert!(written(&rig.rx("ok")).is_empty());
+    assert!(written(&rig.advance(40)).is_empty(), "50 ms since the write is not enough");
+    assert_eq!(written(&rig.advance(10)), ["G00 Y1.0"]);
+}
+
+#[test]
+fn a_line_due_50_ms_or_more_after_a_write_goes_at_once() {
+    let mut rig = Rig::connected();
+    rig.act_with("move", json!("up"), json!("1"));
+    rig.advance(60);
+    assert_eq!(written(&rig.rx("ok")), ["G00 Y1.0"]);
+    let mut job = Rig::connected();
+    job.machine.load_gcode("G0 X1\nG0 X2\n");
+    job.act("startRun");
+    job.advance(50);
+    assert_eq!(written(&job.rx("ok")), ["G0 X2"]);
+}
+
+fn realtime(effects: &[Effect]) -> Vec<&[u8]> {
+    effects
+        .iter()
+        .filter_map(|effect| match effect {
+            Effect::Realtime(bytes) => Some(bytes.as_slice()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_tilde_is_never_paced_and_the_next_line_waits_50_ms_from_its_ack() {
+    let mut rig = Rig::connected();
+    rig.act_with("move", json!("up"), json!("1"));
+    rig.advance(10);
+    rig.rx("ok");
+    rig.advance(10);
+    rig.rx("Maslow Paused");
+    let resume = rig.act("resumeRun");
+    assert_eq!((written(&resume), realtime(&resume)), (vec!["~".to_string()], vec![b"~\n".as_slice()]));
+    rig.advance(10);
+    assert!(written(&rig.rx("ok")).is_empty());
+    assert!(written(&rig.advance(40)).is_empty());
+    assert_eq!(written(&rig.advance(10)), ["G00 Y1.0"]);
+}
+
+#[test]
+fn stop_while_a_command_waits_out_the_pace_writes_at_once_and_drops_it() {
+    let mut rig = Rig::connected();
+    rig.act_with("move", json!("up"), json!("1"));
+    rig.advance(10);
+    let mut effects = rig.rx("ok");
+    effects.extend(rig.advance(40));
+    effects.extend(rig.act("stopRun"));
+    assert_eq!(written(&effects), ["!"], "50 ms after the write, the line still waits");
+    rig.advance(300);
+    let mut effects = rig.rx("<Idle,MPos:0,0,0>");
+    effects.extend(rig.advance(200));
+    assert!(written(&effects).is_empty(), "{:?}", written(&effects));
+}
+
+#[test]
+fn stop_while_a_job_line_waits_out_the_pace_writes_at_once_and_drops_it() {
+    let mut rig = Rig::connected();
+    rig.machine.load_gcode("G0 X1\nG0 X2\n");
+    assert_eq!(written(&rig.act("startRun")), ["G0 X1"]);
+    rig.advance(10);
+    let mut effects = rig.rx("ok");
+    effects.extend(rig.advance(40));
+    effects.extend(rig.act("stopRun"));
+    assert_eq!(written(&effects), ["!"]);
+    rig.advance(300);
+    let mut effects = rig.rx("<Idle,MPos:0,0,0>");
+    effects.extend(rig.advance(200));
+    assert!(written(&effects).is_empty(), "{:?}", written(&effects));
+    assert_eq!(rig.machine.snapshot().upload_flag, 0);
+}
+
+#[test]
+fn pause_while_a_job_line_waits_out_the_pace_holds_it_and_resume_writes_it_once() {
+    let mut rig = Rig::connected();
+    rig.machine.load_gcode("G0 X1\nG0 X2\nG0 X3\n");
+    rig.act("startRun");
+    rig.advance(10);
+    let mut effects = rig.rx("ok");
+    effects.extend(rig.advance(20));
+    effects.extend(rig.act("pauseRun"));
+    effects.extend(rig.advance(500));
+    assert!(written(&effects).is_empty(), "{:?}", written(&effects));
+    rig.clear_written();
+    rig.act("resumeRun");
+    let sent = rig.run_to_quiet();
+    assert_eq!(
+        sent.iter().filter(|line| line.starts_with("G0 X")).collect::<Vec<_>>(),
+        ["G0 X1.0 Y0.0", "G0 X2", "G0 X3"]
+    );
+}
+
+#[test]
+fn buffered_lines_fill_the_controller_in_order_each_a_full_50_ms_after_it_was_due() {
+    let mut rig = Rig::connected_with(settings(&[("Maslow Settings", "bufferOn", json!(1))]));
+    rig.machine.load_gcode("G0 X1\nG0 X2\nG0 X3\nG0 X4\n");
+    assert_eq!(written(&rig.act("startRun")), ["G0 X1"]);
+    let at: Vec<(u64, String)> =
+        (1..=30).flat_map(|step| written(&rig.advance(10)).into_iter().map(move |line| (step * 10, line))).collect();
+    assert_eq!(at, [(60, "G0 X2".to_string()), (120, "G0 X3".to_string()), (180, "G0 X4".to_string())]);
+}
