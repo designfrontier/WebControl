@@ -144,6 +144,10 @@ async fn test_image_and_find_center_report_a_camera_that_cannot_capture() {
     }
     let garbled = server.call("POST", "/api/calibration/optical/test-image", None, b"{}".to_vec()).await;
     assert_eq!(garbled.status, StatusCode::BAD_REQUEST);
+    let mut slow = settings();
+    slow["gaussianBlurValue"] = json!(1_000_000);
+    let refused = server.post_json("/api/calibration/optical/find-center", json!({"settings": slow})).await;
+    assert_eq!(refused.status, StatusCode::BAD_REQUEST, "checked before the camera opens");
 }
 
 #[tokio::test]

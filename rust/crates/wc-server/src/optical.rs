@@ -197,6 +197,7 @@ async fn scan(State(state): State<AppState>, body: Bytes) -> Response {
 /// Test image and find centre: frames from the camera now, without moving, unless a job or a scan is running.
 async fn frames_now(state: &AppState, body: &Bytes) -> Result<(OpticalSettings, Vec<Frame>), Response> {
     let request = parse::<CaptureRequest>(body)?;
+    optical::check(&request.settings).map_err(|problem| error(StatusCode::BAD_REQUEST, &problem))?;
     let snapshot = state.machine.snapshot();
     let busy = match () {
         _ if snapshot.optical.scan.is_some() => Some(optical::RUNNING),

@@ -35,6 +35,8 @@ pub const NO_SAFE_HEIGHT: &str = "Set the Z-axis safe height to a number, so the
 pub const ATTEMPTS: u32 = 6;
 pub const MAX_STEP_MM: f64 = 10.0;
 pub const MAX_CORRECTION_MM: f64 = 25.0;
+/// The largest blur kernel; a wider one makes each frame's blur take seconds on a Pi.
+pub const MAX_BLUR: i32 = 31;
 /// The orientation check's move in +X, then in +Y.
 pub const ORIENT_STEP_MM: f64 = 5.0;
 pub const MAX_TILT_DEG: f64 = 15.0;
@@ -94,6 +96,9 @@ pub fn check(settings: &OpticalSettings) -> Result<(), String> {
         Some((key, _)) => Err(format!("{key} must be a number above 0.")),
         None if !others.iter().all(|v| v.is_finite()) || s.settle_time < 0.0 => {
             Err("Every optical setting must be a number, and settleTime 0 or more.".into())
+        }
+        None if !(0..=MAX_BLUR).contains(&s.gaussian_blur_value) => {
+            Err(format!("gaussianBlurValue must be 0 to {MAX_BLUR}."))
         }
         None => Ok(()),
     }

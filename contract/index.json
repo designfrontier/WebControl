@@ -982,6 +982,11 @@
           "contentType": "application/json",
           "schema": "schemas/http/post-api-calibration-optical-test-image.200.json"
         },
+        "400": {
+          "contentType": "application/json",
+          "description": "Invalid settings",
+          "schema": "schemas/http/post-api-calibration-optical-test-image.400.json"
+        },
         "409": {
           "contentType": "application/json",
           "description": "Optical calibration is turned off in Settings > WebControl Settings; or a job, a scan or another calibration is running",
@@ -1007,6 +1012,11 @@
         "200": {
           "contentType": "application/json",
           "schema": "schemas/http/post-api-calibration-optical-find-center.200.json"
+        },
+        "400": {
+          "contentType": "application/json",
+          "description": "Invalid settings",
+          "schema": "schemas/http/post-api-calibration-optical-find-center.400.json"
         },
         "409": {
           "contentType": "application/json",

@@ -186,14 +186,24 @@ const opticalEndpoints: HttpEndpoint[] = [
     "POST",
     "/test-image",
     "Capture and annotate one frame without moving",
-    { 200: json(opticalTestImageSchema), 409: error(opticalBusy), 422: error("No camera or no frame") },
+    {
+      200: json(opticalTestImageSchema),
+      400: error("Invalid settings"),
+      409: error(opticalBusy),
+      422: error("No camera or no frame"),
+    },
     opticalJson(opticalCaptureRequestSchema),
   ),
   optical(
     "POST",
     "/find-center",
     "Suggest the optical centre from the square under the camera",
-    { 200: json(opticalCenterSchema), 409: error(opticalBusy), 422: error("No camera, no frame or no square") },
+    {
+      200: json(opticalCenterSchema),
+      400: error("Invalid settings"),
+      409: error(opticalBusy),
+      422: error("No camera, no frame or no square"),
+    },
     opticalJson(opticalCaptureRequestSchema),
   ),
   optical(

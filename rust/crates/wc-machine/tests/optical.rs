@@ -512,6 +512,9 @@ fn settings_are_saved_as_numbers_and_refused_when_invalid_or_during_a_job() {
     assert_eq!(world.edit(Request::OpticalSettings(bad)), (400, json!({"error": "markerX must be a number above 0."})));
     let bad = OpticalSettings { canny_low_value: f64::NAN, ..saved.clone() };
     assert_eq!(world.edit(Request::OpticalSettings(bad)).0, 400);
+    let slow = OpticalSettings { gaussian_blur_value: 1_000_000, ..saved.clone() };
+    let too_wide = json!({"error": format!("gaussianBlurValue must be 0 to {}.", optical::MAX_BLUR)});
+    assert_eq!(world.edit(Request::OpticalSettings(slow)), (400, too_wide));
     world.rig.machine.load_gcode("G21\nG1 X10 F100\nG1 X20\n");
     world.rig.sim.move_ms = 60_000;
     world.act("startRun");

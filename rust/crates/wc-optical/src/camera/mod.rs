@@ -22,6 +22,8 @@ pub const PREVIEW_SIZE: (u32, u32) = (256, 192);
 const DEFAULT_SIZE: (u32, u32) = (640, 480);
 const DEFAULT_FPS: f64 = 5.0;
 const MAX_FPS: f64 = 30.0;
+/// Past this a frame no longer fits a Pi 3B's memory ten times over.
+const MAX_SIDE: u32 = 4096;
 
 /// From Camera Settings: `videoSize` and `fps`.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -32,12 +34,12 @@ pub struct CameraConfig {
 }
 
 impl CameraConfig {
-    /// `videoSize` is `WIDTHxHEIGHT`; anything unreadable falls back to 640x480 at 5 fps.
+    /// `videoSize` is `WIDTHxHEIGHT`; anything unreadable or wider than 4096 falls back to 640x480 at 5 fps.
     pub fn from_settings(video_size: &str, fps: f64) -> CameraConfig {
         let size = video_size
             .split_once('x')
             .and_then(|(w, h)| Some((w.trim().parse().ok()?, h.trim().parse().ok()?)))
-            .filter(|&(w, h): &(u32, u32)| w > 0 && h > 0)
+            .filter(|&(w, h): &(u32, u32)| (1..=MAX_SIDE).contains(&w) && (1..=MAX_SIDE).contains(&h))
             .unwrap_or(DEFAULT_SIZE);
         let fps = if fps.is_finite() && fps > 0.0 { fps.min(MAX_FPS) } else { DEFAULT_FPS };
         CameraConfig { width: size.0, height: size.1, fps }

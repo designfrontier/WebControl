@@ -58,7 +58,7 @@ fn the_camera_settings_give_the_size_and_rate() {
     let config = |size, fps| CameraConfig::from_settings(size, fps);
     assert_eq!(config("1024x768", 2.0), CameraConfig { width: 1024, height: 768, fps: 2.0 });
     assert_eq!(config(" 320 x 240 ", 60.0), CameraConfig { width: 320, height: 240, fps: 30.0 });
-    ["", "640", "0x480", "axb"].iter().for_each(|size| {
+    ["", "640", "0x480", "axb", "100000x100000", "640x5000"].iter().for_each(|size| {
         assert_eq!(config(size, f64::NAN), CameraConfig { width: 640, height: 480, fps: 5.0 }, "{size:?}")
     });
     assert_eq!(config("640x480", -1.0).fps, 5.0);
