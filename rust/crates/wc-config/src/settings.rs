@@ -6,6 +6,8 @@ pub(crate) const DEFAULTS: &str = include_str!("../../../../defaultwebcontrol.js
 /// The option fields `Config.addMissingDefaults` copies from the defaults.
 const COPIED_FIELDS: [&str; 9] =
     ["default", "desc", "firmwareKey", "key", "section", "title", "type", "value", "options"];
+/// What an option the defaults also have takes from them on load: all but its `key` and `value`.
+const METADATA_FIELDS: [&str; 7] = ["default", "desc", "firmwareKey", "section", "title", "type", "options"];
 const DEFAULT_PORT: u16 = 5000;
 
 /// Which file the settings came from, as `Config.loadSettingsFile` falls back.
@@ -97,10 +99,30 @@ impl Settings {
         Settings { sections: defaults(), source: Source::Defaults }
     }
 
-    /// True if any option was added.
+    /// Every field but `value` of an option the defaults also have, as the defaults now give it.
+    fn refresh_metadata(&mut self, defaults: &Map<String, Value>) {
+        self.sections.iter_mut().for_each(|(name, section)| {
+            let Some(list) = section.as_array_mut() else { return };
+            list.iter_mut().filter_map(Value::as_object_mut).for_each(|option| {
+                let found = defaults.get(name).and_then(|s| options(s).find(|d| d.get("key") == option.get("key")));
+                let Some(default) = found else { return };
+                METADATA_FIELDS.iter().for_each(|field| {
+                    match default.get(*field) {
+                        Some(value) => option.insert((*field).into(), value.clone()),
+                        None => option.remove(*field),
+                    };
+                });
+            });
+        });
+    }
+
+    /// True if any option was added. Options already there get the defaults' metadata, which alone never makes a
+    /// save: the file keeps what it had until a value changes.
     pub(crate) fn add_missing_defaults(&mut self) -> bool {
+        let defaults = defaults();
+        self.refresh_metadata(&defaults);
         let mut added = false;
-        for (name, section) in defaults() {
+        for (name, section) in defaults {
             let missing: Vec<Value> =
                 options(&section).filter(|o| !has_key(self.sections.get(&name), &o["key"])).map(copied).collect();
             if missing.is_empty() {
