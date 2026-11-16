@@ -345,12 +345,12 @@ fn the_synthetic_camera_looks_at_the_sled() {
 #[test]
 fn cameras_keep_to_their_frame_rate() {
     let mut camera = SyntheticCamera::new(Arc::new(|| (0.0, 0.0)));
-    camera.start(&config(20.0)).unwrap();
+    camera.start(&config(4.0)).unwrap();
     camera.next_frame(Instant::now() + Duration::from_secs(1)).unwrap();
-    assert_eq!(camera.next_frame(Instant::now()).unwrap_err(), OpticalError::NoFrame, "the next frame is 50 ms away");
+    assert_eq!(camera.next_frame(Instant::now()).unwrap_err(), OpticalError::NoFrame, "the next frame is 250 ms away");
     let before = Instant::now();
     camera.next_frame(before + Duration::from_secs(1)).unwrap();
-    assert!(before.elapsed() >= Duration::from_millis(30), "{:?}", before.elapsed());
+    assert!(before.elapsed() >= Duration::from_millis(100), "{:?}", before.elapsed());
     [config(0.0), config(f64::NAN), CameraConfig { width: 0, ..config(5.0) }].iter().for_each(|bad| {
         let why = camera.start(bad).unwrap_err().to_string();
         assert!(why.ends_with("fps are not usable"), "{why}");
