@@ -236,7 +236,7 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
 4. Realtime: `!` resets accounting (immediate `ok`, no ack for the aborted line); `~` immediate `ok`.
 5. Sanitise outgoing lines: strip comments, reject an unclosed `(`, remove `!`, `~`, backtick, `?` and control
    characters, and upper-case the rest (§1); read every line WebControl inspects (file, typed, restart, preview)
-   upper-cased too.
+   upper-cased too. A restart needs an absolute X and Y: refuse one where the file moves X or Y relatively first.
 6. ALARM or `Buffer overflow!` halts streaming and rewinds the job to the oldest unacknowledged line; acks are
    ignored until a status report (the resync); a probe `error:` is that line's ack;
    `$RST` has no `ok` of its own; detect a trailing glued `ok` on 51.291.
