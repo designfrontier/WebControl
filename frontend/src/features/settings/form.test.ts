@@ -96,7 +96,7 @@ describe("validation", () => {
     expect(validateValue(numeric, value)).toBeUndefined();
   });
 
-  it.each(["", "abc", "1.2.3", "1,234.5", "1.234,5", "1,2,3", "-", "1e999", "-1e400", "\u0663"])(
+  it.each(["", "abc", "1.2.3", "1,234.5", "1.234,5", "1,2,3", "1,500", "-", "1e999", "-1e400", "\u0663"])(
     "rejects number %j",
     (value) => {
       expect(validateValue(numeric, value)).toBe("Enter a number");
