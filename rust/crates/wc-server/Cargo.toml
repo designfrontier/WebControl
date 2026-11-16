@@ -26,6 +26,7 @@ tokio-serial.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 uuid.workspace = true
+wc-calibration.workspace = true
 wc-config.workspace = true
 wc-firmware.workspace = true
 wc-gcode.workspace = true

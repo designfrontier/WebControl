@@ -58,6 +58,16 @@ pub fn fit(settings: &Settings, errors: &[(Cell, (f64, f64))]) -> Result<Geometr
     Ok(GeometryFit { current, fitted, sheet, rms_mm, cells: points.len() as u32 })
 }
 
+/// Where a machine built to `built`'s geometry puts the sled when its firmware drives to `commanded` with
+/// `configured`'s; `None` for settings that are not numbers or chains that cannot reach.
+pub fn misplaced(configured: &Settings, built: &Settings, commanded: (f64, f64)) -> Option<(f64, f64)> {
+    let model = |settings: &Settings| {
+        MachineSettings::from_lookup(|section, key| settings.text(section, key)).ok().map(|m| holey::model(&m))
+    };
+    let (left, right) = Kinematics::new(model(configured)?).inverse_unclamped(commanded.0, commanded.1)?;
+    Kinematics::new(model(built)?).forward_from(left, right, commanded)
+}
+
 fn solve(base: &Geometry, points: &[Point]) -> Option<trf::Fitted> {
     trf::solve(|p: &Vector| residuals(base, points, p), Vector::zeros(PARAMETERS))
         .filter(|fitted| fitted.x.iter().chain(fitted.f.iter()).all(|v| v.is_finite()))

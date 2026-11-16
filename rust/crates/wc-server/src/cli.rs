@@ -115,18 +115,20 @@ pub async fn serve(options: Options, shutdown: impl Future<Output = ()> + Send +
     let host = SystemHost::new(&paths.dir(), exit.clone());
     let host = if saving { host.saving_to(paths.clone()) } else { host };
     let machine = Machine::new(&format!("{}:{}", local_ip(), bound.port()), settings).with_library(paths.gcode_dir());
-    let (machine, opener, host, cameras): (Machine, Box<dyn PortOpener>, SystemHost, Cameras) = match options.simulate {
+    type Started = (Machine, Box<dyn PortOpener>, SystemHost, Option<Arc<Mutex<Sim>>>);
+    let (machine, opener, host, sim): Started = match options.simulate {
         true => {
             let opener = SimOpener::new(Build::holey_51_27().on_board(SIMULATED_BOARD));
             let host = host.with_flasher(Box::new(SimFlasher { sim: opener.sim() }));
             let machine = machine.on_port(SIMULATED_PORT).with_firmware(Image::embedded().or(Some(simulated_target())));
-            let cameras = Cameras::new(Some(sled_position(opener.sim())));
-            (machine, Box::new(opener), host, cameras)
+            let sim = opener.sim();
+            (machine, Box::new(opener), host, Some(sim))
         }
-        false => (machine, Box::new(SerialOpener), host, Cameras::default()),
+        false => (machine, Box::new(SerialOpener), host, None),
     };
     let host = Arc::new(host);
     let (machine, task) = spawn(machine, opener, host.clone());
+    let cameras = Cameras::new(sim.map(|sim| true_sled_position(sim, machine.clone())));
     host.attach_gpio(Some(start_gpio(&machine)));
     println!("webcontrol-rs listening on {bound}");
     std::io::stdout().flush()?;
@@ -153,6 +155,16 @@ pub fn sled_position(sim: Arc<Mutex<Sim>>) -> SledPosition {
     Arc::new(move || {
         let [x, y, _] = sim.lock().expect("the simulator does not panic").position();
         (x, y)
+    })
+}
+
+/// Where the simulated machine, built to the default geometry, really puts its sled: its firmware drives the chains
+/// with the settings' geometry, so a setting off its default misplaces the sled as a wrong measurement would.
+pub fn true_sled_position(sim: Arc<Mutex<Sim>>, machine: MachineHandle) -> SledPosition {
+    let (commanded, built) = (sled_position(sim), Settings::defaults());
+    Arc::new(move || {
+        let at = commanded();
+        wc_calibration::optical_fit::misplaced(&machine.snapshot().settings, &built, at).unwrap_or(at)
     })
 }
 
