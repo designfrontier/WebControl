@@ -71,10 +71,21 @@ pub fn render(lines: &[String], machine: Units) -> Preview {
 
 pub fn too_large_alert(count: usize) -> String {
     format!(
-        "The current file contains {count} lines of gcode.  Rendering all {count} lines simultaneously may crash the \
-         program, therefore, only the first {MAX_LINES}lines are shown here.  The complete program will cut if you \
-         choose to do so unless the home position is moved from (0,0)."
+        "The file has {} lines of gcode. The preview shows only the first {} lines; the whole file still runs.",
+        grouped(count),
+        grouped(MAX_LINES)
     )
+}
+
+fn grouped(count: usize) -> String {
+    let digits = count.to_string();
+    digits.char_indices().fold(String::new(), |mut out, (i, digit)| {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(digit);
+        out
+    })
 }
 
 /// The gzipped JSON `gcodeUpdateCompressed` sends.
@@ -421,7 +432,11 @@ mod tests {
     fn only_the_first_max_lines_are_drawn() {
         let lines = vec!["G1 X1 ".to_string(); MAX_LINES + 1];
         let preview = render(&lines, Units::Inches);
-        assert!(preview.too_large.unwrap().starts_with("The current file contains 300001 lines of gcode."));
+        assert_eq!(
+            preview.too_large.unwrap(),
+            "The file has 300,001 lines of gcode. The preview shows only the first 300,000 lines; the whole file still \
+             runs."
+        );
         assert_eq!(preview.moves[0].points.len(), 2);
         assert_eq!(render(&lines[..2], Units::Inches).too_large, None);
     }
