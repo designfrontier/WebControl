@@ -314,9 +314,9 @@ impl Machine {
         HomeShift::from_home(home("homeX"), home("homeY"), self.truncate)
     }
 
-    /// A file line as it goes out (home shift, then R arcs for the firmware), or why it cannot.
+    /// A file line as it goes out (home shift, then its arc rewritten), or why it cannot.
     fn as_written(&self, to_send: &str) -> Result<String, LineProblem> {
-        let line = self.with_arcs_for_firmware(&shift_to_home(to_send, self.positioning, &self.home_shift()))?;
+        let line = self.sled.convert(&shift_to_home(to_send, self.positioning, &self.home_shift()))?;
         match problem_with(&line).filter(|_| !py::isspace(&line)) {
             Some(problem) => Err(problem),
             None => Ok(line),

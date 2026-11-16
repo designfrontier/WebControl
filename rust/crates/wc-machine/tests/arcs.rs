@@ -1,5 +1,5 @@
-//! R-format arcs reach firmware before 51.29 as I and J (spec/firmware.md §9, B18): typed, streamed, shifted to
-//! home and restarted mid-file; 51.29x gets them untouched, and an arc no I and J can give is refused.
+//! R arcs reach every firmware as I and J and G91 arcs with absolute X and Y (spec/firmware.md §9, B18): typed,
+//! streamed, shifted to home and restarted mid-file; an arc that cannot be rewritten is refused.
 
 mod rig;
 
@@ -36,10 +36,28 @@ fn a_typed_r_arc_in_inches_is_converted_in_inches() {
 }
 
 #[test]
-fn on_51_29x_an_r_arc_goes_out_as_written() {
+fn on_51_29x_an_r_arc_is_converted_too_since_the_firmware_drops_rs_sign() {
     let mut rig = Rig::connected_on(settings(&[]), "51.29");
-    assert_eq!(typed(&mut rig, "G2 X10 Y10 R10"), ["G2 X10 Y10 R10"]);
-    assert_eq!(typed(&mut rig, "G2 X10 Y0 R1"), ["G2 X10 Y0 R1"]);
+    assert_eq!(typed(&mut rig, "G2 X10 Y10 R-10"), ["G2 X10 Y10 I0.0000 J10.0000"]);
+    let mut effects = rig.send(Event::Request { id: 1, request: Request::SendGcode("G2 X30 Y10 R1".into()) });
+    (0..10).for_each(|_| effects.extend(rig.advance(100)));
+    assert!(written(&effects).is_empty());
+}
+
+#[test]
+fn a_typed_relative_i_j_arc_is_written_absolute_and_one_with_z_is_refused() {
+    let mut rig = Rig::connected();
+    assert_eq!(
+        typed(&mut rig, "G0 X10 Y10\nG91\nG2 X10 Y-10 I0 J-10\nG1 X1"),
+        ["G0 X10 Y10", "G91", "G2 X20.0000 Y0.0000 I0 J-10", "G1 X1"]
+    );
+    let mut effects = rig.send(Event::Request { id: 1, request: Request::SendGcode("G3 X1 Y1 I1 J0 Z-1".into()) });
+    (0..10).for_each(|_| effects.extend(rig.advance(100)));
+    assert_eq!(
+        alerts(&effects),
+        ["That command is a relative (G91) arc with a Z move; the controller takes an arc's Z as absolute."]
+    );
+    assert!(written(&effects).is_empty());
 }
 
 #[test]
@@ -107,6 +125,17 @@ fn play_mid_file_converts_the_r_arc_from_the_restart_position() {
     let sent = rig.run_to_quiet();
     assert!(sent.contains(&"G0 X10.0 Y10.0".to_string()), "{sent:?}");
     assert_eq!(sent[sent.len() - 2..], ["G2 X20 Y0 I0.0000 J-10.0000", "G0 Z5"]);
+}
+
+#[test]
+fn play_mid_file_in_a_g91_file_writes_the_arc_from_where_the_restart_put_the_sled() {
+    let mut rig = Rig::connected();
+    job(&mut rig, &["G21", "G0 X10 Y10", "G91", "G1 Z-1 F100", "G2 X10 Y-10 I0 J-10", "G1 X1"]);
+    rig.act_with("moveGcodeGoto", json!(4), json!(""));
+    rig.act("startRun");
+    let sent = rig.run_to_quiet();
+    assert!(sent.contains(&"G0 X10.0 Y10.0".to_string()), "{sent:?}");
+    assert_eq!(sent[sent.len() - 2..], ["G2 X20.0000 Y0.0000 I0 J-10", "G1 X1"]);
 }
 
 #[test]

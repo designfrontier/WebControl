@@ -470,7 +470,7 @@ impl Machine {
         }
         let command = format!("{command} ");
         let to_send = tool_change_line(&command, self.job.next_tool, self.job.tool).line;
-        let checked = self.with_arcs_for_firmware(&to_send).and_then(|line| problem_with(&line).map_or(Ok(line), Err));
+        let checked = self.sled.convert(&to_send).and_then(|line| problem_with(&line).map_or(Ok(line), Err));
         let to_send = match checked {
             Ok(line) => line,
             Err(problem) => {

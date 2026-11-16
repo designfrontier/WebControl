@@ -59,6 +59,7 @@ pub fn render(lines: &[String], machine: Units) -> Preview {
         position: [0.0; 3],
         scale: if machine == Units::Mm { MILLIMETERS } else { 1.0 },
         relative: false,
+        arcs_relative: false,
         prepend: "G00 ".to_string(),
         tool: 0,
         file_units: machine,
@@ -93,6 +94,8 @@ struct Drawing {
     position: [f64; 3],
     scale: f64,
     relative: bool,
+    /// A real G91, which Python's `relative` also takes from G91.1; arcs go out relative to it.
+    arcs_relative: bool,
     prepend: String,
     tool: i64,
     file_units: Units,
@@ -154,8 +157,14 @@ impl Drawing {
                 self.scale = MILLIMETERS;
                 self.file_units = Units::Mm;
             }
-            "G90" => self.relative = false,
-            "G91" => self.relative = true,
+            "G90" => {
+                self.relative = false;
+                self.arcs_relative = false;
+            }
+            "G91" => {
+                self.relative = true;
+                self.arcs_relative = self.arcs_relative || words::numbers('G', &full).contains(&91.0);
+            }
             _ => {}
         }
         let t_word = from_char(&full, 'T');
@@ -223,9 +232,8 @@ impl Drawing {
         let (x, y) = (self.value(line, 'X'), self.value(line, 'Y'));
         let (i, j) = (self.value(line, 'I'), self.value(line, 'J'));
         let radius = if i.is_none() && j.is_none() { self.value(line, 'R') } else { None };
-        // An R arc is drawn as WebControl writes it, which follows G91.
-        let relative = radius.is_some() && self.relative;
-        let from = |start: f64| if relative { start } else { 0.0 };
+        // Drawn as WebControl writes it: a G91 arc goes out with absolute X and Y, so it ends where the file means.
+        let from = |start: f64| if self.arcs_relative { start } else { 0.0 };
         if let Some(x) = x {
             target[0] = from(x0) + x * self.scale;
         }
@@ -413,6 +421,8 @@ mod tests {
             ("G21\nG0 X20 Y0\nG3 X10 Y-10 R-10", "G21\nG0 X20 Y0\nG3 X10 Y-10 I-10 J0"),
             ("G21\nG0 X20 Y0\ng3 x10 y-10 r10 z-1", "G21\nG0 X20 Y0\nG3 X10 Y-10 I0 J-10 Z-1"),
             ("G20\nG0 X1 Y1\nG91\nG2 X1 Y-1 R1", "G20\nG0 X1 Y1\nG2 X2 Y0 I0 J-1"),
+            ("G20\nG0 X1 Y1\nG91\nG2 X1 Y-1 I0 J-1", "G20\nG0 X1 Y1\nG2 X2 Y0 I0 J-1"),
+            ("G20\nG0 X1 Y1\nG91.1\nG2 X2 Y0 I0 J-1", "G20\nG0 X1 Y1\nG2 X2 Y0 I0 J-1"),
         ];
         pairs.iter().for_each(|(r, ij)| assert!(same_moves(&draw(r, Units::Mm), &draw(ij, Units::Mm)), "{r}"));
         assert_eq!(draw("G21\nG0 X10 Y10\nG2 X20 Y0 R10", Units::Mm).moves[1].points.len(), 1 + 16 + 1);

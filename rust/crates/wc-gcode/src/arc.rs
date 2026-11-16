@@ -1,5 +1,5 @@
-//! R-format arcs (`G2/G3 X.. Y.. R..`), which only 51.29x reads (spec/firmware.md §9): the centre an R names, and
-//! the controller's interpreter followed line by line so a written R arc can be given as I and J instead.
+//! Arcs the firmware cannot run as written (spec/firmware.md §9): R, which 51.27 ignores and 51.29x reads unsigned,
+//! and G91, which every version's G2/G3 ignores. The interpreter is followed so such arcs go out as I/J, absolute.
 
 use std::ops::Range;
 
@@ -38,11 +38,11 @@ impl ArcProblem {
                 "is an arc with a radius (R) in the G18 or G19 plane, which the controller cannot cut."
             }
             ArcProblem::RelativeZ => {
-                "is a relative (G91) arc with a radius (R) and a Z move; the controller takes an arc's Z as absolute."
+                "is a relative (G91) arc with a Z move; the controller takes an arc's Z as absolute."
             }
             ArcProblem::StartUnknown => {
-                "is an arc with a radius (R), which this controller needs as I and J, and WebControl does not know \
-                 where the sled is to convert it."
+                "is an arc the controller needs rewritten (a radius as I and J, or G91 as absolute X and Y), and \
+                 WebControl does not know where the sled is to rewrite it."
             }
         }
     }
@@ -115,7 +115,10 @@ type Edit = (Range<usize>, String);
 #[derive(Debug, Clone, PartialEq)]
 pub struct Interpreter {
     units: Option<Units>,
+    /// The firmware's, which G91.1 also sets, since it truncates the code to 91.
     positioning: Positioning,
+    /// A real G91: the file means its arcs' X and Y as offsets.
+    relative_arcs: bool,
     plane: u32,
     /// `sys.lastGCommand`, which a line without a G word repeats; zero after a boot.
     motion: u32,
@@ -130,7 +133,8 @@ impl Default for Interpreter {
 
 impl Interpreter {
     pub fn new() -> Interpreter {
-        Interpreter { units: None, positioning: Positioning::Absolute, plane: 17, motion: 0, xy_mm: None }
+        let positioning = Positioning::Absolute;
+        Interpreter { units: None, positioning, relative_arcs: false, plane: 17, motion: 0, xy_mm: None }
     }
 
     pub fn units(&self) -> Option<Units> {
@@ -150,7 +154,7 @@ impl Interpreter {
         self.walk(line, false).is_ok_and(|(_, moved)| moved)
     }
 
-    /// `line` with every R arc in it given as I and J, as firmware before 51.29 needs; unchanged without one.
+    /// `line` with every R arc given as I and J and every G91 arc's X and Y as absolute; unchanged without one.
     pub fn convert(&self, line: &str) -> Result<String, ArcProblem> {
         self.clone().walk(line, true).map(|(line, _)| line)
     }
@@ -185,20 +189,23 @@ impl Interpreter {
         Ok((out, moved))
     }
 
-    /// `executeGcodeLine` for one segment: the edits that give its R as I and J, and whether it may move the sled.
+    /// `executeGcodeLine` for one segment: the edits that rewrite its arc, and whether it may move the sled.
     fn segment(&mut self, segment: &str, convert: bool) -> Result<(Vec<Edit>, bool), ArcProblem> {
-        let code = firmware_value(segment, 'G').map_or(self.motion, |code| code as u32);
+        let number = firmware_value(segment, 'G');
+        let code = number.map_or(self.motion, |code| code as u32);
         let mut moved = false;
         let mut edits = Vec::new();
         match code {
             0..=3 => {
-                let radius = firmware_value(segment, 'R').filter(|_| convert && code >= 2);
-                let radius = radius.filter(|_| !segment.contains(['I', 'J']));
-                // The firmware's G2 and G3 ignore G91; a converted relative arc is written absolute.
-                let relative = self.positioning == Positioning::Relative && (code < 2 || radius.is_some());
+                let arc = code >= 2;
+                let radius = firmware_value(segment, 'R').filter(|_| arc && !segment.contains(['I', 'J']));
+                let rewrite = convert && (radius.is_some() || arc && self.relative_arcs);
+                // The firmware's G2 and G3 ignore G91, so a rewritten relative arc is written absolute.
+                let relative =
+                    if arc { rewrite && self.relative_arcs } else { self.positioning == Positioning::Relative };
                 let end = self.end_of(segment, relative);
-                if let Some(radius) = radius {
-                    edits = self.radius_edits(segment, code == 2, radius, end)?;
+                if rewrite {
+                    edits = self.arc_edits(segment, code == 2, radius, end)?;
                 }
                 self.motion = code;
                 self.xy_mm = end;
@@ -210,8 +217,12 @@ impl Interpreter {
                 moved = units != self.units;
                 self.units = units;
             }
-            90 => self.positioning = Positioning::Absolute,
-            91 => self.positioning = Positioning::Relative,
+            90 | 91 => {
+                self.positioning = if code == 90 { Positioning::Absolute } else { Positioning::Relative };
+                if number.is_some_and(|number| number.fract() == 0.0) {
+                    self.relative_arcs = code == 91;
+                }
+            }
             _ => {}
         }
         Ok((edits, moved))
@@ -233,28 +244,33 @@ impl Interpreter {
         Some([axis(x, 0)?, axis(y, 1)?])
     }
 
-    fn radius_edits(
+    /// An R given as I and J, and under G91 the X and Y given as where the arc ends.
+    fn arc_edits(
         &self,
         segment: &str,
         clockwise: bool,
-        radius: f64,
+        radius: Option<f64>,
         end: Option<[f64; 2]>,
     ) -> Result<Vec<Edit>, ArcProblem> {
-        let relative = self.positioning == Positioning::Relative;
-        if self.plane != 17 {
+        let relative = self.relative_arcs;
+        if radius.is_some() && self.plane != 17 {
             return Err(ArcProblem::Plane);
         }
         if relative && segment.contains('Z') {
             return Err(ArcProblem::RelativeZ);
         }
+        let needs_start = radius.is_some() || relative && segment.contains(['X', 'Y']);
         let (Some(units), Some(start), Some(end)) = (self.units, self.xy_mm, end) else {
-            return Err(ArcProblem::StartUnknown);
+            return if needs_start { Err(ArcProblem::StartUnknown) } else { Ok(Vec::new()) };
         };
         let scale = mm_per(units);
-        let centre = centre_from_radius(start, end, radius * scale, clockwise, RADIUS_TOLERANCE_MM)?;
-        let offset = |axis: usize| four((centre[axis] - start[axis]) / scale);
-        let r = word_range(segment, 'R').expect("an R word");
-        let mut edits = vec![(r, format!("I{} J{}", offset(0), offset(1)))];
+        let mut edits = Vec::new();
+        if let Some(radius) = radius {
+            let centre = centre_from_radius(start, end, radius * scale, clockwise, RADIUS_TOLERANCE_MM)?;
+            let offset = |axis: usize| four((centre[axis] - start[axis]) / scale);
+            let r = word_range(segment, 'R').expect("an R word");
+            edits.push((r, format!("I{} J{}", offset(0), offset(1))));
+        }
         if relative {
             edits.extend([('X', 0), ('Y', 1)].into_iter().filter_map(|(letter, axis)| {
                 word_range(segment, letter).map(|range| (range, format!("{letter}{}", four(end[axis] / scale))))
@@ -331,6 +347,34 @@ mod tests {
         assert!(close(relative.xy_mm().unwrap(), [11.0, 11.0]));
         relative.written("G2 X0 Y0 I-5 J-5 ");
         assert!(close(relative.xy_mm().unwrap(), [0.0, 0.0]));
+    }
+
+    #[test]
+    fn a_relative_i_j_arc_is_written_absolute_and_one_with_z_is_refused() {
+        let at = after(&["G21 ", "G0 X10 Y10 ", "G91 "]);
+        assert_eq!(at.convert("G2 X10 Y-10 I0 J-10 F300 ").unwrap(), "G2 X20.0000 Y0.0000 I0 J-10 F300 ");
+        assert_eq!(at.convert("g3 y5 i0 j2.5").unwrap(), "g3 Y15.0000 i0 j2.5");
+        assert_eq!(at.convert("G2 I5 J0 ").unwrap(), "G2 I5 J0 ");
+        assert_eq!(at.convert("G1 X5 ").unwrap(), "G1 X5 ");
+        assert_eq!(at.convert("G2 X1 Y1 I1 J0 Z-1 ").unwrap_err(), ArcProblem::RelativeZ);
+        assert_eq!(after(&["G21 ", "G91 "]).convert("G2 X1 I1 J0 ").unwrap_err(), ArcProblem::StartUnknown);
+        assert_eq!(after(&["G21 ", "G91 "]).convert("G2 I1 J0 ").unwrap(), "G2 I1 J0 ");
+        let mut absolute = at.clone();
+        absolute.written("G90 ");
+        assert_eq!(absolute.convert("G2 X10 Y-10 I0 J-10 Z-1 ").unwrap(), "G2 X10 Y-10 I0 J-10 Z-1 ");
+    }
+
+    #[test]
+    fn g91_1_moves_lines_relative_as_the_firmware_does_but_leaves_arcs_absolute() {
+        let mut at = after(&["G21 ", "G0 X10 Y10 ", "G91.1 "]);
+        assert_eq!(at.convert("G2 X20 Y0 I0 J-10 Z-1 ").unwrap(), "G2 X20 Y0 I0 J-10 Z-1 ");
+        assert_eq!(at.convert("G2 X20 Y0 R10 ").unwrap(), "G2 X20 Y0 I0.0000 J-10.0000 ");
+        at.written("G1 X1 ");
+        assert!(close(at.xy_mm().unwrap(), [11.0, 10.0]));
+        let mut real = after(&["G21 ", "G0 X0 Y0 ", "G91 ", "G90.1 "]);
+        assert_eq!(real.convert("G2 X2 I1 J0 ").unwrap(), "G2 X2.0000 I1 J0 ");
+        real.written("G90 ");
+        assert_eq!(real.convert("G2 X2 I1 J0 ").unwrap(), "G2 X2 I1 J0 ");
     }
 
     #[test]

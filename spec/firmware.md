@@ -195,7 +195,8 @@ non-zero and X or Y differs from the start: centre = midpoint + e·√(R² − (
 the chord gives a NaN centre; with no X/Y change it falls back to I and J. Every version's G2/G3 reads X, Y and Z as
 absolute even under G91 (only G0/G1 honour it), ignores G17/G18/G19 (`Command G17 unsupported and ignored.`) and
 cuts in XY. Like every word, R is found by the first `R` in the segment (the line is upper-cased, then split at each
-G and M), and its number is the digits and punctuation after it, so `R 5` reads as R0.
+G and M), and its number is the digits and punctuation after it, so `R 5` reads as R0. The G number is truncated
+to an int, so G91.1 and G90.1 switch G0/G1 to relative and absolute like G91 and G90.
 
 ## Implications
 
@@ -220,6 +221,7 @@ G and M), and its number is the digits and punctuation after it, so `R 5` reads 
 | A15 | Info | `bufferSize = 126` is right; PWR:/F: parsing is dead code; PE lines are mis-parsed until B05 is parsed. |
 | A16 | Fixed | After a touching probe WebControl queued `G10 Z0` behind anything already queued; behind a Resume's restart it zeroed Z at the restart's height. The firmware zeroes Z on a touch, so none is sent. Resume and other moving actions pressed mid-probe are now refused until the probe answers or Stop. |
 | A17 | Fixed | R-format arcs (upstream #120) were streamed untouched, so 51.27 sent the sled straight to the end at PID speed (§9); now converted (B18). |
+| A18 | Fixed | G2/G3 under G91 were streamed untouched; every firmware runs their X/Y (and Z) as absolute, while the position, restart and Z tracking took them as relative. Now written absolute, with Z refused (B18). |
 
 ### B. Rust backend requirements
 
@@ -290,18 +292,24 @@ G and M), and its number is the digits and punctuation after it, so `R 5` reads 
     reply shows the alarm again instead of clearing it. The unplaceable-sled message that ends Stop's own reload is
     shown but does not hold again, however long the 200 failed guesses take. After it the firmware takes the sled to
     be at 0, 0, so a job it held resumes only from Stop. `alarm_mid_home_holds_the_plunge_until_stop`.
-18. R-format arcs (upstream #120): below 51.29 (or before B05 answers), every line as it is written (a job line
-    after the home shift, a typed line, a restart's) has each G2/G3 segment with an R and no I or J rewritten with
-    I and J at 4 decimals, R removed. The centre is the standard one: G2 clockwise, G3 counter-clockwise, a
-    negative R the arc over 180°. The start is where WebControl last commanded the sled, following the controller's
-    own parse (segments split at G and M, the modal G, G20/G21, G90/G91; G2/G3 X/Y absolute); after a Stop, an
+18. Arcs as the file means them (upstream #120), on every firmware version: every line as it is written (a job
+    line after the home shift, a typed line, a restart's) has each G2/G3 segment with an R and no I or J rewritten
+    with I and J at 4 decimals, R removed, and each G2/G3 segment under a real G91 rewritten with the absolute X and
+    Y it ends at (start plus offset, 4 decimals; I and J are already offsets and stay as written). The centre is the
+    standard one: G2 clockwise, G3 counter-clockwise, a negative R the arc over 180°. 51.29x gets the same bytes as
+    51.27: it reads R but drops its sign (§9), and one path keeps what is cut independent of the version. The start
+    is where WebControl last commanded the sled, following the controller's own parse (segments split at G and M,
+    the modal G, G20/G21, G90/G91 with G91.1 truncated to G91 for G0/G1; G2/G3 X/Y absolute); after a Stop, an
     alarm, a `B` or `$` line, or with no absolute move yet, it is the last status report's MPos read while nothing
-    that moves is unacknowledged. A relative (G91) R arc is written with absolute X and Y, since the firmware's G2
-    reads them so. Refused like an unclosed comment (a job pauses before the line with an alert; a typed line is
-    dropped with one): |R| shorter than half the chord by over 0.05 mm, no X/Y change, G18/G19 in effect, G91 with a
-    Z word, or no known start. The rewritten line must still fit B3. On 51.29x R lines go out untouched (§9: they
-    lose R's sign there). The preview draws R arcs with the same centre. `r_arc_converted_to_i_j_on_51_27`,
-    `r_arc_impossible_radius_pauses_the_job`, `r_arc_untouched_on_51_292`.
+    that moves is unacknowledged. G91.1 and G90.1 (arc-centre modes) do not make an arc relative. Refused like an
+    unclosed comment (a job pauses before the line with an alert; a typed line is dropped with one): |R| shorter
+    than half the chord by over 0.05 mm, an R arc with no X/Y change, an R arc under G18/G19, a G91 arc with a Z
+    word (the firmware would take it as absolute), or no known start where one is needed. The rewritten line must
+    still fit B3. Since what is sent then ends where the file means, the file-side position and restart state keep
+    reading G91 arcs as relative; the commanded Z (B10) reads an arc's Z as absolute, as the firmware does. The
+    preview draws R arcs with the same centre and real-G91 arcs relative. `r_arc_converted_to_i_j_on_51_27`,
+    `r_arc_impossible_radius_pauses_the_job`, `r_arc_converted_on_51_292`, `g91_arc_written_absolute`,
+    `g91_arc_with_z_pauses_the_job`.
 
 ### C. One-click firmware upgrade
 
