@@ -126,16 +126,30 @@ fn the_build_narrows_51_29_by_the_rewrite_notice() {
 fn accounting_counts_bytes_until_each_ack() {
     let mut accounting = Accounting::default();
     assert!(accounting.is_empty());
-    accounting.sent(10, Some(4));
-    accounting.sent(20, Some(5));
+    accounting.sent(&"a".repeat(10), Some(4));
+    accounting.sent(&"b".repeat(20), Some(5));
     assert_eq!(accounting.space(), BUFFER_SIZE - 30);
     assert_eq!(accounting.oldest_index(), Some(4));
     let tilde = accounting.realtime_sent(2);
-    assert_eq!(accounting.acked(), Some(tilde), "~ is acked ahead of the lines");
+    assert_eq!(accounting.lines(), None, "a ~ is waiting");
+    assert_eq!(accounting.acked().map(|s| s.id), Some(tilde), "~ is acked ahead of the lines");
     assert_eq!(accounting.acked().map(|s| s.index), Some(Some(4)));
     assert_eq!(accounting.space(), BUFFER_SIZE - 20);
     accounting.clear();
     assert!(accounting.is_empty());
     assert_eq!(accounting.acked(), None);
     assert_eq!(accounting.oldest_index(), None);
+}
+
+#[test]
+fn accounting_gives_back_the_lines_it_waits_for_oldest_first() {
+    let mut accounting = Accounting::default();
+    accounting.sent("G1 X1 \n", Some(1));
+    accounting.sent("G1 X2 \n", Some(2));
+    let lines = accounting.lines().unwrap();
+    assert_eq!(lines.iter().map(|s| s.index).collect::<Vec<_>>(), [Some(1), Some(2)]);
+    let taken = accounting.take();
+    assert_eq!(taken.iter().map(|s| s.text.as_deref()).collect::<Vec<_>>(), [Some("G1 X1 \n"), Some("G1 X2 \n")]);
+    assert!(accounting.is_empty());
+    assert_eq!(accounting.lines(), Some(vec![]));
 }

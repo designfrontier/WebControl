@@ -213,7 +213,7 @@ impl Machine {
             self.bit.settled();
         }
         // Identity, not position: a `~` sent mid-probe is acked first with an entry of its own.
-        let answered = controller.probe.take_if(|probe| acked.is_some_and(|sent| sent.id == probe.id));
+        let answered = controller.probe.take_if(|probe| acked.as_ref().is_some_and(|sent| sent.id == probe.id));
         if let Some(probe) = answered {
             self.probe_answered(probe, matches!(reply, Reply::Ok), effects);
         }
@@ -372,7 +372,7 @@ impl Machine {
 
     pub(crate) fn write(&mut self, text: &str, index: Option<usize>, now: Duration, effects: &mut Vec<Effect>) -> u64 {
         let message = format!("{text}\n");
-        let sent = self.controller.accounting.sent(message.len(), index);
+        let id = self.controller.accounting.sent(&message, index);
         self.controller.ready = false;
         self.controller.last_write = Some(now);
         if let Some(mode) = positioning_set_by(&message) {
@@ -385,7 +385,7 @@ impl Machine {
         }
         effects.push(Effect::Write(message.into_bytes()));
         effects.push(Effect::Log(format!("Sent: {text}")));
-        sent.id
+        id
     }
 
     /// Connected, not resyncing, not held by a `Delay`, and 50 ms since the last write.
