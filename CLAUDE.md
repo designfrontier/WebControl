@@ -29,7 +29,7 @@ at `/`. The Python backend this grew from was removed; it is in git history up t
 - `rust/` — the backend `webcontrol-rs` (`spec/RUST-PLAN.md`; crates, commands, Pi deploy and releases in
   `rust/README.md`)
 - `rust/crates/` — `wc-protocol`, `wc-config`, `wc-gcode`, `wc-kinematics`, `wc-calibration`, `wc-firmware`,
-  `wc-machine`, `wc-sim`, `wc-server` (the binary), `wc-testkit`
+  `wc-machine`, `wc-optical` (experimental optical calibration), `wc-sim`, `wc-server` (the binary), `wc-testkit`
 - `rust/deploy/` — the systemd unit, sudoers rule, `wc-switch` and their tests (`test.sh`)
 - `rust/firmware/` — the holey 51.292 build and its SHA-256 pin
 - `spec/` — `RUST-PLAN.md`, `firmware.md` (the firmware's behaviour and requirements), `INSTALL-PI.md`, and

@@ -1,7 +1,9 @@
 # Optical calibration (experimental): what Python did and the Rust/React plan
 
-Status: plan, 2026-11-15. Supersedes the owner decision "Camera and optical calibration dropped"
-(`spec/RUST-PLAN.md:30-31`) once the owner accepts it; M7 in `spec/RUST-PLAN.md:437` is the old one-line version.
+Status: accepted 2026-11-15 with the owner decisions in §5; step 0 (§4) froze the interfaces on branch
+`optical/interfaces`. Supersedes the owner decision "Camera and optical calibration dropped"
+(`spec/RUST-PLAN.md:30-31`); M7 in `spec/RUST-PLAN.md:437` is the old one-line version. Where §1-§3 and §5 disagree,
+§5 and the step 0 interfaces (§4.1) win.
 
 Python citations are `file:line` at commit `220aa0e` (`git show 220aa0e:<file>`). The React screen is at `59895dd^`
 (`git show 59895dd^:frontend/src/features/calibration/OpticalCalibration.tsx`); `59895dd` deleted it. Rust
@@ -14,8 +16,8 @@ the "custom" (madgrizzle) firmware, which was to correct targets inside its inve
 result today.** The owner runs holey firmware, which has no correction. The one firmware that had a correction
 (madgrizzle 101.25) reads different `$` keys from the ones WebControl sends (§1.8). And Python's calibration-mode image
 maths gives wrong answers under the OpenCV it pinned (§1.9). So this plan ports the measurement, fixes it, and lets
-the owner choose what the measurement feeds (§5, Q1). It recommends a holey geometry fit, which works with the
-firmware the owner already runs.
+the owner choose what the measurement feeds (§5, decision 1: a holey geometry fit, which works with the
+firmware the owner already runs).
 
 ---
 
@@ -156,7 +158,7 @@ PNG.
   the correction was only ever meant to run in the firmware.
 
 **Consequence:** the port can't promise "calibration corrects your cuts" without one of: a holey geometry fit (§2.7,
-recommended), host-side correction, or new firmware. That choice is Q1.
+recommended), host-side correction, or new firmware. The owner chose the holey geometry fit (§5, decision 1).
 
 ### 1.9 Python bugs and hazards (not to be ported)
 
@@ -194,10 +196,12 @@ recommended), host-side correction, or new firmware. That choice is Q1.
 
 ### 2.1 Principles
 
-- Experimental and off by default. It is compiled behind the `optical` cargo feature (on in release builds, Q2) and
-  enabled at runtime only by `--optical` (Q3). When it is off, the endpoints return 404, the actions alert "Optical
-  calibration is not enabled", and the UI hides the screen. **No new keys in `webcontrol.json`**, so
-  `wc-config`'s v0.94 byte-for-byte round trip (`rust/README.md`, `python_roundtrip`) is untouched.
+- Experimental and off by default. It is always compiled into `webcontrol-rs` (no cargo feature) and turned on by
+  the `opticalCalibrationEnabled` setting (WebControl Settings, "Optical calibration (experimental)"), read on every
+  request, so it takes effect without a restart (§5, decision 2). When it is off, the endpoints answer 409 naming the
+  setting, the actions alert the same text, and the UI hides the screen. The setting and `cameraSource`,
+  `feedRate`, `settleTime` are new keys; `python_roundtrip` checks a v0.94 file gains exactly those and is otherwise
+  written back byte for byte.
 - The machine core stays sans-IO. Capture and image work run in the shell / blocking pool, like `Work`
   (`wc-machine/src/work.rs`), so Stop never waits behind a frame.
 - Every motion goes through the existing queue and gates. Nothing is written to settings or the controller until an
@@ -207,31 +211,33 @@ recommended), host-side correction, or new firmware. That choice is Q1.
 ### 2.2 Crates and files
 
 ```
-rust/crates/wc-optical/            new; depends on image, imageproc, nalgebra, wc-kinematics (fit), serde
-  src/lib.rs                       re-exports; no IO
-  src/frame.rs                     Gray frame (w, h, Vec<u8>), from YUYV / I420 / RGB / JPEG / PNG
-  src/detect.rs                    the §1.5 pipeline: blur, canny, close, contours, simplify, min-area rect, offsets
-  src/measure.rs                   10-frame average with the ±2σ cut; Measurement {dx_mm, dy_mm, px_centre, angle, frames_used}
-  src/grid.rs                      Cell (i, j), extents, serpentine order, nominal mm, the [i+15][7-j] index
-  src/fit.rs                       6-term surface fit (+ R²), measured cells only; optional order-4 fit
-  src/codec.rs                     xyErrorArray encode/parse (int truncation as Python), CSV text
+rust/crates/wc-optical/            new; depends on image, imageproc, nalgebra, wc-protocol; v4l on Linux only
+  src/lib.rs                       re-exports, OpticalError, Result; no IO
+  src/frame.rs                     Frame {width, height, luma}, decoded from YUYV / I420 / RGB / JPEG / PNG; PNG encode
+  src/detect.rs                    the §1.5 pipeline: blur, canny, close, contours, simplify, min-area rect -> Square
+  src/measure.rs                   10-frame average with the ±2σ cut -> Measurement; find-centre; the orientation maths
+  src/grid.rs                      the [i+15][7-j] index, nominal mm, serpentine scan order, ErrorGrid
+  src/codec.rs                     the CSV text
   src/overlay.rs                   annotated PNG (box, crosshairs; numbers go in JSON, not burned-in text)
-  src/render.rs                    synthetic target renderer (tests and the synthetic camera)
-  src/camera/mod.rs                trait Camera { fn start(&mut self, cfg) ; fn next_frame(&mut self, deadline) -> Result<Frame> ; fn stop }
-  src/camera/file.rs               frames from a directory of PNGs (looping), for tests and demos
-  src/camera/synthetic.rs          renders what a camera at the sim's true sled position sees
-  src/camera/v4l2.rs               feature "v4l2": USB/UVC webcams via the `v4l` crate (mmap stream; YUYV preferred, else MJPEG)
-  src/camera/rpicam.rs             feature "rpicam": spawns `rpicam-vid … --codec mjpeg -o -`, splits JPEGs on SOI/EOI
-rust/crates/wc-machine/src/optical.rs   the scan state machine (§2.4) and the optical actions
-rust/crates/wc-server/src/camera.rs     the capture task: owns the Camera, serves frames to the scan and the live stream
+  src/render.rs                    Target, Scene and the synthetic renderer (tests and the synthetic camera)
+  src/target.rs                    the printable tiled target as PDF (decision 8)
+  src/camera/mod.rs                trait Camera, CameraConfig, Source (the cameraSource setting), open()
+  src/camera/file.rs               DirCamera: frames from a directory of PNGs (looping), for tests and demos
+  src/camera/synthetic.rs          SyntheticCamera: renders what a camera at the sim's true sled position sees
+  src/camera/v4l2.rs               Linux only: USB/UVC webcams via the `v4l` crate (mmap; YUYV preferred, else MJPEG)
+  src/camera/rpicam.rs             spawns `rpicam-vid … --codec mjpeg -o -`, splits JPEGs on SOI/EOI
+rust/crates/wc-machine/src/optical.rs   the setting gate (step 0); the scan state machine (§2.4) and the actions
+rust/crates/wc-server/src/camera.rs     Cameras: the capture task; owns the Camera, serves the scan and the live stream
 rust/crates/wc-server/src/optical.rs    the /api/calibration/optical* routes
-rust/crates/wc-protocol/src/slices/calibration.rs   optical messages and bodies (additive)
+rust/crates/wc-protocol/src/slices/optical.rs   optical messages and bodies
 ```
 
-Cargo features: `wc-optical/{v4l2,rpicam}`, and `wc-server/optical = ["wc-optical", "wc-optical/v4l2",
-"wc-optical/rpicam"]`. `image` uses `default-features = false, features = ["png", "jpeg"]`. CI builds and tests
-with `--features optical` on Linux and runs the aarch64 zigbuild with it. `spec/RUST-PLAN.md:191,206` records that
-`v4l` 0.14 + `imageproc` 0.25 already cross-compile with no system libraries.
+No cargo features: everything is compiled in, and `v4l` is a `cfg(target_os = "linux")` dependency, so macOS
+builds skip `v4l2.rs`. `image` uses `default-features = false, features = ["png", "jpeg"]` and `imageproc`
+`default-features = false`. `v4l2-sys-mit` runs bindgen at build time, which needs libclang on the build host and
+`linux/videodev2.h`; cargo-zigbuild supplies the header for the aarch64 build (checked from macOS in step 0), and the
+GitHub Ubuntu runners have both. Python's surface fits (§1.6) and the `xyErrorArray` codec are not ported:
+nothing reads them (decisions 1 and 3).
 
 ### 2.3 Cameras on a Pi 3B with Pi OS Lite 64-bit trixie
 
@@ -241,8 +247,10 @@ with `--features optical` on Linux and runs the aarch64 zigbuild with it. `spec/
 | Pi Camera Module (CSI) | libcamera only; the old bcm2835-v4l2 driver is gone, and `/dev/video0` from unicam is raw Bayer with no ISP | **subprocess `rpicam-vid`** (rpicam-apps, preinstalled on Pi OS) with `--codec mjpeg --width W --height H --framerate F -t 0 --nopreview -o -` | Linking libcamera (`libcamera` crate) needs its C++ headers and pkg-config at build time, which breaks the sysroot-free zigbuild. A subprocess needs no build dependencies, and the process is killed on stop. MJPEG avoids I420 stride padding. Fallback with no code: run a V4L2 app under `libcamerify` |
 | Tests, CI, demos | none | `file`, `synthetic` | No hardware anywhere in CI |
 
-Selection: `--camera auto|/dev/videoN|rpicam|synthetic|dir:<path>`. `auto` tries `rpicam-hello --list-cameras`,
-then the first V4L2 capture device. The resolution comes from the existing Camera Settings `videoSize` / `fps`. Only
+Selection: the `cameraSource` setting (Camera Settings), `auto|/dev/videoN|rpicam|synthetic|dir:<path>`, read each
+time the camera starts, so a tester changes it in Settings without editing the systemd unit. `synthetic` needs
+`--simulate` (it renders from the simulator's sled). `auto` tries `rpicam-hello --list-cameras`, then the first V4L2
+capture device. The resolution comes from the existing Camera Settings `videoSize` / `fps`. Only
 the capture task opens the device. The live overlay (`toggleCamera`, `cameraMessage`) and the scan share it: one
 reader, frames fan out with a sequence number and a capture `Instant`. The scan takes only frames captured after the
 settle deadline, which fixes Python's stale-frame race (`webcamVideoStream.py:146-154`). The camera stops when nobody
@@ -258,7 +266,8 @@ Idle -> Raising (Raise to safe height, existing clearance::Raise) -> Moving(cell
      -> (|d| >= tol && attempt < max) ? Moving(cell, attempt+1) : Recorded(cell) -> next cell | Done
 ```
 
-- **Lines.** It moves in mm whatever the UI units are: `G21`, `G90`, `G0 X Y` (or G1 at a configured feed, Q8),
+- **Lines.** It moves in mm whatever the UI units are: `G21`, `G90`, `G1 X Y F<feedRate>` (decision 7; default
+  500 mm/min, then `settleTime`, default 1 s, before capturing),
   then the `B10 L` barrier with a new `setup::Measure::Optical` variant (`wc-machine/src/setup.rs:32-40`,
   `:164-177`). At the end it restores the positioning mode and units it found: `G20` if the machine was in inches,
   and always `G90`. It never touches the UI units setting (fixes §1.9.5 and §1.9.11). The barrier works on every
@@ -289,41 +298,36 @@ Idle -> Raising (Raise to safe height, existing clearance::Raise) -> Moving(cell
 
 ### 2.5 Accept and settings
 
-`POST /api/calibration/optical/accept` with `{use: "matrix" | "geometry"}` (geometry only after Track F). It is
-refused during a job, during a scan or with nothing measured (409, like `calibration.rs`'s `NOTHING_TO_ACCEPT`). The
-UI first shows a confirm dialog with what will be written:
-
-- `matrix`: writes `xyErrorArray` (Python's encoding) and `calX*`/`calY*` (the measured-cells-only fit) through the
-  existing settings path. For holey firmware that writes nothing to the controller, and the dialog says so
-  ("stored; your firmware does not apply it"). For firmware ≥ 100 the existing `wc-firmware` rules apply and `$O`
-  is still never sent (Q4).
-- `geometry`: the holey fit's four values, sent through the same `Accept` / `SettingWrite` path as holey calibration
-  (`wc-calibration/src/accept.rs`), with the same safe-height raise.
+`POST /api/calibration/optical/fit` (body `{}`) runs Track F's fit on the session and answers the fitted holey
+geometry beside the current values, the sheet's pose and the RMS residual, unsaved (409 with too few squares, 422
+when it does not converge). `POST /api/calibration/optical/accept` (body `{}`) stores that last fit: the four values
+go through the same `Accept` / `SettingWrite` path as holey calibration (`wc-calibration/src/accept.rs`, the exact
+`$` writes of wc-firmware's `setting_line`), with the same safe-height raise. It is refused during a job, during a
+scan or with nothing fitted (409, like `calibration.rs`'s `NOTHING_TO_ACCEPT`). The UI first shows a confirm dialog
+listing what will be written. There is no matrix Accept: `xyErrorArray` and `calX*`/`calY*` are never written
+(decisions 1 and 3).
 
 Settings → "Save settings" stays a separate explicit PUT, as in Python's new UI (`api/calibration.py:222-232`). Start
 no longer saves them silently: the scan uses the settings in the request and records them in the session.
 
 CSV: `GET /api/calibration/optical/csv` downloads Python's format (§1.7) in the browser instead of writing to the Pi.
+Target: `GET /api/calibration/optical/target.pdf?paper=letter|a4` downloads the tiled target (decision 8).
 
-### 2.6 Protocol and contract (bump `contract/VERSION` 3 → 4)
+### 2.6 Protocol and contract (`contract/VERSION` 3 → 4, done in step 0)
 
-Restore from `59895dd` with these changes (`frontend/src/protocol/calibration.ts`, `actionArgs.ts`, `http.ts`, then
-`npm run contract`; `wc-protocol` events and slices):
+Nothing is restored from `59895dd`; the names are new (decision 4). `contract/README.md`, "Version 4", is the
+reference; in short:
 
-| Item | Change from 59895dd |
+| Item | What |
 |---|---|
-| Event `opticalCalibration {data:{command, arg: settings}}` | Restored. Commands: `optical_Calibrate`, `testOpticalCalibration`, `findCenterOpticalCalibration`, plus new `measureOpticalCell` (arg also carries `{i, j}`) |
-| Actions | Keep `stopOpticalCalibration` (alias of Stop for the scan), `reloadCalibration`, `clearCalibration` (clears the session only), `curveFitOpticalCalibration`, and new `retryOpticalCell`, `skipOpticalCell`. **Drop** `optical_onStart`, `adjustCenter` and `saveCalibrationToCSV` (now HTTP). `saveOpticalCalibrationConfiguration` stays `via: none`. `saveAndSendOpticalCalibration` → replaced by the accept endpoint |
-| Messages | Keep `updateOpticalCalibrationError`, `updateOpticalCalibrationCurve`, `updateOpticalCalibrationFindCenter`, `updateCalibrationImage`. Add `opticalScanProgress {state, cell, attempt, done, total, measurement?}` and `opticalOrientation {rotationDeg, mirrored, pxPerMm}`. The messages are broadcasts (several UIs may watch a scan) |
-| HTTP | `GET /api/calibration/optical` (settings, curve, error, session, camera availability), `PUT /api/calibration/optical/settings`, new `POST /api/calibration/optical/accept`, new `GET /api/calibration/optical/csv` |
-| `GET /api/state` | optional `experimental: string[]` (contains `"optical"` when enabled). Optional, so Python-era schemas stay valid |
-| `toggleCamera` / `queryCamera` / `statusRequest "cameraStatus"` | Implemented when optical is enabled; still no-ops otherwise (`wc-machine/src/actions.rs:110`) |
+| Socket event | None. The settings-carrying commands (scan, test image, find centre) are HTTP, so there is no `opticalCalibration` event |
+| Actions (gate `idle`) | `opticalRetryCell`, `opticalSkipCell`, `opticalClearSession` (session only). Stop is `stopRun`. Python's `optical_*`, `*OpticalCalibration*`, `reloadCalibration`, `clearCalibration`, `saveCalibrationToCSV` and `adjustCenter` are gone |
+| Messages (broadcasts) | `opticalScanProgress {state, cell, attempt, done, total, measurement?, error?}`, `opticalOrientation {rotationDeg, mirrored, pxPerMm}`, `opticalImage {cell, png}` |
+| HTTP | `GET /api/calibration/optical`, `PUT …/settings`, `POST …/scan` (`{settings, cell?}`), `POST …/test-image`, `POST …/find-center` (`{settings}`), `POST …/fit`, `POST …/accept` (`{}`), `GET …/csv`, `GET …/target.pdf?paper=letter\|a4`; each answers 409 naming the setting while it is off |
+| `GET /api/state` | `experimental: string[]`, `["optical"]` while the setting is on (optional in the schema, so Python-era states stay valid) |
+| `toggleCamera` / `queryCamera` / `statusRequest "cameraStatus"` | Unchanged names; Track C implements them while optical is on, still no-ops otherwise (`wc-machine/src/actions.rs:110`) |
 
-The contract tests then fail where they should: `wc-machine/tests/contract.rs`, `wc-protocol/tests/protocol.rs:174`
-(which asserts the event is unknown), `wc-machine/tests/transcripts.rs:198` (asserts 404) and
-`frontend/src/contract/usage.test.ts`. Each changes with its track.
-
-### 2.7 What the result can feed (owner decision Q1)
+### 2.7 What the result can feed (decision 1 chose B, with A)
 
 | Option | Works on the owner's firmware? | Size | Risk |
 |---|---|---|---|
@@ -352,14 +356,14 @@ The contract tests then fail where they should: `wc-machine/tests/contract.rs`, 
    stubs `DataStructures/makesmithInitFuncs.py`, replaces `time.sleep`, and feeds the Rust-rendered PNGs through a
    FakeCamera (the same trick as `test_optical_calibration.py:25-44`). It records `processImage` for find-centre and
    calibration modes, each twice: on raw OpenCV 4.6, and with a shim that maps `minAreaRect`'s angle into OpenCV 3's
-   range. It also records `surfaceFit`, `polyFit2D`, `saveAndSend`'s string, `parseErrorArray` and the CSV on
-   seeded random grids. Output goes to `rust/crates/wc-optical/tests/fixtures/python_golden.json`; the regenerate
+   range. It also records the CSV on seeded random grids (the surface fits and the `xyErrorArray` codec are not
+   ported). Output goes to `rust/crates/wc-optical/tests/fixtures/python_golden.json`; the regenerate
    pattern is `wc-calibration/tests/fixtures/regenerate_trf_path.py`. Rust must match find-centre within 0.5 px and the
-   **shimmed** calibration mode within 0.5 px / 0.05 mm. The fit must match to 1e-9 and the codec/CSV byte for byte.
+   **shimmed** calibration mode within 0.5 px / 0.05 mm, and the CSV byte for byte.
    The raw-4.6 rows are kept as documented divergences (§1.9.1). `imageproc` and OpenCV differ in Canny (L1 against
    L2 gradient) and contour tracing, which can move edges by about a pixel. The ±0.5 px budget is on the 4-corner
-   centre, and averaging helps. If that budget can't be met, the fallback (Q7) is to golden only the ground-truth
-   cases.
+   centre, and averaging helps. The acceptance bar (decision 6) is the ground truth, within 0.3 px; the goldens
+   against Python are informative, not a gate.
 4. **Sim-driven closed loop** (`wc-machine/tests/optical.rs` and `wc-server/tests/optical.rs`). `wc-sim` already
    tracks position (`wc-sim/src/lib.rs:504`). The synthetic camera reads `sim.position()` through an injected **true
    error field**. The realistic field is a geometry mismatch: true sled = `forward(true geometry, inverse(configured
@@ -373,53 +377,92 @@ The contract tests then fail where they should: `wc-machine/tests/contract.rs`, 
    by `cargo test -p wc-machine --test transcripts`.
 6. **Camera backends.** `rpicam.rs` is tested against a fake `rpicam-vid` script on `PATH` that writes
    concatenated JPEGs to stdout, then truncated output, then exits. `v4l2.rs` stays a thin adapter over the pure
-   `frame.rs` converters, which are unit-tested. The adapter is covered only on hardware: it is excluded from the 95%
-   gate with a reason in `scripts/coverage.sh` (Q6), and gets a manual checklist
+   `frame.rs` converters, which are unit-tested. Both adapters are covered only on hardware: `scripts/coverage.sh`
+   excludes `camera/{v4l2,rpicam}.rs` from the 95% gate (decision 5), and they get a manual checklist
    `spec/rust-checklists/M7.md` for testers.
 7. **UI.** Vitest from the restored `OpticalCalibration.test.tsx` and `opticalForm.test.ts`, plus progress, Accept and
-   hidden-when-disabled tests. Playwright `frontend/e2e/optical.spec.ts` runs against
-   `webcontrol-rs --simulate --optical --camera synthetic`.
+   hidden-when-disabled tests. Playwright `frontend/e2e/optical.spec.ts` runs against `webcontrol-rs --simulate`
+   with `opticalCalibrationEnabled` on and `cameraSource` `synthetic` in the throwaway home's `webcontrol.json`.
 
 ---
 
 ## 4. Work breakdown
 
-**Step 0 (one PR, sequential, ~600 source lines):** freeze the interfaces so the tracks don't collide.
-- Contract and protocol per §2.6 (`frontend/src/protocol/calibration.ts`, `actionArgs.ts`, `http.ts`,
-  `main.ts` `experimental`, `contract/` regenerated, `VERSION` 4, `contract/README.md` notes).
-- `wc-protocol` types and events.
-- The `wc-optical` crate skeleton: `Cargo.toml` with features, and `lib.rs` with the public types (`Frame`,
-  `Measurement`, `Cell`, `ErrorGrid`, `OpticalSettings`, the `Camera` trait, `DetectParams`) and `todo!()` bodies.
-- `--optical` / `--camera` flags in `wc-server/src/cli.rs`.
-- Stub routes returning 404 when disabled.
-- `spec/RUST-PLAN.md` owner-decision line updated.
+**Step 0 (done, branch `optical/interfaces`):** froze the interfaces so the tracks don't collide.
+- Contract version 4 (§2.6, `contract/README.md` "Version 4"): `frontend/src/protocol/{calibration,actionArgs,http,main}.ts`,
+  `contract/` regenerated; `frontend/src/features/calibration/{opticalApi,opticalFixtures}.ts` call every new
+  endpoint so `usage.test.ts` covers them.
+- Settings: `opticalCalibrationEnabled` (WebControl Settings), `cameraSource` (Camera Settings), `feedRate` and
+  `settleTime` (Optical Calibration Settings) in `defaultwebcontrol.json`.
+- `wc-protocol::optical`: every message, request and answer type.
+- The `wc-optical` crate: the public types and functions below, each stub answering
+  `OpticalError::NotImplemented`; `grid::{index, nominal_mm, ErrorGrid}`, `Source` parsing, `camera::open`,
+  `DetectParams::from_settings` and `Target::from_settings` are implemented.
+- `wc_calibration::optical_fit::fit` (stub), `wc_machine::optical::{enabled, experimental, OFF}`,
+  `wc-server`'s `optical.rs` routes (409 while off, 501 while on), `camera::Cameras` in `AppState` with the simulator's
+  sled position under `--simulate`, and `experimental` in `GET /api/state`.
+- `scripts/coverage.sh` excludes `wc-optical/src/camera/{v4l2,rpicam}.rs`.
 
-Then five tracks in parallel. Each owns only the files listed, has a 95% per-crate coverage target, and must pass
-clippy and fmt.
+### 4.1 Frozen interfaces
 
-| Track | Owns | Acceptance |
-|---|---|---|
-| **A. Vision core** | `wc-optical/src/{frame,detect,measure,grid,fit,codec,overlay}.rs`, `wc-optical/tests/{detect,fit,codec}.rs` | Ground-truth cases (§3.2) pass; Track B's goldens pass (find-centre ±0.5 px, shimmed calibration ±0.5 px/0.05 mm, fit 1e-9, codec/CSV byte-exact); one 640x480 frame processed in < 150 ms on aarch64 in Docker (Pi 3B budget) |
-| **B. Synthetic target and goldens** | `wc-optical/src/render.rs`, `wc-optical/src/camera/{file,synthetic}.rs`, `tools/optical/golden.py`, `wc-optical/tests/fixtures/**`, `wc-optical/tests/render.rs` | Renderer deterministic (hash-pinned PNGs); `golden.py` regenerates `python_golden.json` from a clean checkout with a documented command; fixture README explains the raw/shim split |
-| **C. Cameras and live stream** | `wc-optical/src/camera/{mod,v4l2,rpicam}.rs`, `wc-server/src/camera.rs`, the camera flags in `wc-server/src/cli.rs` (already stubbed), `spec/rust-checklists/M7.md` | Fake-`rpicam-vid` tests; frame fan-out with sequence and timestamp; `toggleCamera`/`queryCamera`/`cameraStatus` drive `cameraMessage` at about 2 fps at 256x192; the camera closes when idle; aarch64 zigbuild with `--features optical` passes in CI; `ldd` shows no new shared libraries |
-| **D. Scan sequencing and API** | `wc-machine/src/optical.rs`, `wc-machine/tests/optical.rs`, additive lines in `machine.rs` (Event/Effect variants), `actions.rs` (dispatch), `gates.rs`, `alarm.rs`, `setup.rs` (`Measure::Optical`), `work.rs` (an optical lane); `wc-server/src/optical.rs` and its route registration; `contract/serial/transcripts/optical_*.json` | §3.4 sim tests and §3.5 transcripts pass; `--test gates` and `--test latency` still pass (Stop reaches the port within 5 ms during a measurement); Accept writes nothing before confirm; CSV matches Python's format |
-| **E. UI** | `frontend/src/features/calibration/{OpticalCalibration,OpticalFields,Charts,chartData,opticalForm,fixtures,api}.*` (restored from `59895dd^` and adapted), `calibration.css` optical rules, the `CalibrationPage.tsx` / `setupLinks.ts` entries, `frontend/e2e/optical.spec.ts` | Screen hidden unless `experimental` includes `optical`; "Experimental" banner saying what the result does on the connected firmware; live progress grid / heat map; Retry/Skip/Stop on a failed cell; Accept dialog listing every setting it writes; CSV download; no `adjustCenter`; vitest 95%; e2e against `--simulate --optical --camera synthetic` |
+| Where | Signature |
+|---|---|
+| `wc_optical` (lib.rs) | `enum OpticalError { NotImplemented(&str), NoFrame, NoSquare, Camera(String), Invalid(String) }`, `type Result<T>`; re-exports `Cell, Measurement, OpticalSettings, Orientation, Paper, PixelPoint` from `wc_protocol::optical` |
+| `frame` | `struct Frame { width, height, luma: Vec<u8> }`; `enum PixelFormat { Yuyv, I420, Rgb24, Jpeg, Png }`; `Frame::decode(format, width, height, &[u8]) -> Result<Frame>`; `Frame::png(&self) -> Result<Vec<u8>>` |
+| `detect` | `MM_PER_INCH`, `MIN_AREA_PX`; `enum Mode { Calibrate, FindCentre }`; `struct DetectParams { blur_kernel, canny_low, canny_high, min_area_px, marker_mm, mode }` + `from_settings(&OpticalSettings, Mode)`; `struct Square { centre, corners: [PixelPoint; 4], angle_deg, px_per_mm }`; `find_square(&Frame, &DetectParams) -> Result<Square>` |
+| `measure` | `FRAMES = 10`; `measure(&[Frame], &OpticalSettings, Option<&Orientation>) -> Result<Measurement>`; `find_centre(&[Frame], &OpticalSettings) -> Result<PixelPoint>`; `orientation(start, after_x, after_y: PixelPoint, step_mm) -> Result<Orientation>` |
+| `grid` | `COLUMNS, ROWS, PITCH_MM`; `nominal_mm(Cell) -> (f64, f64)`; `index(Cell) -> Option<(usize, usize)>`; `scan_order(&OpticalSettings) -> Result<Vec<Cell>>`; `type Axis`; `ErrorGrid::{new, get, set, measured, columns}` |
+| `codec`, `overlay` | `csv(&ErrorGrid) -> Result<String>`; `annotate(&Frame, Option<&Square>, PixelPoint) -> Result<Vec<u8>>` |
+| `render`, `target` | `struct Target { marker_mm, pitch_mm }` + `from_settings`; `struct Scene { width, height, px_per_mm, rotation_deg, mirrored, centre_offset_px, radial_k1, blur_sigma, noise_sigma, light_gradient, jpeg_quality, seed }` + `Default`; `render(&Target, &Scene, camera_mm) -> Result<Frame>`; `target::pdf(&Target, Paper) -> Result<Vec<u8>>` |
+| `camera` | `struct CameraConfig { width, height, fps }`; `trait Camera: Send { start(&mut, &CameraConfig) -> Result<()>; next_frame(&mut, deadline: Instant) -> Result<Frame>; stop(&mut) }`; `type SledPosition = Arc<dyn Fn() -> (f64, f64) + Send + Sync>`; `enum Source { Auto, Rpicam, Device(PathBuf), Dir(PathBuf), Synthetic }: FromStr`; `open(&Source, Option<SledPosition>) -> Result<Box<dyn Camera>>`; `file::DirCamera::new(&Path)`, `synthetic::SyntheticCamera::new(SledPosition)` (pub `target`, `scene`), `rpicam::RpicamCamera::new()` (pub `program`), `v4l2::V4l2Camera::new(&Path)` |
+| `wc_protocol::optical` | `Cell, PixelPoint, Measurement, Orientation` (message `opticalOrientation`), `ScanState`, `ScanProgress` (`opticalScanProgress`), `ScanImage` (`opticalImage`), `OpticalSettings`, `Session`, `CameraStatus`, `OpticalState`, `SettingsSaved`, `ScanRequest`, `ScanStarted`, `CaptureRequest`, `TestImage`, `CenterFound`, `SheetPose`, `GeometryFit`, `Paper`, `TargetQuery`; `StartupState.experimental` |
+| `wc_calibration::optical_fit` | `fit(&Settings, &[(Cell, (f64, f64))]) -> Result<GeometryFit, CalibrationError>` |
+| `wc_machine::optical` | `ENABLED_SECTION`, `ENABLED_KEY`, `FEATURE`, `OFF`; `enabled(&Settings) -> bool`; `experimental(&Settings) -> Vec<String>` |
+| `wc_server` | `camera::Cameras::{new(Option<SledPosition>), sled()}`; `AppState::{with_cameras, cameras}`; `cli::sled_position(Arc<Mutex<Sim>>)`; `optical::routes()`, `optical::refused(&AppState)` |
 
-Dependencies: A and B are needed for D's end-to-end tests. D can develop against `file` frames and a stubbed
-detector first, and E against `fakeFetch` and the fake socket. C is independent.
+Then six tracks in parallel. Each owns only the files listed (§4.2), has a 95% per-crate coverage target, and must
+pass clippy and fmt. Each deletes the stub checks of what it builds (`wc-optical/tests/{vision,target,camera}_stubs.rs`,
+`wc-calibration/tests/optical_fit.rs`, the 501 loop in `wc-server/tests/optical.rs`).
 
-**Track F (after Q1 = B; owner decision):** `wc-calibration/src/optical_fit.rs`. It fits motor spacing,
-motorOffsetY, left/right chain tolerance, plus the sheet's x/y offset and rotation, to the measured grid through
-`trf.rs`. It plugs into `Accept` with `use: "geometry"`. Acceptance: it recovers the injected geometry in §3.4; a
-Python cross-check isn't possible (Python had no such fit), so it is pinned by its own iteration-path fixture like
-`trf_path.json`.
+| Track | Acceptance |
+|---|---|
+| **A. Vision core** | Ground-truth cases (§3.2) within 0.3 px (decision 6); CSV byte-exact against Track B's goldens; find-centre and shimmed calibration against Python reported, not gated; one 640x480 frame processed in < 150 ms on aarch64 in Docker (Pi 3B budget) |
+| **B. Synthetic target, goldens, printable target** | Renderer deterministic (hash-pinned PNGs); `golden.py` regenerates `python_golden.json` from a clean checkout with a documented command; fixture README explains the raw/shim split; `target::pdf` gives a PDF whose squares measure true size (checked by parsing its content stream) on letter and A4 |
+| **C. Cameras and live stream** | Frame fan-out with sequence and timestamp; `toggleCamera`/`queryCamera`/`cameraStatus` drive `cameraMessage` at about 2 fps at 256x192; the camera opens on demand from `cameraSource` and closes when idle; the aarch64 zigbuild passes in CI; `ldd` shows no new shared libraries; `spec/rust-checklists/M7.md` |
+| **D. Scan sequencing and API** | §3.4 sim tests and §3.5 transcripts pass; `--test gates` and `--test latency` still pass (Stop reaches the port within 5 ms during a measurement); every route and action refused while the setting is off; Accept writes nothing before confirm; CSV and target routes serve A's and B's output |
+| **E. UI** | Screen and menu entry hidden unless `experimental` includes `optical` (refetch `GET /api/state` after a WebControl Settings save); "Experimental" banner saying what the result does on the connected firmware; live progress grid / heat map; Retry/Skip/Stop on a failed cell; Fit shown beside the current values; Accept dialog listing every setting it writes; CSV and target downloads; vitest 95%; e2e (§3.7) |
+| **F. Holey geometry fit** | `fit` recovers the injected geometry in §3.4 to 0.5 mm, plus the sheet pose; pinned by its own iteration-path fixture like `trf_path.json` (Python had no such fit); too few cells or no convergence gives a `CalibrationError` D maps to 409/422 |
 
-Rough size: Step 0 ~600, A ~900, B ~500 (+ Python ~150), C ~600, D ~900, E ~700 (frontend), F ~400. Each fits one
-PR under the 1000-line source cap. D may split into "scan" and "accept/routes".
+Dependencies: A and B are needed for D's end-to-end tests; D develops against `file` frames and the stubs first, E
+against `fakeFetch` and the fake socket, F against synthetic grids from `wc-kinematics`. C is independent.
+
+### 4.2 File ownership
+
+A path appears under one track only. "Additive" means new enum variants, match arms or functions next to the
+existing ones; nothing existing is reworded.
+
+| Track | Owns |
+|---|---|
+| A | `rust/crates/wc-optical/src/{lib,frame,detect,measure,grid,codec,overlay}.rs`; `rust/crates/wc-optical/tests/{vision_stubs,detect,measure,grid,codec}.rs`; `rust/crates/wc-optical/benches/**` |
+| B | `rust/crates/wc-optical/src/{render,target}.rs`; `rust/crates/wc-optical/src/camera/{file,synthetic}.rs`; `rust/crates/wc-optical/tests/{target_stubs,render,target}.rs`; `rust/crates/wc-optical/tests/fixtures/**`; `tools/optical/**` |
+| C | `rust/crates/wc-optical/src/camera/{mod,v4l2,rpicam}.rs`; `rust/crates/wc-optical/tests/{camera_stubs,camera}.rs`; `rust/crates/wc-server/src/camera.rs`; `rust/crates/wc-server/tests/camera.rs`; in `rust/crates/wc-server/src/cli.rs` only `sled_position` and the `Cameras` construction in `serve`; in `rust/crates/wc-machine/src/actions.rs` only the `toggleCamera`/`queryCamera`/`statusRequest "cameraStatus"` arms; a new `rust/crates/wc-machine/src/camera.rs` and its additive `Effect`/`Event` variants in `machine.rs` and arms in `shell.rs`; `spec/rust-checklists/M7.md` |
+| D | `rust/crates/wc-machine/src/optical.rs`; `rust/crates/wc-machine/tests/optical.rs`; additive lines in `rust/crates/wc-machine/src/{machine,actions,gates,alarm,setup,work,edits,shell,lib}.rs` (not C's camera arms); `rust/crates/wc-server/src/optical.rs`; `rust/crates/wc-server/tests/optical.rs`; `contract/serial/transcripts/optical_*.json` |
+| E | `frontend/src/features/calibration/{OpticalCalibration,OpticalFields,Charts,chartData,opticalForm,opticalApi,opticalFixtures}.*` and their tests; the optical rules in `calibration.css`; the optical entries in `CalibrationPage.tsx`, `features/system/setupLinks.ts` and `app/modals.ts`; `frontend/e2e/optical.spec.ts` |
+| F | `rust/crates/wc-calibration/src/optical_fit.rs`; `rust/crates/wc-calibration/tests/optical_fit.rs`; `rust/crates/wc-calibration/tests/fixtures/optical_fit*` |
+
+Shared and frozen by step 0: `frontend/src/protocol/**`, `contract/**` (except D's transcripts),
+`rust/crates/wc-protocol/**`, `defaultwebcontrol.json`, `fixtures/rust_settings/**`, every `Cargo.toml`,
+`rust/scripts/coverage.sh`, `rust/crates/wc-optical/tests/support/mod.rs`, `wc-server/src/{lib,routes,api}.rs`. A
+track that must change one stops and asks first; a contract change is its own PR. `rust/Cargo.lock` changes only when
+a track adds a dependency, which it says in its PR. Merge order where files touch: C before D (both edit
+`wc-machine`), A and F before D's end-to-end tests turn on.
+
+Rough size: A ~900, B ~600 (+ Python ~150), C ~600, D ~900, E ~700 (frontend), F ~400. Each fits one PR under the
+1000-line source cap. D may split into "scan" and "fit/accept/routes".
 
 ---
 
-## 5. Risks and open questions
+## 5. Risks and owner decisions
 
 **Risks**
 
@@ -440,20 +483,26 @@ PR under the 1000-line source cap. D may split into "scan" and "accept/routes".
 - **Safety.** A misdetection now trips a bounded step or attempt limit instead of driving the sled away, and the
   orientation check catches the wrong camera mounting. Any scan still moves the sled across the whole sheet unattended.
 
-**Open questions for the owner**
+**Owner decisions (2026-11-15)**, replacing the open questions:
 
-1. **What should the result feed?** A only; A + B (recommended); C; or D (§2.7)?
-2. Compile `optical` into the release binary (+1-2 MB) with a runtime flag, or ship a separate build?
-3. Runtime gate: the `--optical` CLI flag in the systemd unit (recommended; no `webcontrol.json` change), or a UI
-   setting (a new key in the shared `webcontrol.json`, which Python v0.94 would carry around)?
-4. For firmware ≥ 100, keep refusing `$O` and `$87..98`, since no firmware reads those numbers? Or remap to
-   101.25's `$44/$46/$47..58`, which collide with holey's `$43-$46` meaning? Recommendation: refuse, and say so.
-5. Keep Python's action names for contract continuity (the plan does, minus the dead ones), or rename them cleanly
-   while the contract is at a version bump anyway?
-6. Accept excluding the hardware camera adapters from the 95% coverage gate?
-7. If imageproc can't hold ±0.5 px against OpenCV on blurred goldens, is "ground truth ±0.3 px" acceptable as the
-   bar instead?
-8. Move with `G0` (Python) or `G1` at a slower feed to reduce sled sway? Settle delay default 1 s?
-9. Target: should the plan include a generator for tiled printable sheets (SVG/PDF with registration marks), or will
-   testers bring their own grid? And is there a camera-to-bit offset to record, or is the camera assumed at the sled
-   reference point, as Python assumed?
+1. **The result feeds a holey geometry fit** (§2.7 option B, with A). Track F fits `motorSpacingX`
+   (distBetweenMotors), `motorOffsetY`, `leftChainTolerance` and `rightChainTolerance` from the optical grid. The UI
+   shows them beside the current values; they are written only on an explicit Accept, through the existing exact
+   `$` write path (wc-firmware `setting_line`). The measurement, CSV and overlay images can also be exported. No
+   G-code correction, no firmware fork, no matrix Accept.
+2. **Gating by a setting.** Always compiled into the release binary. Off unless `opticalCalibrationEnabled`
+   (WebControl Settings, "Optical calibration (experimental)", default off) is on; it is read on every request, so
+   it takes effect without a restart. The UI shows the screen only while `GET /api/state`'s `experimental` contains
+   `"optical"`; every optical route answers 409 naming the setting while it is off. The camera source is a setting
+   too, `cameraSource` (Camera Settings, default `auto`), because testers can change it in Settings without editing
+   the systemd unit and it is read each time the camera starts. (This replaces an earlier `--optical` /
+   `--camera` CLI plan; there are no new CLI flags.)
+3. **Firmware 100+:** `$O` and `$87..98` stay refused, with no remap.
+4. **Actions renamed cleanly** at contract version 4 (§2.6); none of Python's optical names survive.
+5. **Coverage:** the hardware camera adapters (`camera/v4l2.rs`, `camera/rpicam.rs`) are excluded from the 95% gate
+   by `scripts/coverage.sh`'s `--ignore-filename-regex`; everything else stays at 95% or more.
+6. **Detection accuracy:** within 0.3 px of synthetic ground truth; bit-matching OpenCV is not a goal.
+7. **Motion:** `G1` at `feedRate` (default 500 mm/min), then `settleTime` (default 1 s) before capturing. Not `G0`.
+8. **Printable target:** the server generates a tiled PDF, `GET /api/calibration/optical/target.pdf?paper=letter|a4`
+   (Track B's `target::pdf`). A camera-to-bit offset is not recorded: the camera is assumed at the sled reference
+   point, as Python assumed.
