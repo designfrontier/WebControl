@@ -70,9 +70,12 @@ test.describe("against the simulator", () => {
       const box = await history.evaluate((region) => ({
         overflow: region.scrollWidth - region.clientWidth,
         bodyOverflow: region.closest(".dialog-body")!.scrollWidth - region.closest(".dialog-body")!.clientWidth,
+        spare: Math.round(region.clientWidth - region.querySelector("table")!.getBoundingClientRect().width),
       }));
+      console.log(`history at ${size.width}x${size.height}`, JSON.stringify(box));
       expect(box.bodyOverflow, `the dialog keeps its width at ${size.width}`).toBeLessThanOrEqual(0);
       expect(box.overflow <= 0, `the history fits at ${size.width}, else scrolls`).toBe(fits);
+      if (fits) expect(box.spare, `history room at ${size.width}`).toBeGreaterThanOrEqual(24);
       await history.evaluate((region) => region.scrollTo({ left: region.scrollWidth }));
       const [region, ended] = await Promise.all(
         [history, details.getByRole("columnheader", { name: "Ended by" })].map((locator) => locator.boundingBox()),

@@ -41,9 +41,15 @@ const HistoryTable = ({ history }: { history: PacingSegment[] }) =>
             <th scope="col">Lines</th>
             <th scope="col">Lost</th>
             <th scope="col">s/line</th>
-            <th scope="col">Recovery s</th>
-            <th scope="col">Short gap ms</th>
-            <th scope="col">Minutes</th>
+            <th scope="col">
+              <abbr title="Recovery, seconds">Recov. s</abbr>
+            </th>
+            <th scope="col">
+              <abbr title="Median short gap, milliseconds">Gap ms</abbr>
+            </th>
+            <th scope="col">
+              <abbr title="Minutes">Mins</abbr>
+            </th>
             <th scope="col">Ended by</th>
           </tr>
         </thead>

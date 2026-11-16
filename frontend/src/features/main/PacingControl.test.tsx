@@ -178,6 +178,7 @@ describe("PacingControl", () => {
     const scroller = within(dialog).getByRole("region", { name: "Segment history" });
     expect(scroller).toHaveAttribute("tabindex", "0");
     expect(scroller).toContainElement(rows[0]);
+    expect(within(rows[0]).getByTitle("Recovery, seconds")).toHaveTextContent("Recov. s");
     await user.click(within(dialog).getByRole("button", { name: "Close" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });

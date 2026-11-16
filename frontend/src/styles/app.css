@@ -155,7 +155,7 @@
 }
 
 /* The narrowest rows keep the build commit; firmware and CPU give up their labels instead. */
-@container status (max-width: 440px) {
+@container status (max-width: 480px) {
   .chip[data-shortest] .chip-full {
     position: absolute;
     width: 1px;
@@ -226,6 +226,17 @@
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
+  }
+}
+
+/* Tablets tighten the menus so a landscape header keeps the status chips on its one row. */
+@media (min-width: 701px) and (max-width: 1279px) and (min-height: 501px) {
+  .topbar {
+    column-gap: var(--space-2);
+  }
+
+  .menu-button {
+    padding: 0 var(--space-2);
   }
 }
 
