@@ -170,6 +170,7 @@ the backend had been quiet for `quiet` seconds, one line per settle.
 | `connect_eeprom_read_fail_restores_settings` | `error: EEPROM read fail` at boot → `$$`, every key written back, alert; the factory `$38` differs, so the port is reopened (a reset) and the next boot writes only `$13` |
 | `connect_without_a_reset_handshakes_after_3_s` | no banner and no `ok` 3 s after the port opens → the same handshake: `B05`, units, `G90`, `$$`, `$13` |
 | `connect_chain_over_sprocket_differs_restarts_the_controller` | the owner's `$$` with `$38=1`: `$13` and `$38` written, the port reopened (a reset), and the next boot writes only `$13` |
+| `connect_repairs_a_pid_weight_above_one` | the owner's `$$` with `$24` and `$32` at 1.00000011 (an earlier `$24=1.000000` write): equal at the printed precision but refused by `SetTunings`, so `$13`, `$24=1` and `$32=1` are written, then `$$` is read back |
 | `jog_each_direction_mm`, `jog_each_direction_inches` | the eight jog buttons |
 | `home_at_safe_height_mm`, `return_to_center_inches` | Home and Return to Center, safe height in each unit |
 | `define_home_from_sled_then_home` | Define Home from the sled and from arguments (inches → mm); Home goes there |
@@ -251,8 +252,10 @@ virtual clock. The format is plain JSON designed for `serde`:
   line can't be expressed.
 - `setup.settings` values are strings, numbers or booleans as `webcontrol.json` stores them (`Value`);
   `expect.settings[].value` is always a string.
-- Numbers inside `tx.bytes` are pinned as the Python backend formats them (`G00 X254.0`, `$13=63.5000`,
-  `G0 X22.8456 Y3.00`), not as Rust's `{}` would; see "Known warts" 5.
+- Numbers inside `tx.bytes` are pinned as the Python backend formats them (`G00 X254.0`,
+  `G0 X22.8456 Y3.00`), not as Rust's `{}` would; see "Known warts" 5. A `$n=` value is the exception: it is the
+  shortest text the firmware's `readFloat` reads as the float32 nearest the stored value (`$13=63.5`, not Python's
+  `63.5000`, which reads as 63.5000038; `spec/firmware.md` §4).
 
 The runner needs these seams in the backend:
 

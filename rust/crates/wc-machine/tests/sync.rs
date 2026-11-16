@@ -292,3 +292,59 @@ fn typed_gcode_waits_for_the_board_that_did_not_restart() {
     assert!(alerts(&effects).iter().any(|a| a.contains("did not restart")), "{:?}", alerts(&effects));
     assert!(rig.run_to_quiet().is_empty());
 }
+
+fn power_cycle(rig: &mut SimRig) {
+    rig.send(Event::PortOpened { port: "/dev/ttyACM0".into() });
+    let boot = rig.sim.boot(0);
+    rig.deliver(boot);
+    rig.run(3000);
+    rig.take();
+}
+
+/// Whether a jog moves the sled; the simulator alarms instead when the L and R PIDs have no gains.
+fn jogs(rig: &mut SimRig) -> bool {
+    let before = rig.sim.position()[1];
+    rig.act_with("move", json!("up"), json!("10"));
+    rig.run(500);
+    rig.take();
+    rig.sim.position()[1] > before
+}
+
+/// The owner's 51.27 on 2026-11-15: a full push wrote `$24=1.000000`, which reads as 1.00000012, and after the next
+/// boot `SetTunings` left the L and R PIDs at zero gains, so every move alarmed.
+#[test]
+fn a_simulated_eeprom_restore_leaves_a_controller_that_still_moves_after_a_power_cycle() {
+    let sim = Sim::new(Build::holey_51_27()).with_eeprom_reset();
+    let mut rig = SimRig::on(settings(&[("Maslow Settings", "zAxis", json!(1))]), sim);
+    rig.run(3000);
+    assert_eq!(rig.sim.setting(24), Some(1.0), "written as text readFloat reads as exactly 1");
+    power_cycle(&mut rig);
+    assert!(rig.sim.main_axes_tuned());
+    assert!(jogs(&mut rig), "the sled moved: {:?}", rig.sim.position());
+}
+
+/// A controller an earlier build left with `$24` and `$32` at 1.00000012 is repaired on connect, then moves.
+#[test]
+fn a_simulated_controller_with_a_weight_above_one_is_repaired_on_connect() {
+    let corrupted = f64::from(f32::from_bits(1.0_f32.to_bits() + 1));
+    let sim = Sim::new(Build::holey_51_27()).with_setting(24, corrupted).with_setting(32, corrupted);
+    let mut rig = SimRig::on(settings(&[("Maslow Settings", "zAxis", json!(1))]), sim);
+    rig.run(3000);
+    assert_eq!((rig.sim.setting(24), rig.sim.setting(32)), (Some(1.0), Some(1.0)));
+    assert!(rig.sim.main_axes_tuned());
+    assert!(jogs(&mut rig), "the sled moved: {:?}", rig.sim.position());
+    power_cycle(&mut rig);
+    assert!(jogs(&mut rig), "and still moves after the next boot");
+}
+
+#[test]
+fn a_ui_change_of_a_pid_weight_writes_text_the_firmware_reads_exactly() {
+    let mut rig = Rig::connected();
+    rig.clear_written();
+    let body = json!({"values": {"enablePosPIDValues": true, "propWeight": "0.5"}});
+    rig.send(Event::Edit { id: 1, request: Request::UpdateSettings { section: "advanced".into(), body } });
+    assert_eq!(rig.run_to_quiet(), ["$24=0.5"]);
+    let body = json!({"values": {"propWeight": "1"}});
+    rig.send(Event::Edit { id: 2, request: Request::UpdateSettings { section: "advanced".into(), body } });
+    assert_eq!(rig.run_to_quiet(), ["$24=1"]);
+}
