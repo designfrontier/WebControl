@@ -209,3 +209,24 @@ fn each_reported_value_is_adopted_rewritten_or_left() {
     let junk = settings_with("Maslow Settings", "bedWidth", json!("wide"));
     assert_eq!(sync_reported(&junk, 51.27, 0, 1.0), Sync::Agrees, "junk text is never written");
 }
+
+/// The owner's real webcontrol.json against the `$$` their 51.27 printed on 2026-11-14: Python wrote only `$13`.
+#[test]
+fn the_owners_connect_writes_only_r_on_this_and_every_later_boot() {
+    let file = include_str!("fixtures/owner_webcontrol.json");
+    let mut settings = Settings::from_text(file).expect("the owner's settings");
+    assert!(settings.compute().is_empty(), "startup derives nothing new from the saved file");
+    let transcript: Value =
+        serde_json::from_str(include_str!("../../../../contract/serial/transcripts/connect_boot_handshake.json"))
+            .expect("transcript");
+    let events = transcript["events"].as_array().expect("events");
+    let lines = events.iter().filter(|e| e["type"] == "rx").filter_map(|e| e["line"].as_str());
+    let reported: Vec<(u32, f64)> = lines.filter_map(parse_setting_reply).collect();
+    assert_eq!(reported.len(), 46);
+    let first = boot_sync(&settings, 51.27, &reported);
+    assert_eq!(first.lines, ["$13=63.5000"]);
+    first.adopted.iter().for_each(|(section, key, value)| {
+        settings.set_value(section, key, value.clone());
+    });
+    assert_eq!(boot_sync(&settings, 51.27, &reported), Push { lines: vec!["$13=63.5000".into()], adopted: vec![] });
+}

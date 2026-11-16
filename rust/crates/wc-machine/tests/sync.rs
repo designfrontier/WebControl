@@ -259,3 +259,36 @@ fn a_simulated_connect_with_a_differing_chain_over_sprocket_still_jogs() {
     assert!(alerts(&effects).is_empty(), "{:?}", alerts(&effects));
     assert!(rig.sim.position()[1] > 0.0, "the sled moved: {:?}", rig.sim.position());
 }
+
+#[test]
+fn a_chain_over_sprocket_line_in_a_job_file_is_skipped_and_the_job_goes_on() {
+    let mut rig = Rig::connected();
+    rig.machine.load_gcode("G0 X1\n$38=1\nG0 X2\n");
+    rig.clear_written();
+    rig.act("startRun");
+    let mut effects = rig.advance(60);
+    (0..4).for_each(|_| {
+        effects.extend(rig.rx("ok"));
+        effects.extend(rig.advance(60));
+    });
+    let sent = written(&effects);
+    assert!(sent.contains(&"G0 X2".to_string()) && !sent.iter().any(|l| l.starts_with("$38")), "{sent:?}");
+    assert!(
+        alerts(&effects).iter().any(|a| a.starts_with("Line 2 sets chain-over-sprocket")),
+        "{:?}",
+        alerts(&effects)
+    );
+    assert!(!restarted(&rig));
+}
+
+#[test]
+fn typed_gcode_waits_for_the_board_that_did_not_restart() {
+    let mut rig = Rig::new();
+    rig.boot_reporting("51.27", &report(&[(38, "1")]));
+    rig.open();
+    rig.advance(3100);
+    rig.answer_with("51.27", &report(&[]));
+    let effects = rig.send(Event::Request { id: 1, request: wc_machine::files::Request::SendGcode("G0 X10".into()) });
+    assert!(alerts(&effects).iter().any(|a| a.contains("did not restart")), "{:?}", alerts(&effects));
+    assert!(rig.run_to_quiet().is_empty());
+}

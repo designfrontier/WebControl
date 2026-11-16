@@ -196,10 +196,11 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
    `setupAxes()` on the live board and the motors stop following ("`$` writes with side effects", §4). When `$38`
    must be written (it differs, an EEPROM reset, the C6 migration, a settings change, a restore), write it with the
    other `$` lines, then, once they are answered, close and reopen the port, which drops DTR and resets the Mega.
-   Refuse every action that could move the machine until the next boot banner; if the port reopens without one (a
+   Refuse every action and typed G-code that could move the machine until the next boot banner; if the port reopens without one (a
    board that does not reset on DTR), alert that the controller must be power-cycled and keep refusing until a banner
    comes. After the reboot `$$` shows `$38` held, so nothing restarts again; a `$38` that still differs then is not
-   written again (one restart per attempt, with an alert). Never write `$38` while a job holds the machine.
+   written again (one restart per attempt, with an alert). Never write `$38` while a job holds the machine; a `$38`
+   line in a job's file is skipped with an alert.
 3. Character-count flow control against 126 bytes; free on `ok`/`error:`; hard-reject lines over 126 characters;
    optionally resync from the PE `space` field when idle.
 4. Realtime: `!` resets accounting (immediate `ok`, no ack for the aborted line); `~` immediate `ok`.

@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use serde_json::Value;
 use wc_config::python_float;
+use wc_firmware::settings::reinitialises_axes;
 use wc_gcode::firmware_gcode::{only_selects_tool, pauses_firmware, tool_change_line};
 use wc_gcode::position::{Position, line_target, word};
 use wc_gcode::restart::{Options, Restart, sequence, state_at};
@@ -16,7 +17,10 @@ use wc_protocol::main::{ActivateModal, ClearAlarm, GcodePositionMessage, PauseBu
 
 use crate::clearance::Raise;
 use crate::gpio::Led;
-use crate::machine::{Effect, Machine, broadcast};
+use crate::machine::{Effect, Machine, alert, broadcast};
+
+const SKIPPED_REINIT: &str = "sets chain-over-sprocket ($38), which re-initialises the motors mid-job, so it was \
+                              skipped. Change it in Advanced Settings instead.";
 
 /// Where the job is; `uploadFlag` on the wire.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -314,7 +318,8 @@ impl Machine {
     fn next_line_written(&self) -> Option<String> {
         let line = sanitise(self.gcode.get(self.index)?);
         let to_send = tool_change_line(&line, self.job.next_tool, self.job.tool).line;
-        let written = !line.is_empty() && !py::isspace(&line) && !only_selects_tool(&line);
+        let written =
+            !line.is_empty() && !py::isspace(&line) && !only_selects_tool(&line) && !reinitialises_axes(&line);
         written.then(|| shift_to_home(&to_send, self.positioning, &self.home_shift()))
     }
 
@@ -366,7 +371,9 @@ impl Machine {
         }
         self.manage_pause(&line, effects);
         let line = self.manage_tool_change(&line);
-        if !line.is_empty() && !py::isspace(&line) && !only_selects_tool(&line) {
+        if reinitialises_axes(&line) {
+            effects.push(alert(&format!("Line {} {SKIPPED_REINIT}", self.index + 1)));
+        } else if !line.is_empty() && !py::isspace(&line) && !only_selects_tool(&line) {
             let positioning = positioning_set_by(&line).unwrap_or(self.positioning);
             let shifted = shift_to_home(&line, self.positioning, &self.home_shift());
             let id = self.write(&shifted, Some(self.index), now, effects);
