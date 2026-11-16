@@ -4,6 +4,7 @@
 
 mod accept;
 pub mod holey;
+pub mod optical_fit;
 mod python;
 mod settings;
 mod trf;
@@ -28,6 +29,8 @@ pub enum CalibrationError {
     NotCalibrated,
     /// A value Accept would save or send is NaN or infinite.
     NotFinite,
+    /// Step 0's stub for a calculation a later track builds (`spec/optical-calibration.md`).
+    NotImplemented(&'static str),
 }
 
 impl fmt::Display for CalibrationError {
@@ -45,6 +48,7 @@ impl fmt::Display for CalibrationError {
             CalibrationError::NotFinite => {
                 write!(f, "The calibration result is not a finite number, so it was not saved. Calculate it again.")
             }
+            CalibrationError::NotImplemented(what) => write!(f, "{what} is not built yet."),
             CalibrationError::NotCalibrated => write!(
                 f,
                 "The machine was not able to be calibrated. Please ensure the work area dimensions are correct and try again."

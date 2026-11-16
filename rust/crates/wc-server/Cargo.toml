@@ -30,6 +30,7 @@ wc-config.workspace = true
 wc-firmware.workspace = true
 wc-gcode.workspace = true
 wc-machine.workspace = true
+wc-optical.workspace = true
 wc-protocol.workspace = true
 wc-sim.workspace = true
 zip.workspace = true

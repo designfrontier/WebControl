@@ -7,7 +7,7 @@ use axum::routing::{get, post};
 use serde_json::json;
 
 use crate::forms::UPLOAD_LIMIT;
-use crate::{AppState, api, archive, assets, boards, files, help, ws};
+use crate::{AppState, api, archive, assets, boards, files, help, optical, ws};
 
 /// The UI's old `/next` addresses: the same path and query at the root.
 async fn from_next(uri: Uri) -> Response {
@@ -70,6 +70,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/calibration/triangular/accept", post(api::accept_triangular))
         .route("/api/calibration/holey", get(api::holey).post(api::calculate_holey))
         .route("/api/calibration/holey/accept", post(api::accept_holey))
+        .merge(optical::routes())
         .route("/ws", get(ws::upgrade))
         .fallback(fallback)
         .layer(DefaultBodyLimit::max(UPLOAD_LIMIT))

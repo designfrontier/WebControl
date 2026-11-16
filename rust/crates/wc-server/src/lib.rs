@@ -6,6 +6,7 @@ mod api;
 pub mod archive;
 pub mod assets;
 mod boards;
+pub mod camera;
 pub mod cli;
 pub mod files;
 pub mod firmware;
@@ -13,6 +14,7 @@ mod forms;
 pub mod gpio;
 pub mod help;
 pub mod host;
+mod optical;
 mod routes;
 pub mod serial;
 mod ws;
@@ -71,13 +73,23 @@ pub struct AppState {
     ping: PingConfig,
     platform: Platform,
     closing: Arc<watch::Sender<bool>>,
+    cameras: camera::Cameras,
 }
 
 impl AppState {
     /// `paths` is the home whose `.WebControl` holds the libraries the file routes read and write.
     pub fn new(machine: MachineHandle, ping: PingConfig, paths: Paths) -> AppState {
         let closing = Arc::new(watch::channel(false).0);
-        AppState { machine, paths, ping, platform: Platform::current(), closing }
+        let cameras = camera::Cameras::default();
+        AppState { machine, paths, ping, platform: Platform::current(), closing, cameras }
+    }
+
+    pub fn with_cameras(self, cameras: camera::Cameras) -> AppState {
+        AppState { cameras, ..self }
+    }
+
+    pub fn cameras(&self) -> &camera::Cameras {
+        &self.cameras
     }
 
     /// Ends every WebSocket session, so a graceful shutdown is not left waiting on open sockets.

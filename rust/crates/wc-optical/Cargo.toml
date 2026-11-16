@@ -1,0 +1,20 @@
+[package]
+name = "wc-optical"
+description = "Experimental optical calibration: frames, square detection, the error grid, the synthetic target and cameras"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+image = { workspace = true }
+imageproc = { workspace = true }
+nalgebra.workspace = true
+wc-protocol.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+v4l = "0.14"

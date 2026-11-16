@@ -3,11 +3,13 @@
 set -euo pipefail
 
 FLOOR="${COVERAGE_FLOOR:-95}"
+# Camera adapters that only real hardware exercises (spec/optical-calibration.md, decision 5).
+EXCLUDED='/crates/wc-optical/src/camera/(v4l2|rpicam)[.]rs$'
 cd "$(dirname "$0")/.."
 report="$(mktemp)"
 trap 'rm -f "$report"' EXIT
 
-cargo llvm-cov --workspace --json --summary-only --output-path "$report" "$@"
+cargo llvm-cov --workspace --json --summary-only --ignore-filename-regex "$EXCLUDED" --output-path "$report" "$@"
 
 jq -r --argjson floor "$FLOOR" '
   [.data[0].files[]
