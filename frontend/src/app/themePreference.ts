@@ -1,25 +1,26 @@
 import { createContext, use } from "react";
+import type { ThemePreference } from "../protocol";
 
-export type ThemePreference = "system" | "light" | "dark";
+export type { ThemePreference };
 export type Theme = "light" | "dark";
 
-const STORAGE_KEY = "webcontrol.theme";
+const LEGACY_KEY = "webcontrol.theme";
 
+/** The per-browser choice older builds stored, shown only until the server's uiTheme arrives. */
 export const readPreference = (): ThemePreference => {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(LEGACY_KEY);
     return stored === "light" || stored === "dark" ? stored : "system";
   } catch {
     return "system";
   }
 };
 
-export const writePreference = (preference: ThemePreference) => {
+export const forgetPreference = () => {
   try {
-    if (preference === "system") localStorage.removeItem(STORAGE_KEY);
-    else localStorage.setItem(STORAGE_KEY, preference);
+    localStorage.removeItem(LEGACY_KEY);
   } catch {
-    // Private windows and blocked storage only lose the remembered choice.
+    // Blocked storage has nothing to forget.
   }
 };
 
@@ -32,9 +33,8 @@ export const applyPreference = (preference: ThemePreference) =>
 export interface ThemeValue {
   preference: ThemePreference;
   theme: Theme;
-  cycle: () => void;
 }
 
-export const ThemeContext = createContext<ThemeValue>({ preference: "system", theme: "light", cycle: () => {} });
+export const ThemeContext = createContext<ThemeValue>({ preference: "system", theme: "light" });
 
 export const useTheme = () => use(ThemeContext);

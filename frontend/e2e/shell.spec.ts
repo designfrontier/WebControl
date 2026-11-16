@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import type { APIRequestContext, Page } from "@playwright/test";
 import { chooseMenu, closeServerDialogs, connectBackend, openActions, resetMachine, waitForServer } from "./helpers";
 
 test.beforeEach(async ({ page, baseURL }) => {
@@ -102,19 +103,45 @@ test("Stop stays on screen on a phone", async ({ page, isMobile }) => {
   await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeInViewport();
 });
 
-test("the theme toggle switches and remembers light and dark", async ({ page }) => {
-  const toggle = page.getByRole("button", { name: /^Theme: / });
-  const background = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-  await expect(toggle).toHaveAccessibleName("Theme: System");
-  await toggle.click();
-  await expect(toggle).toHaveAccessibleName("Theme: Light");
-  expect(await background()).toBe("rgb(255, 255, 255)");
-  await toggle.click();
-  await expect(toggle).toHaveAccessibleName("Theme: Dark");
-  expect(await background()).toBe("rgb(20, 23, 28)");
+test.describe("the display theme", () => {
+  const setTheme = async (request: APIRequestContext, uiTheme: string) =>
+    expect(await request.put("/api/settings/webcontrol", { data: { values: { uiTheme } } })).toBeOK();
+  const background = (page: Page) => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
 
-  await page.reload();
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  await page.getByRole("button", { name: "Theme: Dark" }).click();
-  await expect(page.locator("html")).not.toHaveAttribute("data-theme");
+  test.afterEach(({ request }) => setTheme(request, "system"));
+
+  test("is a WebControl setting that every open page follows without a reload", async ({ page, context }) => {
+    await expect(page.getByRole("banner").getByRole("button", { name: /theme/i })).toHaveCount(0);
+    const other = await context.newPage();
+    await other.goto("/");
+    await waitForServer(other);
+
+    const save = async (theme: string) => {
+      await page.goto("/settings/webcontrol");
+      const form = page.getByRole("form", { name: "WebControl Settings" });
+      await form.getByLabel("Display theme").selectOption(theme);
+      await form.getByRole("button", { name: "Save" }).click();
+      await expect(form.getByText("WebControl Settings saved.")).toBeVisible();
+    };
+
+    await save("light");
+    await expect(other.locator("html")).toHaveAttribute("data-theme", "light");
+    expect(await background(other)).toBe("rgb(255, 255, 255)");
+    await save("dark");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await expect(other.locator("html")).toHaveAttribute("data-theme", "dark");
+    expect(await background(other)).toBe("rgb(20, 23, 28)");
+
+    await other.reload();
+    await expect(other.locator("html")).toHaveAttribute("data-theme", "dark");
+    await save("system");
+    await expect(other.locator("html")).not.toHaveAttribute("data-theme");
+  });
+
+  test("replaces an older build's per-browser choice once the server's theme loads", async ({ page }) => {
+    await page.evaluate(() => localStorage.setItem("webcontrol.theme", "dark"));
+    await page.reload();
+    await expect(page.locator("html")).not.toHaveAttribute("data-theme");
+    await expect.poll(() => page.evaluate(() => localStorage.getItem("webcontrol.theme"))).toBeNull();
+  });
 });

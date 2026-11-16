@@ -1,10 +1,16 @@
 import { z } from "zod";
 import type { EventSchemas, MessageSchemas } from "./core";
 
+/** The uiTheme setting every client shows; "system" follows each device's prefers-color-scheme. */
+export const themeSchema = z.enum(["light", "dark", "system"]);
+export type ThemePreference = z.infer<typeof themeSchema>;
+
 /** Server -> client commands for the settings screens. */
 export const settingsMessages = {
   /** Serial ports found by the "updatePorts" action. */
   updatePorts: z.array(z.string()),
+  /** Broadcast when the uiTheme setting changes. Rust only. */
+  theme: z.object({ theme: themeSchema }),
 } satisfies MessageSchemas;
 
 export const settingsActions = ["updatePorts"] as const;

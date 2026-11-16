@@ -150,7 +150,8 @@ async fn api_state_reports_the_settings_and_the_rust_backend() {
         "Computed Settings": [{"key": "units", "value": "MM"}, {"key": "distToMove", "value": "2.5"},
             {"key": "unitsZ", "value": "MM"}, {"key": "distToMoveZ", "value": 1}],
         "Advanced Settings": [{"key": "homeX", "value": "12.5"}, {"key": "homeY", "value": "-3"}],
-        "Maslow Settings": [{"key": "macro1_title", "value": "Spindle on"}, {"key": "macro2_title", "value": ""}]
+        "Maslow Settings": [{"key": "macro1_title", "value": "Spindle on"}, {"key": "macro2_title", "value": ""}],
+        "WebControl Settings": [{"key": "uiTheme", "value": "dark"}]
     });
     let reply = request_with(settings(Some(file)).1, "GET", "/api/state").await;
     reply.checked("GET", "/api/state");
@@ -165,7 +166,8 @@ async fn api_state_reports_the_settings_and_the_rust_backend() {
             "macros": [{"command": "macro1", "title": "Spindle on"}, {"command": "macro2", "title": ""}],
             "backend": "rust", "version": wc_server::VERSION,
             "commit": wc_server::COMMIT, "experimental": [], "gcodeFile": null,
-            "pacing": {"mode": "v0.94", "gapMs": 50, "job": null, "segment": null, "history": []}})
+            "pacing": {"mode": "v0.94", "gapMs": 50, "job": null, "segment": null, "history": []},
+            "theme": "dark"})
     );
 }
 

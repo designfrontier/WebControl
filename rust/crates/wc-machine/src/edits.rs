@@ -9,6 +9,7 @@ use wc_config::python_float_str;
 use wc_protocol::machine::{QuickConfigureForm, SettingsUpdate};
 use wc_protocol::main::{HomePositionMessage, RequestedSetting};
 use wc_protocol::optical::{Cell, GeometryFit, OpticalSettings};
+use wc_protocol::settings::ThemeChanged;
 use wc_protocol::system::PidTest;
 
 use crate::calibration::{Calculated, Kind};
@@ -126,6 +127,7 @@ impl Machine {
             return Response { status: 400, body: json!({ "errors": errors }) };
         }
         let port = self.settings.value(MASLOW, "COMport").cloned();
+        let theme = forms::theme(&self.settings);
         section.settings.iter().for_each(|field| {
             if let Some(value) = update.values.get(&field.key) {
                 self.write_setting(title, &field.key, &forms::form_value(field, value));
@@ -133,6 +135,10 @@ impl Machine {
         });
         if title == MASLOW && self.settings.value(MASLOW, "COMport").cloned() != port {
             self.reopen_port(now, effects);
+        }
+        let changed = forms::theme(&self.settings);
+        if changed != theme {
+            effects.push(broadcast(&ThemeChanged { theme: changed }));
         }
         Response::ok(200, &self.section_now(id))
     }

@@ -1083,6 +1083,20 @@
             "title": "Line pacing gap (ms)",
             "type": "int",
             "value": 50
+        },
+        {
+            "default": "system",
+            "desc": "Light or dark screens on every device showing WebControl. system follows each device's own light or dark setting.\ndefault setting: system",
+            "key": "uiTheme",
+            "options": [
+                "light",
+                "dark",
+                "system"
+            ],
+            "section": "WebControl Settings",
+            "title": "Display theme",
+            "type": "options",
+            "value": "system"
         }
     ],
     "Camera Settings": [

@@ -1,4 +1,4 @@
-import type { MessageData, StartupState, Units } from "../protocol";
+import type { MessageData, StartupState, ThemePreference, Units } from "../protocol";
 import type { ConnectionStatus } from "../socket/client";
 
 export interface Point {
@@ -41,6 +41,8 @@ export interface MachineState {
   macros: StartupState["macros"];
   alarm: string | null;
   controllerMessages: string[];
+  /** The uiTheme setting, or null until the server names one. */
+  theme: ThemePreference | null;
 }
 
 /** Server commands the store folds into MachineState. */
@@ -58,6 +60,7 @@ export const STORE_COMMANDS = [
   "controllerMessage",
   "alarm",
   "clearAlarm",
+  "theme",
 ] as const;
 export type StoreCommand = (typeof STORE_COMMANDS)[number];
 
@@ -92,6 +95,7 @@ export const initialMachineState: MachineState = {
   macros: [],
   alarm: null,
   controllerMessages: [],
+  theme: null,
 };
 
 const reportedVersion = (version: number) => (version > 0 ? version : null);
@@ -191,6 +195,8 @@ const applyMessage = (state: MachineState, event: Extract<MachineEvent, { type: 
       return { ...state, alarm: event.data.message };
     case "clearAlarm":
       return state.alarm === null ? state : { ...state, alarm: null };
+    case "theme":
+      return { ...state, theme: event.data.theme };
   }
 };
 
@@ -219,6 +225,7 @@ export const machineReducer = (state: MachineState, event: MachineEvent): Machin
         version,
         commit,
         gcodeFile,
+        theme,
       } = event.state;
       return {
         ...state,
@@ -234,6 +241,7 @@ export const machineReducer = (state: MachineState, event: MachineEvent): Machin
         hostAddress,
         macros,
         gcodeFile,
+        theme: theme ?? state.theme,
         controller:
           connectionStatus && state.controller.status === "unknown" ? controllerOf(connectionStatus) : state.controller,
       };

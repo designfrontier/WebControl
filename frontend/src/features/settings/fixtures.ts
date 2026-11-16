@@ -45,6 +45,13 @@ export const webcontrolSection = (): SettingsSection => ({
       type: "bool",
       value: 0,
     }),
+    setting({
+      key: "uiTheme",
+      title: "Display theme",
+      type: "options",
+      options: ["light", "dark", "system"],
+      value: "system",
+    }),
   ],
 });
 

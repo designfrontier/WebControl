@@ -22,12 +22,13 @@ fn opened_python_file() -> (tempfile::TempDir, Paths, Settings) {
 }
 
 /// Options added to the defaults since v0.94, in the order opening a v0.94 file appends them to their sections.
-const ADDED_SINCE_V094: [(&str, &str); 6] = [
+const ADDED_SINCE_V094: [(&str, &str); 7] = [
     ("Optical Calibration Settings", "feedRate"),
     ("Optical Calibration Settings", "settleTime"),
     ("WebControl Settings", "opticalCalibrationEnabled"),
     ("WebControl Settings", "linePacingMode"),
     ("WebControl Settings", "linePacingGapMs"),
+    ("WebControl Settings", "uiTheme"),
     ("Camera Settings", "cameraSource"),
 ];
 

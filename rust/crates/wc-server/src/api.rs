@@ -53,6 +53,7 @@ pub(crate) async fn state(State(state): State<AppState>) -> Json<StartupState> {
         experimental: wc_machine::optical::experimental(settings),
         gcode_file: snapshot.gcode_name.clone(),
         pacing: (*snapshot.pacing).clone(),
+        theme: forms::theme(settings),
     })
 }
 

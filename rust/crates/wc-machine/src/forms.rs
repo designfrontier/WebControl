@@ -5,7 +5,7 @@ use serde_json::{Map, Value};
 use wc_config::{Settings, parse_number, python_str};
 use wc_firmware::boot::supports_z_limits;
 use wc_protocol::machine::{CHAIN_SIDES, MachineSetup, QuickConfigure};
-use wc_protocol::settings::{SettingField, SettingsSection};
+use wc_protocol::settings::{SettingField, SettingsSection, Theme};
 use wc_protocol::system::{PidGains, PidSettings};
 
 /// The settings screens disable custom-flagged settings below firmware 100.
@@ -38,6 +38,11 @@ pub const GPIO_ACTIONS: [&str; 12] = [
 const RING_RADIUS: f64 = 138.4;
 /// Python-only settings an older `webcontrol.json` still carries; kept in the file, left off the screens.
 const RETIRED_KEYS: [&str; 1] = ["recordSerial"];
+
+/// The stored `uiTheme`, which every client shows.
+pub fn theme(settings: &Settings) -> Theme {
+    Theme::from_setting(&settings.text_or_empty("WebControl Settings", "uiTheme"))
+}
 
 pub fn section_title(id: &str) -> Option<&'static str> {
     SECTIONS.iter().find(|(known, _)| *known == id).map(|(_, title)| *title)

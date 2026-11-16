@@ -123,6 +123,22 @@ fn non_finite_numbers_never_reach_the_controller() {
 }
 
 #[test]
+fn a_new_display_theme_is_pushed_to_every_client() {
+    let mut rig = Rig::connected();
+    assert_eq!(value(&rig, "WebControl Settings", "uiTheme"), "system");
+    let (response, effects) = put(&mut rig, "webcontrol", json!({"values": {"uiTheme": "dark"}}));
+    assert_eq!(field(&response, "uiTheme")["value"], "dark");
+    assert_eq!(value(&rig, "WebControl Settings", "uiTheme"), "dark");
+    assert_eq!(pushed(&effects, "theme"), [json!({"theme": "dark"})]);
+    assert_eq!(wc_machine::forms::theme(&rig.machine.snapshot().settings), wc_protocol::settings::Theme::Dark);
+
+    let (_, effects) = put(&mut rig, "webcontrol", json!({"values": {"uiTheme": "dark", "webPort": "5001"}}));
+    assert!(pushed(&effects, "theme").is_empty(), "an unchanged theme is not pushed");
+    let (_, effects) = put(&mut rig, "webcontrol", json!({"values": {"uiTheme": "light"}}));
+    assert_eq!(pushed(&effects, "theme"), [json!({"theme": "light"})]);
+}
+
+#[test]
 fn invalid_updates_are_refused_without_saving_anything() {
     let cases = [
         ("maslow", json!({"nope": "1"}), json!({"nope": "Unknown setting"})),
@@ -139,6 +155,7 @@ fn invalid_updates_are_refused_without_saving_anything() {
             json!({"chainOverSprocket": "Must be one of the listed options"}),
         ),
         ("webcontrol", json!({"webPort": "50.5"}), json!({"webPort": "Must be a whole number"})),
+        ("webcontrol", json!({"uiTheme": "purple"}), json!({"uiTheme": "Must be one of the listed options"})),
         (
             "advanced",
             json!({"propWeight": "1.5", "propWeightVZ": "-0.1", "KdV": "-1", "KpPosZ": "1300"}),

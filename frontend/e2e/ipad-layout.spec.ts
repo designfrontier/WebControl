@@ -76,15 +76,14 @@ const measure = (page: Page) =>
     // Where the log runs under the controls, taller controls take its height instead.
     const aboveLog = panel.getBoundingClientRect().bottom <= log.getBoundingClientRect().top ? logSpare : 0;
     const stage = box(".viewer-stage");
-    const tops = [".brand", ".status-bar", ".theme-toggle"].map((selector) => Math.round(box(selector).top));
+    const tops = [".brand", ".nav", ".status-bar"].map((selector) => Math.round(box(selector).top));
     const chips = Array.from(document.querySelectorAll(".status-bar > .chip")).map((chip) =>
       chip.getBoundingClientRect(),
     );
     const chipsWidth = Math.max(...chips.map((chip) => chip.right)) - Math.min(...chips.map((chip) => chip.left));
+    const topbar = getComputedStyle(document.querySelector(".topbar")!);
     const menuRowSpare =
-      box(".theme-toggle").left -
-      box(".nav").right -
-      parseFloat(getComputedStyle(document.querySelector(".topbar")!).columnGap);
+      box(".topbar").right - parseFloat(topbar.paddingRight) - box(".nav").right - parseFloat(topbar.columnGap);
     return {
       overflow: [
         document.documentElement.scrollHeight - innerHeight,
@@ -138,7 +137,6 @@ test("a job at its tool change fits every iPad without scrolling, with run, stat
     page.getByRole("log", { name: "Controller Messages" }).getByRole("listitem").nth(1),
     page.getByRole("button", { name: "Up", exact: true }),
     page.getByRole("button", { name: "Down right" }),
-    page.getByRole("button", { name: /^Theme: / }),
   ];
 
   await IPADS.reduce(async (previous, ipad) => {
@@ -160,7 +158,7 @@ test("a job at its tool change fits every iPad without scrolling, with run, stat
     console.log(size, JSON.stringify(m));
     expect(m.header, `header on ${size}`).toBeLessThanOrEqual(portrait ? 90 : 54);
     expect(m.smallTargets, `touch targets under 44 px on ${size}`).toEqual([]);
-    if (!portrait) expect(m.oneRow, `menus, status and theme share a row on ${size}`).toBe(true);
+    if (!portrait) expect(m.oneRow, `menus and status share a row on ${size}`).toBe(true);
     expect(m.headerSpare, `header room on ${size}`).toBeGreaterThanOrEqual(SPARE_PX);
     expect(m.stageAspect, `viewer stage shape on ${size}`).toBeGreaterThanOrEqual(1.6);
     if (portrait) expect(m.stageShare, `viewer height on ${size}`).toBeLessThanOrEqual(0.4);

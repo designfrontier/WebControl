@@ -97,6 +97,10 @@
                 "schema": "schemas/messages/updatePorts.json",
                 "dataFormat": "json"
               },
+              "theme": {
+                "schema": "schemas/messages/theme.json",
+                "dataFormat": "json"
+              },
               "updateDirectories": {
                 "schema": "schemas/messages/updateDirectories.json",
                 "dataFormat": "json"
