@@ -10,4 +10,4 @@ pub mod settings;
 pub mod upgrade;
 
 pub use classify::{PositionError, Reply, RunMode, Status, classify, split_glued};
-pub use flow::{Accounting, BUFFER_SIZE, Sent};
+pub use flow::{Accounting, BUFFER_SIZE, EMPTY_RING, Sent};
