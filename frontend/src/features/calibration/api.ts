@@ -17,10 +17,11 @@ export const submit = async <S extends z.ZodType>(
   path: string,
   body: unknown,
   schema: S,
+  method: "POST" | "PUT" = "POST",
 ): Promise<Outcome<z.output<S>>> => {
   try {
     const response = await fetchImpl(`/api${path}`, {
-      method: "POST",
+      method,
       headers: { Accept: "application/json", "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });

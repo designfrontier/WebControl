@@ -264,3 +264,31 @@ allow both.
   after pushes the same event made at once. While a solve runs, only the newest report waits and the others are
   dropped, and a client that falls behind gets its `gcodePositionMessage` the same way. Rust solves only for reports
   that go out. Python solved on every status line, so in quadrilateral mode the solver starts from a different tilt.
+
+## Version 4: experimental optical calibration (Rust only)
+
+Version 4 brings optical calibration back (`spec/optical-calibration.md`) under new names, so nothing from Python's
+optical contract (removed in version 3) survives: no `opticalCalibration` event, no `optical_*` or
+`*OpticalCalibration*` actions, no `updateOpticalCalibration*` or `updateCalibrationImage` messages, no `$O` or
+`$87..98` writes. The whole feature is off until the `opticalCalibrationEnabled` setting (WebControl Settings,
+"Optical calibration (experimental)") is on, which takes effect without a restart:
+
+| Item                                              | What                                                                       |
+| ------------------------------------------------- | -------------------------------------------------------------------------- |
+| `GET /api/state` `experimental`                   | `["optical"]` while the setting is on, else `[]`; the UI shows the screen only then |
+| `GET /api/calibration/optical`                    | settings, the scan session (31 x 15 error grids, `[i+15][7-j]`, `null` where not measured), the camera |
+| `PUT /api/calibration/optical/settings`           | saves the "Optical Calibration Settings" section, now with `feedRate` (mm/min) and `settleTime` (s) |
+| `POST /api/calibration/optical/scan`              | starts a scan of the extents, or of one `cell`, with the settings in the body (it does not save them) |
+| `POST /api/calibration/optical/test-image`        | one annotated frame and its measurement, without moving                    |
+| `POST /api/calibration/optical/find-center`       | the suggested `opticalCenterX/Y`                                           |
+| `POST /api/calibration/optical/fit`               | the holey geometry (`distanceBetweenMotors`, `motorYoffset`, chain tolerances) that best explains the grid, beside the current values, plus where the sheet lies; unsaved |
+| `POST /api/calibration/optical/accept`            | stores the last fit and sends it with the exact `$` writes, as holey calibration's Accept does |
+| `GET /api/calibration/optical/csv`                | the grid in Python's CSV layout                                            |
+| `GET /api/calibration/optical/target.pdf?paper=`  | the printable target, tiled on `letter` (default) or `a4` pages            |
+| `opticalScanProgress`, `opticalOrientation`, `opticalImage` | broadcasts during a scan (every UI may watch it)                 |
+| `opticalRetryCell`, `opticalSkipCell`, `opticalClearSession` | actions (gate `idle`) for a scan that stopped on a failed square |
+
+Stop is `stopRun`, which also ends a scan. Every optical route answers `409 {"error": ...}` naming the setting while
+it is off, and the same 409 for a job, a scan or another calibration in the way. The camera source is the
+`cameraSource` setting (Camera Settings): `auto`, `rpicam`, `/dev/videoN`, `dir:PATH` or `synthetic` (with
+`--simulate` only).

@@ -112,6 +112,13 @@
     },
     "commit": {
       "type": "string"
+    },
+    "experimental": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     }
   },
   "required": [

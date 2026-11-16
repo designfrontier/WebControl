@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { getStartupState } from "../api/state";
 import * as boards from "../features/boards/api";
 import * as calibration from "../features/calibration/api";
+import * as optical from "../features/calibration/opticalApi";
+import { opticalSettings } from "../features/calibration/opticalFixtures";
 import * as files from "../features/files/api";
 import * as machine from "../features/machine/api";
 import { quickConfigureValues } from "../features/machine/fixtures";
@@ -90,6 +92,14 @@ const recordUiRequests = async () => {
         Array.from({ length: 12 }, () => 100),
       ),
     () => calibration.acceptHoley(fetch),
+    () => optical.getOptical(fetch),
+    () => optical.saveOpticalSettings(fetch, opticalSettings()),
+    () => optical.startOpticalScan(fetch, opticalSettings()),
+    () => optical.startOpticalScan(fetch, opticalSettings(), { i: -15, j: 7 }),
+    () => optical.captureTestImage(fetch, opticalSettings()),
+    () => optical.findOpticalCenter(fetch, opticalSettings()),
+    () => optical.fitOpticalGeometry(fetch),
+    () => optical.acceptOpticalGeometry(fetch),
     () => files.getGcodeLibrary(fetch),
     () => files.getLoadedGcode(fetch),
     () => files.getGcodeText(fetch),
@@ -119,6 +129,8 @@ const recordUiRequests = async () => {
     system.helpAssetUrl("../assets/boards/board.png"),
     system.downloadUrl("downloadDiagnostics"),
     system.downloadUrl("backupWebControl"),
+    optical.opticalCsvUrl,
+    optical.opticalTargetUrl("a4"),
   ];
   return [...calls, ...links.map((url) => ({ method: "GET", url, body: undefined }))];
 };
@@ -138,7 +150,7 @@ describe("the HTTP contract", () => {
   it("covers every request the UI makes, and each request body fits its schema", async () => {
     const calls = await recordUiRequests();
     expect(literalApiPaths()).toContainEqual({ method: "GET", url: "/api/main" });
-    expect(calls.filter(({ body }) => body !== undefined)).toHaveLength(22);
+    expect(calls.filter(({ body }) => body !== undefined)).toHaveLength(29);
     const unlisted = [...calls, ...literalApiPaths()].filter(({ method, url }) => !endpointFor(method, url));
     expect(unlisted).toEqual([]);
 

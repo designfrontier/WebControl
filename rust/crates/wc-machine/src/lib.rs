@@ -14,6 +14,7 @@ pub mod gpio;
 mod job;
 mod link;
 mod machine;
+pub mod optical;
 mod pid;
 mod setup;
 mod shell;

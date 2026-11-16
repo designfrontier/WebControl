@@ -1,5 +1,5 @@
 //! The `calibration` slice: triangular and holey parameters, their calculations and the forms they read.
-//! Optical calibration is out of scope.
+//! Optical calibration is in `optical`.
 
 use serde::Serialize;
 use serde_json::Value;

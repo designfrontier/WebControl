@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "post-api-calibration-optical-find-center.200",
+  "type": "object",
+  "properties": {
+    "opticalCenterX": {
+      "type": "number"
+    },
+    "opticalCenterY": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "opticalCenterX",
+    "opticalCenterY"
+  ]
+}

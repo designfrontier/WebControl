@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "opticalScanProgress",
+  "type": "object",
+  "properties": {
+    "state": {
+      "type": "string",
+      "enum": [
+        "idle",
+        "orienting",
+        "moving",
+        "settling",
+        "measuring",
+        "failed",
+        "done",
+        "stopped"
+      ]
+    },
+    "cell": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "i": {
+              "type": "integer",
+              "minimum": -15,
+              "maximum": 15
+            },
+            "j": {
+              "type": "integer",
+              "minimum": -7,
+              "maximum": 7
+            }
+          },
+          "required": [
+            "i",
+            "j"
+          ],
+          "description": "A target square: column i (+X right), row j (+Y up), 3 inches apart"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "done": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "total": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "measurement": {
+      "type": "object",
+      "properties": {
+        "dxMm": {
+          "type": "number"
+        },
+        "dyMm": {
+          "type": "number"
+        },
+        "centrePx": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ]
+        },
+        "angleDeg": {
+          "type": "number"
+        },
+        "framesUsed": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "dxMm",
+        "dyMm",
+        "centrePx",
+        "angleDeg",
+        "framesUsed"
+      ]
+    },
+    "error": {
+      "description": "Why the cell failed; the scan waits for Retry, Skip or Stop",
+      "type": "string"
+    }
+  },
+  "required": [
+    "state",
+    "cell",
+    "attempt",
+    "done",
+    "total"
+  ]
+}

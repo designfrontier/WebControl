@@ -133,6 +133,8 @@ export const startupStateSchema = z.object({
   version: z.string().optional(),
   /** The git commit the webcontrol-rs binary was built from. Rust only. */
   commit: z.string().optional(),
+  /** Experimental features turned on in the settings: "optical" for optical calibration. Rust only. */
+  experimental: z.array(z.string()).default([]),
 });
 export type StartupState = z.infer<typeof startupStateSchema>;
 

@@ -10,6 +10,16 @@ import {
   holeyMeasurementsSchema,
   holeyParametersSchema,
   holeyResultSchema,
+  opticalCaptureRequestSchema,
+  opticalCenterSchema,
+  opticalFitSchema,
+  opticalPaperQuerySchema,
+  opticalScanRequestSchema,
+  opticalScanStartedSchema,
+  opticalSettingsSavedSchema,
+  opticalSettingsSchema,
+  opticalStateSchema,
+  opticalTestImageSchema,
   triangularMeasurementsSchema,
   triangularParametersSchema,
   triangularResultSchema,
@@ -141,6 +151,78 @@ const download = (path: string, summary: string): HttpEndpoint => ({
   family: "classic",
 });
 
+const OPTICAL_OFF = "Optical calibration is turned off in Settings > WebControl Settings";
+const opticalBusy = `${OPTICAL_OFF}; or a job, a scan or another calibration is running`;
+const optical = (
+  method: HttpEndpoint["method"],
+  path: string,
+  summary: string,
+  responses: Record<number, HttpBody>,
+  extra: Partial<HttpEndpoint> = {},
+) => api({ method, path: `/api/calibration/optical${path}`, summary, responses, ...extra });
+const opticalJson = (schema: z.ZodType) => ({ body: json(schema) });
+
+/** Experimental optical calibration (Rust only); every route answers 409 while the setting is off. */
+const opticalEndpoints: HttpEndpoint[] = [
+  optical("GET", "", "Optical settings, the scan session and the camera", {
+    200: json(opticalStateSchema),
+    409: error(OPTICAL_OFF),
+  }),
+  optical(
+    "PUT",
+    "/settings",
+    "Save the optical calibration settings",
+    { 200: json(opticalSettingsSavedSchema), 400: error("Missing or non-numeric field"), 409: error(opticalBusy) },
+    opticalJson(opticalSettingsSchema),
+  ),
+  optical(
+    "POST",
+    "/scan",
+    "Start a scan of the extents, or of one square; progress arrives as opticalScanProgress",
+    { 200: json(opticalScanStartedSchema), 400: error("Invalid settings or extents"), 409: error(opticalBusy) },
+    opticalJson(opticalScanRequestSchema),
+  ),
+  optical(
+    "POST",
+    "/test-image",
+    "Capture and annotate one frame without moving",
+    { 200: json(opticalTestImageSchema), 409: error(opticalBusy), 422: error("No camera or no frame") },
+    opticalJson(opticalCaptureRequestSchema),
+  ),
+  optical(
+    "POST",
+    "/find-center",
+    "Suggest the optical centre from the square under the camera",
+    { 200: json(opticalCenterSchema), 409: error(opticalBusy), 422: error("No camera, no frame or no square") },
+    opticalJson(opticalCaptureRequestSchema),
+  ),
+  optical(
+    "POST",
+    "/fit",
+    "Fit the holey geometry to the measured grid, unsaved",
+    { 200: json(opticalFitSchema), 409: error(`${OPTICAL_OFF}; or too few squares measured`), 422: error("No fit") },
+    { body: json(z.object({}), "{}") },
+  ),
+  optical(
+    "POST",
+    "/accept",
+    "Store the last fit's geometry and send it to the controller",
+    { 200: json(holeyParametersSchema), 409: error(`${opticalBusy}; or nothing fitted yet`) },
+    { body: json(z.object({}), "{}") },
+  ),
+  optical("GET", "/csv", "The measured grid as Python's CSV", {
+    200: { type: "file", description: "text/csv" },
+    409: error(`${OPTICAL_OFF}; or nothing measured`),
+  }),
+  optical(
+    "GET",
+    "/target.pdf",
+    "The printable target, tiled on pages with registration marks",
+    { 200: { type: "file", description: "application/pdf" }, 409: error(OPTICAL_OFF) },
+    { query: opticalPaperQuerySchema },
+  ),
+];
+
 /** Every HTTP route the new UI calls, with what it sends and every answer the backend gives. */
 export const httpEndpoints: HttpEndpoint[] = [
   get("/api/state", "What a client needs on (re)connect", startupStateSchema),
@@ -237,6 +319,7 @@ export const httpEndpoints: HttpEndpoint[] = [
     body: json(z.object({}), "{}"),
     responses: { 200: json(holeyParametersSchema), 409: error("Nothing calculated yet") },
   }),
+  ...opticalEndpoints,
   get("/api/system/info", "Version, platform, firmware and update status", systemInfoSchema),
   get("/api/system/pid", "Stored PID gains", pidSettingsSchema),
   api({

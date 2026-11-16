@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "opticalImage",
+  "type": "object",
+  "properties": {
+    "cell": {
+      "type": "object",
+      "properties": {
+        "i": {
+          "type": "integer",
+          "minimum": -15,
+          "maximum": 15
+        },
+        "j": {
+          "type": "integer",
+          "minimum": -7,
+          "maximum": 7
+        }
+      },
+      "required": [
+        "i",
+        "j"
+      ],
+      "description": "A target square: column i (+X right), row j (+Y up), 3 inches apart"
+    },
+    "png": {
+      "type": "string",
+      "description": "Base64 PNG of the annotated frame"
+    }
+  },
+  "required": [
+    "cell",
+    "png"
+  ]
+}
