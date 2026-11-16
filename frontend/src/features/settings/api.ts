@@ -1,7 +1,10 @@
 import { getJson, sendJson } from "../../api/http";
 import type { Fetch } from "../../api/http";
-import { settingsSectionSchema } from "../../protocol";
-import type { SettingsSectionId, SettingsUpdate } from "../../protocol";
+import { settingsSectionSchema, themeUpdateSchema } from "../../protocol";
+import type { SettingsSectionId, SettingsUpdate, ThemePreference } from "../../protocol";
+
+export const saveTheme = (fetchImpl: Fetch, theme: ThemePreference) =>
+  sendJson(fetchImpl, "PUT", "/display/theme", { theme }, themeUpdateSchema);
 
 export const getSettingsSection = (fetchImpl: Fetch, id: SettingsSectionId) =>
   getJson(fetchImpl, `/settings/${id}`, settingsSectionSchema);

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { actionEventSchema, numeric } from "./core";
 import type { EventSchemas, MessageSchemas } from "./core";
+import { themeSchema } from "./settings";
 
 const unitsSchema = z.enum(["MM", "INCHES"]);
 
@@ -194,6 +195,8 @@ export const startupStateSchema = z.object({
   gcodeFile: z.string().nullable().default(null),
   /** The line pacing and its statistics as last pushed. Rust only. */
   pacing: pacingStatsSchema.optional(),
+  /** The uiTheme setting. Rust only. */
+  theme: themeSchema.optional(),
 });
 export type StartupState = z.infer<typeof startupStateSchema>;
 

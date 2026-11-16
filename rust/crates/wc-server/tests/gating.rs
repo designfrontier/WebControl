@@ -88,6 +88,20 @@ async fn the_lock_lifts_when_the_job_is_stopped() {
 }
 
 #[tokio::test]
+async fn the_display_theme_changes_during_a_job_and_is_saved() {
+    let server = Server::with(streaming());
+    let locked = server.send_json("PUT", "/api/settings/webcontrol", json!({"values": {"webPort": "5001"}})).await;
+    assert_eq!(locked.status, StatusCode::CONFLICT);
+    let reply = server.send_json("PUT", "/api/display/theme", json!({"theme": "dark"})).await;
+    assert_eq!((reply.status, reply.json()), (StatusCode::OK, json!({"theme": "dark"})));
+    assert_eq!(server.get("/api/state").await.json()["theme"], "dark");
+    server.settle().await;
+    let saved = server.saved_settings();
+    let webcontrol = saved["WebControl Settings"].as_array().unwrap();
+    assert_eq!(webcontrol.iter().find(|option| option["key"] == "uiTheme").unwrap()["value"], "dark");
+}
+
+#[tokio::test]
 async fn the_line_pacing_changes_during_a_job_and_takes_effect_at_once() {
     let server = Server::with(streaming());
     let body = json!({"values": {"linePacingMode": "minimum gap", "linePacingGapMs": 25}});

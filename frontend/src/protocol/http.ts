@@ -43,7 +43,13 @@ import {
 } from "./files";
 import { machineSetupSchema, quickConfigureSchema } from "./machine";
 import { mainScreenStateSchema, pacingStatsSchema, pacingUpdateSchema, startupStateSchema } from "./main";
-import { settingsRejectionSchema, settingsSectionIds, settingsSectionSchema, settingsUpdateSchema } from "./settings";
+import {
+  settingsRejectionSchema,
+  settingsSectionIds,
+  settingsSectionSchema,
+  settingsUpdateSchema,
+  themeUpdateSchema,
+} from "./settings";
 import {
   helpPageSchema,
   helpQuerySchema,
@@ -248,6 +254,16 @@ export const httpEndpoints: HttpEndpoint[] = [
       200: json(pacingStatsSchema, "The pacing and statistics after the change"),
       400: json(z.union([settingsRejectionSchema, errorBodySchema]), "Per-setting errors, or a malformed body"),
       409: error("An optical scan is running"),
+    },
+  }),
+  api({
+    method: "PUT",
+    path: "/api/display/theme",
+    summary: "Change the display theme every client shows, at once and also during a job (Rust only)",
+    body: json(themeUpdateSchema),
+    responses: {
+      200: json(themeUpdateSchema, "The stored theme, also broadcast as a theme message"),
+      400: error("Not a theme, or other fields beside it"),
     },
   }),
   api({

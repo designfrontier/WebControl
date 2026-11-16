@@ -97,6 +97,10 @@
                 "schema": "schemas/messages/updatePorts.json",
                 "dataFormat": "json"
               },
+              "theme": {
+                "schema": "schemas/messages/theme.json",
+                "dataFormat": "json"
+              },
               "updateDirectories": {
                 "schema": "schemas/messages/updateDirectories.json",
                 "dataFormat": "json"
@@ -605,6 +609,28 @@
           "contentType": "application/json",
           "description": "An optical scan is running",
           "schema": "schemas/http/put-api-run-pacing.409.json"
+        }
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/display/theme",
+      "family": "api",
+      "summary": "Change the display theme every client shows, at once and also during a job (Rust only)",
+      "body": {
+        "contentType": "application/json",
+        "schema": "schemas/http/put-api-display-theme.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "description": "The stored theme, also broadcast as a theme message",
+          "schema": "schemas/http/put-api-display-theme.200.json"
+        },
+        "400": {
+          "contentType": "application/json",
+          "description": "Not a theme, or other fields beside it",
+          "schema": "schemas/http/put-api-display-theme.400.json"
         }
       }
     },

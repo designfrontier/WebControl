@@ -3,6 +3,7 @@
 use serde::Serialize;
 
 use crate::Message;
+use crate::settings::Theme;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -335,6 +336,8 @@ pub struct StartupState {
     pub gcode_file: Option<String>,
     /// The line pacing and its statistics as last pushed (Rust only).
     pub pacing: PacingStats,
+    /// The `uiTheme` setting (Rust only).
+    pub theme: Theme,
 }
 
 /// One stretch of a job streamed at one line pacing (`spec/firmware.md` B3), or a whole job's totals.

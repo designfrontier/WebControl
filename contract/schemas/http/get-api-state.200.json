@@ -436,6 +436,14 @@
         "segment",
         "history"
       ]
+    },
+    "theme": {
+      "type": "string",
+      "enum": [
+        "light",
+        "dark",
+        "system"
+      ]
     }
   },
   "required": [

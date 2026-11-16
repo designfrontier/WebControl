@@ -122,6 +122,78 @@ fn non_finite_numbers_never_reach_the_controller() {
     }
 }
 
+fn put_theme(rig: &mut Rig, body: Value) -> (Response, Vec<Effect>) {
+    checked(rig, "PUT", "/api/display/theme", Request::Theme(body))
+}
+
+#[test]
+fn a_new_display_theme_is_stored_and_pushed_to_every_client_without_a_dollar_line() {
+    let mut rig = Rig::connected();
+    assert_eq!(value(&rig, "WebControl Settings", "uiTheme"), "system");
+    let (response, effects) = put_theme(&mut rig, json!({"theme": "dark"}));
+    assert_eq!((response.status, response.body), (200, json!({"theme": "dark"})));
+    assert_eq!(value(&rig, "WebControl Settings", "uiTheme"), "dark");
+    assert_eq!(pushed(&effects, "theme"), [json!({"theme": "dark"})]);
+    assert_eq!(saves(&effects), 1);
+    assert!(rig.run_to_quiet().is_empty(), "the theme never reaches the controller");
+    assert_eq!(wc_machine::forms::theme(&rig.machine.snapshot().settings), wc_protocol::settings::Theme::Dark);
+
+    let (response, effects) = put_theme(&mut rig, json!({"theme": "dark"}));
+    assert_eq!(response.status, 200);
+    assert!(pushed(&effects, "theme").is_empty(), "an unchanged theme is not pushed");
+    assert_eq!(saves(&effects), 0);
+}
+
+#[test]
+fn the_display_theme_changes_while_a_job_holds_the_settings_lock() {
+    let mut rig = Rig::connected();
+    rig.machine.load_gcode("G0 X1\nG0 X2\n");
+    rig.act("startRun");
+    let (locked, _) = put(&mut rig, "webcontrol", json!({"values": {"webPort": "5001"}}));
+    assert_eq!(locked.status, 409);
+    let (response, effects) = put_theme(&mut rig, json!({"theme": "light"}));
+    assert_eq!(response.status, 200);
+    assert_eq!(pushed(&effects, "theme"), [json!({"theme": "light"})]);
+    assert!(rig.run_to_quiet().iter().all(|line| !line.starts_with('$')));
+}
+
+#[test]
+fn only_a_known_theme_alone_is_accepted() {
+    let refused = [
+        json!({"theme": "purple"}),
+        json!({"theme": "Dark"}),
+        json!({"theme": 1}),
+        json!({"theme": "dark", "webPort": "5001"}),
+        json!({"uiTheme": "dark"}),
+        json!({}),
+        json!(null),
+        json!(["dark"]),
+    ];
+    refused.into_iter().for_each(|body| {
+        let mut rig = Rig::connected();
+        let before = rig.machine.snapshot().settings.clone();
+        let (response, effects) = put_theme(&mut rig, body.clone());
+        assert_eq!(response.status, 400, "{body}");
+        assert!(response.body["error"].is_string());
+        assert_eq!(*rig.machine.snapshot().settings, *before);
+        assert!(pushed(&effects, "theme").is_empty());
+        assert_eq!(saves(&effects), 0);
+    });
+}
+
+#[test]
+fn the_display_theme_is_left_off_the_webcontrol_form() {
+    let mut rig = Rig::connected();
+    let section = rig.machine.snapshot().settings.clone();
+    let form = wc_machine::forms::section(&section, "webcontrol", 0.0, &[]).unwrap();
+    assert!(form.settings.iter().all(|field| field.key != "uiTheme"));
+    let (response, _) = respond(
+        &mut rig,
+        Request::UpdateSettings { section: "webcontrol".into(), body: json!({"values": {"uiTheme": "dark"}}) },
+    );
+    assert_eq!((response.status, response.body), (400, json!({"errors": {"uiTheme": "Unknown setting"}})));
+}
+
 #[test]
 fn invalid_updates_are_refused_without_saving_anything() {
     let cases = [

@@ -41,3 +41,47 @@ pub struct SettingsSection {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ports: Option<Vec<String>>,
 }
+
+/// The display theme every client shows, from the `uiTheme` setting; `System` follows each device's colour scheme.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Theme {
+    Light,
+    Dark,
+    System,
+}
+
+impl Theme {
+    pub fn parse(text: &str) -> Option<Theme> {
+        match text {
+            "light" => Some(Theme::Light),
+            "dark" => Some(Theme::Dark),
+            "system" => Some(Theme::System),
+            _ => None,
+        }
+    }
+
+    /// Anything but `light` or `dark` reads as `System`.
+    pub fn from_setting(text: &str) -> Theme {
+        Theme::parse(text).unwrap_or(Theme::System)
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Theme::Light => "light",
+            Theme::Dark => "dark",
+            Theme::System => "system",
+        }
+    }
+}
+
+/// Broadcast when the display theme setting changes, so every open client switches; also
+/// `PUT /api/display/theme`'s body and answer.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ThemeChanged {
+    pub theme: Theme,
+}
+
+impl Message for ThemeChanged {
+    const COMMAND: &'static str = "theme";
+}

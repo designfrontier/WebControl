@@ -45,6 +45,7 @@ describe("SettingsPage", () => {
       "WebControl",
       "Camera",
       "GPIO",
+      "Display",
     ]);
     expect(tabs.getByRole("link", { name: "Maslow" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByLabelText("Distance Between Motors")).toHaveValue("2978.4");

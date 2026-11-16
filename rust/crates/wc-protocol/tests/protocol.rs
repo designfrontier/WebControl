@@ -4,7 +4,7 @@ use wc_protocol::main::{
     GcodeLine, HealthMessage, HomePositionMessage, HostAddress, Macro, MainScreen, PacingSegment, PacingStats,
     PauseButton, PositionMessage, RequestedSetting, StartupState, StatusMessage, Units,
 };
-use wc_protocol::settings::UpdatePorts;
+use wc_protocol::settings::{Theme, ThemeChanged, UpdatePorts};
 use wc_protocol::{Action, ClientEvent, Envelope, Frame, Namespace, Push, float};
 use wc_testkit::contract::{Contract, ResponseBody};
 
@@ -35,7 +35,25 @@ fn startup_state() -> StartupState {
         experimental: vec!["optical".into()],
         gcode_file: None,
         pacing: pacing_stats(None),
+        theme: Theme::System,
     }
+}
+
+#[test]
+fn the_display_theme_is_in_the_startup_state_and_its_own_push() {
+    let state = StartupState { theme: Theme::Dark, ..startup_state() };
+    let body = serde_json::to_value(state).unwrap();
+    contract().validate_response("GET", "/api/state", 200, &ResponseBody::Json(body.clone())).unwrap();
+    assert_eq!(body["theme"], "dark");
+    assert_eq!(serde_json::to_value(startup_state()).unwrap()["theme"], "system");
+    [("light", Theme::Light), ("dark", Theme::Dark), ("system", Theme::System), ("purple", Theme::System)]
+        .into_iter()
+        .for_each(|(text, theme)| {
+            assert_eq!(Theme::from_setting(text), theme, "{text}");
+            let envelope = serde_json::to_value(Envelope::json(&ThemeChanged { theme })).unwrap();
+            contract().validate_envelope(&envelope).unwrap();
+            assert_eq!(envelope["command"], "theme");
+        });
 }
 
 fn segment(ended_by: Option<&str>) -> PacingSegment {

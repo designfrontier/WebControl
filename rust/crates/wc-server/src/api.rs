@@ -53,6 +53,7 @@ pub(crate) async fn state(State(state): State<AppState>) -> Json<StartupState> {
         experimental: wc_machine::optical::experimental(settings),
         gcode_file: snapshot.gcode_name.clone(),
         pacing: (*snapshot.pacing).clone(),
+        theme: forms::theme(settings),
     })
 }
 
@@ -64,6 +65,11 @@ pub(crate) async fn pacing(State(state): State<AppState>) -> Json<PacingStats> {
 /// `PUT /api/run/pacing`.
 pub(crate) async fn update_pacing(State(state): State<AppState>, body: Bytes) -> Response {
     answer(&state, Request::Pacing(json_body(&body))).await
+}
+
+/// `PUT /api/display/theme`.
+pub(crate) async fn update_theme(State(state): State<AppState>, body: Bytes) -> Response {
+    answer(&state, Request::Theme(json_body(&body))).await
 }
 
 /// `api/main.py`'s `_flag`: a number's truth, else the text `true`.

@@ -155,7 +155,7 @@
 }
 
 /* The narrowest rows keep the build commit; firmware and CPU give up their labels instead. */
-@container status (max-width: 480px) {
+@container status (max-width: 600px) {
   .chip[data-shortest] .chip-full {
     position: absolute;
     width: 1px;
@@ -195,38 +195,6 @@
 .chip[data-tone="warn"] {
   border-color: var(--warn);
   color: var(--warn);
-}
-
-.theme-toggle {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: var(--space-1);
-  min-width: var(--control);
-  min-height: var(--control);
-  padding: 0 var(--space-2);
-  font-size: 0.85rem;
-}
-
-.theme-toggle-icon {
-  font-size: 1.1rem;
-  line-height: 1;
-}
-
-/* Only wide windows have room to spell the theme out; elsewhere the mark keeps it as its accessible name. */
-@media (max-width: 1599px) {
-  .theme-toggle {
-    justify-content: center;
-  }
-
-  .theme-toggle-text {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
 }
 
 /* Tablets tighten the menus so a landscape header keeps the status chips on its one row. */
@@ -491,16 +459,12 @@ button.danger[data-alarm="true"] {
   padding: var(--space-4);
 }
 
-/* Portrait tablets: brand, menus and theme on one row, the status chips on the next. */
+/* Portrait tablets: brand and menus on one row, the status chips on the next. */
 @media (orientation: portrait) and (min-width: 701px) {
   .status-bar {
     order: 1;
     flex-basis: 100%;
     justify-content: flex-start;
-  }
-
-  .theme-toggle {
-    margin-left: auto;
   }
 }
 

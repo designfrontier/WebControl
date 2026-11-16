@@ -3,7 +3,7 @@ use axum::Router;
 use axum::extract::{DefaultBodyLimit, Path};
 use axum::http::{Method, StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{get, post, put};
 use serde_json::json;
 
 use crate::forms::UPLOAD_LIMIT;
@@ -36,6 +36,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/state", get(api::state))
         .route("/api/main", get(api::main_screen))
         .route("/api/run/pacing", get(api::pacing).put(api::update_pacing))
+        .route("/api/display/theme", put(api::update_theme))
         .route("/api/viewer", get(api::viewer))
         .route("/api/settings/{section}", get(api::settings_section).put(api::update_settings))
         .route("/api/machine/setup", get(api::machine_setup))

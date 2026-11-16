@@ -8,7 +8,6 @@ import { ConfirmDialog } from "./Dialog";
 import { Menu } from "./Menu";
 import type { MenuItem } from "./Menu";
 import { StatusBar } from "./StatusBar";
-import { ThemeToggle } from "./theme";
 
 const ONLINE_HELP = "https://webcontrolcnc.github.io/WebControl/";
 const GCODE_LOCKED_REASON = "Stop the job first";
@@ -59,6 +58,7 @@ export const TopBar = () => {
     { label: "WebControl", onSelect: open("/settings/webcontrol") },
     { label: "Camera", onSelect: open("/settings/camera") },
     { label: "GPIO", onSelect: open("/settings/gpio") },
+    { label: "Display", onSelect: open("/settings/display") },
   ];
   const boards: MenuItem[] = [
     { label: "Open Board", onSelect: open("/boards/open") },
@@ -101,7 +101,6 @@ export const TopBar = () => {
         <Menu label="Help" items={help} badge={updateAvailable ? "New" : undefined} />
       </nav>
       <StatusBar />
-      <ThemeToggle />
       {confirm && (
         <ConfirmDialog
           title={CONFIRMS[confirm].title}

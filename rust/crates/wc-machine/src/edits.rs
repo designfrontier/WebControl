@@ -9,6 +9,7 @@ use wc_config::python_float_str;
 use wc_protocol::machine::{QuickConfigureForm, SettingsUpdate};
 use wc_protocol::main::{HomePositionMessage, RequestedSetting};
 use wc_protocol::optical::{Cell, GeometryFit, OpticalSettings};
+use wc_protocol::settings::{Theme, ThemeChanged};
 use wc_protocol::system::PidTest;
 
 use crate::calibration::{Calculated, Kind};
@@ -46,6 +47,8 @@ pub enum Request {
     OpticalAccept,
     /// `PUT /api/run/pacing`: the line pacing settings, which a job does not lock.
     Pacing(Value),
+    /// `PUT /api/display/theme`: the display theme, which neither a job nor a scan locks.
+    Theme(Value),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -90,7 +93,8 @@ impl Machine {
                 | Request::OpticalFitted(_)
                 | Request::OpticalAccept
         );
-        if let Some(refused) = self.optical_edit_refused().filter(|_| !optical) {
+        let theme = matches!(request, Request::Theme(_));
+        if let Some(refused) = self.optical_edit_refused().filter(|_| !optical && !theme) {
             return refused;
         }
         match request {
@@ -104,6 +108,7 @@ impl Machine {
             Request::OpticalFitted(fit) => self.optical_fitted(*fit),
             Request::OpticalAccept => self.optical_accept(),
             Request::Pacing(body) => self.update_pacing(&body, now, effects),
+            Request::Theme(body) => self.update_theme(&body, effects),
         }
     }
 
@@ -135,6 +140,25 @@ impl Machine {
             self.reopen_port(now, effects);
         }
         Response::ok(200, &self.section_now(id))
+    }
+
+    /// Stores only `uiTheme`: no derived settings, no `$` lines, so neither a job nor a scan holds it back.
+    fn update_theme(&mut self, body: &Value, effects: &mut Vec<Effect>) -> Response {
+        let requested = body
+            .as_object()
+            .filter(|fields| fields.len() == 1)
+            .and_then(|fields| fields.get("theme"))
+            .and_then(Value::as_str)
+            .and_then(Theme::parse);
+        let Some(theme) = requested else {
+            return Response::error(400, "Expected {\"theme\": \"light\" | \"dark\" | \"system\"}");
+        };
+        if self.settings.text_or_empty(forms::THEME_SECTION, forms::THEME_KEY) != theme.name() {
+            let settings = Arc::make_mut(&mut self.settings);
+            settings.set_value(forms::THEME_SECTION, forms::THEME_KEY, Value::from(theme.name()));
+            effects.push(broadcast(&ThemeChanged { theme }));
+        }
+        Response::ok(200, &ThemeChanged { theme })
     }
 
     /// Checked as the WebControl Settings screen checks them, then in effect from the next line on.
