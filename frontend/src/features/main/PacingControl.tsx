@@ -116,7 +116,7 @@ const CustomPacing = ({ current, onApply }: { current: Pacing; onApply: (pacing:
   );
 };
 
-/** Line pacing for the loss-rate experiment, changeable before Play and mid-job, in one row beside its rate. */
+/** Line pacing for the loss-rate experiment, changeable before Play and mid-job, beside the alarm status. */
 export const PacingControl = () => {
   const fetch = useFetch();
   const [stats, setStats] = usePacingStats();
