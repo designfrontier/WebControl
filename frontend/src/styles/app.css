@@ -116,13 +116,14 @@
   container: status / inline-size;
 }
 
-.chip-short {
+.chip-short,
+.chip-shortest {
   display: none;
 }
 
-/* The full chips need about 700px; narrower, the state chips shorten to a name and a mark. */
+/* The full chips need about 700px; narrower, they shorten, the state chips to a name and a mark. */
 @container status (max-width: 760px) {
-  .chip-full {
+  .chip[data-short] .chip-full {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -130,7 +131,7 @@
     clip-path: inset(50%);
   }
 
-  .chip-short {
+  .chip[data-short] .chip-short {
     display: inline;
   }
 
@@ -150,14 +151,22 @@
   }
 }
 
-/* The version is also under Help > About. */
+/* The narrowest rows keep the build commit; firmware and CPU give up their labels instead. */
 @container status (max-width: 440px) {
-  .chip[data-kind="software"] {
+  .chip[data-shortest] .chip-full {
     position: absolute;
     width: 1px;
     height: 1px;
     overflow: hidden;
     clip-path: inset(50%);
+  }
+
+  .chip[data-shortest] .chip-short {
+    display: none;
+  }
+
+  .chip[data-shortest] .chip-shortest {
+    display: inline;
   }
 }
 

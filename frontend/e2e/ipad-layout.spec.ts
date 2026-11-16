@@ -100,6 +100,20 @@ const measure = (page: Page) =>
     };
   });
 
+/** The software chip's visible form, which must name the build: every release says 0.1.0. */
+const shownSoftware = (page: Page) =>
+  page.evaluate(() => {
+    const forms = Array.from(document.querySelectorAll('.chip[data-kind="software"] > span'));
+    return forms.find((form) => form.getBoundingClientRect().width > 2)?.textContent ?? null;
+  });
+
+const expectCommitShown = async (page: Page, size: string) => {
+  const { commit } = (await (await page.request.get("/api/state")).json()) as { commit: string };
+  expect(commit, "the e2e build reports its commit").toMatch(/^[0-9a-f]{7,}$/);
+  await expect(page.locator('.chip[data-kind="software"]'), size).toBeInViewport({ ratio: 1 });
+  await expect.poll(() => shownSoftware(page), { message: `build commit on ${size}` }).toContain(commit);
+};
+
 test("a job at its tool change fits every iPad without scrolling, with run, status and messages in view", async ({
   page,
 }) => {
@@ -133,6 +147,7 @@ test("a job at its tool change fits every iPad without scrolling, with run, stat
       await done;
       await expect(locator, size).toBeInViewport({ ratio: 1 });
     }, Promise.resolve());
+    await expectCommitShown(page, size);
 
     const m = await measure(page);
     console.log(size, JSON.stringify(m));
@@ -157,5 +172,20 @@ test("Units and Set Home Here look enabled when idle", async ({ page }) => {
     await previous;
     await expect(button).toBeEnabled();
     await expect(button).toHaveCSS("opacity", "1");
+  }, Promise.resolve());
+});
+
+test("the build commit shows beside the firmware on a phone and on desktops", async ({ page }) => {
+  await page.goto("/");
+  await waitForServer(page);
+  await [
+    { width: 390, height: 844 },
+    { width: 1280, height: 800 },
+    { width: 1440, height: 900 },
+    { width: 1920, height: 1080 },
+  ].reduce(async (previous, viewport) => {
+    await previous;
+    await page.setViewportSize(viewport);
+    await expectCommitShown(page, `${viewport.width}x${viewport.height}`);
   }, Promise.resolve());
 });

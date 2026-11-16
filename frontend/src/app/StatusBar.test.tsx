@@ -44,15 +44,22 @@ describe("StatusBar", () => {
     expect(chip("Controller: COM3 / fake servo on")).toBeInTheDocument();
   });
 
-  it("gives the state and version chips a short form for narrow headers, hidden from screen readers", async () => {
+  it("gives narrow headers short forms that keep the build commit, hidden from screen readers", async () => {
     const { socket } = renderApp("/", {
-      fetch: fakeFetch({ "GET /api/state": startupState({ version: "0.2.0", commit: "7dd5305" }) }),
+      fetch: fakeFetch({
+        "GET /api/state": startupState({ version: "0.2.0", commit: "7dd5305", controllerFirmwareVersion: 51.27 }),
+      }),
     });
     socket.serverMessage("connectionStatus", { status: "connected", port: "COM3", fakeServoStatus: true });
+    socket.serverMessage("healthMessage", { cpuUsage: 7.6, bufferSize: -1, controllerFirmwareVersion: 51.27 });
     await status().findByText("WebControl 0.2.0 · 7dd5305");
-    const shorts = Array.from(screen.getByRole("list", { name: "Status" }).querySelectorAll(".chip-short"));
-    expect(shorts.map((short) => short.textContent)).toEqual(["Server", "COM3 / fake servo on", "v0.2.0"]);
-    shorts.forEach((short) => expect(short).toHaveAttribute("aria-hidden", "true"));
+    const list = screen.getByRole("list", { name: "Status" });
+    const texts = (selector: string) => Array.from(list.querySelectorAll(selector)).map((form) => form.textContent);
+    expect(texts(".chip-short")).toEqual(["Server", "COM3 / fake servo on", "v0.2.0·7dd5305"]);
+    expect(texts(".chip-shortest")).toEqual(["51.27", "7dd5305", "8%"]);
+    list
+      .querySelectorAll(".chip-short, .chip-shortest")
+      .forEach((form) => expect(form).toHaveAttribute("aria-hidden", "true"));
 
     socket.serverMessage("connectionStatus", { status: "disconnected", port: "none", fakeServoStatus: false });
     expect(chip("Controller: not connected")?.querySelector(".chip-short")).toHaveTextContent("Controller");
@@ -91,13 +98,15 @@ describe("software chip", () => {
   it("shows the WebControl version and build commit beside the firmware", async () => {
     renderApp("/", { fetch: fakeFetch({ "GET /api/state": startupState({ version: "0.2.0", commit: "7dd5305" }) }) });
     const software = (await status().findByText("WebControl 0.2.0 · 7dd5305")).closest("li");
-    expect(software).toHaveAttribute("title", "WebControl version and build");
+    expect(software).toHaveAttribute("title", "WebControl 0.2.0 · 7dd5305: the WebControl version and build");
     expect(software?.previousElementSibling).toHaveTextContent("Firmware: unknown");
   });
 
   it("shows the version alone when the backend sends no commit", async () => {
     renderApp("/", { fetch: fakeFetch({ "GET /api/state": startupState({ version: "0.2.0" }) }) });
-    expect(await status().findByText("WebControl 0.2.0")).toBeInTheDocument();
+    const software = (await status().findByText("WebControl 0.2.0")).closest("li");
+    expect(software?.querySelector(".chip-short")).toHaveTextContent(/^v0\.2\.0$/);
+    expect(software?.querySelector(".chip-shortest")).toHaveTextContent(/^v0\.2\.0$/);
   });
 
   it("is absent until a backend reports its version", async () => {

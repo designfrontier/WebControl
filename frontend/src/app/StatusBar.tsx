@@ -35,23 +35,38 @@ const toneFor = (status: MachineState["controller"]["status"]): Tone =>
 
 interface ChipProps {
   text: string;
-  /** What a narrow header shows instead, beside a tone mark; screen readers always get `text`. */
+  /** What a narrow header shows instead, and `shortest` a narrower one; screen readers always get `text`. */
   short?: string;
+  shortest?: string;
   tone?: Tone;
   title?: string;
   kind?: "state" | "software";
 }
 
-const Chip = ({ text, short, tone, title, kind }: ChipProps) => (
-  <li className="chip" data-tone={tone} data-kind={kind} title={title}>
-    {short === undefined ? (
+const Chip = ({ text, short, shortest, tone, title, kind }: ChipProps) => (
+  <li
+    className="chip"
+    data-tone={tone}
+    data-kind={kind}
+    data-short={short !== undefined || undefined}
+    data-shortest={shortest !== undefined || undefined}
+    title={title}
+  >
+    {short === undefined && shortest === undefined ? (
       text
     ) : (
       <>
         <span className="chip-full">{text}</span>
-        <span className="chip-short" aria-hidden="true">
-          {short}
-        </span>
+        {short === undefined ? null : (
+          <span className="chip-short" aria-hidden="true">
+            {short}
+          </span>
+        )}
+        {shortest === undefined ? null : (
+          <span className="chip-shortest" aria-hidden="true">
+            {shortest}
+          </span>
+        )}
       </>
     )}
   </li>
@@ -82,16 +97,27 @@ export const StatusBar = () => {
         tone={toneFor(controller.status)}
         kind="state"
       />
-      <Chip text={firmwareText(firmware)} title="Controller firmware" />
+      <Chip
+        text={firmwareText(firmware)}
+        shortest={firmware === null ? undefined : String(firmware)}
+        title="Controller firmware"
+      />
       {software && (
         <Chip
           text={softwareText(software)}
-          short={`v${software.version}`}
-          title="WebControl version and build"
+          short={`v${software.version}${software.commit ? `·${software.commit}` : ""}`}
+          shortest={software.commit ?? `v${software.version}`}
+          title={`${softwareText(software)}: the WebControl version and build`}
           kind="software"
         />
       )}
-      {health && <Chip text={`CPU ${Math.round(health.cpuUsage)}%`} />}
+      {health && (
+        <Chip
+          text={`CPU ${Math.round(health.cpuUsage)}%`}
+          shortest={`${Math.round(health.cpuUsage)}%`}
+          title="Server CPU use"
+        />
+      )}
       {health && health.bufferSize >= 0 && <Chip text={`Buffer ${health.bufferSize}`} />}
     </ul>
   );
