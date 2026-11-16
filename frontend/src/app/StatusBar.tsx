@@ -1,6 +1,8 @@
 import { useMachine } from "./context";
 import type { MachineState } from "../state/machine";
 
+type Tone = "ok" | "bad" | undefined;
+
 const serverText = (socket: MachineState["socket"]) =>
   socket === "connected"
     ? "Server: connected"
@@ -12,9 +14,11 @@ const serverText = (socket: MachineState["socket"]) =>
 const hostTitle = (hostAddress: string | null) =>
   hostAddress && hostAddress !== "-" ? `WebControl at ${hostAddress}` : undefined;
 
+const fakeServoText = (fakeServo: boolean) => (fakeServo ? " / fake servo on" : "");
+
 const controllerText = ({ status, port, fakeServo }: MachineState["controller"]) =>
   status === "connected"
-    ? `Controller: ${port}${fakeServo ? " / fake servo on" : ""}`
+    ? `Controller: ${port}${fakeServoText(fakeServo)}`
     : status === "disconnected"
       ? "Controller: not connected"
       : "Controller: unknown";
@@ -26,8 +30,32 @@ const firmwareText = (version: number | null) =>
 const softwareText = ({ version, commit }: NonNullable<MachineState["software"]>) =>
   `WebControl ${version}${commit ? ` · ${commit}` : ""}`;
 
-const toneFor = (status: MachineState["controller"]["status"]) =>
+const toneFor = (status: MachineState["controller"]["status"]): Tone =>
   status === "connected" ? "ok" : status === "disconnected" ? "bad" : undefined;
+
+interface ChipProps {
+  text: string;
+  /** What a narrow header shows instead, beside a tone mark; screen readers always get `text`. */
+  short?: string;
+  tone?: Tone;
+  title?: string;
+  kind?: "state" | "software";
+}
+
+const Chip = ({ text, short, tone, title, kind }: ChipProps) => (
+  <li className="chip" data-tone={tone} data-kind={kind} title={title}>
+    {short === undefined ? (
+      text
+    ) : (
+      <>
+        <span className="chip-full">{text}</span>
+        <span className="chip-short" aria-hidden="true">
+          {short}
+        </span>
+      </>
+    )}
+  </li>
+);
 
 export const StatusBar = () => {
   const socket = useMachine((s) => s.socket);
@@ -39,26 +67,32 @@ export const StatusBar = () => {
 
   return (
     <ul className="status-bar" aria-label="Status">
-      <li
-        className="chip"
+      <Chip
+        text={serverText(socket)}
+        short="Server"
+        tone={socket === "connected" ? "ok" : socket === "connecting" ? undefined : "bad"}
         title={hostTitle(hostAddress)}
-        data-tone={socket === "connected" ? "ok" : socket === "connecting" ? undefined : "bad"}
-      >
-        {serverText(socket)}
-      </li>
-      <li className="chip" data-tone={toneFor(controller.status)}>
-        {controllerText(controller)}
-      </li>
-      <li className="chip" title="Controller firmware">
-        {firmwareText(firmware)}
-      </li>
+        kind="state"
+      />
+      <Chip
+        text={controllerText(controller)}
+        short={
+          controller.status === "connected" ? `${controller.port}${fakeServoText(controller.fakeServo)}` : "Controller"
+        }
+        tone={toneFor(controller.status)}
+        kind="state"
+      />
+      <Chip text={firmwareText(firmware)} title="Controller firmware" />
       {software && (
-        <li className="chip" title="WebControl version and build">
-          {softwareText(software)}
-        </li>
+        <Chip
+          text={softwareText(software)}
+          short={`v${software.version}`}
+          title="WebControl version and build"
+          kind="software"
+        />
       )}
-      {health && <li className="chip">CPU {Math.round(health.cpuUsage)}%</li>}
-      {health && health.bufferSize >= 0 && <li className="chip">Buffer {health.bufferSize}</li>}
+      {health && <Chip text={`CPU ${Math.round(health.cpuUsage)}%`} />}
+      {health && health.bufferSize >= 0 && <Chip text={`Buffer ${health.bufferSize}`} />}
     </ul>
   );
 };
