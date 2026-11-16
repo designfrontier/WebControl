@@ -273,9 +273,9 @@ mod tests {
             .collect()
     }
 
-    fn close(actual: f64, expected: &Value, floor: f64) -> bool {
+    fn close(actual: f64, expected: &Value, relative: f64, floor: f64) -> bool {
         let expected = expected.as_f64().expect("number");
-        (actual - expected).abs() <= 1e-4 * expected.abs() + floor
+        (actual - expected).abs() <= relative * expected.abs() + floor
     }
 
     /// Recorded from this fit, since Python had none: a changed path means a changed model or solver. Regenerate
@@ -305,10 +305,11 @@ mod tests {
             assert_eq!(actual["nfev"], expected["nfev"], "iteration {k}");
             ["cost", "reduction", "stepNorm", "optimality"].iter().for_each(|field| match actual[field].as_f64() {
                 None => assert!(expected[field].is_null(), "iteration {k}: {field}"),
-                Some(value) => assert!(close(value, &expected[field], noise), "iteration {k}: {field} {value}"),
+                // Linux x86 and macOS arm differ by ~3e-4 here from rounding; a model change moves it far more.
+                Some(value) => assert!(close(value, &expected[field], 1e-3, noise), "iteration {k}: {field} {value}"),
             });
         });
-        fitted.x.iter().zip(pinned["fitted"].as_array().unwrap()).for_each(|(x, e)| assert!(close(*x, e, 1e-6)));
+        fitted.x.iter().zip(pinned["fitted"].as_array().unwrap()).for_each(|(x, e)| assert!(close(*x, e, 1e-4, 1e-6)));
         assert!((fitted.x - truth).amax() < 1e-4);
     }
 }
