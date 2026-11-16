@@ -25,7 +25,7 @@ pub enum LineProblem {
     UnclosedComment,
     /// The ring overflows and the firmware then runs the line's unread tail as a command.
     TooLong { written: usize },
-    /// An R-format arc that firmware before 51.29 cannot be given as I and J.
+    /// An arc that cannot be rewritten as I and J with absolute X and Y.
     Arc(ArcProblem),
 }
 

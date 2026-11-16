@@ -94,7 +94,7 @@ struct Drawing {
     position: [f64; 3],
     scale: f64,
     relative: bool,
-    /// A real G91, which Python's `relative` also takes from G91.1; arcs go out relative to it.
+    /// A real G91 (not G91.1, which Python's `relative` also takes, nor ended by G90.1); arcs go out relative to it.
     arcs_relative: bool,
     prepend: String,
     tool: i64,
@@ -159,7 +159,7 @@ impl Drawing {
             }
             "G90" => {
                 self.relative = false;
-                self.arcs_relative = false;
+                self.arcs_relative = self.arcs_relative && !words::numbers('G', &full).contains(&90.0);
             }
             "G91" => {
                 self.relative = true;
@@ -423,6 +423,7 @@ mod tests {
             ("G20\nG0 X1 Y1\nG91\nG2 X1 Y-1 R1", "G20\nG0 X1 Y1\nG2 X2 Y0 I0 J-1"),
             ("G20\nG0 X1 Y1\nG91\nG2 X1 Y-1 I0 J-1", "G20\nG0 X1 Y1\nG2 X2 Y0 I0 J-1"),
             ("G20\nG0 X1 Y1\nG91.1\nG2 X2 Y0 I0 J-1", "G20\nG0 X1 Y1\nG2 X2 Y0 I0 J-1"),
+            ("G20\nG0 X1 Y1\nG91\nG90.1\nG2 X1 Y-1 I0 J-1", "G20\nG0 X1 Y1\nG2 X2 Y0 I0 J-1"),
         ];
         pairs.iter().for_each(|(r, ij)| assert!(same_moves(&draw(r, Units::Mm), &draw(ij, Units::Mm)), "{r}"));
         assert_eq!(draw("G21\nG0 X10 Y10\nG2 X20 Y0 R10", Units::Mm).moves[1].points.len(), 1 + 16 + 1);
