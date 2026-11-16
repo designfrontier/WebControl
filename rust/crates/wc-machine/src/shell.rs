@@ -152,6 +152,11 @@ impl MachineHandle {
         self.snapshot.borrow().clone()
     }
 
+    /// The snapshot as it changes, for a reader that would otherwise poll.
+    pub fn watch(&self) -> watch::Receiver<Snapshot> {
+        self.snapshot.clone()
+    }
+
     /// Sends a settings write to the machine and waits for its answer; `None` once the machine task has ended.
     pub async fn edit(&self, request: crate::Request) -> Option<Response> {
         let (answer, response) = oneshot::channel();

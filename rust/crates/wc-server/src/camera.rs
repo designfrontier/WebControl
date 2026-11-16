@@ -239,18 +239,25 @@ async fn preview(frame: Arc<Frame>) -> Result<String, String> {
     png.map(|png| base64::engine::general_purpose::STANDARD.encode(png)).map_err(|e| e.to_string())
 }
 
+/// Sleeps on the snapshot while the overlay is off, so optical calibration left off costs nothing.
 async fn stream(cameras: Cameras, machine: MachineHandle) {
     let (mut lease, mut failed, mut shown, mut due) = (None::<Lease>, false, 0, Instant::now());
-    let mut ticks = tokio::time::interval(WATCH_PERIOD);
+    let (mut changes, mut ticks) = (machine.watch(), tokio::time::interval(WATCH_PERIOD));
     loop {
-        ticks.tick().await;
-        let snapshot = machine.snapshot();
-        if !snapshot.camera || failed {
-            failed &= snapshot.camera;
+        let (camera, settings) = {
+            let snapshot = changes.borrow_and_update();
+            (snapshot.camera, snapshot.settings.clone())
+        };
+        if !camera || failed {
+            failed &= camera;
             lease = None;
+            if changes.changed().await.is_err() {
+                return;
+            }
             continue;
         }
-        let feed = lease.get_or_insert_with(|| cameras.lease(&snapshot.settings)).latest();
+        ticks.tick().await;
+        let feed = lease.get_or_insert_with(|| cameras.lease(&settings)).latest();
         let report = match feed {
             Feed::Frame(captured) if captured.sequence != shown && Instant::now() >= due => {
                 (shown, due) = (captured.sequence, Instant::now() + PREVIEW_PERIOD);
