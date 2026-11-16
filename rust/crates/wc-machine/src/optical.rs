@@ -181,6 +181,7 @@ struct Scan {
     wait: Wait,
     target: Option<(f64, f64)>,
     restore_inches: bool,
+    safe_height_mm: f64,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -298,6 +299,7 @@ impl Machine {
             wait: Wait::Failed,
             target: None,
             restore_inches,
+            safe_height_mm,
         });
         self.queue(["G21".to_string(), "G90".to_string()]);
         self.queue_raise(Raise::Accept { safe_height_mm });
@@ -356,6 +358,7 @@ impl Machine {
             Wait::Settle { until } if now >= until => self.optical_capture(now, effects),
             Wait::Move { until } if now >= until => {
                 self.measure = None;
+                self.drop_user_commands();
                 self.optical_fail("The controller did not report the move done.".into(), effects);
             }
             Wait::Vision { until, .. } if now >= until => {
@@ -574,6 +577,9 @@ impl Machine {
                 scan.attempt = 1;
                 scan.guess = scan.first_guess;
                 scan.orienting = scan.orienting.as_ref().map(|_| Vec::new());
+                // A lost move may have taken the raise with it, so the bit rises again first.
+                let safe_height_mm = scan.safe_height_mm;
+                self.queue_raise(Raise::Accept { safe_height_mm });
                 self.optical_move(now, effects);
                 None
             }

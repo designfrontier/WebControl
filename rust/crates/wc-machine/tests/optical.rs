@@ -365,6 +365,16 @@ fn a_lost_barrier_reply_or_a_silent_camera_fails_the_square() {
     world.rig.sim.move_ms = 10_000_000;
     world.run(80_000);
     assert!(world.alerts()[0].starts_with("The controller did not report the move done."), "{:?}", world.alerts());
+    // The controller finally finishes the move and is idle again.
+    let mut sim = wc_sim::Sim::new(wc_sim::Build::holey_51_27());
+    sim.boot(0);
+    world.rig.sim = sim;
+    world.rig.deliver(vec!["ok".into()]);
+    world.written.clear();
+    world.act("opticalRetryCell");
+    world.run(3000);
+    assert_eq!(world.written[..2], ["G0 Z5.0", "G1 X0.0 Y0.0 F500.0"], "the bit rises again before the travel");
+    assert_eq!(world.last_state(), "done");
     let mut world = World::new();
     world.answers = false;
     world.scan(&[(0, 0)]);
