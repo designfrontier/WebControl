@@ -78,7 +78,7 @@ describe("software chip", () => {
     renderApp("/", { fetch: fakeFetch({ "GET /api/state": startupState({ version: "0.2.0", commit: "7dd5305" }) }) });
     const chip = await status().findByText("WebControl 0.2.0 · 7dd5305");
     expect(chip).toHaveAttribute("title", "WebControl version and build");
-    expect(chip.previousElementSibling).toHaveTextContent(/^Firmware: unknown$|^(Stock|Holey|Custom) /);
+    expect(chip.previousElementSibling).toHaveTextContent("Firmware: unknown");
   });
 
   it("shows the version alone when the backend sends no commit", async () => {
