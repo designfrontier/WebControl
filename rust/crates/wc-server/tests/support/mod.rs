@@ -104,6 +104,7 @@ impl Server {
             .for_each(|d| std::fs::create_dir_all(d).unwrap());
         machine.snapshot().settings.save(&paths).unwrap();
         let host = Arc::new(SystemHost::new(&paths.dir(), Arc::new(Notify::new())).saving_to(paths.clone()));
+        let machine = machine.with_library(paths.gcode_dir());
         let (machine, _task) = spawn(machine, Box::new(NoPort), host.clone());
         let app = router(AppState::new(machine.clone(), PingConfig::default(), paths));
         Server { app, home, machine, host }

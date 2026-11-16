@@ -121,6 +121,16 @@ describe("Viewer loading", () => {
     expect(screen.getByText("No gcode loaded")).toBeInTheDocument();
   });
 
+  it("names the loaded file in the footer and follows its pushes", async () => {
+    const { socket } = await loaded();
+    const footer = within(screen.getByRole("figure"));
+    expect(footer.getByText("File:").parentElement).toHaveTextContent("File: No file loaded");
+    socket.serverMessage("gcodeFile", { file: "jobs/leg.nc" });
+    expect(footer.getByText("File:").parentElement).toHaveTextContent("File: leg.nc in jobs");
+    socket.serverMessage("gcodeFile", { file: null });
+    expect(footer.getByText("File:").parentElement).toHaveTextContent("File: No file loaded");
+  });
+
   it("shows the spinner from the load-started signal until the payload follows, even an empty one", async () => {
     const { socket } = await loaded();
     expect(screen.queryByText("Loading preview…")).not.toBeInTheDocument();

@@ -31,6 +31,8 @@ export interface MachineState {
   positionError: { left: number; right: number; computed: Point | null } | null;
   homePosition: Point | null;
   gcodePosition: (Point & { z: number; line: string; lineIndex: number }) | null;
+  /** The loaded gcode file's path in the library, such as "jobs/leg.nc"; null when none is loaded. */
+  gcodeFile: string | null;
   units: Units | null;
   unitsZ: Units | null;
   distToMove: number | null;
@@ -51,6 +53,7 @@ export const STORE_COMMANDS = [
   "errorValueMessage",
   "homePositionMessage",
   "gcodePositionMessage",
+  "gcodeFile",
   "requestedSetting",
   "controllerMessage",
   "alarm",
@@ -80,6 +83,7 @@ export const initialMachineState: MachineState = {
   positionError: null,
   homePosition: null,
   gcodePosition: null,
+  gcodeFile: null,
   units: null,
   unitsZ: null,
   distToMove: null,
@@ -171,6 +175,8 @@ const applyMessage = (state: MachineState, event: Extract<MachineEvent, { type: 
       const { xval, yval, zval, gcodeLine, gcodeLineIndex } = event.data;
       return { ...state, gcodePosition: { x: xval, y: yval, z: zval, line: gcodeLine, lineIndex: gcodeLineIndex } };
     }
+    case "gcodeFile":
+      return { ...state, gcodeFile: event.data.file };
     case "requestedSetting":
       return applySetting(state, event.data);
     case "controllerMessage":
@@ -208,6 +214,7 @@ export const machineReducer = (state: MachineState, event: MachineEvent): Machin
         probing,
         version,
         commit,
+        gcodeFile,
       } = event.state;
       return {
         ...state,
@@ -222,6 +229,7 @@ export const machineReducer = (state: MachineState, event: MachineEvent): Machin
         pauseButton: pauseButtonSetting,
         hostAddress,
         macros,
+        gcodeFile,
       };
     }
     case "message":

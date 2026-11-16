@@ -133,6 +133,20 @@ button.side-button:not(:disabled),
   font-weight: 600;
 }
 
+.run-dock {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.run-file {
+  font-size: 1rem;
+}
+
+/* The folder is in the tooltip and the viewer footer, so the name keeps the run panel's one line. */
+.run-file .loaded-file-folder {
+  display: none;
+}
+
 .run-buttons,
 .step-buttons {
   display: grid;
@@ -266,12 +280,12 @@ button.caution:not(:disabled) {
   flex: 1 1 auto;
 }
 
-/* Phones: the viewer above the controls, the page scrolls, and Play / Pause / Stop stay pinned to the bottom. */
+/* Phones: the viewer above the controls, the page scrolls, and the file with Play / Pause / Stop stays pinned below. */
 @media (max-width: 900px) {
   .control-screen {
     grid-template-columns: minmax(0, 1fr);
     height: auto;
-    padding: var(--space-2) var(--space-2) calc(var(--tap) + 2 * var(--space-2));
+    padding: var(--space-2) var(--space-2) calc(var(--tap) + 3.2rem + 3 * var(--space-2));
   }
 
   .control-panel button,
@@ -281,7 +295,7 @@ button.caution:not(:disabled) {
     min-height: var(--tap);
   }
 
-  .run-buttons {
+  .run-dock {
     position: fixed;
     right: 0;
     bottom: 0;

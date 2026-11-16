@@ -162,10 +162,54 @@ fn clear_gcode_empties_the_file_and_pushes_an_empty_preview() {
     let mut rig = Rig::new();
     open(&mut rig, SQUARE, "square.nc");
     let effects = rig.act("clearGCode");
-    assert_eq!(commands(&effects), ["showFPSpinner", "gcodeUpdateCompressed"]);
+    assert_eq!(commands(&effects), ["showFPSpinner", "gcodeUpdateCompressed", "gcodeFile"]);
+    assert_eq!(pushed(&effects, "gcodeFile"), [json!({"file": null})]);
     assert_eq!(inflate(&pushed(&effects, "gcodeUpdateCompressed")[0]), json!([]));
     assert_eq!(rig.machine.snapshot().gcode_count, 0);
     assert_eq!(rig.machine.snapshot().gcode_file, Some(PathBuf::from("square.nc")), "Python keeps the name");
+}
+
+fn in_library(root: &str) -> Rig {
+    let mut rig = Rig::new();
+    let machine = std::mem::replace(&mut rig.machine, wc_machine::Machine::new("h", settings(&[])));
+    rig.machine = machine.with_library(root.into());
+    rig
+}
+
+#[test]
+fn the_loaded_file_is_named_by_its_path_in_the_library_and_announced_when_it_changes() {
+    let mut rig = in_library("/home/pi/.WebControl/gcode");
+    assert_eq!(rig.machine.snapshot().gcode_name, None);
+    let (_, effects) = open(&mut rig, SQUARE, "/home/pi/.WebControl/gcode/mancala/mancala.frd.roughing.nc");
+    assert_eq!(pushed(&effects, "gcodeFile"), [json!({"file": "mancala/mancala.frd.roughing.nc"})]);
+    assert_eq!(rig.machine.snapshot().gcode_name.as_deref(), Some("mancala/mancala.frd.roughing.nc"));
+    let (_, again) = open(&mut rig, SQUARE, "/home/pi/.WebControl/gcode/mancala/mancala.frd.roughing.nc");
+    assert!(pushed(&again, "gcodeFile").is_empty(), "the same file again is no change");
+    let edit = Request::LoadGcode { gcode: Box::new(parse("G0 X1")), file: None, origin: Origin::Edit };
+    assert!(pushed(&ask(&mut rig, edit).1, "gcodeFile").is_empty(), "an edit keeps the name");
+    let (_, outside) = open(&mut rig, SQUARE, "/tmp/elsewhere/part.nc");
+    assert_eq!(pushed(&outside, "gcodeFile"), [json!({"file": "part.nc"})], "outside the library, the name alone");
+    let resync = rig.send(Event::ClientResync { sid: "abc".into() });
+    assert_eq!(pushed(&resync, "gcodeFile"), [json!({"file": "part.nc"})]);
+    let (_, unsaved) = ask(&mut rig, Request::Problem(Problem::GcodeUnsaved));
+    assert_eq!(pushed(&unsaved, "gcodeFile"), [json!({"file": null})]);
+    assert_eq!(rig.machine.snapshot().gcode_name, None);
+}
+
+#[test]
+fn no_gcode_or_no_file_names_nothing() {
+    let mut rig = in_library("/lib");
+    let gcode = Box::new(Gcode::empty(Units::Mm));
+    let empty = Request::LoadGcode { gcode, file: Some("/lib/empty.nc".into()), origin: Origin::Open };
+    let (_, effects) = ask(&mut rig, empty);
+    assert!(pushed(&effects, "gcodeFile").is_empty());
+    assert_eq!(rig.machine.snapshot().gcode_name, None);
+    let mut bare = Rig::new();
+    open(&mut bare, SQUARE, "/somewhere/square.nc");
+    assert_eq!(bare.machine.snapshot().gcode_name.as_deref(), Some("square.nc"), "no library, the name alone");
+    let effects = bare.act("clearGCode");
+    assert_eq!(pushed(&effects, "gcodeFile"), [json!({"file": null})]);
+    assert!(pushed(&bare.act("clearGCode"), "gcodeFile").is_empty(), "already cleared");
 }
 
 #[test]

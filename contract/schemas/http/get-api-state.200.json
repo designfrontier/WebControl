@@ -112,6 +112,13 @@
     },
     "commit": {
       "type": "string"
+    },
+    "gcodeFile": {
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
     }
   },
   "required": [

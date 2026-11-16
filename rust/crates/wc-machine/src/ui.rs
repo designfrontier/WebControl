@@ -195,6 +195,7 @@ impl Machine {
         ];
         self.push_gcode_position_to(sid, &mut pushes);
         self.gcode_update_requested(&mut pushes);
+        self.push_gcode_name(&mut pushes);
         self.push_board(&mut pushes);
         effects.extend(pushes.into_iter().map(|effect| match effect {
             Effect::Push(push) => Effect::Push(push.to_client(sid)),
