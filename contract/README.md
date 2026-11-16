@@ -236,6 +236,12 @@ allow both.
   (`kinematicsTypeComputed`, `distPerRot`, the PID gains, `chainOverSprocketComputed`, `fPWMComputed`), writes the
   derived values that changed to the controller, then sends `$$`, as both backends already do after `/importFile`
   and `/importRestoreWebControl`. Python's `importWebControlJSON` keeps the imported computed values as they are.
+- **Imported values are checked** (upstream #90, #135). `/importFile` takes a bool as on for any non-zero number
+  (GroundControl writes `zAxis = 1.0`) or `true`/`on`/`yes`, and off for zero or `false`/`off`/`no`, in any case;
+  Python took only `on` and `1` as on and anything else as off. A numeric setting (float, int, or text whose default
+  is a number or that the controller holds) given a decimal comma (`0,01`) is stored with a point, in both imports;
+  one that is still no number, or whose comma could be a thousands separator (`1,250`), keeps its current value.
+  Either way an `activateModal` alert lists what was converted or kept. Python stored such text as it came.
 - **Resume after an ALARM or overflow** (same as Python): the job rewinds to the oldest unacknowledged line and Play
   resumes from there, returning at safe height (`serial/transcripts/alarm_mid_cut_rewinds_and_resumes.json`). Stop
   also clears it.

@@ -81,7 +81,7 @@ fn the_derived_settings_and_lines_match_python_for_every_case() {
         let mut settings = opened(case["overrides"].as_object().unwrap());
         assert_eq!(derived(&mut settings, |_| ()), exact(&case["startup"]), "{name} at startup");
         if let Some(ini) = case["ini"].as_str() {
-            let imported = derived(&mut settings, |settings| settings.import_ini(ini).unwrap());
+            let imported = derived(&mut settings, |settings| assert!(settings.import_ini(ini).unwrap().notes.is_empty()));
             assert_eq!(imported, exact(&case["import"]), "{name} after the groundcontrol.ini import");
         }
     });
