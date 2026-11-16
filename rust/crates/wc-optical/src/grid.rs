@@ -1,6 +1,6 @@
 //! Track A: the 31 x 15 grid of squares, the scan order and the error grid.
 
-use crate::{Cell, OpticalSettings, Result, pending};
+use crate::{Cell, OpticalError, OpticalSettings, Result};
 
 pub const COLUMNS: usize = 31;
 pub const ROWS: usize = 15;
@@ -25,9 +25,32 @@ fn cell_at(column: usize, row: usize) -> Cell {
     Cell { i: column as i32 - HALF_COLUMNS, j: HALF_ROWS - row as i32 }
 }
 
-/// The settings' extents in serpentine order (`autoScanDirection` 0 by rows, 1 by columns).
-pub fn scan_order(_settings: &OpticalSettings) -> Result<Vec<Cell>> {
-    pending("grid::scan_order")
+/// The settings' extents in serpentine order (`autoScanDirection` 0 by rows, 1 by columns), from the top left.
+pub fn scan_order(settings: &OpticalSettings) -> Result<Vec<Cell>> {
+    let (left, top, right, bottom) = (settings.tl_x, settings.tl_y, settings.br_x, settings.br_y);
+    let on_grid = |i, j| index(Cell { i, j }).is_some();
+    if !(on_grid(left, top) && on_grid(right, bottom) && left <= right && bottom <= top) {
+        return Err(OpticalError::Invalid(format!(
+            "The scan extents ({left}, {top}) to ({right}, {bottom}) must run left to right and top to bottom \
+             within columns -15..15 and rows 7..-7"
+        )));
+    }
+    let snake = |n: usize, line: Vec<i32>| if n.is_multiple_of(2) { line } else { line.into_iter().rev().collect() };
+    let columns = || (left..=right).collect::<Vec<_>>();
+    let rows = || (bottom..=top).rev().collect::<Vec<_>>();
+    match settings.auto_scan_direction {
+        0 => Ok(rows()
+            .into_iter()
+            .enumerate()
+            .flat_map(|(n, j)| snake(n, columns()).into_iter().map(move |i| Cell { i, j }))
+            .collect()),
+        1 => Ok(columns()
+            .into_iter()
+            .enumerate()
+            .flat_map(|(n, i)| snake(n, rows()).into_iter().map(move |j| Cell { i, j }))
+            .collect()),
+        other => Err(OpticalError::Invalid(format!("autoScanDirection must be 0 or 1, got {other}"))),
+    }
 }
 
 /// One axis of the error grid as the wire carries it: `[column][row]`, `None` where not measured.
