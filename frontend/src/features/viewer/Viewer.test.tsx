@@ -131,6 +131,15 @@ describe("Viewer loading", () => {
     expect(footer.getByText("File:").parentElement).toHaveTextContent("File: No file loaded");
   });
 
+  it("lets a long file name wrap only after its dots, dashes and underscores", async () => {
+    const { socket } = await loaded();
+    socket.serverMessage("gcodeFile", { file: "jobs/leg..rough-cut_v2.nc" });
+    const name = within(screen.getByRole("figure")).getByText(/^leg/);
+    expect(name).toHaveTextContent(/^leg\.\.rough-cut_v2\.nc$/);
+    const pieces = Array.from(name.childNodes).map((node) => (node.nodeName === "WBR" ? "|" : node.textContent));
+    expect(pieces.join("")).toBe("leg.|.|rough-|cut_|v2.|nc");
+  });
+
   it("shows the spinner from the load-started signal until the payload follows, even an empty one", async () => {
     const { socket } = await loaded();
     expect(screen.queryByText("Loading preview…")).not.toBeInTheDocument();

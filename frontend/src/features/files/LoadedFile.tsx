@@ -10,7 +10,8 @@ const splitGcodePath = (path: string) => {
 
 /** A long name wraps after its dots, dashes and underscores rather than mid-word. */
 const breakable = (name: string) =>
-  name.split(/(?<=[._-])/).map((part, at) => (
+  // No lookbehind: Safari before 16.4 refuses to parse the whole bundle over one.
+  (name.match(/[^._-]+[._-]?|[._-]/g) ?? []).map((part, at) => (
     <Fragment key={at}>
       {at > 0 ? <wbr /> : null}
       {part}
