@@ -303,3 +303,24 @@ fn a_boots_corrections_are_the_writes_that_change_a_reported_value() {
     assert_eq!(moved_r, [correction(13, "distPerRot", 10.1, "63.5", false)]);
     assert!(corrections(&settings, 51.27, &["$13=63.5".into(), "$$".into()], &[]).is_empty(), "nothing reported");
 }
+
+/// Loading takes each option's metadata from the defaults; in the owner's file that moves only descriptions and
+/// titles, so no value, type, option list or `$` key changes.
+#[test]
+fn loading_the_owners_file_refreshes_only_descriptions_and_titles() {
+    let file = include_str!("fixtures/owner_webcontrol.json");
+    let stored: serde_json::Map<String, Value> = serde_json::from_str(file).expect("the owner's settings");
+    let loaded = Settings::from_text(file).expect("the owner's settings");
+    let meaning = |option: &serde_json::Map<String, Value>| {
+        let kept = option.iter().filter(|(field, _)| !["desc", "title"].contains(&field.as_str()));
+        kept.map(|(field, value)| (field.clone(), value.clone())).collect::<Vec<_>>()
+    };
+    let options =
+        stored.iter().flat_map(|(section, list)| list.as_array().into_iter().flatten().map(move |o| (section, o)));
+    let compared = options.map(|(section, option)| {
+        let key = option["key"].as_str().expect("a key");
+        let refreshed = loaded.option(section, key).expect("still there");
+        assert_eq!(meaning(option.as_object().expect("an option")), meaning(refreshed), "{section} {key}");
+    });
+    assert_eq!(compared.count(), 151);
+}

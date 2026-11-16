@@ -247,6 +247,14 @@ allow both.
   was 478 on the controller; WebControl wrote 463.`, and one alert lists any PID weight or gain it repaired because
   the firmware ignores it. The `$13` every boot writes is announced only when the controller held another value.
   Python wrote silently.
+- **Stored options take the defaults' metadata** (upstream #70). On load every option `defaultwebcontrol.json` also
+  has gets its `default`, `desc`, `firmwareKey`, `section`, `title`, `type` and `options` from there (a field the
+  defaults lack is dropped); its `value` and any other field stay. That alone never saves the file. Python kept
+  whatever metadata the file held, so a `firmwareKey` changed in the defaults never reached an existing file.
+- **Jogs are checked and rounded.** An X/Y jog distance that is no number or rounds to zero is refused with an
+  alert naming it, and the distance goes out rounded to four places, as Z jogs and `moveTo` already were. Python
+  dropped an unreadable distance silently and sent `0.1 + 0.2` as `0.30000000000000004`. Home and Return to Center
+  name `zAxisSafeHeight` and what it holds when it is no number, where Python answered `Error with returning to home.`
 - **Resume after an ALARM or overflow** (same as Python): the job rewinds to the oldest unacknowledged line and Play
   resumes from there, returning at safe height (`serial/transcripts/alarm_mid_cut_rewinds_and_resumes.json`). Stop
   also clears it.
