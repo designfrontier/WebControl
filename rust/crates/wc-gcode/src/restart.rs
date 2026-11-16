@@ -35,8 +35,8 @@ pub struct GcodeState {
     pub spindle_speed: Option<f64>,
     pub laser: Option<&'static str>,
     pub dwell: Option<String>,
-    /// A relative X or Y move came before the file set that axis absolutely, so X and Y count from wherever the
-    /// file started, which a restart cannot know.
+    /// The file moves X or Y relatively before it first sets that axis absolutely, and has not set it by this
+    /// line, so the axis counts from wherever the file started, which a restart cannot know.
     pub xy_unknown: bool,
 }
 
@@ -60,16 +60,24 @@ pub fn state_at(
     before.iter().enumerate().try_for_each(|(line_index, line)| {
         parser.line(line).map_err(|()| GcodeError::Unreadable { index: line_index })
     })?;
+    let mut ahead = parser.clone();
+    let _ = lines[index..].iter().try_for_each(|line| match ahead.first_relative {
+        [Some(_), Some(_)] => Err(()),
+        _ => ahead.line(line),
+    });
+    let unplaced_relative = |axis: usize| !parser.placed[axis] && ahead.first_relative[axis] == Some(true);
+    parser.state.xy_unknown = unplaced_relative(0) || unplaced_relative(1);
     Ok(parser.state)
 }
 
+#[derive(Clone)]
 struct StateParser {
     state: GcodeState,
     home: (f64, f64),
     next_tool: Option<i64>,
-    /// Per axis (X, Y): set absolutely, and moved relatively before that.
+    /// Per axis (X, Y): set absolutely, and whether the axis's first word was relative.
     placed: [bool; 2],
-    lost: [bool; 2],
+    first_relative: [Option<bool>; 2],
 }
 
 impl StateParser {
@@ -91,7 +99,7 @@ impl StateParser {
             dwell: None,
             xy_unknown: false,
         };
-        StateParser { state, home: (home_x, home_y), next_tool: None, placed: [false; 2], lost: [false; 2] }
+        StateParser { state, home: (home_x, home_y), next_tool: None, placed: [false; 2], first_relative: [None; 2] }
     }
 
     fn line(&mut self, raw: &str) -> Result<(), ()> {
@@ -196,9 +204,8 @@ impl StateParser {
     }
 
     fn moved(&mut self, axis: usize, relative: bool) {
-        self.lost[axis] = relative && !self.placed[axis];
+        self.first_relative[axis].get_or_insert(relative);
         self.placed[axis] |= !relative;
-        self.state.xy_unknown = self.lost.contains(&true);
     }
 }
 
@@ -621,6 +628,15 @@ mod tests {
         assert!(!unknown(&["G91", "G1 X1 Y1", "G90", "G0 X0 Y0", "G91", "G1 X1"]));
         assert!(!unknown(&["G91", "G1 Z-1", "G90"]));
         assert!(!unknown(&["G90", "G4 P1"]));
+    }
+
+    #[test]
+    fn xy_is_unknown_before_a_g91_file_first_moves_x_or_y() {
+        let unknown_at = |lines: &[&str], index| state_at(&file(lines), index, 0.0, 0.0, Units::Mm).unwrap().xy_unknown;
+        assert!(unknown_at(&["G91", "G1 Z-1", "G1 X1 Y1"], 2));
+        assert!(unknown_at(&["G90", "G0 X1", "G91", "G1 Z-1", "G1 Y1"], 4));
+        assert!(!unknown_at(&["G91", "G1 Z-1", "G90", "G0 X1 Y1", "G91", "G1 X1"], 2));
+        assert!(!unknown_at(&["G90", "G1 Z-1", "G0 X1 Y1"], 2));
     }
 
     #[test]

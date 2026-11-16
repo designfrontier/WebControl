@@ -295,6 +295,15 @@ fn resume_and_play_mid_file_are_refused_before_a_g91_file_sets_x_and_y() {
 }
 
 #[test]
+fn resume_is_refused_before_a_g91_file_first_moves_x_or_y() {
+    let mut rig = Rig::connected();
+    pause_at(&mut rig, &["G91", "G1 Z-1", "G1 Z-1", "G1 X5", "G1 X1"], 2);
+    rig.clear_written();
+    assert!(alerts(&rig.act("resumeRun"))[0].starts_with(XY_UNKNOWN));
+    assert!(rig.run_to_quiet().is_empty(), "the sled would travel to home, not where the file started");
+}
+
+#[test]
 fn resume_restores_the_units_the_job_was_paused_in() {
     let mut rig = Rig::connected();
     pause_at(&mut rig, &["G90", "G0 X10 Y20", "G1 Z-3", "G1 X30 Y40", "G1 X1"], 3);

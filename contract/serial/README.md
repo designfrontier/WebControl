@@ -568,7 +568,7 @@ Where the Rust backend writes something different from Python by owner decision.
 8. **No restart from an unknown XY** (2026-11-15). Python's restart state started X and Y at home, so a file that
    moves X or Y relatively (G91) before it sets them absolutely was restarted, or resumed after a pause, by
    travelling to home plus the file's relative moves, wherever the file had really started; every relative move
-   after that cut in the wrong place. Rust refuses Play mid-file and Resume at such a line with an alert, sends
-   nothing (no `~`; a paused job stays paused) and keeps the index; Stop and Play from the first line still run the
-   file. A file that sets X and Y absolutely before its relative passes restarts as before. No transcript has such a
+   after that cut in the wrong place. Rust refuses Play mid-file and Resume at any line before such a file sets X
+   and Y absolutely, even one before its first X or Y move, with an alert, sends nothing (no `~`; a paused job stays
+   paused) and keeps the index; Stop and Play from the first line still run the file. A file that sets X and Y absolutely before its relative passes restarts as before. No transcript has such a
    file (`wc-machine` tests `resume_and_play_mid_file_are_refused_before_a_g91_file_sets_x_and_y`).
