@@ -14,6 +14,7 @@ mod gates;
 pub mod gpio;
 mod job;
 mod link;
+mod lost;
 mod machine;
 mod pid;
 mod setup;

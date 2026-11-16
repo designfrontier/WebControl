@@ -155,8 +155,10 @@ is spelled out with `tick`: after `!`, an ALARM or `Buffer overflow!` the backen
 it reads a status report once its input has run dry at least 0.25 s after the halt, so those transcripts `tick`
 0.3 s and then send a status report; `stop_ignores_a_status_report_read_too_soon` pins that an earlier report
 releases nothing. After an ALARM or overflow the resync releases only `$` and modal lines: anything that moves waits
-for Stop, or Play on the held job (Rust-intended deviation 4). The backend treats 5 s without any controller line as a
-lost connection, so no transcript waits that long without an rx.
+for Stop, or Play on the held job (Rust-intended deviation 4). A line the controller never received goes out again
+once three status reports past a 150 ms grace after the write show an empty ring and a still sled with no echo or
+ack (Rust-intended deviation 6), so those transcripts stream the recorded reports with `tick` 0.2 between them. The backend treats 5 s without any
+controller line as a lost connection, so no transcript waits that long without an rx.
 
 The Python recorder used the same rules, so a recorded transcript replayed: its controller model answered only once
 the backend had been quiet for `quiet` seconds, one line per settle.
@@ -200,6 +202,8 @@ the backend had been quiet for `quiet` seconds, one line per settle.
 | `stop_ignores_a_status_report_read_too_soon` | a status report within 0.25 s of `!` does not end the resync |
 | `alarm_mid_cut_rewinds_and_resumes` | ALARM: halt, rewind to the oldest unacknowledged line, Play resumes there |
 | `alarm_mid_home_holds_the_plunge_until_stop` | The owner's Home with the motor supply off: ALARM mid-travel; Home's `G00 Z0` never goes out, a jog is refused, Stop clears it and the next jog goes |
+| `stream_lost_line_is_sent_again` | the owner's cut: an arc never echoed or acked, the ring empty and the sled still for three reports; it goes out again once and the job goes on |
+| `stream_line_lost_twice_pauses_until_resume` | the same arc lost again: the job pauses at it with an alert; Resume returns there and sends it |
 | `buffer_overflow_halts_streaming` | `Buffer overflow!` and its buffer dump: halt, rewind, Stop |
 | `line_too_long_pauses_the_job` | a line over 126 bytes as written is never sent; the job pauses with an alert |
 | `unclosed_comment_pauses_the_job` | an unclosed `(` is never sent; the job pauses with an alert |
@@ -544,12 +548,24 @@ Where the Rust backend writes something different from Python by owner decision.
    machine. The transcript runner reopens the port as the shell does; the banner after a reset is an `rx`.
    Transcripts: `connect_chain_over_sprocket_differs_restarts_the_controller`,
    `connect_eeprom_read_fail_restores_settings`.
+6. **A line the controller never received goes out again** (2026-11-15). On the owner's cut a written arc got no
+   echo and no `ok`, and every report showed `[PE:]` space 127 and the same MPos until Stop, 44 s later; Python
+   would have waited the same way. Rust takes the unacknowledged lines as lost when, since the last ack, the
+   controller printed only status reports and three in a row, each read at least 150 ms after the latest write,
+   showed an empty ring, an unchanged MPos and `Idle` (`spec/firmware.md` B18): the firmware reads the port into
+   its ring before every report, so a line that arrived would show in the ring or be echoed first; on the owner's two
+   cuts every line received was echoed within 40 ms. Rust then writes the same bytes again once, with a `controllerMessage` naming the line. Lost
+   again, a job line pauses the job at it with a `Line Not Received` alert, and Resume returns to the file there as
+   after any pause; a lost command is dropped with what was queued after it. Only a line written to an idle
+   controller is checked, since an `ok` behind a lost buffered line is counted for the lost one. A job paused by the user waits at the
+   lost line for Resume. Transcripts: `stream_lost_line_is_sent_again`, built from the owner's
+   `webcontrol-rs.log` lines, and `stream_line_lost_twice_pauses_until_resume`.
 6. **Arcs go out as the file means them** (upstream #120, 2026-11-15). Python streamed G2/G3 untouched. 51.27 has
    no R word, so an R arc sent the sled straight to its end at PID speed; 51.29x reads R but drops its sign; and
-   every version runs an arc's X, Y and Z as absolute under G91 (`spec/firmware.md` §9, A17, A18). On every version
+   every version runs an arc's X, Y and Z as absolute under G91 (`spec/firmware.md` §9, A17, A18, B19). On every version
    Rust rewrites, as the line is written and from where it last commanded the sled (or the last status report),
    each R arc (no I or J) with I and J at 4 decimals and each arc under a real G91 with the absolute X and Y it ends
    at. An arc it cannot rewrite (radius short of half the chord, an R arc with no X/Y change or under G18/G19, a
-   G91 arc with Z, no known start) is refused as an unclosed comment is (B18). Transcripts:
+   G91 arc with Z, no known start) is refused as an unclosed comment is (B19). Transcripts:
    `r_arc_converted_to_i_j_on_51_27`, `r_arc_impossible_radius_pauses_the_job`, `r_arc_converted_on_51_292`,
    `g91_arc_written_absolute`, `g91_arc_with_z_pauses_the_job`.

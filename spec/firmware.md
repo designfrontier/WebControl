@@ -19,6 +19,10 @@ upgrade flow are built against. Firmware paths are relative to `cnc_ctrl_v1/`.
   counts the appended space and `\n` exactly as stored. `?` and the realtime characters never enter the ring.
 - **Over-long lines:** a line over 126 characters overflows the ring. The firmware prints `Buffer overflow!`, stops,
   flushes, and then **executes the unread tail of the line as a new command** and acks it.
+- **Echo:** the main loop takes a whole line out of the ring (`gcodeExecuteLoop`, H27 `GCode.cpp:685`), then
+  prints it before running it: a B line whole, a G/M line one word group at a time, a line with no G or M whole
+  (`interpretCommandString`, H27 `GCode.cpp:629-667`; the same in S126 and H292). `$` lines are the only ones not
+  echoed. No status report can come between taking the line and its echo.
 - **`ok`:** one per line, sent when the line *finishes* (moves, dwells and pauses block first). No `ok` for a line
   that was stopped (`!`, ALARM, overflow, failed probe, `$RST`). Boot sends one unsolicited `ok`.
 - **`error:`:** `error: <text>` — `Bad number format`, `Invalid statement` (unknown B code or `$` key),
@@ -39,7 +43,11 @@ upgrade flow are built against. Firmware paths are relative to `cnc_ctrl_v1/`.
 
 No Run state (it says Idle while moving). MPos is in current units with 2 decimals (0.254 mm resolution under G20).
 No version sends `PWR:` or `F:`, so that parsing in `UIProcessor.py` is dead code. Reports are at least 200 ms apart.
-`space` is the firmware's true free space. B04 prints a status line with no newline.
+`space` is the firmware's true free space (`incSerialBuffer.spaceAvailable()`, 127 with the ring empty, including
+while a line runs, since it has left the ring). Every report comes from `execSystemRealtime()`, which reads the
+serial port into the ring first (H27 `System.cpp:567-568`), and moves, dwells (`maslowDelay`), M0 pauses and the
+forward solve all call it, so a byte that has reached the board is in the ring by the next report. B04 prints a
+status line with no newline.
 
 ## 3. Version reporting
 
@@ -220,8 +228,8 @@ to an int, so G91.1 and G90.1 switch G0/G1 to relative and absolute like G91 and
 | A14 | Low | `$86`, `$144` rejected; `$43` unused on holey; G17 ignored. |
 | A15 | Info | `bufferSize = 126` is right; PWR:/F: parsing is dead code; PE lines are mis-parsed until B05 is parsed. |
 | A16 | Fixed | After a touching probe WebControl queued `G10 Z0` behind anything already queued; behind a Resume's restart it zeroed Z at the restart's height. The firmware zeroes Z on a touch, so none is sent. Resume and other moving actions pressed mid-probe are now refused until the probe answers or Stop. |
-| A17 | Fixed | R-format arcs (upstream #120) were streamed untouched, so 51.27 sent the sled straight to the end at PID speed (§9); now converted (B18). |
-| A18 | Fixed | G2/G3 under G91 were streamed untouched; every firmware runs their X/Y (and Z) as absolute, while the position, restart and Z tracking took them as relative. Now written absolute, with Z refused (B18). |
+| A17 | Fixed | R-format arcs (upstream #120) were streamed untouched, so 51.27 sent the sled straight to the end at PID speed (§9); now converted (B19). |
+| A18 | Fixed | G2/G3 under G91 were streamed untouched; every firmware runs their X/Y (and Z) as absolute, while the position, restart and Z tracking took them as relative. Now written absolute, with Z refused (B19). |
 
 ### B. Rust backend requirements
 
@@ -292,7 +300,29 @@ to an int, so G91.1 and G90.1 switch G0/G1 to relative and absolute like G91 and
     reply shows the alarm again instead of clearing it. The unplaceable-sled message that ends Stop's own reload is
     shown but does not hold again, however long the 200 failed guesses take. After it the firmware takes the sled to
     be at 0, 0, so a job it held resumes only from Stop. `alarm_mid_home_holds_the_plunge_until_stop`.
-18. Arcs as the file means them (upstream #120), on every firmware version: every line as it is written (a job
+
+18. Lost lines (2026-11-15): on the owner's cut a line Rust wrote never reached the firmware (no echo, no `ok`,
+    `[PE:]` space 127 and MPos unchanged for 44 s), and Rust waited for its `ok` until Stop; Python had the same
+    blind spot. Unacknowledged lines are lost when, since the last ack, the controller has printed nothing but
+    status reports (no echo, no message) and three reports in a row, each read at least 150 ms after the latest
+    write, showed an empty ring (space 127), the same MPos and `Idle`, with no `~` awaiting its `ok`, no `Maslow
+    Paused` or Z prompt, and no boot or resync (§1, §2: a line in the ring keeps space under 127, a line that runs
+    has been echoed, a running move changes MPos). The firmware reads the port into the ring before every report
+    (§2) and a line is under 10 ms on the wire at 57600 baud, so a report made after the bytes arrived shows space
+    under 127 or follows the echo; reports within 150 ms of the write are ignored all the same, and three are
+    needed so one garbled or glued report is never enough. Detection comes about 0.6–0.8 s after the write. On
+    the owner's two cuts (3247 lines sent) 51.27 echoed or answered every line it received within 40 ms (about
+    20 ms typically), and the rule finds all 11 lost lines and no other. They were never run, so each goes out
+    again once, as written, with a controller message naming it; the 126-byte accounting forgets the lost ones first. A job line
+    lost again pauses the job at it (`Line Not Received`) and Resume returns to the file there and sends it; a
+    command lost again is dropped with the commands queued after it, `G20`/`G21` and `G90` are written to put
+    the firmware back in step, and a job in progress pauses. A job the user paused waits at the lost line for
+    Resume instead. A line written while another awaited its `ok` (buffered mode) is never taken for lost: with
+    an earlier line lost, the next line's echo and `ok` would be counted for it. Not covered: a line whose `\n` alone was lost (the ring keeps its bytes, space stays under
+    127) and a line that ran while both its echo and `ok` were lost on the way back.
+    `stream_lost_line_is_sent_again`, `stream_line_lost_twice_pauses_until_resume`.
+
+19. Arcs as the file means them (upstream #120), on every firmware version: every line as it is written (a job
     line after the home shift, a typed line, a restart's) has each G2/G3 segment with an R and no I or J rewritten
     with I and J at 4 decimals, R removed, and each G2/G3 segment under a real G91 rewritten with the absolute X and
     Y it ends at (start plus offset, 4 decimals; I and J are already offsets and stay as written). The centre is the

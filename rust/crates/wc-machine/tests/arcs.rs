@@ -1,4 +1,4 @@
-//! R arcs reach every firmware as I and J and G91 arcs with absolute X and Y (spec/firmware.md §9, B18): typed,
+//! R arcs reach every firmware as I and J and G91 arcs with absolute X and Y (spec/firmware.md §9, B19): typed,
 //! streamed, shifted to home and restarted mid-file; an arc that cannot be rewritten is refused.
 
 mod rig;

@@ -1,4 +1,4 @@
-//! No firmware runs an R arc or a G91 arc as the file means it (spec/firmware.md §9, B18), so each goes out with I
+//! No firmware runs an R arc or a G91 arc as the file means it (spec/firmware.md §9, B19), so each goes out with I
 //! and J and absolute X and Y, worked out from where the sled is when the line reaches the controller.
 
 use wc_gcode::Units;

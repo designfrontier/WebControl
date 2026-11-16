@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "meta": {
     "name": "r_arc_converted_to_i_j_on_51_27",
-    "description": "51.27 has no R word (spec/firmware.md §9, B18): a G2/G3 with R and no I/J would run an arc centred on its start. Each R arc goes out with I and J worked out from where the sled is, at 4 decimals; the negative R is the arc over 180 degrees, and the relative arc is written absolute because the firmware's G2 ignores G91.",
+    "description": "51.27 has no R word (spec/firmware.md §9, B19): a G2/G3 with R and no I/J would run an arc centred on its start. Each R arc goes out with I and J worked out from where the sled is, at 4 decimals; the negative R is the arc over 180 degrees, and the relative arc is written absolute because the firmware's G2 ignores G91.",
     "firmware": {
       "variant": "holey",
       "version": "51.27"
