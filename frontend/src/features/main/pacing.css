@@ -109,7 +109,7 @@
 
 .pacing-history table {
   border-collapse: collapse;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   white-space: nowrap;
 }
 
@@ -119,7 +119,7 @@
 
 .pacing-history th,
 .pacing-history td {
-  padding: var(--space-1) var(--space-2);
+  padding: var(--space-1);
   border-bottom: 1px solid var(--line);
   text-align: right;
 }
