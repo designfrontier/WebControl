@@ -47,7 +47,10 @@ describe("MainPage run status", () => {
   it("tolerates a failed /api/main and waits for the status push", async () => {
     const { socket } = renderApp("/", { fetch: fakeFetch({ "/api/main": () => jsonResponse({}, 500) }) });
     await waitFor(() =>
-      expect(screen.getByText("Server: connected")).toHaveAttribute("title", "WebControl at 192.168.1.20:5000"),
+      expect(screen.getByText("Server: connected").closest("li")).toHaveAttribute(
+        "title",
+        "WebControl at 192.168.1.20:5000",
+      ),
     );
     expect(button("Play")).toBeDisabled();
     status(socket, 0);

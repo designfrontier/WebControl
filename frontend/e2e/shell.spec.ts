@@ -105,12 +105,12 @@ test("Stop stays on screen on a phone", async ({ page, isMobile }) => {
 test("the theme toggle switches and remembers light and dark", async ({ page }) => {
   const toggle = page.getByRole("button", { name: /^Theme: / });
   const background = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-  await expect(toggle).toHaveText("Theme: System");
+  await expect(toggle).toHaveAccessibleName("Theme: System");
   await toggle.click();
-  await expect(toggle).toHaveText("Theme: Light");
+  await expect(toggle).toHaveAccessibleName("Theme: Light");
   expect(await background()).toBe("rgb(255, 255, 255)");
   await toggle.click();
-  await expect(toggle).toHaveText("Theme: Dark");
+  await expect(toggle).toHaveAccessibleName("Theme: Dark");
   expect(await background()).toBe("rgb(20, 23, 28)");
 
   await page.reload();

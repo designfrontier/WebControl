@@ -17,6 +17,9 @@
 }
 
 .brand {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control);
   color: var(--text);
   font-size: 1.15rem;
   font-weight: 600;
@@ -102,21 +105,72 @@
   font-size: 0.8rem;
 }
 
-.topbar-end {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  margin-left: auto;
-}
-
+/* Takes the rest of the menu row, or a row of its own when less than its basis is left. */
 .status-bar {
   display: flex;
+  flex: 1 1 240px;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: var(--space-1);
+  min-width: 0;
   margin: 0;
   padding: 0;
   list-style: none;
+  container: status / inline-size;
+}
+
+.chip-short,
+.chip-shortest {
+  display: none;
+}
+
+/* The full chips need about 700px; narrower, they shorten, the state chips to a name and a mark. */
+@container status (max-width: 760px) {
+  .chip[data-short] .chip-full {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .chip[data-short] .chip-short {
+    display: inline;
+  }
+
+  .chip[data-kind="state"] .chip-short::after {
+    content: " …";
+    content: " …" / "";
+  }
+
+  .chip[data-kind="state"][data-tone="ok"] .chip-short::after {
+    content: " ✓";
+    content: " ✓" / "";
+  }
+
+  .chip[data-kind="state"][data-tone="bad"] .chip-short::after {
+    content: " ✕";
+    content: " ✕" / "";
+  }
+}
+
+/* The narrowest rows keep the build commit; firmware and CPU give up their labels instead. */
+@container status (max-width: 440px) {
+  .chip[data-shortest] .chip-full {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .chip[data-shortest] .chip-short {
+    display: none;
+  }
+
+  .chip[data-shortest] .chip-shortest {
+    display: inline;
+  }
 }
 
 .chip {
@@ -144,9 +198,35 @@
 }
 
 .theme-toggle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: var(--control);
   min-height: var(--control);
   padding: 0 var(--space-2);
   font-size: 0.85rem;
+}
+
+.theme-toggle-icon {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+/* Only wide windows have room to spell the theme out; elsewhere the mark keeps it as its accessible name. */
+@media (max-width: 1599px) {
+  .theme-toggle {
+    justify-content: center;
+  }
+
+  .theme-toggle-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 .alarm {
@@ -400,8 +480,21 @@ button.danger[data-alarm="true"] {
   padding: var(--space-4);
 }
 
-/* Phones and narrow windows: the menus fold behind Menu and the chips wrap under the brand. */
-@media (max-width: 900px) {
+/* Portrait tablets: brand, menus and theme on one row, the status chips on the next. */
+@media (orientation: portrait) and (min-width: 701px) {
+  .status-bar {
+    order: 1;
+    flex-basis: 100%;
+    justify-content: flex-start;
+  }
+
+  .theme-toggle {
+    margin-left: auto;
+  }
+}
+
+/* Phones: the menus fold behind Menu and the chips go under the brand. */
+@media (max-width: 700px), (max-height: 500px) {
   .shell {
     display: block;
     height: auto;
@@ -412,6 +505,12 @@ button.danger[data-alarm="true"] {
     align-items: center;
     min-height: var(--control);
     margin-left: auto;
+  }
+
+  .status-bar {
+    order: 2;
+    flex-basis: 100%;
+    justify-content: flex-start;
   }
 
   .nav {
@@ -435,12 +534,6 @@ button.danger[data-alarm="true"] {
   .menu-list {
     position: static;
     box-shadow: none;
-  }
-
-  .topbar-end {
-    order: 2;
-    width: 100%;
-    margin: 0;
   }
 }
 

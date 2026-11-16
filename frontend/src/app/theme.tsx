@@ -39,7 +39,10 @@ export const ThemeToggle = () => {
   const { preference, cycle } = useTheme();
   return (
     <button type="button" className="theme-toggle" onClick={cycle} title="Switch between system, light and dark">
-      Theme: {LABELS[preference]}
+      <span className="theme-toggle-icon" aria-hidden="true">
+        ◐
+      </span>
+      <span className="theme-toggle-text">Theme: {LABELS[preference]}</span>
     </button>
   );
 };
