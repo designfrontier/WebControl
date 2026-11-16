@@ -13,6 +13,8 @@ export interface MachineState {
   health: { cpuUsage: number; bufferSize: number } | null;
   /** The controller's firmware version, or null until it reports one. */
   firmwareVersion: number | null;
+  /** This WebControl's release and build commit from /api/state, or null until it loads. */
+  software: { version: string; commit: string | null } | null;
   status: { uploadFlag: number; currentTool: number; positioningMode: number } | null;
   /** Whether a job is running or paused, which uploadFlag alone loses on controller pauses; probing is Rust only. */
   job: { inProgress: boolean; manualZAxisAdjust: boolean; probing: boolean };
@@ -71,6 +73,7 @@ export const initialMachineState: MachineState = {
   controller: { status: "unknown", port: null, fakeServo: false },
   health: null,
   firmwareVersion: null,
+  software: null,
   status: null,
   job: { inProgress: false, manualZAxisAdjust: false, probing: false },
   position: null,
@@ -203,11 +206,14 @@ export const machineReducer = (state: MachineState, event: MachineEvent): Machin
         jobInProgress,
         manualZAxisAdjust,
         probing,
+        version,
+        commit,
       } = event.state;
       return {
         ...state,
         job: { inProgress: jobInProgress, manualZAxisAdjust, probing },
         firmwareVersion: reportedVersion(controllerFirmwareVersion),
+        software: version ? { version, commit: commit ?? null } : null,
         units,
         unitsZ,
         distToMove,

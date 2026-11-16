@@ -30,6 +30,7 @@ fn startup_state() -> StartupState {
         macros: vec![Macro::new(1, "Spindle on"), Macro::new(2, "")],
         backend: Backend::Rust,
         version: "1.2.3".into(),
+        commit: "abc1234".into(),
     }
 }
 
@@ -90,6 +91,7 @@ fn the_startup_state_fits_get_api_state() {
     contract().validate_response("GET", "/api/state", 200, &ResponseBody::Json(body.clone())).unwrap();
     assert_eq!(body["backend"], "rust");
     assert_eq!(body["version"], "1.2.3");
+    assert_eq!(body["commit"], "abc1234");
     assert_eq!(body["unitsZ"], "INCHES");
     assert_eq!(body["controllerBoard"], Value::Null);
     assert_eq!(body["macros"][0], json!({"command": "macro1", "title": "Spindle on"}));

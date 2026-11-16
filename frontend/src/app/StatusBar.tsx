@@ -23,6 +23,9 @@ const controllerText = ({ status, port, fakeServo }: MachineState["controller"])
 const firmwareText = (version: number | null) =>
   version === null ? "Firmware: unknown" : `${version < 50 ? "Stock" : version < 100 ? "Holey" : "Custom"} ${version}`;
 
+const softwareText = ({ version, commit }: NonNullable<MachineState["software"]>) =>
+  `WebControl ${version}${commit ? ` · ${commit}` : ""}`;
+
 const toneFor = (status: MachineState["controller"]["status"]) =>
   status === "connected" ? "ok" : status === "disconnected" ? "bad" : undefined;
 
@@ -32,6 +35,7 @@ export const StatusBar = () => {
   const controller = useMachine((s) => s.controller);
   const health = useMachine((s) => s.health);
   const firmware = useMachine((s) => s.firmwareVersion);
+  const software = useMachine((s) => s.software);
 
   return (
     <ul className="status-bar" aria-label="Status">
@@ -48,6 +52,11 @@ export const StatusBar = () => {
       <li className="chip" title="Controller firmware">
         {firmwareText(firmware)}
       </li>
+      {software && (
+        <li className="chip" title="WebControl version and build">
+          {softwareText(software)}
+        </li>
+      )}
       {health && <li className="chip">CPU {Math.round(health.cpuUsage)}%</li>}
       {health && health.bufferSize >= 0 && <li className="chip">Buffer {health.bufferSize}</li>}
     </ul>

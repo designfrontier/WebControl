@@ -30,6 +30,9 @@ pub use routes::router;
 /// The release version (`WC_VERSION` at build time, from the tag), else the crate's.
 pub const VERSION: &str = env!("WC_VERSION");
 
+/// The short git commit the binary was built from (`WC_GIT_SHA` at build time).
+pub const COMMIT: &str = env!("WC_GIT_SHA");
+
 /// WebSocket liveness: ping every `interval`, close a connection that has not answered within `timeout`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PingConfig {
