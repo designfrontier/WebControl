@@ -25,7 +25,8 @@ export default defineConfig({
       command: backendCommand,
       url: `http://localhost:${port}/`,
       reuseExistingServer: !process.env.CI && !process.env.E2E_BACKEND_PORT,
-      timeout: 180_000,
+      // A CI run whose Cargo.lock changed rebuilds the server from a cold cache before it can answer.
+      timeout: process.env.CI ? 600_000 : 180_000,
       env: { E2E_BACKEND_PORT: String(port) },
     },
     {
