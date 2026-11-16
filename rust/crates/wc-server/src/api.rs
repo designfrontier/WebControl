@@ -67,6 +67,11 @@ pub(crate) async fn update_pacing(State(state): State<AppState>, body: Bytes) ->
     answer(&state, Request::Pacing(json_body(&body))).await
 }
 
+/// `PUT /api/display/theme`.
+pub(crate) async fn update_theme(State(state): State<AppState>, body: Bytes) -> Response {
+    answer(&state, Request::Theme(json_body(&body))).await
+}
+
 /// `api/main.py`'s `_flag`: a number's truth, else the text `true`.
 fn flag(value: Option<&Value>) -> bool {
     match value {

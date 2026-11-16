@@ -45,6 +45,7 @@ describe("SettingsPage", () => {
       "WebControl",
       "Camera",
       "GPIO",
+      "Display",
     ]);
     expect(tabs.getByRole("link", { name: "Maslow" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByLabelText("Distance Between Motors")).toHaveValue("2978.4");
@@ -310,22 +311,6 @@ describe("SettingsPage", () => {
 
     await waitFor(() => expect(puts).toEqual([{ computedPosition: true }]));
     expect(screen.getByLabelText("Computed Sled Position")).toBeChecked();
-  });
-
-  it("saves the display theme with the WebControl settings, and shows it once the server pushes it", async () => {
-    const { fetch, puts } = settingsServer(webcontrolSection());
-    const { user, socket } = renderApp("/settings/webcontrol", { fetch });
-    await screen.findByRole("form", { name: "WebControl Settings" });
-
-    expect(screen.getByLabelText("Display theme")).toHaveValue("system");
-    await user.selectOptions(screen.getByLabelText("Display theme"), "dark");
-    await user.click(saveButton());
-    await waitFor(() => expect(puts).toEqual([{ uiTheme: "dark" }]));
-    expect(screen.getByLabelText("Display theme")).toHaveValue("dark");
-
-    socket.serverMessage("theme", { theme: "dark" });
-    expect(document.documentElement).toHaveAttribute("data-theme", "dark");
-    document.documentElement.removeAttribute("data-theme");
   });
 
   it("switches sections from the tabs", async () => {

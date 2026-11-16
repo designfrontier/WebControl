@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import type { APIRequestContext, Page } from "@playwright/test";
 import { chooseMenu, closeServerDialogs, connectBackend, openActions, resetMachine, waitForServer } from "./helpers";
+import { simulatorURL } from "./simulator";
 
 test.beforeEach(async ({ page, baseURL }) => {
   await resetMachine(baseURL!);
@@ -104,38 +105,65 @@ test("Stop stays on screen on a phone", async ({ page, isMobile }) => {
 });
 
 test.describe("the display theme", () => {
-  const setTheme = async (request: APIRequestContext, uiTheme: string) =>
-    expect(await request.put("/api/settings/webcontrol", { data: { values: { uiTheme } } })).toBeOK();
+  const setTheme = async (request: APIRequestContext, theme: string) =>
+    expect(await request.put("/api/display/theme", { data: { theme } })).toBeOK();
   const background = (page: Page) => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const choose = async (page: Page, theme: string) => {
+    const group = page.getByRole("dialog", { name: "Settings" }).getByRole("group", { name: "Display theme" });
+    await group.getByRole("radio", { name: theme }).check();
+  };
 
   test.afterEach(({ request }) => setTheme(request, "system"));
 
-  test("is a WebControl setting that every open page follows without a reload", async ({ page, context }) => {
+  test("applies a choice in Settings at once, and every open page follows without a reload", async ({
+    page,
+    context,
+  }) => {
     await expect(page.getByRole("banner").getByRole("button", { name: /theme/i })).toHaveCount(0);
     const other = await context.newPage();
     await other.goto("/");
     await waitForServer(other);
 
-    const save = async (theme: string) => {
-      await page.goto("/settings/webcontrol");
-      const form = page.getByRole("form", { name: "WebControl Settings" });
-      await form.getByLabel("Display theme").selectOption(theme);
-      await form.getByRole("button", { name: "Save" }).click();
-      await expect(form.getByText("WebControl Settings saved.")).toBeVisible();
-    };
-
-    await save("light");
+    await chooseMenu(page, "Settings", "Display");
+    await expect(page.getByRole("dialog", { name: "Settings" }).getByRole("button", { name: "Save" })).toHaveCount(0);
+    await choose(page, "Light");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
     await expect(other.locator("html")).toHaveAttribute("data-theme", "light");
     expect(await background(other)).toBe("rgb(255, 255, 255)");
-    await save("dark");
+    await choose(page, "Dark");
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     await expect(other.locator("html")).toHaveAttribute("data-theme", "dark");
     expect(await background(other)).toBe("rgb(20, 23, 28)");
 
     await other.reload();
     await expect(other.locator("html")).toHaveAttribute("data-theme", "dark");
-    await save("system");
+    await choose(page, "System");
     await expect(other.locator("html")).not.toHaveAttribute("data-theme");
+  });
+
+  test.describe("on the simulator", () => {
+    test.use({ baseURL: simulatorURL });
+    test.skip(({ isMobile }) => isMobile, "one simulated job is enough");
+    test.afterEach(() => resetMachine(simulatorURL));
+
+    test("changes mid-job without stopping it", async ({ page, request }) => {
+      await request.post("/api/files/gcode/directories", { data: { name: "theme" } });
+      const lines = ["G21", "G90", ...Array.from({ length: 400 }, (_, n) => `G1 X${(n % 20) / 10} Y0 F3000`)];
+      const file = { name: "theme.nc", mimeType: "text/plain", buffer: Buffer.from(`${lines.join("\n")}\n`) };
+      const upload = await request.post("/uploadGCode", { multipart: { selectedDirectory: "theme", "file[]": file } });
+      expect(upload.status()).toBe(200);
+      await page.goto("/");
+      await waitForServer(page);
+      await page.getByRole("button", { name: "Play" }).click();
+      const pacing = page.getByRole("group", { name: "Line pacing" });
+      await expect(pacing.getByText(/^\d+ lines\/min$/)).toBeVisible({ timeout: 15_000 });
+
+      await chooseMenu(page, "Settings", "Display");
+      await choose(page, "Dark");
+      await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+      expect((await (await request.get("/api/state")).json()).theme).toBe("dark");
+      expect((await (await request.get("/api/state")).json()).jobInProgress).toBe(true);
+    });
   });
 
   test("replaces an older build's per-browser choice once the server's theme loads", async ({ page }) => {

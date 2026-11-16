@@ -39,6 +39,7 @@ describe("App shell", () => {
     ["Settings", "WebControl", "/settings/webcontrol", "Settings"],
     ["Settings", "Camera", "/settings/camera", "Settings"],
     ["Settings", "GPIO", "/settings/gpio", "Settings"],
+    ["Settings", "Display", "/settings/display", "Settings"],
     ["Boards", "Open Board", "/boards/open", "Open Board"],
     ["Boards", "Save Board", "/boards/save", "Save Board"],
     ["Boards", "Create/Edit Board", "/boards/edit", "Create/Edit Board"],

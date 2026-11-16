@@ -52,17 +52,31 @@ pub enum Theme {
 }
 
 impl Theme {
+    pub fn parse(text: &str) -> Option<Theme> {
+        match text {
+            "light" => Some(Theme::Light),
+            "dark" => Some(Theme::Dark),
+            "system" => Some(Theme::System),
+            _ => None,
+        }
+    }
+
     /// Anything but `light` or `dark` reads as `System`.
     pub fn from_setting(text: &str) -> Theme {
-        match text {
-            "light" => Theme::Light,
-            "dark" => Theme::Dark,
-            _ => Theme::System,
+        Theme::parse(text).unwrap_or(Theme::System)
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Theme::Light => "light",
+            Theme::Dark => "dark",
+            Theme::System => "system",
         }
     }
 }
 
-/// Broadcast when the display theme setting changes, so every open client switches.
+/// Broadcast when the display theme setting changes, so every open client switches; also
+/// `PUT /api/display/theme`'s body and answer.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ThemeChanged {
     pub theme: Theme,

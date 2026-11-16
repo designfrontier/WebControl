@@ -58,6 +58,7 @@ export const TopBar = () => {
     { label: "WebControl", onSelect: open("/settings/webcontrol") },
     { label: "Camera", onSelect: open("/settings/camera") },
     { label: "GPIO", onSelect: open("/settings/gpio") },
+    { label: "Display", onSelect: open("/settings/display") },
   ];
   const boards: MenuItem[] = [
     { label: "Open Board", onSelect: open("/boards/open") },

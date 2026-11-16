@@ -5,6 +5,9 @@ import type { EventSchemas, MessageSchemas } from "./core";
 export const themeSchema = z.enum(["light", "dark", "system"]);
 export type ThemePreference = z.infer<typeof themeSchema>;
 
+/** PUT /api/display/theme body and answer: only the theme, which applies at once, also during a job. */
+export const themeUpdateSchema = z.strictObject({ theme: themeSchema });
+
 /** Server -> client commands for the settings screens. */
 export const settingsMessages = {
   /** Serial ports found by the "updatePorts" action. */

@@ -38,10 +38,13 @@ pub const GPIO_ACTIONS: [&str; 12] = [
 const RING_RADIUS: f64 = 138.4;
 /// Python-only settings an older `webcontrol.json` still carries; kept in the file, left off the screens.
 const RETIRED_KEYS: [&str; 1] = ["recordSerial"];
+pub const THEME_SECTION: &str = "WebControl Settings";
+/// Changed only through `PUT /api/display/theme`, so it stays off the section forms.
+pub const THEME_KEY: &str = "uiTheme";
 
 /// The stored `uiTheme`, which every client shows.
 pub fn theme(settings: &Settings) -> Theme {
-    Theme::from_setting(&settings.text_or_empty("WebControl Settings", "uiTheme"))
+    Theme::from_setting(&settings.text_or_empty(THEME_SECTION, THEME_KEY))
 }
 
 pub fn section_title(id: &str) -> Option<&'static str> {
@@ -110,7 +113,7 @@ pub fn section(settings: &Settings, id: &str, firmware_version: f64, ports: &[St
             .section(title)
             .into_iter()
             .map(|option| describe(title, option))
-            .filter(|field| !RETIRED_KEYS.contains(&field.key.as_str()))
+            .filter(|field| !RETIRED_KEYS.contains(&field.key.as_str()) && field.key != THEME_KEY)
             .collect(),
         ports: (id == "maslow").then(|| ports.to_vec()),
     })
