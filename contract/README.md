@@ -55,8 +55,9 @@ ends it. **The Rust backend differs from Python here on purpose:**
   job.
 - `GET /api/state`, `GET /api/main` and `statusMessage` carry `probing` (true while a probe is queued or descending),
   which the UI uses to grey out every move. Python never sends it; the schemas list it as optional.
-- `GET /api/state` carries `version`, the webcontrol-rs release, which `webcontrol-update` checks after a restart.
-  Python never sends it; the schema lists it as optional.
+- `GET /api/state` carries `version`, the webcontrol-rs release, which `webcontrol-update` checks after a restart,
+  and `commit`, the git commit it was built from; the status bar shows both.
+  Python never sends either; the schema lists both as optional.
 
 HTTP `family` is `api` (JSON for this UI), `classic` (old form routes
 the UI reuses, with their old shapes) or `static`.

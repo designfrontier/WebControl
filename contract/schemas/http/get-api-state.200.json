@@ -109,6 +109,9 @@
     },
     "version": {
       "type": "string"
+    },
+    "commit": {
+      "type": "string"
     }
   },
   "required": [

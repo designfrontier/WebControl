@@ -131,6 +131,8 @@ export const startupStateSchema = z.object({
   backend: z.enum(["python", "rust"]).optional(),
   /** The webcontrol-rs release, such as "0.2.0". Rust only; Python never sends it. */
   version: z.string().optional(),
+  /** The git commit the webcontrol-rs binary was built from. Rust only. */
+  commit: z.string().optional(),
 });
 export type StartupState = z.infer<typeof startupStateSchema>;
 
