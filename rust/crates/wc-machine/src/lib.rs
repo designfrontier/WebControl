@@ -4,6 +4,7 @@
 mod actions;
 mod alarm;
 pub mod calibration;
+mod camera;
 mod clearance;
 pub mod commands;
 mod edits;
@@ -23,6 +24,7 @@ mod ui;
 mod upgrade;
 mod work;
 
+pub use camera::CameraReport;
 pub use edits::{Request, Response};
 pub use gates::{Gate, gate};
 pub use job::Flow;

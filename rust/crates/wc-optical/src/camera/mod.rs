@@ -1,4 +1,4 @@
-//! Track C: the camera trait, the Camera Source setting and opening a source.
+//! The camera trait, the Camera Source setting, opening a source, and the pieces the adapters share.
 
 pub mod file;
 pub mod rpicam;
@@ -11,7 +11,17 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::{Frame, OpticalError, Result, pending};
+use image::ImageEncoder;
+use image::codecs::png::PngEncoder;
+use image::imageops::{FilterType, resize};
+
+use crate::{Frame, OpticalError, Result};
+
+/// The live overlay's size, as Python's capture thread sent it.
+pub const PREVIEW_SIZE: (u32, u32) = (256, 192);
+const DEFAULT_SIZE: (u32, u32) = (640, 480);
+const DEFAULT_FPS: f64 = 5.0;
+const MAX_FPS: f64 = 30.0;
 
 /// From Camera Settings: `videoSize` and `fps`.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -19,6 +29,19 @@ pub struct CameraConfig {
     pub width: u32,
     pub height: u32,
     pub fps: f64,
+}
+
+impl CameraConfig {
+    /// `videoSize` is `WIDTHxHEIGHT`; anything unreadable falls back to 640x480 at 5 fps.
+    pub fn from_settings(video_size: &str, fps: f64) -> CameraConfig {
+        let size = video_size
+            .split_once('x')
+            .and_then(|(w, h)| Some((w.trim().parse().ok()?, h.trim().parse().ok()?)))
+            .filter(|&(w, h): &(u32, u32)| w > 0 && h > 0)
+            .unwrap_or(DEFAULT_SIZE);
+        let fps = if fps.is_finite() && fps > 0.0 { fps.min(MAX_FPS) } else { DEFAULT_FPS };
+        CameraConfig { width: size.0, height: size.1, fps }
+    }
 }
 
 /// One reader per device; the server's capture task owns it and fans frames out.
@@ -64,7 +87,7 @@ impl FromStr for Source {
 /// `sled` is the simulator's position, which only `--simulate` has.
 pub fn open(source: &Source, sled: Option<SledPosition>) -> Result<Box<dyn Camera>> {
     match source {
-        Source::Auto => pending("camera::open(auto)"),
+        Source::Auto => open(&pick_auto(rpicam::list_cameras().as_deref(), &capture_devices())?, sled),
         Source::Rpicam => Ok(Box::new(rpicam::RpicamCamera::new())),
         Source::Device(path) => device(path),
         Source::Dir(path) => Ok(Box::new(file::DirCamera::new(path))),
@@ -72,6 +95,16 @@ pub fn open(source: &Source, sled: Option<SledPosition>) -> Result<Box<dyn Camer
             Some(sled) => Ok(Box::new(synthetic::SyntheticCamera::new(sled))),
             None => Err(OpticalError::Invalid("The synthetic camera needs webcontrol-rs --simulate".into())),
         },
+    }
+}
+
+/// `auto`: the Pi camera if `listing` (`rpicam-hello --list-cameras`) names one, else the first USB webcam.
+pub fn pick_auto(listing: Option<&str>, devices: &[PathBuf]) -> Result<Source> {
+    let numbered = |line: &str| line.trim_start().split_once(" : ").is_some_and(|(n, _)| n.parse::<u32>().is_ok());
+    match (listing.is_some_and(|text| text.lines().any(numbered)), devices.first()) {
+        (true, _) => Ok(Source::Rpicam),
+        (false, Some(device)) => Ok(Source::Device(device.clone())),
+        (false, None) => Err(OpticalError::Camera("no Pi camera (rpicam-hello lists none) and no USB webcam".into())),
     }
 }
 
@@ -83,4 +116,59 @@ fn device(path: &Path) -> Result<Box<dyn Camera>> {
 #[cfg(not(target_os = "linux"))]
 fn device(path: &Path) -> Result<Box<dyn Camera>> {
     Err(OpticalError::Camera(format!("{} needs Linux's V4L2", path.display())))
+}
+
+#[cfg(target_os = "linux")]
+fn capture_devices() -> Vec<PathBuf> {
+    v4l2::capture_devices()
+}
+
+#[cfg(not(target_os = "linux"))]
+fn capture_devices() -> Vec<PathBuf> {
+    Vec::new()
+}
+
+/// The frame shrunk to [`PREVIEW_SIZE`] as a PNG, for the live overlay.
+pub fn preview(frame: &Frame) -> Result<Vec<u8>> {
+    let invalid = || OpticalError::Invalid(format!("a {}x{} frame without its pixels", frame.width, frame.height));
+    let image = image::GrayImage::from_raw(frame.width, frame.height, frame.luma.clone()).ok_or_else(invalid)?;
+    let small = resize(&image, PREVIEW_SIZE.0, PREVIEW_SIZE.1, FilterType::Triangle);
+    let mut png = Vec::new();
+    PngEncoder::new(&mut png)
+        .write_image(small.as_raw(), PREVIEW_SIZE.0, PREVIEW_SIZE.1, image::ExtendedColorType::L8)
+        .map_err(|error| OpticalError::Invalid(error.to_string()))?;
+    Ok(png)
+}
+
+/// Cuts an MJPEG byte stream into whole JPEGs at each SOI (`FF D8`) and EOI (`FF D9`).
+#[derive(Debug, Default)]
+pub struct MjpegSplitter {
+    pending: Vec<u8>,
+}
+
+impl MjpegSplitter {
+    /// Every JPEG `bytes` completes; a partial one waits for the next call.
+    pub fn push(&mut self, bytes: &[u8]) -> Vec<Vec<u8>> {
+        self.pending.extend_from_slice(bytes);
+        let mut jpegs = Vec::new();
+        while let Some(jpeg) = self.next_jpeg() {
+            jpegs.push(jpeg);
+        }
+        jpegs
+    }
+
+    fn next_jpeg(&mut self) -> Option<Vec<u8>> {
+        let Some(start) = find(&self.pending, [0xFF, 0xD8], 0) else {
+            let keep = usize::from(self.pending.last() == Some(&0xFF));
+            self.pending.drain(..self.pending.len() - keep);
+            return None;
+        };
+        self.pending.drain(..start);
+        let end = find(&self.pending, [0xFF, 0xD9], 2)? + 2;
+        Some(self.pending.drain(..end).collect())
+    }
+}
+
+fn find(bytes: &[u8], marker: [u8; 2], from: usize) -> Option<usize> {
+    bytes.get(from..)?.windows(2).position(|pair| pair == marker).map(|at| at + from)
 }

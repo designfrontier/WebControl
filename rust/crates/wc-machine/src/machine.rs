@@ -88,6 +88,8 @@ pub enum Event {
     Button(Button),
     /// A [`Work`] the shell ran.
     Computed(Done),
+    /// From the server's capture task, while [`Snapshot::camera`] holds.
+    Camera(crate::camera::CameraReport),
 }
 
 /// What the shell must do after an event, in order.
@@ -206,6 +208,8 @@ pub struct Snapshot {
     pub ports: Vec<String>,
     pub settings: Shared<Settings>,
     pub firmware_upgrade: FirmwareUpgrade,
+    /// The live camera overlay is on; the server's capture task streams to it while this holds.
+    pub camera: bool,
 }
 
 impl Snapshot {
@@ -368,6 +372,8 @@ pub struct Machine {
     pub(crate) upgrade: Upgrade,
     pub(crate) restart: crate::sync::Restart,
     pub(crate) lanes: Lanes,
+    /// `toggleCamera` turned the overlay on.
+    pub(crate) camera_on: bool,
 }
 
 pub(crate) fn broadcast<M: Message>(message: &M) -> Effect {
@@ -424,6 +430,7 @@ impl Machine {
             upgrade: Upgrade::new(Image::embedded()),
             restart: crate::sync::Restart::None,
             lanes: Lanes::default(),
+            camera_on: false,
         }
     }
 
@@ -487,6 +494,7 @@ impl Machine {
                 self.action(&action, now, &mut effects);
             }
             Event::Computed(done) => self.computed(done, &mut effects),
+            Event::Camera(report) => self.camera_report(report, &mut effects),
         }
         self.pump(now, &mut effects);
         self.status_if_changed(&mut effects);
@@ -565,6 +573,7 @@ impl Machine {
             ports: self.ports.clone(),
             settings: Shared(self.settings.clone()),
             firmware_upgrade: self.upgrade.view(),
+            camera: self.camera_wanted(),
         }
     }
 }

@@ -107,8 +107,7 @@ impl Machine {
         let failure = match command {
             "stopRun" => self.stop_run(now, effects),
             "stopZ" => self.stop_z(now, effects),
-            // statusRequest only asks for the camera's status, and the camera is out of scope.
-            "statusRequest" => None,
+            "statusRequest" | "toggleCamera" | "queryCamera" => self.camera_action(command, &action.arg, effects),
             "shutdown" => {
                 effects.push(Effect::Exit);
                 None

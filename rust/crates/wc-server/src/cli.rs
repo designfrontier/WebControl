@@ -130,6 +130,7 @@ pub async fn serve(options: Options, shutdown: impl Future<Output = ()> + Send +
     host.attach_gpio(Some(start_gpio(&machine)));
     println!("webcontrol-rs listening on {bound}");
     std::io::stdout().flush()?;
+    let streaming = cameras.stream_to(machine.clone());
     let state = AppState::new(machine, PingConfig::default(), paths).with_cameras(cameras);
     let closing = state.clone();
     let stopped = async move {
@@ -141,6 +142,7 @@ pub async fn serve(options: Options, shutdown: impl Future<Output = ()> + Send +
     };
     axum::serve(listener, router(state)).with_graceful_shutdown(stopped).await?;
     host.attach_gpio(None);
+    drop(streaming);
     // The machine task ends with the last handle, once its final settings save is on disk.
     let _ = tokio::time::timeout(SAVE_ON_EXIT, task).await;
     Ok(())
