@@ -48,6 +48,7 @@ pub(crate) async fn state(State(state): State<AppState>) -> Json<StartupState> {
             .collect(),
         backend: Backend::Rust,
         version: crate::VERSION.into(),
+        commit: crate::COMMIT.into(),
     })
 }
 

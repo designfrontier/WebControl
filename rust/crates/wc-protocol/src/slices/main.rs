@@ -314,4 +314,6 @@ pub struct StartupState {
     pub backend: Backend,
     /// The webcontrol-rs release (Rust only), which `webcontrol-update` checks after a restart.
     pub version: String,
+    /// The git commit the binary was built from (Rust only), shown beside the release version.
+    pub commit: String,
 }

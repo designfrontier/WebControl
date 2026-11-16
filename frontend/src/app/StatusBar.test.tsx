@@ -73,6 +73,26 @@ describe("firmware chip", () => {
   });
 });
 
+describe("software chip", () => {
+  it("shows the WebControl version and build commit beside the firmware", async () => {
+    renderApp("/", { fetch: fakeFetch({ "GET /api/state": startupState({ version: "0.2.0", commit: "7dd5305" }) }) });
+    const chip = await status().findByText("WebControl 0.2.0 · 7dd5305");
+    expect(chip).toHaveAttribute("title", "WebControl version and build");
+    expect(chip.previousElementSibling).toHaveTextContent(/^Firmware: unknown$|^(Stock|Holey|Custom) /);
+  });
+
+  it("shows the version alone when the backend sends no commit", async () => {
+    renderApp("/", { fetch: fakeFetch({ "GET /api/state": startupState({ version: "0.2.0" }) }) });
+    expect(await status().findByText("WebControl 0.2.0")).toBeInTheDocument();
+  });
+
+  it("is absent until a backend reports its version", async () => {
+    renderApp("/", { fetch: fakeFetch({ "GET /api/state": startupState({ controllerFirmwareVersion: 51.27 }) }) });
+    await status().findByText("Holey 51.27");
+    expect(status().queryByText(/^WebControl /)).not.toBeInTheDocument();
+  });
+});
+
 describe("AlarmBanner", () => {
   it("announces alarms on the calibration page and hides them when cleared", () => {
     const { socket } = renderApp("/calibration");

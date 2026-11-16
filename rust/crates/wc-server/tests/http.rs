@@ -161,7 +161,8 @@ async fn api_state_reports_the_settings_and_the_rust_backend() {
             "manualZAxisAdjust": false, "probing": false, "hostAddress": "10.0.0.5:5000", "controllerFirmwareVersion": 0.0,
             "controllerBoard": null, "firmwareBuild": null,
             "macros": [{"command": "macro1", "title": "Spindle on"}, {"command": "macro2", "title": ""}],
-            "backend": "rust", "version": wc_server::VERSION})
+            "backend": "rust", "version": wc_server::VERSION,
+            "commit": wc_server::COMMIT})
     );
 }
 
