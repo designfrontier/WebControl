@@ -55,6 +55,16 @@ fn a_typed_r_arc_no_i_and_j_can_give_is_refused_with_an_alert() {
 }
 
 #[test]
+fn an_r_arc_that_fits_the_buffer_only_with_its_r_is_refused_as_too_long() {
+    let mut rig = Rig::connected();
+    let line = format!("G2 X10 Y10 R10{}", " ".repeat(100));
+    let mut effects = rig.send(Event::Request { id: 1, request: Request::SendGcode(line) });
+    (0..10).for_each(|_| effects.extend(rig.advance(100)));
+    assert_eq!(alerts(&effects), ["That command is 129 characters; the controller accepts at most 126."]);
+    assert!(written(&effects).is_empty());
+}
+
+#[test]
 fn after_a_stop_the_status_report_says_where_the_arc_starts() {
     let mut rig = Rig::connected();
     rig.send(Event::Request { id: 1, request: Request::SendGcode("G0 X50 Y50".into()) });

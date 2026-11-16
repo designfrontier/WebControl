@@ -194,8 +194,8 @@ non-zero and X or Y differs from the start: centre = midpoint + e·√(R² − (
 1 for G3. `sq(R)` drops R's sign, so a negative R cuts the short arc, not the one over 180°; an R shorter than half
 the chord gives a NaN centre; with no X/Y change it falls back to I and J. Every version's G2/G3 reads X, Y and Z as
 absolute even under G91 (only G0/G1 honour it), ignores G17/G18/G19 (`Command G17 unsupported and ignored.`) and
-cuts in XY. Like every word, R is found by the first `R` in the segment (the line is split at each G and M and upper-
-cased first), and its number is the digits and punctuation after it, so `R 5` reads as R0.
+cuts in XY. Like every word, R is found by the first `R` in the segment (the line is upper-cased, then split at each
+G and M), and its number is the digits and punctuation after it, so `R 5` reads as R0.
 
 ## Implications
 
