@@ -68,7 +68,11 @@ export const createClient = (socket: Transport): WebControlClient => {
 
   socket.on("message", (raw: never) => received(raw));
   socket.on("connect", () => setStatus("connected"));
-  socket.on("disconnect", () => setStatus("disconnected"));
+  socket.on("disconnect", () => {
+    // A held message from a dropped connection is stale; the next connect pushes it again.
+    early.length = 0;
+    setStatus("disconnected");
+  });
   socket.on("connect_error", () => setStatus("disconnected"));
 
   const emit = <E extends ClientEvent>(event: E, payload: ClientEvents[E]) => {

@@ -46,6 +46,16 @@ describe("createClient messages", () => {
     expect(seen).toEqual([1, 2]);
   });
 
+  it("drops held messages when their connection drops before anyone listens", async () => {
+    const { socket, client } = setup();
+    socket.serverMessage("connectionStatus", { status: "connected", port: "/dev/ttyACM0" });
+    socket.serverDisconnect();
+    const onLink = vi.fn();
+    client.onMessage("connectionStatus", onLink);
+    await Promise.resolve();
+    expect(onLink).not.toHaveBeenCalled();
+  });
+
   it("holds only the newest 256 messages", async () => {
     const { socket, client } = setup();
     Array.from({ length: 300 }, (_, i) => socket.serverMessage("healthMessage", { cpuUsage: i, bufferSize: 0 }));
