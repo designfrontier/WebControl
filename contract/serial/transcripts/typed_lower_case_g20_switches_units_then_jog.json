@@ -1,0 +1,60 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "typed_lower_case_g20_switches_units_then_jog",
+    "description": "A g20 typed in Send G-code goes out upper-cased, as the firmware reads it, and switches WebControl to inches with the controller: home and the jog step are converted, an XY jog's distance is in inches, and the Z panel's mm move goes out in inches after G20 instead of putting the controller back in mm.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "f6a976e"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 254,
+      "y": -127
+    },
+    "bootBanner": [
+      "PCB v1.1 Detected",
+      "Grbl v1.00",
+      "ready",
+      "ok",
+      "[Forward Calculating Position]",
+      "position loaded at:",
+      "247.79",
+      "-5.88"
+    ]
+  },
+  "events": [
+    {"type": "http", "method": "POST", "path": "/sendGCode", "form": {"gcode": "g20"}, "status": 200},
+    {"type": "tx", "bytes": "G20 \n"},
+    {"type": "rx", "line": "G20"},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "state": {"units": "INCHES", "home": {"x": 10.0, "y": -5.0}}, "settings": [{"section": "Computed Settings", "key": "distToMove", "value": "0.03937007874015748"}]},
+    {"type": "ui", "action": {"command": "move", "arg": "up", "arg1": "0.5"}},
+    {"type": "tx", "bytes": "G91  \n"},
+    {"type": "rx", "line": "G91"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G00 Y0.5  \n"},
+    {"type": "rx", "line": "G00 Y0.5"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "G90"},
+    {"type": "rx", "line": "ok"},
+    {"type": "ui", "action": {"command": "moveZ", "arg": "raise", "arg1": "0.25"}},
+    {"type": "tx", "bytes": "G20  \n"},
+    {"type": "rx", "line": "G20"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G91  \n"},
+    {"type": "rx", "line": "G91"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G00 Z0.0098  \n"},
+    {"type": "rx", "line": "G00 Z0.0098"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "G90"},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "state": {"units": "INCHES", "positioningMode": "G90"}}
+  ]
+}

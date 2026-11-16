@@ -204,6 +204,8 @@ the backend had been quiet for `quiet` seconds, one line per settle.
 | `line_too_long_pauses_the_job` | a line over 126 bytes as written is never sent; the job pauses with an alert |
 | `unclosed_comment_pauses_the_job` | an unclosed `(` is never sent; the job pauses with an alert |
 | `realtime_characters_stripped_from_lines` | `!`, `~`, backtick, `?`, control characters and comments removed from lines |
+| `typed_lower_case_g20_switches_units_then_jog` | A `g20` sent with `/sendGCode` goes out as `G20` and switches WebControl to inches (home, jog step); the mm Z panel then moves in inches |
+| `lower_case_file_g91_g90_m0_then_resume` | A lower-case file goes out upper-cased: `g91` stops the home shift, `g90` resumes it, `m0` pauses, Resume returns |
 | `z_limits_refused_on_51_27` | Z-limit actions alert and send nothing below 51.292 |
 | `z_limits_on_51_292` | `$63`/`$64` in mm, clear, `B20`, with 51.292's replies to each |
 | `holey_calibration_accept_writes_settings` | Calculate sends nothing; Accept writes `$3`, `$2`, `$40`, `$41` |
@@ -539,3 +541,11 @@ Where the Rust backend writes something different from Python by owner decision.
    machine. The transcript runner reopens the port as the shell does; the banner after a reset is an `rx`.
    Transcripts: `connect_chain_over_sprocket_differs_restarts_the_controller`,
    `connect_eeprom_read_fail_restores_settings`.
+6. **Lines are read and sent upper-cased** (2026-11-15). The firmware upper-cases every line before it parses it
+   (`spec/firmware.md` §1), but Python checked lines case-sensitively and wrote them as the file or the user had
+   them (only absolute file lines were upper-cased, by the home shift). So a typed `g20` put the controller in inches
+   while WebControl stayed in mm, a lower-case `m0` or `m6` streamed on without a pause, `g91` and `g90` were missed,
+   and a restart dropped a lower-case `m3`. Rust upper-cases each line once its comments are stripped, before it
+   checks or writes it, and reads the file upper-cased for the restart state, the positions and the preview (the
+   loaded text keeps the case it was written in). No upper-case line changes, so no earlier transcript does.
+   Transcripts: `typed_lower_case_g20_switches_units_then_jog`, `lower_case_file_g91_g90_m0_then_resume`.

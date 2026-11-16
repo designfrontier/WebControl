@@ -41,7 +41,7 @@ impl CommandedZ {
     /// Whether `line` moves Z, redefines it or changes units, which a status report read before it no longer
     /// describes.
     pub fn written(&mut self, line: &str) -> bool {
-        let line = words::blank_comments(line);
+        let line = words::code(line);
         let codes = words::numbers('G', &line);
         let last_of = |pair: [f64; 2]| codes.iter().rev().find(|code| pair.contains(code)).copied();
         let units = match last_of([20.0, 21.0]) {
@@ -112,6 +112,9 @@ mod tests {
         let z = after(&["G20 ", "G0 Z0.5 "]);
         assert_eq!((z.z_mm(), z.units()), (Some(12.7), Some(Units::Inches)));
         assert_eq!(after(&["G20 G0 Z1 ", "G21 ", "G91 ", "G0 Z-2.7 "]).z_mm(), Some(22.7));
+        let lower = after(&["g20 ", "g91 ", "g0 z0.5 "]);
+        assert_eq!((lower.z_mm(), lower.units()), (None, Some(Units::Inches)), "relative from an unknown Z");
+        assert_eq!(after(&["g20 g0 z0.5 "]).z_mm(), Some(12.7));
     }
 
     #[test]

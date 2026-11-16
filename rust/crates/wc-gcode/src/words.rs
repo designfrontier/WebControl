@@ -87,6 +87,11 @@ pub fn blank_comments(line: &str) -> String {
     replace_semicolons(&replace_parens(line, ""), "\n")
 }
 
+/// The line as the firmware reads its words: comments blanked, then upper-cased (holey 51.27 `prettyReadLine`).
+pub fn code(line: &str) -> String {
+    blank_comments(line).to_ascii_uppercase()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -131,5 +136,6 @@ mod tests {
         assert_eq!(replace_semicolons("G1 ; a ; b", ""), "G1 ");
         assert_eq!(replace_semicolons("a;b\nc;d", "\n"), "a\n\nc\n");
         assert_eq!(blank_comments("(c) G1 ; x"), " G1 \n");
+        assert_eq!(code("(c) g1 x1 ; y"), " G1 X1 \n");
     }
 }

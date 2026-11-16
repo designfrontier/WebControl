@@ -17,6 +17,9 @@ upgrade flow are built against. Firmware paths are relative to `cnc_ctrl_v1/`.
 - **Link:** 57600 baud 8N1 in every version. Lines in end at `\n` (`\r` is stripped); lines out end `\r\n`.
 - **Buffer:** `INCBUFFERLENGTH 128`, a ring buffer holding 127 bytes. WebControl's `bufferSize = 126` is safe; it
   counts the appended space and `\n` exactly as stored. `?` and the realtime characters never enter the ring.
+- **Case:** every version trims each line and upper-cases it before parsing it (`maslowRingBuffer::prettyReadLine`,
+  `maslowRingBuffer.cpp:102-112`, from `gcodeExecuteLoop`: S126 `GCode.cpp:622`, H27 `:685`, H292 `:774`), so `g20`,
+  `m0`, `m6`, `t2`, `g91`, `g38.2`, `b05` and `$rst` act exactly as their upper-case forms.
 - **Over-long lines:** a line over 126 characters overflows the ring. The firmware prints `Buffer overflow!`, stops,
   flushes, and then **executes the unread tail of the line as a new command** and acks it.
 - **`ok`:** one per line, sent when the line *finishes* (moves, dwells and pauses block first). No `ok` for a line
@@ -209,6 +212,7 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
 | A14 | Low | `$86`, `$144` rejected; `$43` unused on holey; G17 ignored. |
 | A15 | Info | `bufferSize = 126` is right; PWR:/F: parsing is dead code; PE lines are mis-parsed until B05 is parsed. |
 | A16 | Fixed | After a touching probe WebControl queued `G10 Z0` behind anything already queued; behind a Resume's restart it zeroed Z at the restart's height. The firmware zeroes Z on a touch, so none is sent. Resume and other moving actions pressed mid-probe are now refused until the probe answers or Stop. |
+| A17 | Fixed | Every check WebControl made of a line (units, positioning and the home shift, M0/M1, T and M6, G38.2, `$RST`, the restart state, the preview's G words) was case-sensitive, so a lower-case `g20`, `m0` or `g91` acted on the controller but not in WebControl (upstream #177, #102). Lines are now upper-cased before they are read or written. |
 
 ### B. Rust backend requirements
 
@@ -231,7 +235,8 @@ loops forever on one, so WebControl's comment stripping is load-bearing).
    optionally resync from the PE `space` field when idle.
 4. Realtime: `!` resets accounting (immediate `ok`, no ack for the aborted line); `~` immediate `ok`.
 5. Sanitise outgoing lines: strip comments, reject an unclosed `(`, remove `!`, `~`, backtick, `?` and control
-   characters.
+   characters, and upper-case the rest (§1); read every line WebControl inspects (file, typed, restart, preview)
+   upper-cased too.
 6. ALARM or `Buffer overflow!` halts streaming and rewinds the job to the oldest unacknowledged line; acks are
    ignored until a status report (the resync); a probe `error:` is that line's ack;
    `$RST` has no `ok` of its own; detect a trailing glued `ok` on 51.291.

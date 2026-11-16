@@ -88,7 +88,7 @@ impl StateParser {
     }
 
     fn line(&mut self, raw: &str) -> Result<(), ()> {
-        let line = words::blank_comments(raw);
+        let line = words::code(raw);
         if py::isspace(&line) {
             return Ok(());
         }
@@ -582,6 +582,18 @@ mod tests {
         assert_eq!(tool_of(&["G21", "T2", "M6", "T5", "G0 X1"]), Some(2));
         assert_eq!(tool_of(&["G21", "G0 X1 T4", "M6", "G0 X1"]), Some(4));
         assert_eq!(tool_of(&["G21", "M6"]), None);
+    }
+
+    #[test]
+    fn a_lower_case_file_is_read_as_the_firmware_upper_cases_it() {
+        let lines = ["g20", "g90", "t2 m6", "g0 x1 y2", "m3 s1000", "g1 z-0.1 f10", "g91", "g1 x1", "g1 x1"];
+        let state = state_at(&file(&lines), 8, 0.0, 0.0, Units::Mm).unwrap();
+        assert_eq!(
+            (state.units, state.positioning, state.x, state.z),
+            (Units::Inches, Positioning::Relative, 2.0, Some(-0.1))
+        );
+        assert_eq!((state.tool, state.spindle, state.spindle_speed), (Some(2), Some("M3 "), Some(1000.0)));
+        assert!(restart_with(&lines, 8, (0.0, 0.0), Units::Mm, 2).contains(&"M3 ".into()));
     }
 
     #[test]
