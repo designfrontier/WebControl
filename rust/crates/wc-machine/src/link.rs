@@ -17,6 +17,7 @@ use crate::alarm::survives_alarm;
 use crate::clearance::BitHeight;
 use crate::gpio::Led;
 use crate::job::{Flow, pause_button};
+use crate::lost::Watch;
 use crate::machine::{Controller, Effect, Link, Machine, Probe, Queued, alert, broadcast};
 
 /// The 5 s poller Python used to reopen the port.
@@ -191,6 +192,7 @@ impl Machine {
         }
         let reply = classify(line);
         self.acknowledge(line, &reply, effects);
+        self.watch_for_lost_line(&reply, now, effects);
         self.react(line, reply, now, effects);
     }
 
@@ -209,6 +211,7 @@ impl Machine {
         }
         controller.ready = true;
         let acked = controller.accounting.acked();
+        controller.watch.acked(acked.as_ref());
         if controller.accounting.is_empty() {
             self.bit.settled();
         }
@@ -346,6 +349,7 @@ impl Machine {
     pub(crate) fn await_resync(&mut self, now: Duration) {
         let controller = &mut self.controller;
         controller.accounting.clear();
+        controller.watch = Watch::default();
         controller.probe = None;
         controller.ready = false;
         controller.resync_after = Some(now + RESYNC_DELAY);
@@ -362,6 +366,7 @@ impl Machine {
         effects.push(Effect::Realtime(message.clone().into_bytes()));
         effects.push(Effect::Log(format!("Sent: {text}")));
         self.controller.last_write = Some(now);
+        self.controller.watch.written(false);
         if text == "!" {
             self.await_resync(now);
         } else {
@@ -372,9 +377,11 @@ impl Machine {
 
     pub(crate) fn write(&mut self, text: &str, index: Option<usize>, now: Duration, effects: &mut Vec<Effect>) -> u64 {
         let message = format!("{text}\n");
+        let idle = self.controller.accounting.is_empty();
         let id = self.controller.accounting.sent(&message, index);
         self.controller.ready = false;
         self.controller.last_write = Some(now);
+        self.controller.watch.written(idle);
         if let Some(mode) = positioning_set_by(&message) {
             self.positioning = mode;
         }
