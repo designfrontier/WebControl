@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useClient, useFetch, useMachine, useServerMessage } from "../../app/context";
 import type { Motor, PidKind, PidSettings, PidTestRequest } from "../../protocol";
+import { decimalPoint } from "../../numbers/decimal";
 import { selectGcodeLocked, selectRunState } from "../../state/machine";
 import { getPidSettings, startPidTest } from "./api";
 import { LineChart } from "./LineChart";
@@ -43,7 +44,7 @@ const FIELDS: Record<PidKind, { field: Field; label: string }[]> = {
 
 /** Matches api/system.py: the firmware parses plain decimals only. */
 const PLAIN_DECIMAL = /^-?(\d+\.?\d*|\.\d+)$/;
-const isNumber = (value: string | undefined) => value !== undefined && PLAIN_DECIMAL.test(value.trim());
+const isNumber = (value: string | undefined) => value !== undefined && PLAIN_DECIMAL.test(decimalPoint(value.trim()));
 
 const MotorAdjustment = ({ fourMotor, disabled }: { fourMotor: boolean; disabled: boolean }) => {
   const client = useClient();
@@ -120,7 +121,8 @@ const PidTestForm = ({ kind, settings, chart, disabled }: FormProps) => {
       return;
     }
     setStatus({ text: "Starting test…", error: false });
-    startPidTest(fetchImpl, form).then(
+    const numbers = Object.fromEntries(FIELDS[kind].map(({ field }) => [field, decimalPoint(form[field] ?? "")]));
+    startPidTest(fetchImpl, { ...form, ...numbers }).then(
       () => setStatus({ text: "Test sent. Results appear here when the controller finishes.", error: false }),
       (error: unknown) => setStatus({ text: `Could not start the test: ${errorText(error)}`, error: true }),
     );

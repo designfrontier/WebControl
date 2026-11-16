@@ -10,9 +10,10 @@ describe("parseDistance", () => {
     [" 0.25 ", 0.25],
     [".5", 0.5],
     ["2.", 2],
+    ["2,5", 2.5],
   ])("accepts %j", (text, value) => expect(parseDistance(text)).toBe(value));
 
-  it.each(["", "0", "0.0", "-1", "abc", "1e3", "1.2.3"])("rejects %j", (text) => {
+  it.each(["", "0", "0.0", "-1", "abc", "1e3", "1.2.3", "1,234.5", "1.234,5"])("rejects %j", (text) => {
     expect(parseDistance(text)).toBeNull();
   });
 });
@@ -72,6 +73,15 @@ describe("quick configure form", () => {
     const bad = { ...form, rotationRadius: "", motorSpacingX: "-2", motorOffsetY: "lots" };
     expect(invalidFields(bad)).toEqual(["rotationRadius", "motorSpacingX", "motorOffsetY"]);
     expect(fromForm(bad)).toBeNull();
+  });
+
+  it("reads a decimal comma as a point and refuses mixed separators", () => {
+    expect(fromForm({ ...form, rotationRadius: "138,4" })).toEqual(quickConfigureValues());
+    expect(invalidFields({ ...form, motorSpacingX: "1.234,5", motorOffsetY: "1,234.5" })).toEqual([
+      "motorSpacingX",
+      "motorOffsetY",
+    ]);
+    expect(subtractGearbox("2978,4")).toBe("2938");
   });
 
   it("fills in each kit's rotation radius and leaves Custom alone", () => {

@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import type { CreatedDirectory } from "../../protocol";
 import { useSubmit } from "./hooks";
@@ -105,26 +105,35 @@ interface EditorProps {
 
 const countLines = (text: string) => (text === "" ? 0 : text.split("\n").length);
 
+const lineNumbers = (count: number) => Array.from({ length: Math.max(count, 1) }, (_, i) => i + 1).join("\n");
+
 /** A plain monospace textarea: no wrapping, spellcheck or autocorrect, which would mangle gcode. */
 export const GcodeEditor = ({ label, value, onChange, hint }: EditorProps) => {
   const id = useId();
+  const gutter = useRef<HTMLPreElement>(null);
   const lines = countLines(value);
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
-      <textarea
-        id={id}
-        className="code-editor"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        rows={18}
-        wrap="off"
-        spellCheck={false}
-        autoCapitalize="off"
-        autoComplete="off"
-        autoCorrect="off"
-        aria-describedby={`${id}-hint`}
-      />
+      <div className="code-frame">
+        <pre className="code-gutter" ref={gutter} aria-hidden="true">
+          {lineNumbers(lines)}
+        </pre>
+        <textarea
+          id={id}
+          className="code-editor"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          onScroll={(event) => gutter.current && (gutter.current.scrollTop = event.currentTarget.scrollTop)}
+          rows={18}
+          wrap="off"
+          spellCheck={false}
+          autoCapitalize="off"
+          autoComplete="off"
+          autoCorrect="off"
+          aria-describedby={`${id}-hint`}
+        />
+      </div>
       <span id={`${id}-hint`} className="muted">
         {lines} {lines === 1 ? "line" : "lines"}. {hint}
       </span>

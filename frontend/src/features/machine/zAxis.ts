@@ -1,10 +1,11 @@
+import { decimalPoint } from "../../numbers/decimal";
 import type { Units } from "../../protocol";
 
 const MM_PER_INCH = 25.4;
 
 /** A Z step the user typed: a positive decimal, or null. */
 export const parseDistance = (text: string): number | null => {
-  const trimmed = text.trim();
+  const trimmed = decimalPoint(text.trim());
   if (!/^\d*\.?\d+$|^\d+\.$/.test(trimmed)) return null;
   const value = Number(trimmed);
   return value > 0 ? value : null;

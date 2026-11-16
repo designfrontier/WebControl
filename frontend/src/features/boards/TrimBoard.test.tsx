@@ -36,6 +36,14 @@ describe("Trim board", () => {
     await expectPath("/");
   });
 
+  it("posts a decimal comma trim as a point", async () => {
+    const { user, trim } = setup();
+    await screen.findByLabelText("Trim top");
+    await enter(user, "Trim top", "1,5");
+    await user.click(screen.getByRole("button", { name: "Trim board" }));
+    expect(trim.forms()).toEqual([{ trimTop: "1.5", trimBottom: "0", trimLeft: "0", trimRight: "0", units: "inches" }]);
+  });
+
   it("rejects blank and negative trims", async () => {
     const { user, trim } = setup();
     await screen.findByLabelText("Trim top");

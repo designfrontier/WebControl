@@ -72,6 +72,11 @@ service run `systemctl poweroff` (the UI's Turn Off Raspberry Pi) and nothing el
 `install-pi.sh` installs, and keeps each backup in `~/.WebControl/firmware-backups/<time>/`; `M6.md` rehearses an
 upgrade and a rollback before the real one.
 
+Behind a reverse proxy (nginx) or HTTPS, the proxy must forward the original `Host` (`proxy_set_header Host $host;`)
+and the WebSocket `Upgrade`/`Connection` headers: `wc-server` refuses a WebSocket whose `Origin` does not match
+`Host` (`crates/wc-server/src/ws.rs`). `spec/INSTALL-PI.md` has an nginx example. Direct `http://maslow.local:5000`
+use needs none of this.
+
 ## Releases
 
 `.github/workflows/release.yml` runs on an arm64 runner. It builds the 51.292 hex with `firmware/docker-build.sh`,

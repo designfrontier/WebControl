@@ -1,3 +1,5 @@
+import { decimalPoint } from "../../numbers/decimal";
+
 export interface MeasurementField {
   key: string;
   label: string;
@@ -8,7 +10,7 @@ export type Parsed = { values: Record<string, number> } | { errors: Record<strin
 
 /** A finite number from a text field, or null when it is blank or not a number. */
 export const parseNumber = (text: string) => {
-  const trimmed = text.trim();
+  const trimmed = decimalPoint(text.trim());
   const value = Number(trimmed);
   return trimmed === "" || !Number.isFinite(value) ? null : value;
 };

@@ -16,6 +16,9 @@ describe("parseNumber", () => {
     ["abc", null],
     ["Infinity", null],
     ["1e400", null],
+    ["2,5", 2.5],
+    ["1,234.5", null],
+    ["1.234,5", null],
   ])("parses %j as %j", (text, expected) => {
     expect(parseNumber(text)).toBe(expected);
   });
