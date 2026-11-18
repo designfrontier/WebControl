@@ -59,7 +59,8 @@ pacing; calibration after a cut has shown jobs work, since it changes the geomet
 
 ## Safety, in every checklist
 
-- **Router switched off at its own switch, and the bit removed**, except in `jobs.md` section 7, the real cut.
+- **Router switched off at its own switch, and the bit removed**, except for the real cuts: `jobs.md` section 7 and
+  `pacing.md` section 5.
 - The sled has room to move, and you can reach the controller's power.
 - Keep a hand near the UI's **Stop** button. If Stop does not stop the sled within a second, cut the controller's
   power, report it, and do not go on.
