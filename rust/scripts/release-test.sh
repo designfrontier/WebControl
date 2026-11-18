@@ -36,7 +36,7 @@ expected_contents() {
   {
     printf '%s\n' "$top" "$top/rust-checklists"
     printf "$top/%s\n" webcontrol-rs install-pi.sh webcontrol-update wc-switch webcontrol-rs.service \
-      webcontrol-conflicts.conf webcontrol-rs.sudoers README.md
+      webcontrol-conflicts.conf webcontrol-rs.sudoers webcontrol-update@.service README.md
     (cd "$repo/spec" && find rust-checklists -type f) | sed "s|^|$top/|"
   } | sort
 }

@@ -1,0 +1,13 @@
+# webcontrol-update@update.service and webcontrol-update@rollback.service, which the UI starts through sudo.
+# A unit of its own, so the update outlives the webcontrol-rs restart it makes.
+[Unit]
+Description=webcontrol-update %i, started from the WebControl UI
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/webcontrol-update --service %i
+StateDirectory=webcontrol-rs
+StateDirectoryMode=0755
+TimeoutStartSec=15min

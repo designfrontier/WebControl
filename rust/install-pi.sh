@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # Runs on the Pi: installs webcontrol-rs, enables it and starts it unless it is already running.
-#   bash install-pi.sh <dir with webcontrol-rs, the unit, the drop-in, wc-switch, webcontrol-update and the sudoers rule>
+#   bash install-pi.sh <dir with webcontrol-rs, the units, the drop-in, wc-switch, webcontrol-update and the sudoers rule>
+# As root (webcontrol-update@update.service runs it) it calls nothing through sudo.
 # A running webcontrol.service (an older WebControl on the same disk) keeps the port; switch with `wc-switch rust`.
 set -euo pipefail
 
 src="${1:?usage: install-pi.sh <staging dir>}"
 root="${WC_ROOT:-}"
-read -r -a SYSTEMCTL <<< "${WC_SYSTEMCTL:-sudo systemctl}"
-read -r -a SUDO <<< "${WC_SUDO:-sudo}"
-read -r -a APT <<< "${WC_APT:-sudo apt-get install -y avrdude}"
+as_root="$([ "$(id -u)" = 0 ] || echo sudo)"
+read -r -a SYSTEMCTL <<< "${WC_SYSTEMCTL:-$as_root systemctl}"
+read -r -a SUDO <<< "${WC_SUDO:-$as_root}"
+read -r -a APT <<< "${WC_APT:-$as_root apt-get install -y avrdude}"
 user="${WC_USER:-${SUDO_USER:-$(id -un)}}"
 opt="$root/opt/webcontrol-rs"
 units="$root/etc/systemd/system"
@@ -18,19 +20,20 @@ if [ -z "$root" ]; then
   "$src/webcontrol-rs" --version > /dev/null || { echo "webcontrol-rs does not run here (glibc 2.36+ needed)" >&2; exit 1; }
 fi
 
-"${SUDO[@]}" install -d "$opt" "$units/webcontrol.service.d" "$root/usr/local/bin" "$root/etc/sudoers.d"
-if [ -f "$opt/webcontrol-rs" ]; then "${SUDO[@]}" mv "$opt/webcontrol-rs" "$opt/webcontrol-rs.prev"; fi
-"${SUDO[@]}" install -m 755 "$src/webcontrol-rs" "$opt/webcontrol-rs"
-sed "s/^User=.*/User=$user/" "$src/webcontrol-rs.service" | "${SUDO[@]}" tee "$units/webcontrol-rs.service" > /dev/null
-"${SUDO[@]}" install -m 644 "$src/webcontrol-conflicts.conf" "$units/webcontrol.service.d/conflicts.conf"
-"${SUDO[@]}" install -m 755 "$src/wc-switch" "$root/usr/local/bin/wc-switch"
-"${SUDO[@]}" install -m 755 "$src/webcontrol-update" "$root/usr/local/bin/webcontrol-update"
-# Power-off from the UI; a sudoers file that fails visudo would lock sudo out, so it is checked first.
+${SUDO[@]+"${SUDO[@]}"} install -d "$opt" "$units/webcontrol.service.d" "$root/usr/local/bin" "$root/etc/sudoers.d"
+if [ -f "$opt/webcontrol-rs" ]; then ${SUDO[@]+"${SUDO[@]}"} mv "$opt/webcontrol-rs" "$opt/webcontrol-rs.prev"; fi
+${SUDO[@]+"${SUDO[@]}"} install -m 755 "$src/webcontrol-rs" "$opt/webcontrol-rs"
+sed "s/^User=.*/User=$user/" "$src/webcontrol-rs.service" | ${SUDO[@]+"${SUDO[@]}"} tee "$units/webcontrol-rs.service" > /dev/null
+${SUDO[@]+"${SUDO[@]}"} install -m 644 "$src/webcontrol-update@.service" "$units/webcontrol-update@.service"
+${SUDO[@]+"${SUDO[@]}"} install -m 644 "$src/webcontrol-conflicts.conf" "$units/webcontrol.service.d/conflicts.conf"
+${SUDO[@]+"${SUDO[@]}"} install -m 755 "$src/wc-switch" "$root/usr/local/bin/wc-switch"
+${SUDO[@]+"${SUDO[@]}"} install -m 755 "$src/webcontrol-update" "$root/usr/local/bin/webcontrol-update"
+# Power-off and updates from the UI; a sudoers file that fails visudo would lock sudo out, so it is checked first.
 rule="$(mktemp)"
 sed "s/^pi /$user /" "$src/webcontrol-rs.sudoers" > "$rule"
 # Through sudo: visudo is in /usr/sbin, which is not on pi's PATH.
-"${SUDO[@]}" visudo -cqf "$rule" || { echo "the sudoers rule does not parse" >&2; exit 1; }
-"${SUDO[@]}" install -m 440 "$rule" "$root/etc/sudoers.d/webcontrol-rs"
+${SUDO[@]+"${SUDO[@]}"} visudo -cqf "$rule" || { echo "the sudoers rule does not parse" >&2; exit 1; }
+${SUDO[@]+"${SUDO[@]}"} install -m 440 "$rule" "$root/etc/sudoers.d/webcontrol-rs"
 rm -f "$rule"
 "${SYSTEMCTL[@]}" daemon-reload
 # The firmware upgrade reads and writes the controller's flash with avrdude.
@@ -51,4 +54,4 @@ else
   "${SYSTEMCTL[@]}" enable --now webcontrol-rs
   echo "webcontrol-rs is running and starts at boot: http://$(hostname).local:5000/"
 fi
-echo "Later updates: webcontrol-update (from the latest published GitHub Release)"
+echo "Later updates: Help ▸ Update in the UI, or webcontrol-update here (from the latest published GitHub Release)"

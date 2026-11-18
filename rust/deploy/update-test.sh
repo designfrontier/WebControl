@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests webcontrol-update against release.sh's real tarballs, a file:// GitHub API and /api/state, and stub
-# sudo, systemctl, uname and webcontrol-rs binaries; nothing touches a real system.
+# sudo, systemctl, uname, id and webcontrol-rs binaries; nothing touches a real system.
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -26,6 +26,16 @@ cat > "$work/bin/visudo" <<EOF
 #!/usr/bin/env bash
 ! grep -qs "BAD SUDOERS" "\${*: -1}"
 EOF
+# With \$work/as-root, everything that asks id -u runs as root would.
+cat > "$work/bin/id" <<EOF
+#!/usr/bin/env bash
+if [ "\$1" = -u ] && [ -f "$work/as-root" ]; then echo 0; else exec /usr/bin/id "\$@"; fi
+EOF
+# A stub that records the update's phase when it is called, so a test sees the phases in order.
+phase_probe() {
+  printf '%s\n' "[ -f \"$work/root/var/lib/webcontrol-rs/update.json\" ] &&" \
+    "  sed -n 's/.*\"phase\":\"\\([A-Za-z]*\\)\".*/\\1/p' \"$work/root/var/lib/webcontrol-rs/update.json\" >> \"$work/phases\""
+}
 cat > "$work/bin/uname" <<EOF
 #!/usr/bin/env bash
 if [ "\$1" = -m ]; then cat "$work/arch"; else exec /usr/bin/uname "\$@"; fi
@@ -33,6 +43,7 @@ EOF
 cat > "$work/bin/curl" <<EOF
 #!/usr/bin/env bash
 echo "curl \$*" >> "$work/calls"
+$(phase_probe)
 [[ " \$* " == *" -K - "* ]] || exec "$real_curl" "\$@"
 config="\$(cat)"
 echo "curl-config \$config" >> "$work/calls"
@@ -43,16 +54,17 @@ EOF
 cat > "$work/bin/systemctl" <<EOF
 #!/usr/bin/env bash
 echo "systemctl \$*" >> "$work/calls"
+$(phase_probe)
 bin="$work/root/opt/webcontrol-rs/webcontrol-rs"
 case "\$1" in
   daemon-reload)
     [ -f "$work/job-starts" ] && [ -f "$work/srv/api/state" ] &&
       sed -i.orig 's/"jobInProgress":false/"jobInProgress":true/' "$work/srv/api/state" &&
       echo '{"owner": "changed during the job"}' > "$work/home/.WebControl/webcontrol.json" ;;
+  show) cat "$work/service-env" 2> /dev/null ;;
   is-active)
-    unit="\${*: -1}"
-    if [ "\$unit" = webcontrol-rs ]; then s="\$(cat "$work/active" 2> /dev/null || echo inactive)"
-    else s="\$(cat "$work/python-active" 2> /dev/null || echo inactive)"; fi
+    s=inactive
+    [ "\${*: -1}" != webcontrol-rs ] || s="\$(cat "$work/active" 2> /dev/null || echo inactive)"
     [ "\$2" = --quiet ] || echo "\$s"
     [ "\$s" = active ]
     exit ;;
@@ -120,7 +132,7 @@ installed() {
 
 fresh() {
   rm -rf "${work:?}/root" "${work:?}/home" "$work/srv" "$work/gh" "$work/x" "$work/calls" "$work/active" \
-    "$work/python-active" "$work/controller" "$work/controller-lost" "$work/stale-version" "$work/running" "$work/out" "$work/err" \
+    "$work/as-root" "$work/service-env" "$work/phases" "$work/controller" "$work/controller-lost" "$work/stale-version" "$work/running" "$work/out" "$work/err" \
     "$work/fail-cp" "$work/job-starts"
   mkdir -p "$work/root" "$work/home/.WebControl" "$work/srv/api" "$work/x"
   echo '{"owner": "settings"}' > "$work/home/.WebControl/webcontrol.json"
@@ -177,7 +189,8 @@ update_without_a_backup() {
     grep -qx "version=1.0" "$backup/MANIFEST" && grep -qE "^date=20[0-9-]+T" "$backup/MANIFEST" &&
     [ "$(version_of "$backup/files$opt/webcontrol-rs")" = 1.0 ] &&
     cmp -s "$backup/files$work/home/.WebControl/webcontrol.json" "$work/home/.WebControl/webcontrol.json" &&
-    [ "$(grep -c "^file=" "$backup/MANIFEST")" = 7 ] &&
+    [ "$(grep -c "^file=" "$backup/MANIFEST")" = 8 ] &&
+    grep -qx "file=$work/root/etc/systemd/system/webcontrol-update@.service" "$backup/MANIFEST" &&
     grep -qx "file=$work/root/etc/sudoers.d/webcontrol-rs" "$backup/MANIFEST" &&
     grep -qx "file=$work/root/etc/systemd/system/webcontrol.service.d/conflicts.conf" "$backup/MANIFEST" &&
     grep -qx "file=$work/root/usr/local/bin/webcontrol-update" "$backup/MANIFEST" &&
@@ -438,15 +451,134 @@ takes_the_repo_and_token() {
     ! update --repo 'x;y' > /dev/null 2>&1
 }
 
-python_backend_is_not_started() {
+status="$work/root/var/lib/webcontrol-rs/update.json"
+# progress <jq filter>: true when the status file the server reads passes it.
+progress() { jq -e "$1" "$status" > /dev/null; }
+mode_of() { stat -c %a "$1" 2> /dev/null || stat -f %Lp "$1"; }
+
+service_update_reports_its_progress() {
   fresh
   installed 1.0
-  echo inactive > "$work/active"
-  echo active > "$work/python-active"
   publish 1.1
   latest 1.1
-  update > "$work/out" && grep -q "older WebControl (webcontrol.service) is running" "$work/out" &&
-    ! grep -q "systemctl restart" "$work/calls" && [ "$(version_of "$opt/webcontrol-rs")" = 1.1 ]
+  touch "$work/as-root"
+  update --service update > "$work/out" && [ "$(version_of "$opt/webcontrol-rs")" = 1.1 ] &&
+    ! grep -q "^sudo" "$work/calls" && grep -qx "version=1.0" "$backup/MANIFEST" &&
+    progress '.action == "update" and .phase == "finished" and .result == "updated"' &&
+    progress '.from == "1.0" and .to == "1.1" and .startedAt > 1700000000000 and .finishedAt >= .startedAt' &&
+    progress '(.log | index("Checksum OK.")) and .log[-2] == "Updated webcontrol-rs to 1.1."' &&
+    [ "$(uniq "$work/phases" | tr '\n' ' ')" = "checking downloading installing restarting healthCheck " ] &&
+    [ "$(mode_of "$status")" = 644 ] && [ ! -e "$status.new" ]
+}
+
+service_reports_an_automatic_rollback() {
+  fresh
+  installed 1.0
+  publish 1.9 BROKEN
+  latest 1.9
+  touch "$work/as-root"
+  ! update --service update > /dev/null 2>&1 && [ "$(version_of "$opt/webcontrol-rs")" = 1.0 ] &&
+    progress '.action == "update" and .result == "rolledBack" and .to == "1.9"' &&
+    progress '.log | index("ROLLED BACK: webcontrol-rs 1.0 is running again, with its settings.")' &&
+    grep -qx rollingBack "$work/phases"
+}
+
+service_reports_a_failed_rollback() {
+  fresh
+  echo 51.29 > "$work/controller"
+  installed 1.0
+  publish 1.1
+  latest 1.1
+  touch "$work/controller-lost" "$work/as-root"
+  ! update --service update > /dev/null 2>&1 && progress '.result == "rollbackFailed" and .phase == "finished"'
+}
+
+service_rolls_back() {
+  fresh
+  installed 1.0
+  publish 1.1
+  latest 1.1
+  touch "$work/as-root"
+  update --service update > /dev/null || return 1
+  update --service rollback > /dev/null && [ "$(version_of "$opt/webcontrol-rs")" = 1.0 ] &&
+    progress '.action == "rollback" and .result == "rolledBack" and .from == "1.1" and .to == "1.0"' &&
+    ! grep -q "^sudo" "$work/calls"
+}
+
+service_reports_a_refusal() {
+  fresh
+  installed 1.0
+  publish 1.1
+  latest 1.1
+  touch "$work/as-root"
+  sed -i.orig 's/"jobInProgress":false/"jobInProgress":true/' "$work/srv/api/state"
+  ! update --service update > /dev/null 2>&1 && [ "$(version_of "$opt/webcontrol-rs")" = 1.0 ] &&
+    progress '.result == "failed" and .from == null' &&
+    progress '.log[-1] == "Not now: a job is running or paused. Finish or stop it, then run webcontrol-update again."' &&
+    ! update --service rollback > /dev/null 2>&1 && progress '.action == "rollback" and .result == "failed"'
+}
+
+service_up_to_date() {
+  fresh
+  installed 1.1
+  publish 1.1
+  latest 1.1
+  touch "$work/as-root"
+  update --service update > /dev/null && progress '.result == "upToDate" and .from == "1.1" and .to == "1.1"'
+}
+
+service_escapes_the_log() {
+  fresh
+  installed 1.0
+  mkdir -p "$api"
+  printf '{"tag_name": "bad\\\\x\t1"}' > "$api/latest"
+  touch "$work/as-root"
+  ! update --service update > /dev/null 2>&1 &&
+    progress '.log[-1] == "The release'"'"'s tag \"bad\\\\x 1\" is not a version."'
+}
+
+service_takes_webcontrol_rs_environment() {
+  fresh
+  installed 1.0
+  mkdir -p "$work/gh/repos/maker/fork/releases"
+  publish 1.1
+  cp "$api/tags/v1.1" "$work/gh/repos/maker/fork/releases/latest"
+  echo "WEBCONTROL_REPO=maker/fork GITHUB_TOKEN=secret" > "$work/service-env"
+  touch "$work/as-root"
+  update WEBCONTROL_REPO=other/repo --service update > /dev/null && [ "$(version_of "$opt/webcontrol-rs")" = 1.1 ] &&
+    grep -q "^curl -K - .*repos/maker/fork/releases/latest" "$work/calls" &&
+    grep -qx 'curl-config header = "Authorization: Bearer secret"' "$work/calls"
+}
+
+service_needs_root_and_one_action() {
+  fresh
+  installed 1.0
+  ! update --service update > /dev/null 2> "$work/err" && grep -q "runs as root" "$work/err" || return 1
+  touch "$work/as-root"
+  ! update --service frob > /dev/null 2>&1 && ! update --service update --force > /dev/null 2>&1 &&
+    ! update --service > /dev/null 2>&1 && [ ! -e "$status" ]
+}
+
+service_runs_one_at_a_time() {
+  command -v flock > /dev/null || return 0
+  fresh
+  installed 1.0
+  publish 1.1
+  latest 1.1
+  touch "$work/as-root"
+  mkdir -p "$(dirname "$status")"
+  echo '{"phase": "downloading"}' > "$status"
+  { flock -n 9 && ! update --service update > /dev/null 2> "$work/err"; } 9> "$(dirname "$status")/update.lock" &&
+    grep -q "already running" "$work/err" && progress '.phase == "downloading"' &&
+    [ "$(version_of "$opt/webcontrol-rs")" = 1.0 ]
+}
+
+terminal_runs_write_no_status() {
+  fresh
+  installed 1.0
+  publish 1.1
+  latest 1.1
+  update > /dev/null && [ ! -e "$status" ] && [ "$(grep -c "^sudo -v" "$work/calls")" = 1 ]
 }
 
 hung_service_is_busy() {
@@ -660,7 +792,17 @@ check "--version installs that tag" pins_a_version
 check "drafts are invisible: no published release is an error" drafts_are_invisible
 check "refuses a machine that is not aarch64" refuses_off_aarch64
 check "--repo, WEBCONTROL_REPO and GITHUB_TOKEN" takes_the_repo_and_token
-check "leaves an older WebControl running" python_backend_is_not_started
+check "--service update: as root, no sudo, progress in the status file" service_update_reports_its_progress
+check "--service update reports an automatic rollback" service_reports_an_automatic_rollback
+check "--service update reports a rollback that failed" service_reports_a_failed_rollback
+check "--service rollback restores the backup" service_rolls_back
+check "--service reports a refusal as failed with the reason" service_reports_a_refusal
+check "--service update with nothing newer reports up to date" service_up_to_date
+check "--service writes quotes, backslashes and tabs as JSON" service_escapes_the_log
+check "--service takes the repository and token from webcontrol-rs" service_takes_webcontrol_rs_environment
+check "--service needs root and exactly update or rollback" service_needs_root_and_one_action
+check "--service refuses while another run holds the lock" service_runs_one_at_a_time
+check "a run from a terminal writes no status file" terminal_runs_write_no_status
 check "--help and unknown flags" help_and_bad_flags
 check "an active service that does not answer counts as busy" hung_service_is_busy
 check "a backup that fails keeps the previous one" failed_backup_keeps_the_old_one

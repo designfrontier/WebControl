@@ -1,2 +1,5 @@
-# /etc/sudoers.d/webcontrol-rs: lets webcontrol-rs power the Pi off (TurnOffRPI), and nothing else.
+# /etc/sudoers.d/webcontrol-rs: lets webcontrol-rs power the Pi off (TurnOffRPI) and start an update or a rollback
+# from the Updates screen, with exactly these arguments, and nothing else.
 pi ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff
+pi ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block webcontrol-update@update.service
+pi ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block webcontrol-update@rollback.service
