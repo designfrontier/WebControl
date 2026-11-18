@@ -87,6 +87,14 @@ fn form_json(parts: &[Part]) -> Value {
     Value::Object(map)
 }
 
+/// A FIFO at `path`: a read of it waits until something writes.
+pub fn fifo(path: &std::path::Path) {
+    use std::os::unix::ffi::OsStrExt;
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let name = std::ffi::CString::new(path.as_os_str().as_bytes()).unwrap();
+    assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o644) }, 0);
+}
+
 pub fn machine_with(settings: Settings) -> Machine {
     Machine::new("10.0.0.5:5000", settings)
 }

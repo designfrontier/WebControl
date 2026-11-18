@@ -139,6 +139,11 @@ impl MachineHandle {
         reply.await.unwrap_or(Reply::Failed)
     }
 
+    /// Asks the machine without waiting, for callers that cannot await, such as a `Drop`.
+    pub fn submit(&self, request: Request) {
+        let _ = self.commands.send(Command::Request(request, oneshot::channel().0));
+    }
+
     pub fn subscribe(&self) -> broadcast::Receiver<Push> {
         self.pushes.subscribe()
     }

@@ -242,9 +242,10 @@ until a `VERSION` bump changes them.
 14. **Gcode load signal.** `/openGCode`, `/uploadGCode` and `/editGCode` broadcast `showFPSpinner` with `0` as the
     load starts, then answer the HTTP request once the preview is built. A failed load broadcasts the current
     `gcodeUpdateCompressed`, so every spinner ends; a successful one relies on the client's `checkForGCodeUpdate`
-    (`/editGCode` resends it itself). A load waits for one already running, and `startRun` is refused meanwhile;
-    a load that finishes after a job has started is dropped with a 500 and the job keeps its gcode. The board resend
-    after any `action` (wart 12) ends the spinner early too.
+    (`/editGCode` resends it itself). A load waits for one already running, so loads land in the order asked, and
+    `startRun` is refused meanwhile; a load that finishes after a job has started is dropped with a 500 and the job
+    keeps its gcode. A load runs to the end even if its client disconnects, and then resends `gcodeUpdateCompressed`
+    itself. The board resend after any `action` (wart 12) ends the spinner early too.
 15. **Board size cap (Rust-intended).** Rust grids a board of at most 2^24 one-inch cells (about a 340-foot square).
     Opening, trimming or marking a larger one fails (`/openBoard` and `/trimBoard` answer as failed; the board is
     left as it was) instead of allocating the grid. Python has no cap.
