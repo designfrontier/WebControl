@@ -98,12 +98,27 @@ async fn a_browser_reaching_a_name_public_dns_could_rebind_is_refused() {
 }
 
 #[tokio::test]
-async fn reads_are_not_guarded() {
+async fn cross_site_reads_are_allowed_but_not_through_a_rebound_name() {
     let server = Server::new();
-    let headers =
-        [("host", "rebind.evil.example"), ("origin", "http://evil.example"), ("sec-fetch-site", "cross-site")];
-    assert_eq!(call(&server, "GET", "/api/state", &headers, "").await.0, StatusCode::OK);
-    assert_eq!(call(&server, "HEAD", "/", &headers, "").await.0, StatusCode::OK);
+    let linked = [("host", "maslow.local:5000"), ("origin", "http://evil.example"), ("sec-fetch-site", "cross-site")];
+    assert_eq!(call(&server, "GET", "/api/state", &linked, "").await.0, StatusCode::OK);
+    assert_eq!(call(&server, "HEAD", "/", &linked, "").await.0, StatusCode::OK);
+    let rebound = [("host", "rebind.evil.example:5000"), ("sec-fetch-site", "same-origin")];
+    assert_eq!(call(&server, "GET", "/backupWebControl", &rebound, "").await.0, StatusCode::FORBIDDEN);
+    assert_eq!(call(&server, "GET", "/api/state", &[("host", "rebind.evil.example")], "").await.0, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn sec_fetch_site_decides_over_origin_when_sent() {
+    let server = Server::new();
+    let host = ("host", "maslow.lan:5000");
+    let refused = [("same-site", "http://maslow.lan:5000"), ("same-site", "http://router.lan")];
+    for (site, origin) in refused {
+        let headers = [host, ("sec-fetch-site", site), ("origin", origin), ("content-type", FORM)];
+        assert_eq!(call(&server, "POST", "/sendGCode", &headers, SEND).await.0, StatusCode::FORBIDDEN, "{origin}");
+    }
+    let no_referrer = [host, ("sec-fetch-site", "same-origin"), ("origin", "null"), ("content-type", FORM)];
+    assert_eq!(call(&server, "POST", "/sendGCode", &no_referrer, SEND).await.0, StatusCode::OK);
 }
 
 #[tokio::test]

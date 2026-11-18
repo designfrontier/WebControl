@@ -28,13 +28,14 @@ fn same_origin(origin: &str, host: &str) -> bool {
     authority.is_some_and(|authority| authority.eq_ignore_ascii_case(host))
 }
 
-/// Requests with neither header (curl, scripts, `webcontrol-update`) are not a browser's, so not cross-site.
+/// `Sec-Fetch-Site` is the browser's own verdict, so it decides when sent; requests with neither header (curl,
+/// scripts, `webcontrol-update`) are not a browser's.
 fn cross_site(headers: &HeaderMap) -> bool {
     let host = text(headers, header::HOST).unwrap_or_default();
     match (text(headers, header::HeaderName::from_static("sec-fetch-site")), text(headers, header::ORIGIN)) {
-        (Some("cross-site"), _) => true,
-        (_, Some(origin)) => !same_origin(origin, host),
-        (site, None) => site == Some("same-site"),
+        (Some(site), _) => !matches!(site, "same-origin" | "none"),
+        (None, Some(origin)) => !same_origin(origin, host),
+        (None, None) => false,
     }
 }
 
@@ -71,7 +72,8 @@ pub(crate) async fn guard(request: Request, next: Next) -> Response {
         tracing::warn!(origin = ?headers.get(header::ORIGIN), uri = %request.uri(), "refused a cross-site request");
         return refuse(StatusCode::FORBIDDEN, CROSS_SITE);
     }
-    if guarded && from_browser(headers) && !local_name(host) {
+    // Reads too: a rebound page could otherwise read back the settings and the backup.
+    if from_browser(headers) && !local_name(host) {
         tracing::warn!(host, uri = %request.uri(), "refused a browser request to a non-local name");
         return refuse(StatusCode::FORBIDDEN, NOT_LOCAL);
     }

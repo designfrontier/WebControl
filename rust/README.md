@@ -80,7 +80,7 @@ service run `systemctl poweroff` (the UI's Turn Off Raspberry Pi) and nothing el
 
 Behind a reverse proxy (nginx) or HTTPS, the proxy must forward the original `Host` (`proxy_set_header Host $host;`)
 and the WebSocket `Upgrade`/`Connection` headers: `wc-server` refuses a WebSocket or write whose `Origin` does not
-match `Host`, and any from a browser whose `Host` is not a local name (`crates/wc-server/src/guard.rs`,
+match `Host`, and any browser request whose `Host` is not a local name (`crates/wc-server/src/guard.rs`,
 `contract/README.md` "Cross-site requests"). `spec/INSTALL-PI.md` has an nginx example. Direct
 `http://maslow.local:5000` use needs none of this.
 

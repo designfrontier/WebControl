@@ -93,11 +93,13 @@ a Rust test fails on a field the schema does not list, and a new one goes into `
 Every request but `GET`, `HEAD` and `OPTIONS`, and every WebSocket upgrade, is refused with
 `403 {"error": "..."}` before it reaches its route when it comes from another site's page:
 
-- `Sec-Fetch-Site: cross-site`, or `same-site` without an `Origin`;
-- an `Origin` whose `host[:port]` is not the request's `Host` (`null` included);
-- a browser request (one carrying `Origin` or `Sec-Fetch-Site`) whose `Host` is not a local name: an IP address, a
-  name without dots, `localhost`, or a name ending in `.local`, `.lan`, `.home`, `.home.arpa`, `.internal`,
-  `.localdomain` or `.localhost`. Public DNS cannot answer for these, so a page cannot rebind one to the machine.
+- `Sec-Fetch-Site` other than `same-origin` or `none` (the browser's own verdict decides when it is sent);
+- without `Sec-Fetch-Site`, an `Origin` whose `host[:port]` is not the request's `Host` (`null` included).
+
+Any browser request (one carrying `Origin` or `Sec-Fetch-Site`), reads included, is refused the same way when its
+`Host` is not a local name: an IP address, a name without dots, `localhost`, or a name ending in `.local`, `.lan`,
+`.home`, `.home.arpa`, `.internal`, `.localdomain` or `.localhost`. Public DNS cannot answer for these, so a page
+cannot rebind one to the machine and read back its settings or backup.
 
 A request with neither header (curl, scripts, `webcontrol-update`) is allowed from any name. Reaching WebControl
 from a browser through another DNS name (a Tailscale or public name, a reverse proxy) is refused; use its IP address.
