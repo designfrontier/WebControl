@@ -198,12 +198,60 @@ fn stop_writes_at_once_and_holds_commands_until_a_status_report_after_the_input_
     let stop = rig.act("stopRun");
     assert_eq!(written(&stop), ["!"]);
     assert!(stop.iter().any(|e| matches!(e, Effect::Realtime(bytes) if bytes == b"!\n")));
-    assert_eq!(commands(&stop), ["clearAlarm", "requestedSetting"]);
+    assert_eq!(commands(&stop), ["clearAlarm", "requestedSetting", "statusMessage"]);
     rig.act_with("move", json!("up"), json!("1"));
     rig.rx("ok");
     assert!(written(&rig.rx("<Idle,MPos:0,0,0>")).is_empty(), "too soon");
     rig.advance(300);
-    assert_eq!(written(&rig.rx("<Idle,MPos:0,0,0>")), ["G91"]);
+    assert_eq!(written(&rig.rx("<Idle,MPos:0,0,0>")), ["G21"]);
+}
+
+#[test]
+fn stop_mid_jog_puts_the_controller_back_in_absolute_mode() {
+    let mut rig = Rig::connected();
+    rig.act_with("move", json!("up"), json!("1"));
+    rig.rx("ok");
+    rig.advance(100);
+    assert_eq!(rig.machine.snapshot().state_fields()["positioningMode"], "G91", "the G00 is in flight");
+    rig.act("stopRun");
+    rig.clear_written();
+    assert_eq!(rig.machine.snapshot().state_fields()["positioningMode"], "G90");
+    rig.act_with("move", json!("up"), json!("1"));
+    rig.advance(300);
+    rig.rx("<Idle,MPos:0,0,0>");
+    assert_eq!(rig.run_to_quiet(), ["G21", "G90", "G91", "G00 Y1.0", "G90"]);
+}
+
+#[test]
+fn stop_with_a_g90_in_flight_sends_it_again_and_an_idle_stop_sends_nothing() {
+    let mut rig = Rig::connected_with(settings(&[("Maslow Settings", "bufferOn", json!(1))]));
+    rig.machine.load_gcode("G91\nG0 X1\nG90\nG0 X2\n");
+    rig.act("startRun");
+    rig.advance(300);
+    rig.act("stopRun");
+    rig.clear_written();
+    rig.advance(300);
+    rig.rx("<Idle,MPos:0,0,0>");
+    assert_eq!(rig.run_to_quiet(), ["G21", "G90"]);
+    rig.act("stopRun");
+    rig.clear_written();
+    rig.advance(300);
+    rig.rx("<Idle,MPos:0,0,0>");
+    assert!(rig.run_to_quiet().is_empty());
+}
+
+#[test]
+fn stop_under_an_alarm_still_restores_absolute_mode() {
+    let mut rig = Rig::connected();
+    rig.act_with("move", json!("up"), json!("1"));
+    rig.rx("ok");
+    rig.advance(100);
+    rig.rx("ALARM: Position Lost");
+    rig.clear_written();
+    rig.act("stopRun");
+    rig.advance(300);
+    rig.rx("<Idle,MPos:0,0,0>");
+    assert_eq!(rig.run_to_quiet(), ["!", "G21", "G90"]);
 }
 
 #[test]
@@ -400,7 +448,7 @@ fn stop_while_a_command_waits_out_the_pace_writes_at_once_and_drops_it() {
     rig.advance(300);
     let mut effects = rig.rx("<Idle,MPos:0,0,0>");
     effects.extend(rig.advance(200));
-    assert!(written(&effects).is_empty(), "{:?}", written(&effects));
+    assert_eq!(written(&effects), ["G21"], "the jog is dropped, and its G90 restored after the units");
 }
 
 #[test]

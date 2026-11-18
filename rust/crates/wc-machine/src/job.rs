@@ -17,7 +17,7 @@ use wc_protocol::main::{ActivateModal, ClearAlarm, GcodePositionMessage, PauseBu
 
 use crate::clearance::Raise;
 use crate::gpio::Led;
-use crate::machine::{Effect, Machine, alert, broadcast};
+use crate::machine::{Effect, Machine, Queued, alert, broadcast};
 
 const SKIPPED_REINIT: &str = "sets chain-over-sprocket ($38), which re-initialises the motors mid-job, so it was \
                               skipped. Change it in Advanced Settings instead.";
@@ -313,9 +313,13 @@ impl Machine {
         self.probing = false;
         self.measure = None;
         self.pid.end_tests();
+        let out_of_step = self.modes_unsure();
         self.realtime("!", now, effects);
         self.controller.stop_reload = true;
         self.drop_user_commands();
+        if out_of_step {
+            self.restore_modes();
+        }
         self.end_job();
         let job = &mut self.job;
         job.manual_z = None;
@@ -328,6 +332,20 @@ impl Machine {
         }
         job.paused_at = None;
         job.paused_units = None;
+    }
+
+    /// Relative mode, or a mode line in flight that the `!` may flush unread, such as a jog's closing G90.
+    fn modes_unsure(&self) -> bool {
+        let sets_mode = |text: &str| positioning_set_by(text).is_some() || text.contains("G20") || text.contains("G21");
+        self.positioning == Positioning::Relative || self.controller.accounting.texts().any(sets_mode)
+    }
+
+    /// The firmware gets WebControl's units and G90 again.
+    fn restore_modes(&mut self) {
+        let units = if self.units() == Units::Inches { "G20 " } else { "G21 " };
+        let line = |text: &str| Queued::Line { text: text.into(), boot: true };
+        self.controller.queue.extend([line(units), line("G90 ")]);
+        self.positioning = Positioning::Absolute;
     }
 
     pub(crate) fn stop_run(&mut self, now: Duration, effects: &mut Vec<Effect>) -> Option<String> {

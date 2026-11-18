@@ -284,7 +284,9 @@ top of every file, so as written it would run every move after it relative.
    from_mode=v0.94 from_gap_ms=50`. A job writes `PACING JOB START file_line=N mode=... gap_ms=...` and, at its end,
    a `PACING JOB` line with the segment keys (its first pacing) and `PACING JOB END file_line_end=N mode=... gap_ms=...
    ended_by=...`. Every word after the upper-case label is a `key=value` pair.
-4. Realtime: `!` resets accounting (immediate `ok`, no ack for the aborted line); `~` immediate `ok`.
+4. Realtime: `!` resets accounting (immediate `ok`, no ack for the aborted line); `~` immediate `ok`. A Stop that
+   finds WebControl in G91, or a G20/G21/G90/G91 unacknowledged, writes units and `G90` after the resync, since
+   the `!` drops a jog's closing `G90` (2026-11-18).
 5. Sanitise outgoing lines: strip comments, reject an unclosed `(`, remove `!`, `~`, backtick, `?` and control
    characters, and upper-case the rest (§1); read every line WebControl inspects (file, typed, restart, preview)
    upper-cased too. A restart needs an absolute X and Y: refuse one where the file moves X or Y relatively first.

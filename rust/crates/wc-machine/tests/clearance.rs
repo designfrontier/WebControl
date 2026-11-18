@@ -233,7 +233,7 @@ fn after_a_stop_mid_rise_the_raise_uses_the_report_that_ends_the_resync() {
     rig.clear_written();
     rig.advance(300);
     rig.rx("<Idle,MPos:0.00,0.00,7.43,WPos:0.000,0.000,0.000>");
-    assert_eq!(rig.run_to_quiet(), ["G90", "G00 Z7.44", "G00 X0.0 Y0.0", "G00 Z0"]);
+    assert_eq!(rig.run_to_quiet(), ["G21", "G90", "G90", "G00 Z7.44", "G00 X0.0 Y0.0", "G00 Z0"]);
 }
 
 #[test]
