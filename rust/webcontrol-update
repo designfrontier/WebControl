@@ -395,6 +395,8 @@ restore_backup() {
 restart() {
   phase restarting
   say "Restarting webcontrol-rs."
+  # A release that crash-looped leaves the unit at its start limit, which would refuse the restored one.
+  root_do systemctl reset-failed webcontrol-rs 2> /dev/null || true
   root_do systemctl restart webcontrol-rs
 }
 
