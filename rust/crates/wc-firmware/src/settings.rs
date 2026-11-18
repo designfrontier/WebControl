@@ -185,6 +185,14 @@ fn adopt(option: FirmwareOption, reported: f64) -> Sync {
     Sync::Adopt { section: option.section, key: option.key, value, repair }
 }
 
+/// A ranged key the controller holds as NaN, which the firmware refuses to use: store and write its default.
+fn adopt_default(option: FirmwareOption, (low, high): (f32, f32)) -> Sync {
+    let default = stored_number(&option.default).unwrap_or_default().clamp(low.into(), high.into());
+    let value = Value::from(adopted_text(default));
+    let repair = Some(setting_line(option.firmware_key, &value));
+    Sync::Adopt { section: option.section, key: option.key, value, repair }
+}
+
 /// The stored value as the firmware gets it: brought into the key's range, as `setting_line` writes it.
 fn in_range(key: u32, stored: Value) -> Value {
     let range = firmware_range(key).map(|(low, high)| (f64::from(low), f64::from(high)));
@@ -199,7 +207,11 @@ pub fn sync_reported(settings: &Settings, firmware: f64, key: u32, reported: f64
         return Sync::Agrees;
     };
     if option.value == Value::String(String::new()) {
-        return if reported.is_nan() { Sync::Agrees } else { adopt(option, reported) };
+        return match (reported.is_nan(), firmware_range(key)) {
+            (false, _) => adopt(option, reported),
+            (true, Some(range)) => adopt_default(option, range),
+            (true, None) => Sync::Agrees,
+        };
     }
     let stored = if option.key == "spindleAutomate" { spindle_code(&option.value) } else { option.value.clone() };
     let held = values_match(key, &in_range(key, stored), reported) && in_firmware_range(key, reported);

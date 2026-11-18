@@ -211,6 +211,19 @@ fn each_reported_value_is_adopted_rewritten_or_left() {
     assert_eq!(sync_reported(&junk, 51.27, 0, 1.0), Sync::Agrees, "junk text is never written");
 }
 
+#[test]
+fn a_nan_pid_weight_with_no_stored_value_is_repaired_with_its_default() {
+    let push = boot_sync(&Settings::defaults(), 51.27, &[(28, f64::NAN), (36, f64::NAN)]);
+    assert_eq!(push.lines, ["$13=63.5", "$28=1", "$36=1"]);
+    assert_eq!(
+        push.adopted,
+        [
+            ("Advanced Settings".into(), "propWeightV".into(), json!("1")),
+            ("Advanced Settings".into(), "propWeightVZ".into(), json!("1")),
+        ]
+    );
+}
+
 /// The owner's real webcontrol.json against the `$$` their 51.27 printed on 2026-11-14: Python wrote only `$13`.
 #[test]
 fn the_owners_connect_writes_only_r_on_this_and_every_later_boot() {
