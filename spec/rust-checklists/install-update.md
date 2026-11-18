@@ -23,7 +23,11 @@ run" first. Below, `<version>` is the new release (for example `0.3.0`) and `<pr
 - [ ] `systemctl status webcontrol-rs` shows it active, running as `pi`. `journalctl -u webcontrol-rs -n 20` shows
       `webcontrol-rs listening on 0.0.0.0:5000` and `settings loaded` with `source=File`.
 - [ ] `sudo visudo -c` says `parsed OK`, and `sudo cat /etc/sudoers.d/webcontrol-rs` allows only
-      `/usr/bin/systemctl poweroff`.
+      `/usr/bin/systemctl poweroff` and `/usr/bin/systemctl start --no-block webcontrol-update@update.service` and
+      `...@rollback.service`.
+- [ ] `systemctl cat webcontrol-update@update.service` shows `ExecStart=/usr/local/bin/webcontrol-update --service %i`.
+      As `pi`, `sudo -k; sudo -n /usr/bin/systemctl start webcontrol-update@update.service` (no `--no-block`) is refused
+      with "a password is required": only the exact command is allowed.
 - [ ] `avrdude -? 2>&1 | head -1` prints avrdude's usage (the firmware upgrade needs it).
 - [ ] Open `http://maslow.local:5000/`. The version chip in the status bar reads `WebControl <version> · <commit>`,
       and Help ▸ About shows `v<version>`.
@@ -80,7 +84,28 @@ Run this once the draft is published, on the Pi or a spare card with the previou
       and changes nothing.
 - [ ] `webcontrol-update --rollback` puts `<previous>` back, and `webcontrol-update` brings `<version>` back.
 
-## 6. From the Mac (development builds only)
+## 6. From the browser: Update and Roll back
+
+Run once the draft is published, on the Pi or a spare card with the previous release (0.4.0 or later) installed. Keep
+the page open on an iPad or a laptop the whole time.
+
+- [ ] Help ▸ Update shows "Update available: v<version>", **Update to v<version>** and **Roll back to <backup>**,
+      each at least a finger wide and tall, with nothing cut off in portrait and landscape.
+- [ ] Open a file, press Play, then Pause: both buttons turn grey and the screen says
+      "Not now: a job is running or paused. Finish or stop it first." Press Stop: the buttons come back.
+- [ ] **Update to v<version>**: the confirm shows the release notes and says WebControl restarts and the page
+      reconnects. Cancel changes nothing. Confirm: the steps tick through Downloading, Checksum OK, Backing up,
+      Installing and Restarting; "WebControl is restarting; reconnecting…" shows, then "Updated from <previous> to
+      <version>." and **Reload the page**. After the reload the version chip reads `WebControl <version>`.
+- [ ] On the Pi: `journalctl -u webcontrol-update@update -n 30` shows the same lines, and
+      `sudo cat /var/lib/webcontrol-rs/update.json` shows `"result":"updated"`. No `sudo` password was asked for.
+- [ ] Reload the Update screen mid-way through a later update: it picks the run up again and shows the result.
+- [ ] **Roll back to <previous>**: the confirm warns that settings come back with the backup. Confirm: the steps show
+      "Restoring the backup", then "Rolled back from <version> to <previous>.", and the version chip follows after a
+      reload. The settings are the backup's.
+- [ ] Update again from the browser to put `<version>` back.
+
+## 7. From the Mac (development builds only)
 
 - [ ] `rust/deploy.sh push` while a job is paused prints "A job is running or paused on pi@maslow.local; stop it
       first." and changes nothing. With the machine idle it copies the

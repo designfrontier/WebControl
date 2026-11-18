@@ -119,7 +119,9 @@ To update from the Mac with a release's binary instead of a local build:
 
 ## Updating on the Pi
 
-`install-pi.sh` puts `webcontrol-update` in `/usr/local/bin`. On the Pi, as `pi`, with the machine idle:
+Help ▸ Update in the UI updates and rolls back with the buttons there (below, "From the UI"). The same updater runs
+from a terminal: `install-pi.sh` puts `webcontrol-update` in `/usr/local/bin`. On the Pi, as `pi`, with the machine
+idle:
 
 ```sh
 webcontrol-update            # the latest published release, if it is newer
@@ -143,13 +145,14 @@ An update:
    paused, no tool change or Z adjustment waiting, no probe and no controller firmware upgrade. If nothing answers it
    carries on only when `webcontrol-rs` is not running; a running service that does not answer may be mid-job, so it
    refuses until you stop it.
-2. Asks for the `sudo` password once, downloads the tarball and `SHA256SUMS` to a temporary directory, checks the
+2. Asks for the `sudo` password once (not when it runs as root, from the UI), downloads the tarball and `SHA256SUMS` to a temporary directory, checks the
    checksum and the tarball's contents (no paths outside its directory, no links), and stops with nothing changed if
    either is wrong. The checksum catches a corrupt download; anyone who can publish a release can also run its
    `install-pi.sh` here, so treat write access to the repository as root on the Pi.
 3. Backs up the current install to `backup.new`, then swaps it in for the previous backup (it says so), so a backup
    that fails partway leaves the previous one:
-   the binary, `webcontrol-rs.service`, the drop-in for an older WebControl's unit, `wc-switch`, `webcontrol-update`,
+   the binary, `webcontrol-rs.service`, `webcontrol-update@.service`, the drop-in for an older WebControl's unit,
+   `wc-switch`, `webcontrol-update`,
    `/etc/sudoers.d/webcontrol-rs`, `~/.WebControl/webcontrol.json` (gcode and boards are not touched by updates) and
    a `MANIFEST` with the version, the date and the files. There is one backup, of the install before the last update.
 4. Runs the release's own `install-pi.sh` and checks `/api/state` again: if a job started meanwhile, it puts the old
@@ -162,13 +165,39 @@ An update:
    back) or `ROLLBACK FAILED`.
 
 `--rollback` does step 5 by hand, with the same idle check, and keeps the backup, so the next update replaces it.
-If an older WebControl (`webcontrol.service`) is the one running, the update installs but does not start webcontrol-rs.
 
 The backup only covers the last update. The deeper fallback is still the SSD or the old card (spec/INSTALL-PI.md):
 power off, boot from it, and look at the card later.
 
-The UI's Update screen (Help ▸ Update, `GET /api/system/updates`) shows the installed version and commit, the latest
-published release with its notes, whether it is newer, and the backup, with the command to run here. It never
-installs anything. The server asks GitHub at most every 10 minutes (30 s after a failure), with a 5 s timeout, and
-reads `WEBCONTROL_REPO`, `GITHUB_TOKEN` and `WC_GITHUB_API` from its own environment
-(`sudo systemctl edit webcontrol-rs` to set them), not your shell's.
+### From the UI
+
+The Update screen (Help ▸ Update, `GET /api/system/updates`) shows the installed version and commit, the latest
+published release with its notes, whether it is newer, and the backup. The server asks GitHub at most every 10 minutes
+(30 s after a failure), with a 5 s timeout, and reads `WEBCONTROL_REPO`, `GITHUB_TOKEN` and `WC_GITHUB_API` from its
+own environment (`sudo systemctl edit webcontrol-rs` to set them), not your shell's.
+
+**Update to vX** (only when a newer release is published) and **Roll back to vY** (only when there is a backup) each
+ask first, then `POST /api/system/updates/install` or `/rollback`. The server starts
+`webcontrol-update@update.service` or `webcontrol-update@rollback.service` with
+`sudo --non-interactive /usr/bin/systemctl start --no-block <unit>`, which `/etc/sudoers.d/webcontrol-rs` allows
+the service user exactly, with no password, and nothing else beyond `systemctl poweroff`. The unit
+(`deploy/webcontrol-update@.service`) runs `webcontrol-update --service update|rollback` as root: the same steps as
+above, with no prompts, the latest published release only (no `--version`, `--force` or `--repo`, so never a
+downgrade), the repository and token from `webcontrol-rs`'s environment, and one run at a time. Nothing from the
+request reaches the unit or a shell. Being its own unit, it carries on while it restarts `webcontrol-rs`.
+
+The updater writes its progress to `/var/lib/webcontrol-rs/update.json` (root's, mode 644) and to the journal
+(`journalctl -u 'webcontrol-update@*'`): the action, the phase (`checking`, `downloading`, `verified`, `backingUp`,
+`installing`, `restarting`, `healthCheck`, `rollingBack`, `finished`), the versions, the times, the result
+(`updated`, `upToDate`, `rolledBack`, `rollbackFailed`, `failed`) and its log. The page polls the progress every 2 s,
+says it is reconnecting while WebControl restarts, and shows the result once the new version answers; reloading the
+page mid-update picks the run up again. A run whose unit stopped without finishing reads as `interrupted`.
+
+The server refuses with 409 while an update runs, while the machine is busy (a job running or paused, a hold, a tool
+change, a probe, a controller firmware upgrade or an optical scan; the buttons say why and stay off), with nothing
+newer to install or no backup to restore, and on an install whose `/etc/systemd/system/webcontrol-update@.service`
+is missing: an install older than 0.4.0 updates once from the terminal, which adds the unit and the rule.
+
+Anyone who can open the page can update to, or roll back from, the fork's latest published release, as they can power
+the Pi off. That is the intended reach: the release is still checked against `SHA256SUMS` and rolled back if it does
+not come up.

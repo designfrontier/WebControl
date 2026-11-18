@@ -73,7 +73,13 @@ ends it. **The Rust backend differs from Python here on purpose:**
 - `GET /api/system/updates` (contract 5) replaces Python's `/api/system/releases` and its install buttons: the
   installed version and commit, the latest published GitHub release, `status` (`devBuild` is the released version
   built from another commit) and `webcontrol-update`'s backup. `GET /api/system/info`'s `update` comes from the last
-  check and never waits for GitHub. Updating stays on the Pi (`rust/README.md`).
+  check and never waits for GitHub. Within contract 5 it also carries `canUpdate` (the updater's
+  `webcontrol-update@.service` is installed), `busy` (why an update would be refused now) and `progress`, the last
+  update or rollback started from the page as the updater's status file reports it, with `phase` `starting` until the
+  updater first writes and `result` `interrupted` when its unit stopped without finishing.
+  `POST /api/system/updates/install` and `POST /api/system/updates/rollback` (body `{}`) start that unit and answer
+  202 with the same report, or 409 while one runs, the machine is busy, there is nothing newer or no backup, or the
+  unit is missing (`rust/README.md`, "From the UI").
 
 HTTP `family` is `api` (JSON for this UI), `classic` (old form routes
 the UI reuses, with their old shapes) or `static`.
