@@ -4,8 +4,12 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-out="$(mkdir -p "${1:?usage: docker-build.sh <out-dir> [51.292|51.27]}" && cd "$1" && pwd)"
 version="${2:-51.292}"
+case "$version" in
+  51.292 | 51.27) ;;
+  *) echo "no pinned holey $version; use 51.292 or 51.27" >&2; exit 2 ;;
+esac
+out="$(mkdir -p "${1:?usage: docker-build.sh <out-dir> [51.292|51.27]}" && cd "$1" && pwd)"
 image=ubuntu:24.04@sha256:2198e4c65076e9cb0b3d695219df667c0e3b0072da64ca3c2648aca17dcecaf5
 
 docker run --rm --platform linux/arm64 -e KEEP_UNPINNED -v "$here:/fw:ro" -v "$out:/out" "$image" bash -c '
