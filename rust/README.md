@@ -146,7 +146,8 @@ with a warning. `--version v0.2.0` installs that tag instead, older or not (with
 An update:
 
 1. Refuses unless the Pi is aarch64 with `curl`, `sha256sum` and `tar`, and `/api/state` shows no job running or
-   paused, no tool change or Z adjustment waiting, no probe and no controller firmware upgrade. If nothing answers it
+   paused, no tool change or Z adjustment waiting, no probe and no controller firmware upgrade, and the `busy` of
+   `GET /api/system/updates` shows no optical scan. If nothing answers it
    carries on only when `webcontrol-rs` is not running; a running service that does not answer may be mid-job, so it
    refuses until you stop it.
 2. Asks for the `sudo` password once (not when it runs as root, from the UI), downloads the tarball and `SHA256SUMS` to a temporary directory, checks the
@@ -158,7 +159,8 @@ An update:
    the binary, `webcontrol-rs.service`, `webcontrol-update@.service`, the drop-in for an older WebControl's unit,
    `wc-switch`, `webcontrol-update`,
    `/etc/sudoers.d/webcontrol-rs`, `~/.WebControl/webcontrol.json` (gcode and boards are not touched by updates) and
-   a `MANIFEST` with the version, the date and the files. There is one backup, of the install before the last update.
+   a `MANIFEST` with the version, the date and the files. As root, it reads and writes `webcontrol.json` as the
+   service user (`runuser`), so a link that user plants in their home cannot point root's copy elsewhere. There is one backup, of the install before the last update.
 4. Runs the release's own `install-pi.sh` and checks `/api/state` again: if a job started meanwhile, it puts the old
    files back without restarting anything and stops. Otherwise it restarts `webcontrol-rs` and waits up to 60 s for
    the unit to be active,
@@ -187,7 +189,8 @@ ask first, then `POST /api/system/updates/install` or `/rollback`. The server st
 the service user exactly, with no password, and nothing else beyond `systemctl poweroff`. The unit
 (`deploy/webcontrol-update@.service`) runs `webcontrol-update --service update|rollback` as root: the same steps as
 above, with no prompts, the latest published release only (no `--version`, `--force` or `--repo`, so never a
-downgrade), the repository and token from `webcontrol-rs`'s environment, and one run at a time. Nothing from the
+downgrade), the repository (checked to be `owner/name`) and token from `webcontrol-rs`'s environment, which only
+root can change, and one run at a time. Nothing from the
 request reaches the unit or a shell. Being its own unit, it carries on while it restarts `webcontrol-rs`.
 
 The updater writes its progress to `/var/lib/webcontrol-rs/update.json` (root's, mode 644) and to the journal

@@ -203,12 +203,27 @@ expect "the unit's result" "$(docker exec "$name" systemctl show -p Result --val
 expect "a second install answer" "$(post install)" 409
 as_pi 'cat /tmp/reply' | grep -q "no newer published release" || fail "the second install was not refused for having nothing newer"
 
-say "From the UI: POST /api/system/updates/rollback puts $v1 back"
+say "Without a password, the sudoers rule allows those two starts exactly, and nothing more"
+# pi is in the sudo group, so anything else asks for the password, which -n refuses to do.
+needs_password() { [[ "$(as_pi "sudo -n /usr/bin/systemctl $1" 2>&1)" == *"password is required"* ]]; }
+for command in "start --no-block webcontrol-update@update.service --now" "start --no-block webcontrol-update@frob.service" \
+  "start --no-block webcontrol-update@update.service webcontrol-rs.service" "start webcontrol-update@update.service" \
+  "stop webcontrol-rs" "start --no-block webcontrol-update@*"; do
+  needs_password "$command" || fail "sudo allows systemctl $command without a password"
+done
+
+say "From the UI: POST /api/system/updates/rollback puts $v1 back, without following a link pi planted"
+docker exec "$name" bash -c 'echo untouched > /etc/wc-target && chmod 644 /etc/wc-target'
+as_pi 'ln -sf /etc/wc-target .WebControl/webcontrol.json.wc-restore'
 expect "the rollback answer" "$(post rollback)" 202
 run="$(finished_run)"
 expect "the run's action and result" "$(jq -r '"\(.action) \(.result)"' <<< "$run")" "rollback rolledBack"
 expect "the installed version" "$(installed)" "$v1"
 expect "the version /api/state reports" "$(answering)" "$v1"
+expect "the file pi's link pointed at" "$(docker exec "$name" stat -c '%U' /etc/wc-target) $(docker exec "$name" cat /etc/wc-target)" \
+  "root untouched"
+expect "webcontrol.json's owner and type" "$(docker exec "$name" stat -c '%U %F' /home/pi/.WebControl/webcontrol.json)" \
+  "pi regular file"
 
 say "From the UI: a $v2 that cannot start rolls back by itself, and the page is told"
 docker exec "$name" bash -c "cp /home/pi/bad.tar.gz /srv/gh/dl/v$v2/webcontrol-rs-$v2-aarch64.tar.gz &&

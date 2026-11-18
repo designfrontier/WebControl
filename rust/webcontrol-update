@@ -232,7 +232,7 @@ preflight() {
 }
 
 busy_reason() {
-  local body="$1" info stage
+  local body="$1" info stage reason
   if [ -z "$body" ]; then
     rust_active && echo "webcontrol-rs is running but not answering at $URL, so it may be mid-job" \
       "(if you are sure it is not, root_do systemctl stop webcontrol-rs first)"
@@ -246,8 +246,13 @@ busy_reason() {
   stage="$(field "$info" stage)"
   case "$stage" in
     backingUp | flashing | restarting | migrating | selfTest | testing | rollingBack)
-      echo "a controller firmware upgrade is underway ($stage)" ;;
+      echo "a controller firmware upgrade is underway ($stage)"; return ;;
   esac
+  # Only the server's own check sees an optical scan; it may wait on GitHub first.
+  info="$(curl -fsS --max-time 15 "$URL/api/system/updates" 2> /dev/null || true)"
+  reason="$(field "$info" busy)"
+  reason="${reason#Not now: }"
+  [ -z "$reason" ] || [ "$reason" = null ] || echo "${reason%. Finish or stop it first.}"
 }
 
 # Sets EXPECT_CONTROLLER: a controller that answered before the restart must answer again after it.
@@ -330,6 +335,24 @@ download_and_check() {
 
 settings_path() { echo "$(service_home "$(service_user)")/.WebControl/webcontrol.json"; }
 
+# As root, the settings are read and written as their owner, so a link the owner plants there cannot redirect root.
+as_owner() { runuser -u "$(service_user)" -- "$@"; }
+owns_settings() { [ "$AS_ROOT" = 0 ] || [ "$1" != "$(settings_path)" ]; }
+
+back_up() {
+  if owns_settings "$1"; then root_do cp -p "$1" "$2"; else as_owner cat "$1" > "$2"; fi
+}
+
+# put_back <from> <to>: by a rename, so a running copy of this script keeps reading the file it started from.
+put_back() {
+  if owns_settings "$2"; then
+    root_do mkdir -p "$(dirname "$2")" && root_do cp -p "$1" "$2.wc-restore" && root_do mv -f "$2.wc-restore" "$2"
+  else
+    as_owner mkdir -p "$(dirname "$2")" && as_owner rm -f "$2.wc-restore" &&
+      as_owner tee "$2.wc-restore" < "$1" > /dev/null && as_owner mv -f "$2.wc-restore" "$2"
+  fi
+}
+
 backed_up_paths() {
   printf '%s\n' "$binary" "$unit" "$dropin" "$bindir/wc-switch" "$bindir/webcontrol-update" "$sudoers" "$update_unit" \
     "$(settings_path)"
@@ -351,7 +374,7 @@ make_backup() {
   while IFS= read -r path; do
     [ -e "$path" ] || continue
     root_do mkdir -p "$next/files$(dirname "$path")"
-    root_do cp -p "$path" "$next/files$path"
+    back_up "$path" "$next/files$path"
     manifest="$manifest"$'\n'"file=$path"
   done < <(backed_up_paths)
   # Written last: a backup without a MANIFEST is incomplete and is never restored.
@@ -379,9 +402,7 @@ restore_backup() {
       failed=1
       continue
     fi
-    # A rename, so a running copy of this script keeps reading the file it started from.
-    if root_do mkdir -p "$(dirname "$path")" && root_do cp -p "$from" "$path.wc-restore" &&
-      root_do mv -f "$path.wc-restore" "$path"; then
+    if put_back "$from" "$path"; then
       say "  restored $path"
     else
       say "  NOT restored $path"
@@ -573,6 +594,10 @@ service_env() {
   done
 }
 
+check_repo() {
+  [[ "$REPO" =~ ^[A-Za-z0-9-]+/[A-Za-z0-9_.-]+$ && ! "$REPO" =~ /\.\.?$ ]] || fail "--repo takes owner/name, not \"$REPO\"."
+}
+
 # One run at a time; a second one leaves the first one's status file alone.
 take_lock() {
   command -v flock > /dev/null || return 0
@@ -596,6 +621,7 @@ service() {
   LOG_JSON=""
   SERVICE=1
   write_status
+  check_repo
   PIN=""
   FORCE=0
   "$1"
@@ -626,7 +652,7 @@ main() {
     esac
     shift
   done
-  [[ "$REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || fail "--repo takes owner/name, not \"$REPO\"."
+  check_repo
   [[ -z "$PIN" || "$PIN" =~ $TAG_RE ]] || fail "--version takes a release tag such as v0.2.0, not \"$PIN\"."
   URL="$(state_url)"
   case "$mode" in

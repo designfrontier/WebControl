@@ -31,6 +31,14 @@ cat > "$work/bin/id" <<EOF
 #!/usr/bin/env bash
 if [ "\$1" = -u ] && [ -f "$work/as-root" ]; then echo 0; else exec /usr/bin/id "\$@"; fi
 EOF
+# runuser -u <user> -- <command>: runs the command as is.
+cat > "$work/bin/runuser" <<EOF
+#!/usr/bin/env bash
+echo "runuser \$*" >> "$work/calls"
+[ "\$1 \$3" = "-u --" ] || exit 2
+shift 3
+exec "\$@"
+EOF
 # A stub that records the update's phase when it is called, so a test sees the phases in order.
 phase_probe() {
   printf '%s\n' "[ -f \"$work/root/var/lib/webcontrol-rs/update.json\" ] &&" \
@@ -468,7 +476,9 @@ service_update_reports_its_progress() {
     progress '.from == "1.0" and .to == "1.1" and .startedAt > 1700000000000 and .finishedAt >= .startedAt' &&
     progress '(.log | index("Checksum OK.")) and .log[-2] == "Updated webcontrol-rs to 1.1."' &&
     [ "$(uniq "$work/phases" | tr '\n' ' ')" = "checking downloading installing restarting healthCheck " ] &&
-    [ "$(mode_of "$status")" = 644 ] && [ ! -e "$status.new" ]
+    [ "$(mode_of "$status")" = 644 ] && [ ! -e "$status.new" ] &&
+    grep -qx "runuser -u pi -- cat $work/home/.WebControl/webcontrol.json" "$work/calls" &&
+    cmp -s "$backup/files$work/home/.WebControl/webcontrol.json" "$work/home/.WebControl/webcontrol.json"
 }
 
 service_reports_an_automatic_rollback() {
@@ -502,7 +512,31 @@ service_rolls_back() {
   update --service update > /dev/null || return 1
   update --service rollback > /dev/null && [ "$(version_of "$opt/webcontrol-rs")" = 1.0 ] &&
     progress '.action == "rollback" and .result == "rolledBack" and .from == "1.1" and .to == "1.0"' &&
-    ! grep -q "^sudo" "$work/calls"
+    ! grep -q "^sudo" "$work/calls" &&
+    grep -qx "runuser -u pi -- mv -f $work/home/.WebControl/webcontrol.json.wc-restore $work/home/.WebControl/webcontrol.json" \
+      "$work/calls" && grep -qx '{"owner": "settings"}' "$work/home/.WebControl/webcontrol.json"
+}
+
+service_refuses_a_bad_repository() {
+  fresh
+  installed 1.0
+  echo "WEBCONTROL_REPO=x/.." > "$work/service-env"
+  touch "$work/as-root"
+  ! update --service update > /dev/null 2>&1 && progress '.result == "failed"' &&
+    progress '.log[-1] | startswith("--repo takes owner/name")' && ! grep -qs "^curl" "$work/calls"
+}
+
+refuses_during_an_optical_scan() {
+  fresh
+  installed 1.0
+  publish 1.1
+  latest 1.1
+  mkdir -p "$work/srv/api/system"
+  echo '{"busy": "Not now: an optical calibration scan is running. Finish or stop it first."}' > "$work/srv/api/system/updates"
+  ! update > /dev/null 2> "$work/err" && grep -q "Not now: an optical calibration scan is running. Finish" "$work/err" &&
+    [ "$(version_of "$opt/webcontrol-rs")" = 1.0 ] || return 1
+  echo '{"busy": null}' > "$work/srv/api/system/updates"
+  update > /dev/null && [ "$(version_of "$opt/webcontrol-rs")" = 1.1 ]
 }
 
 service_reports_a_refusal() {
@@ -803,6 +837,8 @@ check "--service reports a refusal as failed with the reason" service_reports_a_
 check "--service update with nothing newer reports up to date" service_up_to_date
 check "--service writes quotes, backslashes and tabs as JSON" service_escapes_the_log
 check "--service takes the repository and token from webcontrol-rs" service_takes_webcontrol_rs_environment
+check "--service refuses a repository that is not owner/name" service_refuses_a_bad_repository
+check "refuses during an optical scan, which only the server's check sees" refuses_during_an_optical_scan
 check "--service needs root and exactly update or rollback" service_needs_root_and_one_action
 check "--service refuses while another run holds the lock" service_runs_one_at_a_time
 check "a run from a terminal writes no status file" terminal_runs_write_no_status
