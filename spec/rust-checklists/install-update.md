@@ -42,12 +42,12 @@ run" first. Below, `<version>` is the new release (for example `0.3.0`) and `<pr
 ## 3. `webcontrol-update` on the draft: update to the previous release and roll back
 
 A draft is invisible to `webcontrol-update`, so this checks its download, backup, health check and rollback against
-the previous published release. With the draft installed, plain `webcontrol-update` would install the latest
-published release, which is the older one; use `--version` so the downgrade is deliberate.
+the previous published release. Plain `webcontrol-update` is not the way to do this: the latest published release is
+older than the draft. `--version` installs it explicitly.
 
 - [ ] The machine is idle: no file running or paused, no tool change waiting.
 - [ ] `webcontrol-update --version v<previous>` asks for the `sudo` password once, then prints
-      `Updating webcontrol-rs <version> to <previous> ...`, `Checksum OK.`,
+      `Updating webcontrol-rs <version> to <previous> from designfrontier/WebControl.`, `Checksum OK.`,
       `Backed up webcontrol-rs <version> to /opt/webcontrol-rs/backup.`, `Restarting webcontrol-rs.`,
       `webcontrol-rs <previous> is running and answering at http://localhost:5000, with the controller connected.`
       and `Updated webcontrol-rs to <previous>.`

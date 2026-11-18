@@ -164,8 +164,8 @@ A2). v0.94 was never run against 51.292 and never writes `$18`, so roll the firm
 
 If the controller runs 51.292, roll it back to 51.27 first (`spec/rust-checklists/firmware-upgrade.md`, section 7):
 v0.94 must not drive 51.292. Then power off (`sudo poweroff`, then wait for the green LED), remove the card, power
-on. The Pi boots v0.94 from the SSD at `http://192.168.86.155:5000`, exactly as before. Nothing on the SSD was changed. To go back to WebControl, put the
-card back in.
+on. The Pi boots v0.94 from the SSD at `http://192.168.86.155:5000`, exactly as before. Nothing on the SSD was
+changed. To go back to WebControl, put the card back in.
 
 A bad WebControl update needs no disk swap: `webcontrol-update --rollback` on the Pi puts the install before the last
 update back (see Updating), and `rust/deploy.sh rollback` from the Mac puts back the binary before the last push.

@@ -45,8 +45,8 @@ what you saw and the wizard's "Steps so far", and go to section 8.
 
 ## 2. Pre-flight: Check the controller
 
-- [ ] Actions ▸ Upgrade holey firmware to 51.292… opens the wizard, titled "Upgrade to holey 51.292". Its
-      "51.292 image SHA-256" reads `d7171d97f6eef2735db488a001c556fa60e3639033e6ec7c6ef7b18ff0ee8917`, the same as
+- [ ] Actions ▸ Upgrade holey firmware to 51.292… opens the "Upgrade holey firmware" wizard, headed "Upgrade to holey
+      51.292". Its "51.292 image SHA-256" reads `d7171d97f6eef2735db488a001c556fa60e3639033e6ec7c6ef7b18ff0ee8917`, the same as
       `rust/firmware/holey-51.292.sha256`. "none in this build" means a local build without Docker: install a release.
 - [ ] **Check the controller**: the log shows `Sent: B05`, `Sent: $$`, `Sent: B10 L`, `Sent: B10 R` and their replies.
 - [ ] The wizard shows Board (`PCB v1.1 Detected`), Firmware before, and Chains before. Note the chains: left ______
@@ -133,7 +133,8 @@ writes every setting back.
 
 - [ ] `ls ~/.WebControl/firmware-backups/`, and pick the directory of the upgrade: its `preflight.txt` names 51.27 as
       the firmware before.
-- [ ] Flash it, with WebControl stopped so avrdude has the port:
+- [ ] Flash it, with WebControl stopped so avrdude has the port. `-P` is the serial port from Settings ▸ Maslow
+      (Serial Connection), usually `/dev/ttyACM0`:
 
   ```sh
   sudo systemctl stop webcontrol-rs
@@ -157,8 +158,8 @@ from madgrizzle/Firmware @ 950fb23. Flash it the same way.
 
 ## 8. If something goes wrong
 
-- The wizard rolls back by itself when the flash fails twice, when the board's banner changes after the flash, or
-  when the controller does not answer B05 with 51.29 within 30 s. Wait for "Rolled back" or "The upgrade failed".
+- The wizard rolls back by itself when the flash fails (a lost avrdude sync is retried once first), when the board's
+  banner changes after the flash, or when the controller does not answer B05 with 51.29 within 30 s. Wait for "Rolled back" or "The upgrade failed".
 - "The upgrade failed" names the backup's `rollback.hex`: flash it as in section 7, part B.
 - `$18` at 126, or Z running too fast: press Stop. Settings ▸ Advanced, Max Z-Axis RPM must read 12.6; Save it, and
   check the log shows `Sent: $18=12.6`. If it will not stay, roll back (section 7).
