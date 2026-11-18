@@ -9,7 +9,6 @@ use wc_calibration::CalibrationError;
 use wc_calibration::holey::HoleyResult;
 use wc_config::{Settings, python_float_str};
 use wc_optical::grid::{self, ErrorGrid};
-use wc_protocol::float;
 use wc_protocol::optical::{
     Cell, GeometryFit, Measurement, OpticalSettings, Orientation, PixelPoint, ScanImage, ScanProgress, ScanStarted,
     ScanState, Session, SettingsSaved,
@@ -34,7 +33,6 @@ pub const JOB_RUNNING: &str = "Stop the job before running optical calibration."
 pub const NOT_CONNECTED: &str = "The controller is not connected.";
 /// A measurement that is not a number would reach the controller as `G1 Xnan`.
 pub const NOT_A_NUMBER: &str = "The camera's measurement was not a number.";
-pub const NO_SAFE_HEIGHT: &str = "Set the Z-axis safe height to a number, so the bit rises before the scan moves.";
 pub const ATTEMPTS: u32 = 6;
 pub const MAX_STEP_MM: f64 = 10.0;
 pub const MAX_CORRECTION_MM: f64 = 25.0;
@@ -288,8 +286,9 @@ impl Machine {
         if !matches!(self.link, Link::Connected { .. }) {
             return Response::error(409, NOT_CONNECTED);
         }
-        let Some(safe_height_mm) = self.settings.value("Maslow Settings", "zAxisSafeHeight").and_then(float) else {
-            return Response::error(409, NO_SAFE_HEIGHT);
+        let safe_height_mm = match self.safe_height("scanning") {
+            Ok(height) => height,
+            Err(refused) => return Response::error(409, &refused),
         };
         let (half_width, half_height) = (self.bed("bedWidth") / 2.0, self.bed("bedHeight") / 2.0);
         let outside = cells.iter().find(|cell| {

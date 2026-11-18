@@ -121,11 +121,20 @@ enum Identifier {
     Text(String),
 }
 
-/// A semantic version, with an optional `v` and build metadata ignored.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// A pre-release sorts before its release.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+enum Pre {
+    Pre(Vec<Identifier>),
+    Release,
+}
+
+/// A version ordered as `webcontrol-update` orders them: `MAJOR[.MINOR[.PATCH]]`, an optional `v`, build metadata
+/// ignored, and a `git describe` build (`-3-gabc1234`, `-dirty`) after the tag it describes.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Version {
     core: [u64; 3],
-    pre: Vec<Identifier>,
+    pre: Pre,
+    commits_past: Option<u64>,
 }
 
 fn number(text: &str) -> Option<u64> {
@@ -142,32 +151,40 @@ fn identifier(text: &str) -> Option<Identifier> {
     }
 }
 
+/// Splits `rc.1-3-gabc1234-dirty` into `rc.1` and the commit count, 3.
+fn split_describe(suffix: &str) -> (&str, Option<u64>) {
+    let (suffix, dirty) = match suffix.strip_suffix("dirty") {
+        Some(rest) if rest.is_empty() || rest.ends_with('-') => (rest.strip_suffix('-').unwrap_or(rest), Some(0)),
+        _ => (suffix, None),
+    };
+    let described = suffix.rsplit_once("-g").and_then(|(head, hash)| {
+        let hex = !hash.is_empty() && hash.chars().all(|c| matches!(c, '0'..='9' | 'a'..='f'));
+        let (pre, count) = head.rsplit_once('-').unwrap_or(("", head));
+        Some((pre, number(count)?)).filter(|_| hex)
+    });
+    described.map_or((suffix, dirty), |(pre, count)| (pre, Some(count)))
+}
+
+fn pre(text: Option<&str>) -> Option<Pre> {
+    let Some(text) = text else { return Some(Pre::Release) };
+    text.split('.').map(identifier).collect::<Option<_>>().map(Pre::Pre)
+}
+
 impl Version {
     pub fn parse(text: &str) -> Option<Version> {
         let text = text.strip_prefix('v').unwrap_or(text);
         let text = text.split_once('+').map_or(text, |(version, _)| version);
-        let (core, pre) = text.split_once('-').map_or((text, None), |(core, pre)| (core, Some(pre)));
-        let core: Vec<u64> = core.split('.').map(number).collect::<Option<_>>()?;
-        let pre = pre.map_or(Some(vec![]), |pre| pre.split('.').map(identifier).collect())?;
-        Some(Version { core: core.try_into().ok()?, pre })
-    }
-}
-
-impl Ord for Version {
-    fn cmp(&self, other: &Self) -> Ordering {
-        // A pre-release sorts before its release.
-        let pre = match (self.pre.is_empty(), other.pre.is_empty()) {
-            (true, false) => Ordering::Greater,
-            (false, true) => Ordering::Less,
-            _ => self.pre.cmp(&other.pre),
-        };
-        self.core.cmp(&other.core).then(pre)
-    }
-}
-
-impl PartialOrd for Version {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
+        let (core, suffix) = text.split_once('-').map_or((text, None), |(core, suffix)| (core, Some(suffix)));
+        let mut core: Vec<u64> = core.split('.').map(number).collect::<Option<_>>()?;
+        if core.len() > 3 {
+            return None;
+        }
+        core.resize(3, 0);
+        let (pre_release, commits_past) = suffix.map_or((None, None), |suffix| {
+            let (pre_release, commits_past) = split_describe(suffix);
+            (Some(pre_release).filter(|p| !p.is_empty() || commits_past.is_none()), commits_past)
+        });
+        Some(Version { core: core.try_into().ok()?, pre: pre(pre_release)?, commits_past })
     }
 }
 
@@ -204,7 +221,7 @@ pub fn repo_from(value: Option<String>) -> String {
         .unwrap_or_else(|| DEFAULT_REPO.into())
 }
 
-/// How long answers are kept and how long GitHub gets.
+/// How long answers are kept and how long each request to GitHub gets.
 #[derive(Debug, Clone, Copy)]
 pub struct Timing {
     pub fresh: Duration,
@@ -310,9 +327,11 @@ impl Updates {
         }
         let source = self.0.source.clone();
         let fetch = tokio::task::spawn_blocking(move || source.latest());
-        let result = match tokio::time::timeout(self.0.timing.timeout, fetch).await {
+        // Two requests, the release then its tag's commit, each get the timeout.
+        let wait = self.0.timing.timeout * 2;
+        let result = match tokio::time::timeout(wait, fetch).await {
             Ok(joined) => joined.unwrap_or_else(|_| Err("The update check failed".into())),
-            Err(_) => Err(format!("Couldn't reach GitHub within {} s", self.0.timing.timeout.as_secs_f32())),
+            Err(_) => Err(format!("Couldn't reach GitHub within {} s", wait.as_secs_f32())),
         };
         let before = last.take().and_then(|checked| checked.latest);
         let (latest, error) = match result {

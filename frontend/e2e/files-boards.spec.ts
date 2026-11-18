@@ -61,7 +61,11 @@ test("uploads, opens, edits, saves and clears gcode from the G-Code menu", async
     .getByRole("dialog", { name: "Clear the loaded gcode?" })
     .getByRole("button", { name: "Clear GCode" })
     .click();
-  await expect(page.getByText(/^(0 cut and 0 rapid moves|No gcode loaded)$/)).toBeVisible();
+  await expect(
+    page
+      .getByRole("figure", { name: "Gcode and board viewer" })
+      .getByText(/^(0 cut and 0 rapid moves|No file loaded)$/),
+  ).toBeVisible();
   await closeServerDialogs(page);
 });
 

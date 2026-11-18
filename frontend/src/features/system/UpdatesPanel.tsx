@@ -10,7 +10,7 @@ const LatestRelease = ({ latest }: { latest: NonNullable<Updates["latest"]> }) =
     <div className="release-head">
       <h3>{latest.name === latest.tag ? latest.tag : `${latest.name} (${latest.tag})`}</h3>
       {safeUrl(latest.url) && (
-        <a href={safeUrl(latest.url)} target="_blank" rel="noreferrer">
+        <a href={safeUrl(latest.url)} target="_blank" rel="noopener noreferrer">
           View on GitHub
         </a>
       )}
@@ -38,7 +38,10 @@ const HowToUpdate = ({ updates }: { updates: Updates }) => (
         <code>ssh pi@{window.location.hostname}</code>
       </li>
       <li>
-        Run <code>{updateCommand(updates)}</code>. It checks the download against <code>SHA256SUMS</code>, backs up this
+        {updates.status === "ahead" && updates.latest
+          ? `Only to put ${updates.latest.tag} in place of this build, run`
+          : "Run"}{" "}
+        <code>{updateCommand(updates)}</code>. It checks the download against <code>SHA256SUMS</code>, backs up this
         install, restarts WebControl and rolls back by itself if the new version does not come up.
       </li>
       <li>Reload this page when it reports the update.</li>

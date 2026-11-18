@@ -6,7 +6,7 @@ upgrade flow are built against. Firmware paths are relative to `cnc_ctrl_v1/`.
 | Tag | Repo @ commit | Notes |
 |---|---|---|
 | S126 | MaslowCNC/Firmware @ e1e0d02 | Stock 1.26 |
-| H27 | madgrizzle/Firmware @ 950fb23 | Holey 51.27, bundled by the Python backend's `buildFirmware.sh`; the user's controller |
+| H27 | madgrizzle/Firmware @ 950fb23 | Holey 51.27, bundled by v0.94's `buildFirmware.sh`; `rust/firmware/docker-build.sh <dir> 51.27` rebuilds it with a newer compiler (not byte-identical), pinned in `holey-51.27.sha256`. Not the owner's controller: that ran an older "51.27" without B99 or the TLE9201 boot line, which this rebuild does not reproduce; the backup's `rollback.hex` is the only exact copy |
 | H28 | madgrizzle/Firmware @ e9cc445 | 51.28: FAKE_SERVO handling and version only |
 | H291 | Orob-Maslow/Firmware @ 97d12a6 | Tags v51.29 / v51.291 (master); reports `51.29` |
 | H292 | Orob-Maslow/Firmware @ 0064955 | Tag v51.292; the planned upgrade target |
@@ -62,7 +62,7 @@ the raw line, re-send B05 on any boot banner (`PCB v1.`, `Grbl v1.00`, `ready`),
 
 ## 4. Commands WebControl sends
 
-- B02, B04, B05, B06, B08, B09, B10, B11, B13, B14 work on every version; B99 on 51.27+.
+- B02, B04, B05, B06, B08, B09, B10, B11, B13, B14 work on every version; B99 on H27 and later, but not on every build that reports 51.27 (the owner's former one predates it).
 - **Z limits B17–B20:** `Invalid statement` on 1.26/51.27/51.28. On 51.291 B17/B18 overwrite `$43`/`$44`. On
   51.292 B17/B18 store nothing but report success; only `$63`/`$64` (mm) work, and B20 reads them back.
 - G17 is unsupported (sent by both calibration patterns). G38.2 moves at a fixed 60 mm/min, but touchZ's `F1` still
@@ -73,7 +73,10 @@ the raw line, re-send B05 on any boot banner (`PCB v1.`, `Grbl v1.00`, `ready`),
   `ok`, and sets `sys.stop`, which drops every line the firmware held (H27 `GCode.cpp:936-937`, H292
   `GCode.cpp:1061-1062`). It acks with `ok` and no `z axis zeroed` when Z is not attached (`G38.2 gcode only valid
   with z-axis attached`), when the target equals the current Z (no move at all), and for `G38.<n>` other than `.2`
-  (H27 `GCode.cpp:836-948`). `M2` and
+  (H27 `GCode.cpp:836-948`). That last case is every G38 word whose two characters after `G38` are not `.2`
+  (G38.3, G38.4, G38.5, a bare `G38`, even `G038.2`): it prints `G38.3 is invalid. Only G38.2 recognized.` (or the
+  z-axis message without Z), moves nothing, ignores X, Y, Z and F, leaves the modal G alone and acks `ok`. `G38()`
+  is byte-identical on 51.292 (H292 `GCode.cpp:961-1073`), so neither version implements G38.3–.5 (B16). `M2` and
   `M30` only turn the spindle off. The firmware reads T only when it leads a line that also has a G or M word (`T2 M6`, `T2 G0 X1`):
   in `M6 T2`, `N10 T2 M6`, `G0 X1 T2` and a lone `T2` line the T is ignored, and a lone `T2` runs as a modal move.
 - `$` keys: units match WebControl's assumptions. `$13` is the only path that sets R. `$37` is used only when
@@ -207,7 +210,10 @@ the chord gives a NaN centre; with no X/Y change it falls back to I and J. Every
 absolute even under G91 (only G0/G1 honour it), ignores G17/G18/G19 (`Command G17 unsupported and ignored.`) and
 cuts in XY. Like every word, R is found by the first `R` in the segment (the line is upper-cased, then split at each
 G and M), and its number is the digits and punctuation after it, so `R 5` reads as R0. The G number is truncated
-to an int, so G91.1 and G90.1 switch G0/G1 to relative and absolute like G91 and G90.
+to an int (`int gNumber = extractGcodeValue(gcodeLine, 'G', -1)` in `executeGcodeLine`, 51.27 to 51.292), so G91.1
+and G90.1 switch G0/G1 to relative and absolute like G91 and G90, and the rest of their segment is ignored; I and J
+are always offsets from the start (`centerX = X1 + I`), whatever G90.1 asked. VCarve posts write `G91.1` near the
+top of every file, so as written it would run every move after it relative.
 
 ## Implications
 
@@ -234,6 +240,7 @@ to an int, so G91.1 and G90.1 switch G0/G1 to relative and absolute like G91 and
 | A17 | Fixed | Every check WebControl made of a line (units, positioning and the home shift, M0/M1, T and M6, G38.2, `$RST`, the restart state, the preview's G words) was case-sensitive, so a lower-case `g20`, `m0` or `g91` acted on the controller but not in WebControl (upstream #177, #102). Lines are now upper-cased before they are read or written. |
 | A18 | Fixed | R-format arcs (upstream #120) were streamed untouched, so 51.27 sent the sled straight to the end at PID speed (§9); now converted (B19). |
 | A19 | Fixed | G2/G3 under G91 were streamed untouched; every firmware runs their X/Y (and Z) as absolute, while the position, restart and Z tracking took them as relative. Now written absolute, with Z refused (B19). |
+| A20 | Fixed | G90.1 and G91.1 were streamed untouched (§9): a VCarve file's `G91.1` made every G0/G1 after it relative on the controller, while the home shift, position and preview took them as relative too and the restart as absolute; G90.1 arcs were cut about the wrong centre. Now never written, and G90.1 centres written as offsets (B19). |
 
 ### B. Rust backend requirements
 
@@ -300,7 +307,12 @@ to an int, so G91.1 and G90.1 switch G0/G1 to relative and absolute like G91 and
     rounded up, never used to restore an exact Z (B15). A report read before the handshake's G20/G21, or while a line
     that moves Z or changes units is unacknowledged, is not used. With no report since then, the raise
     waits for one read after every line before it is acked (about every 200 ms, §2) and is refused with an alert
-    after 3 s; it never guesses the safe height.
+    after 3 s; it never guesses the safe height. The safe height (`zAxisSafeHeight`) must be a number above 0
+    (owner decision, 2026-11-17): at 0 or below every raise before travel would leave the bit at or under the work
+    surface, so Home, Return to Center, Play mid-file, every Resume that returns to the file, triangular Accept and
+    an optical scan are refused with an alert (a 409 over HTTP) naming the setting and what it holds, and nothing is
+    sent (no `~`; a paused job stays paused). The settings form refuses to save such a value (`Must be more than
+    0`); an import or a hand-edited file can still hold one, which is why each action checks again.
 11. Never auto-send `~`; stop streaming before any line the firmware will pause on (using its T semantics); emit
     `T<n> M6`. After an ALARM or `Buffer overflow!`, Play resumes from the oldest unacknowledged line, returning at
     safe height (`alarm_mid_cut_rewinds_and_resumes`); Stop also clears it (owner decision, 2026-11-15).
@@ -317,7 +329,13 @@ to an int, so G91.1 and G90.1 switch G0/G1 to relative and absolute like G91 and
 16. Touch Z: send `G38.2` alone; no `G10 Z0` after it; a probe `error:` alerts and zeroes nothing; until the probe
     answers, refuse every action that moves the machine (Resume included), except Stop. A `G38.2` streamed from a file
     is the same: stream nothing behind it, hold the job at the probe line on a miss, and take Z as 0 after a touch.
-    An `ok` without `z axis zeroed` alerts that Z was not zeroed and pauses a job.
+    An `ok` without `z axis zeroed` alerts that Z was not zeroed and pauses a job. G38.3, G38.4, G38.5 and every
+    other G38 word but G38.2 (2026-11-17) are never sent: 51.27 and 51.292 run no probe for them, only print that
+    they are invalid and ack `ok` (§4), so there is nothing to track, and a file that relies on one would cut from
+    a Z it never set (WebControl would also take the probe's Z limit as the bit's height). Typed or in a macro the
+    line is dropped with a `Command Unsupported Probe` alert; in a file the job pauses before the line with a
+    `Line Unsupported Probe` alert, as for an unclosed comment, and Resume stops there again. A restart's state
+    ignores such a line's Z. `probe_g38_3_4_5_refused_typed_and_in_file`.
 
 17. Alarm hold (2026-11-15): after `ALARM:`, `Buffer overflow!` or `Message: Unable to find valid machine position`
     (other than zero chain lengths), write nothing that can move the machine until the user clears it. Queued
@@ -357,17 +375,31 @@ to an int, so G91.1 and G90.1 switch G0/G1 to relative and absolute like G91 and
     standard one: G2 clockwise, G3 counter-clockwise, a negative R the arc over 180°. 51.29x gets the same bytes as
     51.27: it reads R but drops its sign (§9), and one path keeps what is cut independent of the version. The start
     is where WebControl last commanded the sled, following the controller's own parse (segments split at G and M,
-    the modal G, G20/G21, G90/G91 with G91.1 truncated to G91 for G0/G1; G2/G3 X/Y absolute); after a Stop, an
+    the modal G, G20/G21, G90/G91; G2/G3 X/Y absolute); after a Stop, an
     alarm, a line lost twice (B18), a `B` or `$` line, or with no absolute move yet, it is the last status report's MPos read while nothing
-    that moves is unacknowledged. G91.1 and G90.1 (arc-centre modes) do not make an arc relative. Refused like an
+    that moves is unacknowledged. G90.1 and G91.1 (arc-centre modes) are never written (§9): each segment whose G
+    number is 90.1 or 91.1 is left out of the line, axis words and all, and a line left blank is not written at all
+    (a job counts it as sent). WebControl keeps the mode itself (G91.1, offsets, by default and for every run from
+    the first line); under G90.1 each G2/G3 with I or J (no R) has them rewritten as offsets from its start at 4
+    decimals, the centre being I and J (0 when absent) plus the home shift the line's X and Y get, in the line's
+    units, under G90 or G91. G90.1 and G91.1 never change G90/G91 for the home shift, the position, the restart
+    state, the commanded Z or the preview. A restart ends with the file's arc-centre mode at that line (`G90.1` or
+    `G91.1`, kept, never written), so a mid-file restart converts as the file would. A file that uses either is
+    noted on the console when it loads. Arc start precision: a start taken from a status report is known to half its
+    last digit (±0.005 in its units: 0.127 mm in inches); an arc that must be rewritten from such a start is
+    refused (`Arc Start Uncertain`) when, with the sled anywhere in that square, its centre or its rewritten end
+    could fall more than 0.05 mm from where the file means. The worst case grows as |R| nears half the chord, where
+    the centre swings fastest. Resume's restart then travels to an exact commanded XY first, so the arc converts
+    from an exact start; a typed arc is refused with an alert until an absolute move. Refused like an
     unclosed comment (a job pauses before the line with an alert; a typed line is dropped with one): |R| shorter
     than half the chord by over 0.05 mm, an R arc with no X/Y change, an R arc under G18/G19, a G91 arc with a Z
     word (the firmware would take it as absolute), or no known start where one is needed. The rewritten line must
     still fit B3. Since what is sent then ends where the file means, the file-side position and restart state keep
     reading G91 arcs as relative; the commanded Z (B10) reads an arc's Z as absolute, as the firmware does. The
-    preview draws R arcs with the same centre and real-G91 arcs relative. `r_arc_converted_to_i_j_on_51_27`,
-    `r_arc_impossible_radius_pauses_the_job`, `r_arc_converted_on_51_292`, `g91_arc_written_absolute`,
-    `g91_arc_with_z_pauses_the_job`.
+    preview draws R arcs with the same centre, real-G91 arcs relative and G90.1 centres absolute.
+    `r_arc_converted_to_i_j_on_51_27`, `r_arc_impossible_radius_pauses_the_job`, `r_arc_converted_on_51_292`,
+    `g91_arc_written_absolute`, `g91_arc_with_z_pauses_the_job`, `g91_1_left_out_of_a_vcarve_file`,
+    `g90_1_arc_centres_written_as_offsets`.
 
 ### C. One-click firmware upgrade
 
@@ -386,5 +418,7 @@ to an int, so G91.1 and G90.1 switch G0/G1 to relative and absolute like G91 and
    says; the push after that boot skips it and verifies with `$$`; re-send units and G90.
 7. **Self-test:** with the chains slack, B04 must pass both directions on L, R and Z; re-zero Z; compare B10 chain
    lengths with pre-flight and guide B08/B02 if they differ.
-8. **Rollback:** reflash the saved hex, then push the full settings again (downgrades reset too).
+8. **Rollback:** reflash the saved hex, then push the full settings again (downgrades reset too). With no saved hex,
+   flash the pinned 51.27 rebuild (`rust/firmware/docker-build.sh <dir> 51.27`); on the owner's machine that is
+   a newer 51.27 than it ran (H27 above), so keep its `rollback.hex` safe.
 9. The parser must tolerate the 51.29x text quirks before any post-flash step runs.

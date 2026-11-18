@@ -2,12 +2,17 @@ import type { Updates } from "../../protocol";
 
 export const DEFAULT_REPO = "designfrontier/WebControl";
 
-/** The `webcontrol-update` line to run on the Pi for this install. */
-export const updateCommand = ({ repo, status }: Pick<Updates, "repo" | "status">) =>
+const statusFlags = ({ status, latest }: Pick<Updates, "status" | "latest">) => {
+  if (status === "devBuild") return ["--force"];
+  return status === "ahead" && latest ? ["--version", latest.tag] : [];
+};
+
+/** The `webcontrol-update` line to run on the Pi for this install; on its own it never installs an older version. */
+export const updateCommand = (updates: Pick<Updates, "repo" | "status" | "latest">) =>
   [
     "webcontrol-update",
-    ...(repo === DEFAULT_REPO ? [] : ["--repo", repo]),
-    ...(status === "devBuild" ? ["--force"] : []),
+    ...(updates.repo === DEFAULT_REPO ? [] : ["--repo", updates.repo]),
+    ...statusFlags(updates),
   ].join(" ");
 
 export type Tone = "ok" | "warn" | "danger" | undefined;
@@ -36,7 +41,10 @@ export const explanation = ({ status, installed, latest }: Updates) => {
       `release${latest.commit ? ` (commit ${shortCommit(latest.commit)})` : ""}. The command below replaces it with the release.`
     );
   if (status === "ahead")
-    return `This build (${installed.version}) is newer than ${latest.tag}, the latest published release. There is nothing to update to.`;
+    return (
+      `This build (${installed.version}) is newer than ${latest.tag}, the latest published release. There is ` +
+      `nothing to update to, and webcontrol-update on its own leaves it alone; --version installs the release over it.`
+    );
   return `The installed version (${installed.version}) or the release tag (${latest.tag}) is not a version number this page can compare.`;
 };
 

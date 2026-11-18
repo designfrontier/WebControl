@@ -107,6 +107,20 @@ fn the_preview_is_pushed_on_request_with_its_size_first() {
 }
 
 #[test]
+fn a_file_with_arc_centre_modes_gets_a_console_note_that_they_are_converted() {
+    let mut rig = Rig::new();
+    let (_, effects) = open(&mut rig, "G00G21G17G90G40G49G80\nG71G91.1\nG0 X1\n", "vcarve.nc");
+    let note = "This file uses G91.1; WebControl converts it for the Maslow firmware.";
+    assert_eq!(pushed(&effects, "controllerMessage"), [json!(note)]);
+    let (_, effects) = open(&mut rig, "G21\nG90.1\nG2 X1 I1 J0\n", "absolute.nc");
+    assert_eq!(pushed(&effects, "controllerMessage").len(), 1);
+    let (_, plain) = open(&mut rig, SQUARE, "square.nc");
+    assert!(pushed(&plain, "controllerMessage").is_empty());
+    let edit = Request::LoadGcode { gcode: Box::new(parse("G91.1\nG0 X2")), file: None, origin: Origin::Edit };
+    assert!(pushed(&ask(&mut rig, edit).1, "controllerMessage").is_empty());
+}
+
+#[test]
 fn an_edit_keeps_the_index_where_it_fits_and_pushes_the_preview() {
     let mut rig = Rig::new();
     open(&mut rig, SQUARE, "square.nc");

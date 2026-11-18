@@ -455,9 +455,9 @@ fn an_arc_after_a_dropped_jog_starts_where_the_report_puts_the_sled() {
     rig.rx("G90");
     assert!(ok(&mut rig).is_empty());
     reports(&mut rig, 200, STILL, EMPTY);
-    let mut effects = rig.send(Event::Request { id: 1, request: Request::SendGcode("G2 X-130.22 Y25.13 R5".into()) });
+    let mut effects = rig.send(Event::Request { id: 1, request: Request::SendGcode("G2 X-135.22 Y20.13 R5".into()) });
     effects.extend(rig.advance(100));
-    assert_eq!(written(&effects), ["G2 X-130.22 Y25.13 I5.0000 J0.0000"], "{:?}", alerts(&effects));
+    assert_eq!(written(&effects), ["G2 X-135.22 Y20.13 I0.0000 J-5.0000"], "{:?}", alerts(&effects));
 }
 
 #[test]
@@ -471,7 +471,7 @@ fn a_relative_move_sent_again_moves_the_arcs_start_once() {
     assert_eq!(ok(&mut rig), ["G90"]);
     rig.rx("G90");
     assert!(ok(&mut rig).is_empty());
-    let mut effects = rig.send(Event::Request { id: 1, request: Request::SendGcode("G2 X11 Y0 R5".into()) });
+    let mut effects = rig.send(Event::Request { id: 1, request: Request::SendGcode("G2 X6 Y-5 R5".into()) });
     effects.extend(rig.advance(100));
-    assert_eq!(written(&effects), ["G2 X11 Y0 I5.0000 J0.0000"], "{:?}", alerts(&effects));
+    assert_eq!(written(&effects), ["G2 X6 Y-5 I0.0000 J-5.0000"], "{:?}", alerts(&effects));
 }

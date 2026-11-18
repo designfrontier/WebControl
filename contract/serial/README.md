@@ -176,6 +176,7 @@ the backend had been quiet for `quiet` seconds, one line per settle.
 | `connect_repairs_a_pid_weight_above_one` | the owner's `$$` with `$24` and `$32` at 1.00000011 (an earlier `$24=1.000000` write): equal at the printed precision but refused by `SetTunings`, so `$13`, `$24=1` and `$32=1` are written, then `$$` is read back |
 | `jog_each_direction_mm`, `jog_each_direction_inches` | the eight jog buttons |
 | `home_at_safe_height_mm`, `return_to_center_inches` | Home and Return to Center, safe height in each unit |
+| `home_refused_at_a_safe_height_of_zero` | Home and Return to Center with `zAxisSafeHeight` 0: refused with an alert naming it, nothing written (Rust-intended deviation 10) |
 | `define_home_from_sled_then_home` | Define Home from the sled and from arguments (inches → mm); Home goes there |
 | `move_z_raise_lower_and_zero_mm`, `move_z_in_inches_on_a_mm_machine` | Z moves, `G10 Z0`; a Z distance in the other unit is converted, units and home never change |
 | `touch_z_mm`, `touch_z_inches` | `G38.2` probe in the machine's units (the mm plunge limit converted); no `G10 Z0`, the firmware zeroes Z on a touch |
@@ -185,6 +186,7 @@ the backend had been quiet for `quiet` seconds, one line per settle.
 | `probe_in_file_waits_for_the_touch` | Buffered streaming waits behind a `G38.2` from the file; a jog is refused and Clear Logs runs mid-probe; Resume after the touch lowers to Z 0 |
 | `probe_in_file_misses_and_waits_at_the_probe` | A `G38.2` from the file misses: the Touch Z Failed alert, the job held at the probe line, Play returns and probes again |
 | `touch_z_without_zeroing_alerts` | An `ok` with no `z axis zeroed` before it alerts that Z was not zeroed |
+| `probe_g38_3_4_5_refused_typed_and_in_file` | Typed G38.3 and G38.5 are dropped with an alert; a G38.4 in the file pauses the job before it (Rust-intended deviation 11) |
 | `stream_unbuffered_with_home_shift` | one line per ok; home shift keeps both operands' decimals |
 | `stream_buffered_short_job_fits_the_buffer` | the same job buffered: 125 bytes, all sent before the first ok |
 | `stream_buffered_with_home_shift` | 126-byte character counting, refilled by each ok |
@@ -213,6 +215,8 @@ the backend had been quiet for `quiet` seconds, one line per settle.
 | `r_arc_converted_on_51_292` | 51.29x gets R arcs as I and J too, since it drops R's sign |
 | `g91_arc_written_absolute` | a G91 I/J arc goes out with the absolute X and Y it ends at; G1 under G91 as written |
 | `g91_arc_with_z_pauses_the_job` | a G91 arc with Z (which the firmware takes as absolute) is never sent; the job pauses |
+| `g91_1_left_out_of_a_vcarve_file` | a VCarve-style `G90 G91.1` goes out as `G90`, a lone `G91.1` not at all; the moves after it stay absolute |
+| `g90_1_arc_centres_written_as_offsets` | G90.1 is never sent; its arcs' centres, shifted to home, go out as I and J offsets |
 | `realtime_characters_stripped_from_lines` | `!`, `~`, backtick, `?`, control characters and comments removed from lines |
 | `typed_lower_case_g20_switches_units_then_jog` | A `g20` sent with `/sendGCode` goes out as `G20` and switches WebControl to inches (home, jog step); the mm Z panel then moves in inches |
 | `lower_case_file_g91_g90_m0_then_resume` | A lower-case file goes out upper-cased: `g91` stops the home shift, `g90` resumes it, `m0` pauses, Resume returns |
@@ -511,7 +515,7 @@ Where the Rust backend writes something different from Python by owner decision.
 1. **Triangular Accept raises Z first** (decision 3, 2026-11-15). Python's Accept queues `G21 `, `G90 `, `G40 `,
    `G0 X0 Y0 ` after the `$` lines, so the sled travels to the centre at whatever height the bit is. Rust queues
    `G0 Z<zAxisSafeHeight in mm> ` before `G0 X0 Y0 ` (after `G21`, so in millimetres), and refuses the Accept with a
-   409 or an alert, saving nothing, when the safe height is not a finite number. No transcript pins it:
+   409 or an alert, saving nothing, when the safe height is not a number above 0. No transcript pins it:
    `fixtures/calibration/accept_commands.json` stays Python's record, and `wc-calibration`'s fixture test inserts the
    raise.
 2. **Never lower before travel** (2026-11-15). Before the XY travel of every resume and restart (Resume after Pause, an
@@ -598,3 +602,24 @@ Where the Rust backend writes something different from Python by owner decision.
    G91 arc with Z, no known start) is refused as an unclosed comment is (B19). Transcripts:
    `r_arc_converted_to_i_j_on_51_27`, `r_arc_impossible_radius_pauses_the_job`, `r_arc_converted_on_51_292`,
    `g91_arc_written_absolute`, `g91_arc_with_z_pauses_the_job`.
+10. **No raise to a safe height of 0 or less** (2026-11-17). Python raised to whatever `zAxisSafeHeight` held, so at
+    0 Home sent `G00 Z0.0` and travelled with the bit at the work surface, and below 0 plunged before travelling.
+    Rust refuses Home, Return to Center, Play mid-file, every Resume that returns to the file, triangular Accept and
+    an optical scan with an alert (or a 409) naming the setting and the value it holds, and sends nothing (no `~`; a
+    paused job stays paused). The settings form refuses to save such a value (`spec/firmware.md` B10). Transcript:
+    `home_refused_at_a_safe_height_of_zero`.
+11. **G38.3, G38.4 and G38.5 are never sent** (2026-11-17). 51.27 and 51.292 probe only on G38.2; any other G38 word
+    prints that it is invalid and acks `ok` with no move and no `z axis zeroed` (`spec/firmware.md` §4), so a file
+    that relies on it cuts from a Z that was never set. Python sent them. Rust refuses them as it refuses an unclosed
+    comment: a typed line is dropped with a `Command Unsupported Probe` alert, and a job pauses before the line with
+    a `Line Unsupported Probe` alert (B16). Transcript: `probe_g38_3_4_5_refused_typed_and_in_file`.
+12. **G90.1 and G91.1 never reach the controller** (2026-11-17). Every firmware truncates the G number to an int,
+    so Python's untouched `G91.1`, which VCarve posts write near the top of every file, switched every later G0/G1
+    to relative, and `G90.1` arcs were cut about the wrong centre, since the firmware always reads I and J as
+    offsets (`spec/firmware.md` §9, A20, B19). Rust leaves each G90.1 or G91.1 segment out of every line it writes
+    (a line left blank is not written; a job counts it as sent), keeps the arc-centre mode itself, and writes each
+    G90.1 arc's centre, shifted to home with its X and Y, as I and J offsets from its start. A restart's queued
+    lines end with the file's mode there (`G90.1 ` or `G91.1 `), which is taken and never written. An arc rewritten
+    from a start only a status report gives is refused (`Arc Start Uncertain`) when the report's two decimals could
+    put it more than 0.05 mm from where the file means, as an exact half circle can be. Transcripts:
+    `g91_1_left_out_of_a_vcarve_file`, `g90_1_arc_centres_written_as_offsets`.

@@ -153,7 +153,15 @@ fn check_restarts(name: &str, lines: &[String], fixture: &Value, tolerance: f64)
             speed_after_spindle: false,
         };
         let restart = sequence(&state, &options);
-        assert_eq!(json!(restart.lines), case["sent"], "{at}");
+        // Rust ends a full restart with the arc-centre mode it keeps for the file, which never reaches the controller.
+        let sent = match restart.lines.split_last() {
+            Some((word, lines)) if !restart.stopped_at_tool_change => {
+                assert_eq!(word, state.arc_centres.word(), "{at}");
+                lines
+            }
+            _ => &restart.lines[..],
+        };
+        assert_eq!(json!(sent), case["sent"], "{at}");
         assert_eq!(json!(restart.stopped_at_tool_change), case["stoppedAtToolChange"], "{at}");
     });
 }

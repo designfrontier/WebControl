@@ -120,6 +120,11 @@ enum Unbuilt {
     XyUnknown,
 }
 
+/// Nothing for the controller: empty, or whitespace only once G90.1 and G91.1 are left out.
+pub(crate) fn blank(line: &str) -> bool {
+    line.is_empty() || py::isspace(line)
+}
+
 pub(crate) fn pause_button(button: PauseButton) -> Effect {
     let value = serde_json::to_value(button).unwrap_or(Value::Null);
     broadcast(&RequestedSetting { setting: "pauseButtonSetting".into(), value })
@@ -196,7 +201,7 @@ impl Machine {
 
     /// Queues the restart, whose height is settled once the lines before it are answered; `None` if it cannot be built.
     fn queue_restart(&mut self, state: GcodeState, z_target: Option<f64>, change_tool: bool) -> Option<Restart> {
-        let safe_height = self.settings.value("Maslow Settings", "zAxisSafeHeight").and_then(python_float)?;
+        let safe_height = self.safe_height_mm()?;
         let version = self.firmware_version;
         let options = Options {
             z_target,
@@ -220,8 +225,12 @@ impl Machine {
             return Some("No GCode file loaded.".into());
         }
         self.job.z_target = self.position.z;
+        self.sled.arc_centres_reset();
         let mut flow = Flow::Streaming;
         if self.index > 0 {
+            if let Err(refused) = self.safe_height("starting the file mid-way") {
+                return Some(refused);
+            }
             let restart = match self.restart_state() {
                 Ok(state) => self.queue_restart(state, None, true),
                 Err(Unbuilt::XyUnknown) => return Some(XY_UNKNOWN.into()),
@@ -264,6 +273,9 @@ impl Machine {
             return None;
         }
         let restarts = !manual && self.job.flow.in_job();
+        if let Some(Err(refused)) = restarts.then(|| self.safe_height("resuming the job")) {
+            return Some(refused);
+        }
         let state = match restarts.then(|| self.restart_state()) {
             // Refused before the `~`, so the job stays paused where it is.
             Some(Err(Unbuilt::XyUnknown)) => return Some(XY_UNKNOWN.into()),
@@ -349,9 +361,11 @@ impl Machine {
         HomeShift::from_home(home("homeX"), home("homeY"), self.truncate)
     }
 
-    /// A file line as it goes out (home shift, then its arc rewritten), or why it cannot.
+    /// A file line as it goes out (home shift, then its arc rewritten), or why it cannot; blank when nothing of it
+    /// goes out.
     fn as_written(&self, to_send: &str) -> Result<String, LineProblem> {
-        let line = self.sled.convert(&shift_to_home(to_send, self.positioning, &self.home_shift()))?;
+        let home = self.home_shift();
+        let line = self.sled.convert(&shift_to_home(to_send, self.positioning, &home), [home.x, home.y])?;
         match problem_with(&line).filter(|_| !py::isspace(&line)) {
             Some(problem) => Err(problem),
             None => Ok(line),
@@ -364,7 +378,7 @@ impl Machine {
         let to_send = tool_change_line(&line, self.job.next_tool, self.job.tool).line;
         let written =
             !line.is_empty() && !py::isspace(&line) && !only_selects_tool(&line) && !reinitialises_axes(&line);
-        written.then(|| self.as_written(&to_send))
+        written.then(|| self.as_written(&to_send)).filter(|line| !line.as_ref().is_ok_and(|line| blank(line)))
     }
 
     /// Buffered streaming: the next line fits the controller's free bytes, or is refused or skipped without them.
@@ -412,11 +426,12 @@ impl Machine {
             Ok(shifted) => shifted,
             Err(problem) => return self.refuse_line(problem.alert(self.index), effects),
         };
+        self.sled.sent(&to_send);
         self.manage_pause(&line, effects);
         let line = self.manage_tool_change(&line);
         if reinitialises_axes(&line) {
             effects.push(alert(&format!("Line {} {SKIPPED_REINIT}", self.index + 1)));
-        } else if !line.is_empty() && !py::isspace(&line) && !only_selects_tool(&line) {
+        } else if !blank(&line) && !blank(&shifted) && !only_selects_tool(&line) {
             let positioning = positioning_set_by(&line).unwrap_or(self.positioning);
             let id = self.write(&shifted, Some(self.index), now, effects);
             self.track_probe(&shifted, id, Some(self.index));

@@ -9,7 +9,7 @@ use flate2::write::GzEncoder;
 use serde::Serialize;
 use wc_protocol::main::Units;
 
-use crate::arc::{RADIUS_TOLERANCE_MM, centre_from_radius};
+use crate::arc::{ArcCentres, RADIUS_TOLERANCE_MM, centre_from_radius};
 use crate::load::unreadable_word;
 use crate::{py, words};
 
@@ -59,7 +59,7 @@ pub fn render(lines: &[String], machine: Units) -> Preview {
         position: [0.0; 3],
         scale: if machine == Units::Mm { MILLIMETERS } else { 1.0 },
         relative: false,
-        arcs_relative: false,
+        arc_centres: ArcCentres::Offsets,
         prepend: "G00 ".to_string(),
         tool: 0,
         file_units: machine,
@@ -104,9 +104,9 @@ pub(crate) fn gzip(bytes: &[u8]) -> Vec<u8> {
 struct Drawing {
     position: [f64; 3],
     scale: f64,
+    /// Set by G90 and G91 only: Python's G91.1 and G90.1 set it too, though WebControl never writes them.
     relative: bool,
-    /// A real G91 (not G91.1, which Python's `relative` also takes, nor ended by G90.1); arcs go out relative to it.
-    arcs_relative: bool,
+    arc_centres: ArcCentres,
     prepend: String,
     tool: i64,
     file_units: Units,
@@ -169,14 +169,10 @@ impl Drawing {
                 self.scale = MILLIMETERS;
                 self.file_units = Units::Mm;
             }
-            "G90" => {
-                self.relative = false;
-                self.arcs_relative = self.arcs_relative && !words::numbers('G', &full).contains(&90.0);
-            }
-            "G91" => {
-                self.relative = true;
-                self.arcs_relative = self.arcs_relative || words::numbers('G', &full).contains(&91.0);
-            }
+            "G90" | "G91" => match words::numbers('G', &full).first().and_then(|&code| ArcCentres::set_by(code)) {
+                Some(centres) => self.arc_centres = centres,
+                None => self.relative = g_word == "G91",
+            },
             _ => {}
         }
         let t_word = from_char(&full, 'T');
@@ -245,18 +241,18 @@ impl Drawing {
         let (i, j) = (self.value(line, 'I'), self.value(line, 'J'));
         let radius = if i.is_none() && j.is_none() { self.value(line, 'R') } else { None };
         // Drawn as WebControl writes it: a G91 arc goes out with absolute X and Y, so it ends where the file means.
-        let from = |start: f64| if self.arcs_relative { start } else { 0.0 };
+        let from = |start: f64| if self.relative { start } else { 0.0 };
+        // Under G90.1 I and J name the centre itself; WebControl writes them as offsets from the start.
+        let measured_from = |start: f64| if self.arc_centres == ArcCentres::Absolute { start } else { 0.0 };
         if let Some(x) = x {
             target[0] = from(x0) + x * self.scale;
         }
         if let Some(y) = y {
             target[1] = from(y0) + y * self.scale;
         }
-        if let Some(i) = i {
-            centre_offset[0] = i * self.scale;
-        }
-        if let Some(j) = j {
-            centre_offset[1] = j * self.scale;
+        if i.is_some() || j.is_some() {
+            let offset = |word: Option<f64>, start: f64| word.unwrap_or(0.0) * self.scale - measured_from(start);
+            centre_offset = [offset(i, x0), offset(j, y0)];
         }
         if let Some(z) = self.value(line, 'Z') {
             target[2] = z * self.scale;
@@ -435,10 +431,24 @@ mod tests {
             ("G20\nG0 X1 Y1\nG91\nG2 X1 Y-1 R1", "G20\nG0 X1 Y1\nG2 X2 Y0 I0 J-1"),
             ("G20\nG0 X1 Y1\nG91\nG2 X1 Y-1 I0 J-1", "G20\nG0 X1 Y1\nG2 X2 Y0 I0 J-1"),
             ("G20\nG0 X1 Y1\nG91.1\nG2 X2 Y0 I0 J-1", "G20\nG0 X1 Y1\nG2 X2 Y0 I0 J-1"),
-            ("G20\nG0 X1 Y1\nG91\nG90.1\nG2 X1 Y-1 I0 J-1", "G20\nG0 X1 Y1\nG2 X2 Y0 I0 J-1"),
+            ("G20\nG0 X1 Y1\nG91\nG90.1\nG2 X1 Y-1 I1 J0", "G20\nG0 X1 Y1\nG2 X2 Y0 I0 J-1"),
+            (
+                "G20\nG0 X1 Y1\nG90.1\nG2 X2 Y0 I1\nG91.1\nG3 X1 Y1 I-1 J0",
+                "G20\nG0 X1 Y1\nG2 X2 Y0 I0 J-1\nG3 X1 Y1 I-1 J0",
+            ),
+            ("G20\nG0 X1 Y1\ng90.1 g2 x2 y0 j0", "G20\nG0 X1 Y1\nG2 X2 Y0 I-1 J-1"),
         ];
         pairs.iter().for_each(|(r, ij)| assert!(same_moves(&draw(r, Units::Mm), &draw(ij, Units::Mm)), "{r}"));
         assert_eq!(draw("G21\nG0 X10 Y10\nG2 X20 Y0 R10", Units::Mm).moves[1].points.len(), 1 + 16 + 1);
+    }
+
+    #[test]
+    fn g91_1_and_g90_1_leave_g0_and_g1_absolute() {
+        let preview = draw("G20\nG71G91.1\nG0 X1 Y1\nG1 X2\nG90.1\nG1 Y2", Units::Mm);
+        assert_eq!(preview.moves[0].points, [[0.0, 0.0, 0.0], [1.0, 1.0, 0.0]]);
+        assert_eq!(last_point(&preview), [2.0, 2.0, 0.0]);
+        let relative = draw("G91\nG91.1\nG1 X1\nG1 X1", Units::Inches);
+        assert_eq!(last_point(&relative), [2.0, 0.0, 0.0]);
     }
 
     #[test]

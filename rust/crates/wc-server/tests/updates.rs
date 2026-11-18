@@ -74,9 +74,37 @@ fn versions_compare_as_semver() {
     assert!(v("1.0.0-2") < v("1.0.0-alpha"));
     assert_eq!(v("1.2.3+build.5"), v("v1.2.3"));
     assert_eq!(v("1.2.3").partial_cmp(&v("1.2.3")), Some(std::cmp::Ordering::Equal));
-    ["", "dev", "1.2", "1.2.3.4", "1.x.3", "+1.2.3", "1.2.3-", "1.2.3-a..b", "1.2.3-a_b"]
+    assert_eq!(v("v1.2"), v("1.2.0"));
+    assert_eq!(v("1"), v("1.0.0"));
+    ["", "dev", "1.2.3.4", "1.x.3", "+1.2.3", "1.2.3-", "1.2.3-a..b", "1.2.3-a_b"]
         .iter()
         .for_each(|text| assert_eq!(Version::parse(text), None, "{text}"));
+}
+
+#[test]
+fn a_git_describe_build_comes_after_its_release_as_webcontrol_update_orders_it() {
+    let v = |text: &str| Version::parse(text).unwrap_or_else(|| panic!("{text}"));
+    assert!(v("0.4.0-3-gabc1234") > v("0.4.0"));
+    assert!(v("0.4.0-3-gabc1234") < v("0.4.0-12-g0123456"));
+    assert!(v("0.4.0-3-gabc1234-dirty") > v("0.4.0"));
+    assert!(v("0.4.0-dirty") > v("0.4.0"));
+    assert!(v("0.4.0-3-gabc1234") < v("0.4.1-rc.1"));
+    assert!(v("0.4.0-rc.1") < v("0.4.0"));
+    assert!(v("0.4.0-3-gXYZ") < v("0.4.0"), "not a commit hash, so a pre-release");
+}
+
+#[test]
+fn a_git_describe_build_of_a_pre_release_comes_after_that_pre_release_only() {
+    let v = |text: &str| Version::parse(text).unwrap_or_else(|| panic!("{text}"));
+    assert!(v("0.3.0-rc.1-3-gabc1234") < v("0.3.0-rc.2"));
+    assert!(v("0.3.0-rc.1-3-gabc1234") > v("0.3.0-rc.1"));
+    assert!(v("0.3.0-rc.1-dirty") < v("0.3.0"));
+    assert!(v("0.3.0-rc.1-dirty") > v("0.3.0-rc.1"));
+    assert!(v("0.3.0-rc.1-3-gabc1234-dirty") > v("0.3.0-rc.1-dirty"));
+    assert_eq!(
+        compare("0.3.0-rc.1-3-gabc1234", "abc1234", Some(&release("v0.3.0-rc.2", None))),
+        UpdateState::UpdateAvailable
+    );
 }
 
 #[test]
@@ -89,6 +117,7 @@ fn the_installed_build_against_the_latest_release() {
     assert_eq!(compare("0.3.0", "unknown", latest("v0.3.0", Some(SHA)).as_ref()), UpdateState::UpToDate);
     assert_eq!(compare("0.4.0", "dc9bdca", latest("v0.3.0", Some(SHA)).as_ref()), UpdateState::Ahead);
     assert_eq!(compare("0.3.0-rc.1", "dc9bdca", latest("v0.3.0", None).as_ref()), UpdateState::UpdateAvailable);
+    assert_eq!(compare("0.3.0-2-gdc9bdca", "dc9bdca", latest("v0.3.0", Some(SHA)).as_ref()), UpdateState::Ahead);
     assert_eq!(compare("dev", "dc9bdca", latest("v0.3.0", None).as_ref()), UpdateState::Unknown);
     assert_eq!(compare("0.3.0", "dc9bdca", latest("nightly", None).as_ref()), UpdateState::Unknown);
     assert_eq!(compare("0.3.0", "dc9bdca", None), UpdateState::Unknown);
@@ -299,10 +328,19 @@ async fn a_check_that_outlasts_its_timeout_or_panics_is_an_error() {
     source.delay = Duration::from_millis(500);
     let timing = Timing { timeout: Duration::from_millis(50), ..LONG };
     let report = updates(source, std::path::Path::new("/nonexistent"), timing).report().await;
-    assert_eq!(report.error.as_deref(), Some("Couldn't reach GitHub within 0.05 s"));
+    assert_eq!(report.error.as_deref(), Some("Couldn't reach GitHub within 0.1 s"));
 
     let report = updates(Panics, std::path::Path::new("/nonexistent"), LONG).report().await;
     assert_eq!(report.error.as_deref(), Some("The update check failed"));
+}
+
+#[tokio::test]
+async fn a_check_gets_the_timeout_for_each_of_its_two_requests() {
+    let mut source = Scripted::new(vec![Ok(release("v999.0.0", None))]);
+    source.delay = Duration::from_millis(300);
+    let timing = Timing { timeout: Duration::from_millis(200), ..LONG };
+    let report = updates(source, std::path::Path::new("/nonexistent"), timing).report().await;
+    assert_eq!((report.error, report.status), (None, UpdateState::UpdateAvailable));
 }
 
 #[tokio::test]

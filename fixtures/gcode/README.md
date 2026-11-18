@@ -11,6 +11,14 @@ not, so where a line is lower case (`g1 x10 y20` in `comments_mixed.nc`, `n60 g1
 `crlf_numbered.nc`, the lower-case rows of `stream.json`, and the lower-case text an unclosed comment, a stray `)`
 or realtime characters leave in a line) its `sanitised` text and the lines built from it are upper case, `m0` pauses, `t3 g0 x1` names tool 3, and the restart states and positions after it count its X, Y and F.
 
+Hand-edited since: the firmware truncates G90.1 and G91.1 to G90 and G91 (`spec/firmware.md` §9), so Rust never
+writes them and they no longer set relative moves, which Python took them to. Where they appear (the `G91.1` rows of
+`stream.json`, `vcarve_mm.nc` and `relative_g91.nc`, and the `../boards/` grids and trims of those two files) the
+positioning mode, the G90 shift, the preview moves, the positions and the board cells are what Python's rules give
+for the same file with each G91.1 word replaced by a no-op (`G71G91.1` by `G71`, a lone `G91.1` by `G40`). The
+restart `sent` lines stay Python's; Rust's restart adds the arc-centre mode as a last line it never writes, which
+`fixtures.rs` checks apart.
+
 Every file has a `tolerance` (1e-9): the largest absolute difference allowed for a float. Strings, booleans, `null`
 and integers must match exactly. Every gcode string (loaded lines, shifted lines, restart lines) is compared exactly.
 

@@ -69,7 +69,7 @@ const LogPane = ({ log, title, view, dispatch }: PaneProps) => {
   );
 };
 
-/** The /logs page: live tails of log.txt and alog.txt from LogStreamer. */
+/** The /logs page: live tails of the full and abridged serial log pushed on the log socket. */
 export const LogsPanel = ({ connect = connectLogSocket }: { connect?: () => SocketLike }) => {
   const [view, dispatch] = useLogStream(connect);
   return (

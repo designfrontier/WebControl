@@ -23,6 +23,7 @@ describe("UpdatesPanel", () => {
     expect(release.getByRole("link", { name: "View on GitHub" })).toHaveAttribute("target", "_blank");
     expect(await release.findByRole("heading", { name: "Faster previews" })).toBeInTheDocument();
     expect(release.getByRole("link", { name: "#12" })).toHaveAttribute("href", "https://github.com/x/y/issues/12");
+    expect(release.getByRole("link", { name: "#12" })).toHaveAttribute("rel", "noopener noreferrer");
     expect(document.querySelector(".markdown img")).toBeNull();
 
     expect(steps().getByText("webcontrol-update")).toBeInTheDocument();
@@ -64,12 +65,32 @@ describe("UpdatesPanel", () => {
     expect(steps().getByText("webcontrol-update --repo someone/WebControl --force")).toBeInTheDocument();
   });
 
-  it("says a build ahead of the latest release has nothing to update to", async () => {
+  it("says a build ahead of the latest release has nothing to update to, and how to go back to it", async () => {
     renderUpdates({
       "/api/system/updates": updates({ status: "ahead", installed: { version: "0.5.0", commit: "x" } }),
     });
     expect(await screen.findByRole("heading", { name: "Newer than the latest release" })).toBeInTheDocument();
-    expect(screen.getByText(/There is nothing to update to/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/There is nothing to update to, and webcontrol-update on its own leaves it/),
+    ).toBeInTheDocument();
+    expect(steps().getByText(/Only to put v0\.4\.0 in place of this build, run/)).toBeInTheDocument();
+    expect(steps().getByText("webcontrol-update --version v0.4.0")).toBeInTheDocument();
+  });
+
+  it("links release notes only to https and opens them without an opener", async () => {
+    const notes = [
+      "[js](javascript:alert(1)) [data](data:text/html,x) [plain](http://example.com/x) [here](/api/state)",
+      "<javascript:alert(2)> [ref][r] ![pic](http://example.com/a.png)",
+      "",
+      "[r]: JaVaScRiPt:alert(3)",
+    ].join("\n");
+    renderUpdates({ "/api/system/updates": updates({ latest: latestRelease({ notes }) }) });
+    const release = within(await screen.findByRole("article", { name: "Latest release" }));
+    expect(await release.findByText(/^js/)).toBeInTheDocument();
+    const hrefs = Array.from(document.querySelectorAll(".markdown a")).map((link) => link.getAttribute("href"));
+    expect(hrefs).toEqual([]);
+    expect(document.querySelector(".markdown img")?.getAttribute("src") ?? null).toBeNull();
+    expect(release.getByRole("link", { name: "View on GitHub" })).toHaveAttribute("rel", "noopener noreferrer");
   });
 
   it("explains an offline Pi and checks again", async () => {

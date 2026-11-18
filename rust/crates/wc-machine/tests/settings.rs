@@ -455,3 +455,16 @@ fn a_value_adopted_from_the_controller_is_saved() {
     assert_eq!(value(&rig, "Advanced Settings", "maxZRPM"), "12.6");
     assert_eq!(saves(&effects), 1);
 }
+
+/// Home, Return to Center, a restart and Accept refuse a safe height of 0 or less, so the form does too.
+#[test]
+fn a_safe_height_of_zero_or_less_is_refused() {
+    let mut rig = Rig::connected();
+    ["0", "-1", "-0.01"].into_iter().for_each(|height| {
+        let (response, _) = put(&mut rig, "maslow", json!({"values": {"zAxisSafeHeight": height}}));
+        let error = response.body["errors"]["zAxisSafeHeight"].clone();
+        assert_eq!((response.status, error), (400, json!("Must be more than 0")), "{height}");
+    });
+    assert_eq!(value(&rig, "Maslow Settings", "zAxisSafeHeight"), "5");
+    assert_eq!(put(&mut rig, "maslow", json!({"values": {"zAxisSafeHeight": "0.5"}})).0.status, 200);
+}

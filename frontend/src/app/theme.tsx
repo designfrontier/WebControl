@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import { useMachine } from "./context";
-import { ThemeContext, applyPreference, readPreference, rememberPreference } from "./themePreference";
+import { ThemeContext, applyPreference, applyThemeColor, readPreference, rememberPreference } from "./themePreference";
 import type { Theme } from "./themePreference";
 
 const DARK_QUERY = "(prefers-color-scheme: dark)";
@@ -22,12 +22,12 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const [remembered] = useState(readPreference);
   const preference = server ?? remembered;
   const system = useSyncExternalStore(subscribeToSystem, systemTheme);
+  const theme = preference === "system" ? system : preference;
   useLayoutEffect(() => applyPreference(preference), [preference]);
+  useLayoutEffect(() => applyThemeColor(theme), [theme]);
   useEffect(() => {
     if (server) rememberPreference(server);
   }, [server]);
 
-  return (
-    <ThemeContext value={{ preference, theme: preference === "system" ? system : preference }}>{children}</ThemeContext>
-  );
+  return <ThemeContext value={{ preference, theme }}>{children}</ThemeContext>;
 };

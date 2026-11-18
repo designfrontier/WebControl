@@ -6,12 +6,13 @@ use std::sync::Arc;
 
 use serde_json::Value;
 use wc_config::{Imported, Settings};
+use wc_gcode::arc::arc_centre_note;
 use wc_gcode::board::{Board, BoardEdit, BoardTrim};
 use wc_gcode::preview::{self, Move};
 use wc_gcode::{GcodeError, load, py};
 use wc_protocol::boards::BoardDataUpdate;
 use wc_protocol::files::UpdateDirectories;
-use wc_protocol::main::{ActivateModal, GcodeFile, Units};
+use wc_protocol::main::{ActivateModal, ControllerMessage, GcodeFile, Units};
 use wc_protocol::{Envelope, Push};
 
 use crate::machine::{Effect, Machine, alert, broadcast};
@@ -49,6 +50,8 @@ pub struct Gcode {
     pub truncate: Option<u32>,
     /// The alert Python raises when only the first 300,000 lines are drawn.
     pub too_large: Option<String>,
+    /// The console note for a file with G90.1 or G91.1, which WebControl converts.
+    pub arc_centres: Option<String>,
 }
 
 /// `Advanced Settings.truncate` is on when it equals 1; `digits` is the text Python splices into its pattern.
@@ -80,6 +83,7 @@ impl Gcode {
             },
             truncate,
             too_large: drawn.too_large,
+            arc_centres: arc_centre_note(&lines),
             lines,
         })
     }
@@ -93,6 +97,7 @@ impl Gcode {
             preview: Preview { compressed: Some(preview::compress(&[])), moves: Vec::new(), file_units: units },
             truncate: None,
             too_large: None,
+            arc_centres: None,
         }
     }
 }
@@ -289,6 +294,9 @@ impl Machine {
         }
         if let Some(text) = &gcode.too_large {
             effects.push(alert(text));
+        }
+        if let Some(text) = gcode.arc_centres.as_ref().filter(|_| origin != Origin::Edit) {
+            effects.push(broadcast(&ControllerMessage(text.clone())));
         }
         let (index, name) = (self.index, self.gcode_name());
         self.install(gcode);

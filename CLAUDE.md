@@ -31,7 +31,7 @@ at `/`. The Python backend this grew from was removed; it is in git history up t
 - `rust/crates/` — `wc-protocol`, `wc-config`, `wc-gcode`, `wc-kinematics`, `wc-calibration`, `wc-firmware`,
   `wc-machine`, `wc-optical` (experimental optical calibration), `wc-sim`, `wc-server` (the binary), `wc-testkit`
 - `rust/deploy/` — the systemd unit, sudoers rule, `wc-switch` and their tests (`test.sh`)
-- `rust/firmware/` — the holey 51.292 build and its SHA-256 pin
+- `rust/firmware/` — the holey 51.292 build (embedded) and the 51.27 rollback build, each with its SHA-256 pin
 - `spec/` — `RUST-PLAN.md`, `firmware.md` (the firmware's behaviour and requirements), `INSTALL-PI.md`, and
   `rust-checklists/` (hardware checklists by feature for validating a release; its `README.md` maps features to
   sections)
