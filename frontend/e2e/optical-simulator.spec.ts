@@ -91,7 +91,16 @@ test("a scan finds the misconfigured geometry, the fit recovers it and Accept wr
   await scanState(page, /^Measuring|^Moving|^Settling/);
   await shoot(page, "scanning", scanCard(page));
   await scanState(page, /^Done/, 240_000);
-  await expect(page.getByRole("progressbar", { name: "Scan progress" })).toHaveAttribute("value", "25");
+  const bar = page.getByRole("progressbar", { name: "Scan progress" });
+  await expect(bar).toHaveAttribute("value", "25");
+  await expect(status(page)).toHaveText("Scan done: 25 of 25 squares.");
+  const spansCard = await bar.evaluate((progress) => {
+    const card = progress.parentElement!;
+    const { paddingLeft, paddingRight } = getComputedStyle(card);
+    const inner = card.clientWidth - parseFloat(paddingLeft) - parseFloat(paddingRight);
+    return Math.abs(progress.getBoundingClientRect().width - inner) < 1;
+  });
+  expect(spansCard, "the scan progress bar fills its card").toBe(true);
   await shoot(page, "scanned", scanCard(page));
 
   await page.getByRole("button", { name: "Fit geometry" }).click();
