@@ -21,9 +21,9 @@ const Harness = () => {
   );
 };
 
-const escapeIsSwallowed = () => {
+const escapeIsSwallowed = (target: Element = document.body) => {
   const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
-  document.body.dispatchEvent(event);
+  target.dispatchEvent(event);
   return event.defaultPrevented;
 };
 
@@ -56,6 +56,19 @@ describe("LoadingOverlay", () => {
     await act(async () => overlay().close());
     expect(overlay()).toHaveAttribute("open");
     expect(topLayer().at(-1)).toBe(overlay());
+  });
+
+  it("leaves Escape to a server dialog stacked above it", async () => {
+    await start();
+    renderWithProviders(
+      <Dialog title="Alert" layer="server" onClose={() => {}}>
+        Something happened.
+      </Dialog>,
+    );
+    const alert = screen.getByRole("dialog", { name: "Alert" });
+    expect(topLayer().at(-1)).toBe(alert);
+    expect(escapeIsSwallowed(within(alert).getByRole("button", { name: "Close" }))).toBe(false);
+    expect(escapeIsSwallowed(within(overlay()).getByRole("button", { name: "Stop machine" }))).toBe(true);
   });
 
   it("keeps Stop within reach", async () => {

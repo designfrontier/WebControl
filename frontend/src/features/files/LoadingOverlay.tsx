@@ -24,7 +24,11 @@ export const LoadingOverlay = ({ title, detail }: Props) => {
     const opener = document.activeElement;
     const refuse = (event: Event) => event.preventDefault();
     // Chrome closes the whole dialog stack on a repeated Escape unless the keydown itself is cancelled.
-    const swallowEscape = (event: KeyboardEvent) => event.key === "Escape" && event.preventDefault();
+    // A server dialog stacked above keeps its Escape.
+    const swallowEscape = (event: KeyboardEvent) => {
+      const within = event.target instanceof Element ? event.target.closest("dialog") : null;
+      if (event.key === "Escape" && (!within || within === dialog)) event.preventDefault();
+    };
     const reopen = () => {
       if (dialog.open) return;
       hideDialog(dialog);
