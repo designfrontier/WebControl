@@ -186,33 +186,39 @@ compare_prereleases() {
   echo 0
 }
 
-# Sets V_CORE, V_RANK (0 pre-release, 1 release, 2 a git describe build past it) and V_EXTRA; fails on a non-version.
+# Sets V_CORE, V_PRE (the pre-release) and V_DESC (git describe's commit count past the tag); fails on a non-version.
 parse_version() {
   [[ "$1" =~ $VERSION_RE ]] || return 1
   V_CORE=("${BASH_REMATCH[1]}" "${BASH_REMATCH[3]:-0}" "${BASH_REMATCH[5]:-0}")
-  local suffix="${BASH_REMATCH[7]}"
-  V_RANK=0
-  V_EXTRA="$suffix"
-  [ -n "$suffix" ] || V_RANK=1
-  [ "$suffix" != dirty ] || { V_RANK=2; V_EXTRA=0; }
-  [[ ! "$suffix" =~ ^([0-9]+)-g[0-9a-f]+(-dirty)?$ ]] || { V_RANK=2; V_EXTRA="${BASH_REMATCH[1]}"; }
+  V_PRE="${BASH_REMATCH[7]}"
+  V_DESC=""
+  case "$V_PRE" in dirty | *-dirty) V_PRE="${V_PRE%dirty}"; V_PRE="${V_PRE%-}"; V_DESC=0 ;; esac
+  [[ ! "$V_PRE" =~ ^(.*-)?([0-9]+)-g[0-9a-f]+$ ]] || { V_PRE="${BASH_REMATCH[1]%-}"; V_DESC="${BASH_REMATCH[2]}"; }
+}
+
+# compare_presence <a> <b> <order of an empty a>: prints 0 when both or neither are empty.
+compare_presence() {
+  [ -z "$1" ] && [ -n "$2" ] && { echo "$3"; return 0; }
+  [ -n "$1" ] && [ -z "$2" ] && { echo "$((0 - $3))"; return 0; }
+  echo 0
 }
 
 # version_order <a> <b>: prints older, same or newer for a against b, or unknown if either is not a version.
 version_order() {
   local -a core
-  local rank extra i order=0
+  local pre desc i order=0
   parse_version "$1" || { echo unknown; return 0; }
   core=("${V_CORE[@]}")
-  rank="$V_RANK"
-  extra="$V_EXTRA"
+  pre="$V_PRE"
+  desc="$V_DESC"
   parse_version "$2" || { echo unknown; return 0; }
   for i in 0 1 2; do
     [ "$order" != 0 ] || order="$(compare_numbers "${core[i]}" "${V_CORE[i]}")"
   done
-  [ "$order" != 0 ] || [ "$rank" = "$V_RANK" ] || order="$([ "$rank" -lt "$V_RANK" ] && echo -1 || echo 1)"
-  [ "$order" != 0 ] || [ "$rank" != 0 ] || order="$(compare_prereleases "$extra" "$V_EXTRA")"
-  [ "$order" != 0 ] || [ "$rank" != 2 ] || order="$(compare_numbers "$extra" "$V_EXTRA")"
+  [ "$order" != 0 ] || order="$(compare_presence "$pre" "$V_PRE" 1)"
+  [ "$order" != 0 ] || order="$(compare_prereleases "$pre" "$V_PRE")"
+  [ "$order" != 0 ] || order="$(compare_presence "$desc" "$V_DESC" -1)"
+  [ "$order" != 0 ] || order="$(compare_numbers "$desc" "$V_DESC")"
   case "$order" in -1) echo older ;; 0) echo same ;; *) echo newer ;; esac
 }
 

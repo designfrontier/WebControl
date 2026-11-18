@@ -762,6 +762,9 @@ v1.0.0 same 1.0.0
 0.3.0-5-gabc1234-dirty older 0.3.1
 0.3.0-dirty newer 0.3.0
 0.3.0-12-gaaa1 newer 0.3.0-5-gbbb2
+0.3.0-rc.1-3-gabc1234 older 0.3.0-rc.2
+0.3.0-rc.1-3-gabc1234 newer 0.3.0-rc.1
+0.3.0-rc.1-dirty older 0.3.0
 abc1234 unknown 0.3.0
 0.3.0 unknown ../x
 EOF
