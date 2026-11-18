@@ -88,6 +88,27 @@ Schemas describe the wire: what is actually sent, before the UI coerces anything
 properties; ignore unknown fields. A backend still sends none: `wc-testkit`'s harness closes every object schema, so
 a Rust test fails on a field the schema does not list, and a new one goes into `frontend/src/protocol/` first. Fields marked as numbers-or-numeric-text really do arrive both ways.
 
+## Cross-site requests (Rust backend only)
+
+Every request but `GET`, `HEAD` and `OPTIONS`, and every WebSocket upgrade, is refused with
+`403 {"error": "..."}` before it reaches its route when it comes from another site's page:
+
+- `Sec-Fetch-Site: cross-site`, or `same-site` without an `Origin`;
+- an `Origin` whose `host[:port]` is not the request's `Host` (`null` included);
+- a browser request (one carrying `Origin` or `Sec-Fetch-Site`) whose `Host` is not a local name: an IP address, a
+  name without dots, `localhost`, or a name ending in `.local`, `.lan`, `.home`, `.home.arpa`, `.internal`,
+  `.localdomain` or `.localhost`. Public DNS cannot answer for these, so a page cannot rebind one to the machine.
+
+A request with neither header (curl, scripts, `webcontrol-update`) is allowed from any name. Reaching WebControl
+from a browser through another DNS name (a Tailscale or public name, a reverse proxy) is refused; use its IP address.
+
+A `POST`/`PUT` under `/api/` with a body must send `Content-Type: application/json` (parameters allowed), else
+`415 {"error": "Send the body as Content-Type: application/json."}`; the form routes still take urlencoded and
+multipart bodies. A browser cannot send JSON cross-site without a preflight the server never answers.
+
+Python checked none of this beyond socket.io's same-origin default for the socket. The Vite dev proxy must keep the
+browser's `Host` (`changeOrigin: false`), or every write through it reads as another site's.
+
 ## Job lock (Rust backend only)
 
 A Rust-intended deviation (owner decision 2, 2026-11-15). While a job holds the gcode (`noJob`'s locked states:
@@ -165,8 +186,8 @@ The same events and payloads, without socket.io. The frontend's only transport (
 
 - **Endpoint**: `ws://<host>/ws?ns=<url-encoded namespace>` (`wss:` under https), one WebSocket per namespace. The UI
   opens `/MaslowCNC` and, while the log viewer is open, a second one for `/MaslowCNCLogs`.
-- **Origin**: the server answers 403 to an upgrade whose `Origin` header is not `http(s)://<Host>`, as socket.io's
-  same-origin default does, so another site's page cannot drive the machine.
+- **Origin**: an upgrade passes the same cross-site check as an HTTP write ("Cross-site requests" above): a 403 when
+  its `Origin` is not `http(s)://<Host>` or its `Host` is not a local name.
 - **Frames**: UTF-8 text frames only, one JSON object per frame, `{"ns": "/MaslowCNC", "event": "...", "data": ...}`
   (`schemas/websocket/frame.json`). `data` is exactly the single argument socket.io would carry: the envelope for
   `message`, `{"data": {...}}` for client events. No acks, no batching, no binary frames.

@@ -109,7 +109,8 @@ async fn settings_are_saved_and_a_bad_body_is_refused() {
         (refused.status, error(&refused)),
         (StatusCode::BAD_REQUEST, "markerX must be a number above 0.".into())
     );
-    let missing = server.call("PUT", "/api/calibration/optical/settings", None, b"{}".to_vec()).await;
+    let missing =
+        server.call("PUT", "/api/calibration/optical/settings", Some("application/json"), b"{}".to_vec()).await;
     assert_eq!(missing.status, StatusCode::BAD_REQUEST);
     assert!(error(&missing).starts_with("Invalid request: missing field"));
 }
@@ -121,13 +122,18 @@ async fn a_scan_needs_a_connected_controller_and_valid_extents() {
     let refused = server.post_json("/api/calibration/optical/scan", one).await;
     assert_eq!((refused.status, error(&refused)), (StatusCode::CONFLICT, optical::NOT_CONNECTED.into()));
     let extents = server
-        .call("POST", "/api/calibration/optical/scan", None, json!({"settings": settings()}).to_string().into_bytes())
+        .call(
+            "POST",
+            "/api/calibration/optical/scan",
+            Some("application/json"),
+            json!({"settings": settings()}).to_string().into_bytes(),
+        )
         .await;
     match wc_optical::grid::scan_order(&optical::settings(&Settings::defaults())) {
         Ok(_) => assert_eq!((extents.status, error(&extents)), (StatusCode::CONFLICT, optical::NOT_CONNECTED.into())),
         Err(problem) => assert_eq!((extents.status, error(&extents)), (StatusCode::BAD_REQUEST, problem.to_string())),
     }
-    let garbled = server.call("POST", "/api/calibration/optical/scan", None, b"[1]".to_vec()).await;
+    let garbled = server.call("POST", "/api/calibration/optical/scan", Some("application/json"), b"[1]".to_vec()).await;
     assert_eq!(garbled.status, StatusCode::BAD_REQUEST);
 }
 
@@ -137,12 +143,15 @@ async fn test_image_and_find_center_report_a_camera_that_cannot_capture() {
     for source in ["synthetic", "rpicam"] {
         camera_source(&server, source).await;
         for path in ["/api/calibration/optical/test-image", "/api/calibration/optical/find-center"] {
-            let reply = server.call("POST", path, None, json!({"settings": settings()}).to_string().into_bytes()).await;
+            let reply = server
+                .call("POST", path, Some("application/json"), json!({"settings": settings()}).to_string().into_bytes())
+                .await;
             assert_eq!(reply.status, StatusCode::UNPROCESSABLE_ENTITY, "{source} {path}");
             assert!(!error(&reply).is_empty());
         }
     }
-    let garbled = server.call("POST", "/api/calibration/optical/test-image", None, b"{}".to_vec()).await;
+    let garbled =
+        server.call("POST", "/api/calibration/optical/test-image", Some("application/json"), b"{}".to_vec()).await;
     assert_eq!(garbled.status, StatusCode::BAD_REQUEST);
     let mut slow = settings();
     slow["gaussianBlurValue"] = json!(1_000_000);

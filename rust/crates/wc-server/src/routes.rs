@@ -2,12 +2,13 @@ use axum::Json;
 use axum::Router;
 use axum::extract::{DefaultBodyLimit, Path};
 use axum::http::{Method, StatusCode, Uri, header};
+use axum::middleware;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post, put};
 use serde_json::json;
 
 use crate::forms::UPLOAD_LIMIT;
-use crate::{AppState, api, archive, assets, boards, files, help, optical, updates, ws};
+use crate::{AppState, api, archive, assets, boards, files, guard, help, optical, updates, ws};
 
 /// The UI's old `/next` addresses: the same path and query at the root.
 async fn from_next(uri: Uri) -> Response {
@@ -79,5 +80,6 @@ pub fn router(state: AppState) -> Router {
         .route("/ws", get(ws::upgrade))
         .fallback(fallback)
         .layer(DefaultBodyLimit::max(UPLOAD_LIMIT))
+        .layer(middleware::from_fn(guard::guard))
         .with_state(state)
 }

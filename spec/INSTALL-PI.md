@@ -220,8 +220,10 @@ on), or run `rust/deploy.sh push` from the Mac, which refuses while a job is run
 
 Not needed for direct use at `http://maslow.local:5000/`. If you ever put WebControl behind a reverse proxy such as
 nginx, or behind HTTPS, the proxy must pass the browser's `Host` header through unchanged and forward the WebSocket
-upgrade. The server accepts a WebSocket only when its `Origin` matches `Host`, so without these the page loads but
-stays disconnected:
+upgrade. The server accepts a WebSocket or a change only when its `Origin` matches `Host`, so without these the page
+loads but stays disconnected. The name in the browser must also be local (an IP address, `localhost`, a name without
+dots, or one ending in `.local`, `.lan`, `.home`, `.home.arpa`, `.internal` or `.localdomain`); any other name is
+refused, so a web page cannot rebind it to the Pi:
 
 ```nginx
 location / {
