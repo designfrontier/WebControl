@@ -57,7 +57,7 @@ export const useSubmit = ({ timeoutMs, timeoutMessage = "The server did not answ
   useEffect(() => () => inFlight.current?.abort(), []);
 
   const run = async (task: (signal: AbortSignal) => Promise<void>, failure: string) => {
-    // Not for fetch: a dropped connection cancels the server's load halfway, and Play stays refused.
+    // Not for fetch: the request runs on, so a load that finishes late still asks for its preview.
     const controller = new AbortController();
     inFlight.current = controller;
     const timer =

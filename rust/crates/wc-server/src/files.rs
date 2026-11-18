@@ -1,6 +1,7 @@
 //! The gcode library and the loaded gcode: `api/files.py` and the classic gcode form routes in `main.py`.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use axum::Json;
 use axum::body::Bytes;
@@ -124,31 +125,73 @@ async fn read(path: PathBuf) -> std::io::Result<String> {
     tokio::fs::read(path).await.map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
 }
 
-/// `loadUpdateFile` from disk: the file read and parsed off the machine task, then handed over.
-/// Wart 14: the machine hears a load has begun, so Play waits for it and the spinners start.
-async fn load_starting(machine: &MachineHandle) {
-    machine.request(Ask::LoadStarting).await;
+/// A load the machine has heard begin (wart 14: Play waits, the spinners start). Dropped unfinished, it ends as
+/// unreadable, so no load that stopped part way holds Play.
+struct Loading {
+    machine: MachineHandle,
+    finished: bool,
 }
 
-async fn load_file(machine: &MachineHandle, file: PathBuf, text: Option<String>, origin: Origin) -> Reply {
-    load_starting(machine).await;
+impl Loading {
+    async fn begin(machine: MachineHandle) -> Loading {
+        machine.request(Ask::LoadStarting).await;
+        Loading { machine, finished: false }
+    }
+
+    async fn finish(mut self, request: Ask) -> Reply {
+        self.finished = true;
+        self.machine.request(request).await
+    }
+
+    async fn unreadable(self) -> Reply {
+        self.finish(Ask::Problem(Problem::GcodeUnreadable)).await;
+        Reply::Failed
+    }
+}
+
+impl Drop for Loading {
+    fn drop(&mut self) {
+        if !self.finished {
+            self.machine.submit(Ask::Problem(Problem::GcodeUnreadable));
+        }
+    }
+}
+
+/// Runs `load` on a task of its own, so a client that disconnects mid-load cannot cancel it.
+async fn detached<L, F>(state: &AppState, load: L) -> Reply
+where
+    L: FnOnce(Loading) -> F + Send + 'static,
+    F: Future<Output = Reply> + Send,
+{
+    let (machine, queue) = (state.machine.clone(), state.loads.clone());
+    let (answer, reply) = tokio::sync::oneshot::channel();
+    tokio::spawn(async move {
+        let loading = Loading::begin(machine.clone()).await;
+        let _turn = queue.lock().await;
+        if answer.send(load(loading).await).is_err() {
+            // The client that would ask for the preview has gone, so every client is sent it.
+            machine.send(Event::CheckForGcodeUpdate);
+        }
+    });
+    reply.await.unwrap_or(Reply::Failed)
+}
+
+/// `loadUpdateFile` from disk: the file read and parsed off the machine task, then handed over.
+async fn load_file(loading: Loading, file: PathBuf, text: Option<String>, origin: Origin) -> Reply {
     let text = match text {
         Some(text) => Ok(text),
         None => read(file.clone()).await,
     };
     let gcode = match text {
-        Ok(text) => parse(text, machine.snapshot().settings).await,
+        Ok(text) => parse(text, loading.machine.snapshot().settings).await,
         Err(error) => {
             tracing::warn!(%error, file = %file.display(), "could not read the gcode");
             None
         }
     };
     match gcode {
-        Some(gcode) => machine.request(Ask::LoadGcode { gcode: Box::new(gcode), file: Some(file), origin }).await,
-        None => {
-            machine.request(Ask::Problem(Problem::GcodeUnreadable)).await;
-            Reply::Failed
-        }
+        Some(gcode) => loading.finish(Ask::LoadGcode { gcode: Box::new(gcode), file: Some(file), origin }).await,
+        None => loading.unreadable().await,
     }
 }
 
@@ -179,15 +222,27 @@ pub(crate) async fn open(State(state): State<AppState>, request: Request) -> Res
     if !named {
         return forms::status(500);
     }
-    reply_status(load_file(&state.machine, target, None, Origin::Open).await)
+    reply_status(detached(&state, |loading| load_file(loading, target, None, Origin::Open)).await)
 }
 
-/// In order, stopping at the first that fails, as Python's loop does.
+/// Written to a hidden file beside `target` and renamed over it, so no reader sees half an upload.
+fn save_upload(target: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    static UPLOADS: AtomicU64 = AtomicU64::new(0);
+    let name = target.file_name().unwrap_or_default().to_string_lossy();
+    let partial = target.with_file_name(format!(".{name}.{}.part", UPLOADS.fetch_add(1, Ordering::Relaxed)));
+    std::fs::write(&partial, bytes).and_then(|()| std::fs::rename(&partial, target)).inspect_err(|_| {
+        let _ = std::fs::remove_file(&partial);
+    })
+}
+
+/// In order, stopping at the first that fails, as Python's loop does; off the handler, so a client leaving
+/// cannot stop it part way.
 async fn save_uploads(uploads: &[&forms::Upload], targets: &[PathBuf]) -> std::io::Result<()> {
-    for (upload, target) in uploads.iter().zip(targets) {
-        tokio::fs::write(target, &upload.bytes).await?;
-    }
-    Ok(())
+    let files: Vec<(PathBuf, Bytes)> =
+        uploads.iter().zip(targets).map(|(upload, target)| (target.clone(), upload.bytes.clone())).collect();
+    let saved =
+        tokio::task::spawn_blocking(move || files.iter().try_for_each(|(target, bytes)| save_upload(target, bytes)));
+    saved.await.map_err(std::io::Error::other)?
 }
 
 pub(crate) async fn upload(State(state): State<AppState>, request: Request) -> Response {
@@ -221,8 +276,8 @@ pub(crate) async fn upload(State(state): State<AppState>, request: Request) -> R
         tracing::warn!(%error, "could not save an upload");
         return forms::status(500);
     }
-    let text = String::from_utf8_lossy(&first.bytes).into_owned();
-    reply_status(load_file(&state.machine, targets[1].clone(), Some(text), Origin::Open).await)
+    let (text, target) = (String::from_utf8_lossy(&first.bytes).into_owned(), targets[1].clone());
+    reply_status(detached(&state, |loading| load_file(loading, target, Some(text), Origin::Open)).await)
 }
 
 /// `GCodeFile.saveFile`: every line followed by a newline.
@@ -267,24 +322,19 @@ pub(crate) async fn edit(State(state): State<AppState>, request: Request) -> Res
         Ok(text) => text.trim_end().to_string(),
         Err(refusal) => return refusal,
     };
-    let machine = &state.machine;
-    let snapshot = machine.snapshot();
-    let reply = match (text.is_empty(), snapshot.gcode_file.clone()) {
-        (true, Some(file)) => load_file(machine, file, None, Origin::Reload).await,
-        (true, None) => {
-            let gcode = Box::new(Gcode::empty(snapshot.units()));
-            machine.request(Ask::LoadGcode { gcode, file: None, origin: Origin::Edit }).await
+    let reply = detached(&state, |loading| async move {
+        let snapshot = loading.machine.snapshot();
+        let edited = |gcode| Ask::LoadGcode { gcode: Box::new(gcode), file: None, origin: Origin::Edit };
+        match (text.is_empty(), snapshot.gcode_file.clone()) {
+            (true, Some(file)) => load_file(loading, file, None, Origin::Reload).await,
+            (true, None) => loading.finish(edited(Gcode::empty(snapshot.units()))).await,
+            (false, _) => match parse(text, snapshot.settings).await {
+                Some(gcode) => loading.finish(edited(gcode)).await,
+                None => loading.unreadable().await,
+            },
         }
-        (false, _) => {
-            load_starting(machine).await;
-            match parse(text, snapshot.settings).await {
-                Some(gcode) => {
-                    machine.request(Ask::LoadGcode { gcode: Box::new(gcode), file: None, origin: Origin::Edit }).await
-                }
-                None => machine.request(Ask::Problem(Problem::GcodeUnreadable)).await,
-            }
-        }
-    };
+    })
+    .await;
     match reply {
         Reply::Refused(error) => forms::refused(409, &error),
         _ => forms::result(true),
@@ -302,5 +352,33 @@ pub(crate) async fn send(State(state): State<AppState>, request: Request) -> Res
             reply => forms::result(reply == Reply::Done),
         },
         Err(refusal) => refusal,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use serde_json::json;
+    use wc_machine::{Machine, NoHost, NoPort, spawn};
+    use wc_protocol::Action;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn a_load_dropped_unfinished_ends_as_unreadable_and_frees_play() {
+        let machine = Machine::new("10.0.0.5:5000", Settings::defaults());
+        let (machine, _task) = spawn(machine, Box::new(NoPort), Arc::new(NoHost));
+        let mut pushes = machine.subscribe();
+        drop(Loading::begin(machine.clone()).await);
+        machine.send(Event::Action(Action::new("startRun", json!(""), json!(""))));
+        machine.request(Ask::SetSettings(Vec::new())).await;
+        let alerts: Vec<String> = std::iter::from_fn(|| pushes.try_recv().ok())
+            .filter(|push| push.data["command"] == "activateModal")
+            .map(|push| push.data["data"].to_string())
+            .collect();
+        assert_eq!(alerts.len(), 2, "{alerts:?}");
+        assert!(alerts[0].contains("Cannot open gcode file."));
+        assert!(alerts[1].contains("No GCode file loaded."), "Play is not held: {alerts:?}");
     }
 }

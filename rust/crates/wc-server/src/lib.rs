@@ -77,6 +77,8 @@ pub struct AppState {
     closing: Arc<watch::Sender<bool>>,
     cameras: camera::Cameras,
     updates: updates::Updates,
+    /// Gcode loads run one at a time, in the order they were asked for.
+    loads: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl AppState {
@@ -85,7 +87,8 @@ impl AppState {
         let closing = Arc::new(watch::channel(false).0);
         let cameras = camera::Cameras::default();
         let updates = updates::Updates::off();
-        AppState { machine, paths, ping, platform: Platform::current(), closing, cameras, updates }
+        let loads = Arc::default();
+        AppState { machine, paths, ping, platform: Platform::current(), closing, cameras, updates, loads }
     }
 
     pub fn with_updates(self, updates: updates::Updates) -> AppState {

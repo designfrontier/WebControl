@@ -187,6 +187,10 @@ async fn uploading_saves_every_file_and_opens_the_first() {
     assert_eq!(reply.status, StatusCode::OK);
     assert!(server.dir().join("gcode/jobs/My_Part.nc").is_file());
     assert!(server.dir().join("gcode/jobs/second.nc").is_file());
+    let mut saved: Vec<_> =
+        std::fs::read_dir(server.dir().join("gcode/jobs")).unwrap().map(|e| e.unwrap().file_name()).collect();
+    saved.sort();
+    assert_eq!(saved, ["My_Part.nc", "second.nc"], "no partial upload is left beside them");
     let loaded = server.get("/api/files/gcode/loaded").await.json();
     assert_eq!(loaded, json!({"directory": "jobs", "name": "My_Part.nc", "lineCount": 10}));
     let none = server.post_unchecked("/uploadGCode", &[Part::Field("selectedDirectory", ".")]).await;
@@ -245,6 +249,73 @@ async fn an_edit_python_cannot_load_alerts_but_answers_success() {
     assert_eq!(server.post_form("/editGCode", &[Part::Field("gcode", "G0 X1")]).await.json(), json!("success"));
     server.settle().await;
     assert!(drain(&mut pushes, "activateModal")[0].as_str().unwrap().contains("Cannot open gcode file."));
+}
+
+const STILL_LOADING: &str = "Gcode is still loading";
+
+/// Presses Play on the unconnected machine and answers whether it was refused for a load underway.
+async fn play_waits_for_a_load(server: &Server, pushes: &mut tokio::sync::broadcast::Receiver<Push>) -> bool {
+    server.act("startRun", json!(""));
+    server.settle().await;
+    drain(pushes, "activateModal").iter().any(|alert| alert.as_str().unwrap().contains(STILL_LOADING))
+}
+
+async fn next_preview(pushes: &mut tokio::sync::broadcast::Receiver<Push>) {
+    let preview = async { while pushes.recv().await.unwrap().data["command"] != "gcodeUpdateCompressed" {} };
+    tokio::time::timeout(Duration::from_secs(5), preview).await.expect("the preview was sent");
+}
+
+/// Writes `text` into the FIFO a load is reading, which ends the read.
+async fn release(path: std::path::PathBuf, text: &'static str) {
+    tokio::task::spawn_blocking(move || std::fs::write(path, text)).await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn a_load_whose_client_leaves_still_finishes_sends_the_preview_and_frees_play() {
+    let server = Server::new();
+    let path = server.dir().join("gcode/slow.nc");
+    support::fifo(&path);
+    let mut pushes = server.machine.subscribe();
+    let open = server.post_form("/openGCode", &[Part::Field("selectedGCode", "./slow.nc")]);
+    assert!(tokio::time::timeout(Duration::from_millis(300), open).await.is_err(), "the read waits on the FIFO");
+    assert!(play_waits_for_a_load(&server, &mut pushes).await);
+    release(path, SQUARE).await;
+    next_preview(&mut pushes).await;
+    let loaded = server.get("/api/files/gcode/loaded").await.json();
+    assert_eq!(loaded, json!({"directory": ".", "name": "slow.nc", "lineCount": 10}));
+    assert!(!play_waits_for_a_load(&server, &mut pushes).await);
+}
+
+#[tokio::test]
+async fn a_failed_load_frees_play() {
+    let server = Server::new();
+    let mut pushes = server.machine.subscribe();
+    assert_eq!(server.post_form("/openGCode", &[Part::Field("selectedGCode", "./missing.nc")]).await.status, 500);
+    assert!(!play_waits_for_a_load(&server, &mut pushes).await);
+}
+
+#[tokio::test]
+async fn a_second_load_waits_its_turn_and_the_later_file_stays_loaded() {
+    let server = Server::new();
+    let path = server.dir().join("gcode/slow.nc");
+    support::fifo(&path);
+    server.write("gcode/quick.nc", "G0 X1\n");
+    let mut pushes = server.machine.subscribe();
+    let slow = server.post_form("/openGCode", &[Part::Field("selectedGCode", "./slow.nc")]);
+    let quick = async {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        server.post_form("/openGCode", &[Part::Field("selectedGCode", "./quick.nc")]).await
+    };
+    let queued = async {
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        assert_eq!(server.get("/api/files/gcode/loaded").await.json()["name"], Value::Null);
+        assert!(play_waits_for_a_load(&server, &mut pushes).await);
+        release(path, SQUARE).await;
+    };
+    let (slow, quick, ()) = tokio::join!(slow, quick, queued);
+    assert_eq!((slow.status, quick.status), (StatusCode::OK, StatusCode::OK));
+    assert_eq!(server.get("/api/files/gcode/loaded").await.json()["name"], "quick.nc");
+    assert!(!play_waits_for_a_load(&server, &mut pushes).await);
 }
 
 /// A machine streaming a job, so the gcode is locked.

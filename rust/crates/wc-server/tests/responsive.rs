@@ -3,23 +3,15 @@
 
 mod support;
 
-use std::ffi::CString;
 use std::fs::OpenOptions;
 use std::io::Read;
-use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::channel;
 use std::time::Duration;
 
 use axum::http::StatusCode;
-use support::{Part, Server};
-
-fn fifo(path: &Path) {
-    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    let name = CString::new(path.as_os_str().as_bytes()).unwrap();
-    assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o644) }, 0);
-}
+use support::{Part, Server, fifo};
 
 fn trim_board() -> Vec<Part<'static>> {
     ["trimTop", "trimBottom", "trimLeft", "trimRight"]
