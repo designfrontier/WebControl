@@ -1,0 +1,71 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "g90_1_arc_centres_written_as_offsets",
+    "description": "Under G90.1 an arc's I and J name its centre, but every firmware takes them as offsets from the start and runs G90.1 itself as G90 (spec/firmware.md §9, B19). G90.1 and G91.1 are never written; each G90.1 arc's centre gets the home shift its X and Y get and goes out as I and J offsets from where the sled is, at 4 decimals. After G91.1 the I and J go out as written.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "rust"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 10,
+      "y": 5
+    },
+    "gcode": {
+      "lines": [
+        "G21",
+        "G90",
+        "G90.1",
+        "G0 X10 Y10",
+        "G1 Z-1 F300",
+        "G2 X20 Y0 I10 J0",
+        "G3 X30 Y10 I30 J0",
+        "G91.1",
+        "G2 X20 Y20 I-10 J0",
+        "G0 Z5"
+      ]
+    },
+    "bootBanner": [
+      "PCB v1.1 Detected",
+      "Grbl v1.00",
+      "ready",
+      "ok",
+      "[Forward Calculating Position]",
+      "position loaded at:",
+      "247.79",
+      "-5.88"
+    ]
+  },
+  "events": [
+    {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "G21"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n", "comment": "the G90.1 after it is not sent"},
+    {"type": "rx", "line": "G90"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 X20 Y15  \n"},
+    {"type": "rx", "line": "G0 X20 Y15"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 Z-1 F300  \n"},
+    {"type": "rx", "line": "G1 Z-1 F300"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G2 X30 Y5 I0.0000 J-10.0000  \n", "comment": "centre (10, 0) plus home is (20, 5), from (20, 15)"},
+    {"type": "rx", "line": "G2 X30 Y5 I0.0000 J-10.0000"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G3 X40 Y15 I10.0000 J0.0000  \n", "comment": "centre (30, 0) plus home is (40, 5), from (30, 5)"},
+    {"type": "rx", "line": "G3 X40 Y15 I10.0000 J0.0000"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G2 X30 Y25 I-10 J0  \n", "comment": "after G91.1 (not sent) I and J are offsets already"},
+    {"type": "rx", "line": "G2 X30 Y25 I-10 J0"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 Z5  \n"},
+    {"type": "rx", "line": "G0 Z5"},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "state": {"uploadFlag": 0, "jobInProgress": false, "gcodeIndex": 0}}
+  ]
+}

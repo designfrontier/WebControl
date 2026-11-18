@@ -17,7 +17,7 @@ use crate::alarm::survives_alarm;
 use crate::arcs::Sled;
 use crate::clearance::BitHeight;
 use crate::gpio::Led;
-use crate::job::{Flow, pause_button};
+use crate::job::{Flow, blank, pause_button};
 use crate::lost::Watch;
 use crate::machine::{Controller, Effect, Link, Machine, Probe, Queued, alert, broadcast};
 
@@ -444,6 +444,7 @@ impl Machine {
 
     /// Writes whatever the controller has room for: a queued command first, else the job's next line.
     pub(crate) fn pump(&mut self, now: Duration, effects: &mut Vec<Effect>) {
+        self.take_unwritten();
         while self.can_write(now) {
             if self.restart_due() {
                 return self.restart_controller(now, effects);
@@ -480,8 +481,22 @@ impl Machine {
                 return;
             }
         }
+        self.take_unwritten();
         if self.can_stream(now) && !self.controller.axes_reinitialised && self.paced(now) {
             self.send_next_line(now, effects);
+        }
+    }
+
+    /// Queued lines with nothing left to write once G90.1 and G91.1 are left out (a restart's arc-centre mode) only
+    /// set that mode, so they need not wait for the controller's acks.
+    fn take_unwritten(&mut self) {
+        while let Some(Queued::Line { text, .. }) = self.controller.queue.front() {
+            let command = sanitise(text);
+            if blank(&command) || !self.sled.convert(&command, [0.0; 2]).is_ok_and(|line| blank(&line)) {
+                break;
+            }
+            self.sled.sent(&command);
+            self.controller.queue.pop_front();
         }
     }
 
@@ -493,7 +508,7 @@ impl Machine {
         }
         let command = format!("{command} ");
         let to_send = tool_change_line(&command, self.job.next_tool, self.job.tool).line;
-        let checked = self.sled.convert(&to_send).and_then(|line| problem_with(&line).map_or(Ok(line), Err));
+        let checked = self.sled.convert(&to_send, [0.0; 2]).and_then(|line| problem_with(&line).map_or(Ok(line), Err));
         let to_send = match checked {
             Ok(line) => line,
             Err(problem) => {
@@ -504,8 +519,9 @@ impl Machine {
             }
         };
         self.manage_tool_change(&command);
+        self.sled.sent(&command);
         let command = to_send;
-        if only_selects_tool(&command) || !self.may_reinitialise(&command, effects) {
+        if blank(&command) || only_selects_tool(&command) || !self.may_reinitialise(&command, effects) {
             return false;
         }
         let id = self.write(&command, None, now, effects);

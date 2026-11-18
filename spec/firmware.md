@@ -210,7 +210,10 @@ the chord gives a NaN centre; with no X/Y change it falls back to I and J. Every
 absolute even under G91 (only G0/G1 honour it), ignores G17/G18/G19 (`Command G17 unsupported and ignored.`) and
 cuts in XY. Like every word, R is found by the first `R` in the segment (the line is upper-cased, then split at each
 G and M), and its number is the digits and punctuation after it, so `R 5` reads as R0. The G number is truncated
-to an int, so G91.1 and G90.1 switch G0/G1 to relative and absolute like G91 and G90.
+to an int (`int gNumber = extractGcodeValue(gcodeLine, 'G', -1)` in `executeGcodeLine`, 51.27 to 51.292), so G91.1
+and G90.1 switch G0/G1 to relative and absolute like G91 and G90, and the rest of their segment is ignored; I and J
+are always offsets from the start (`centerX = X1 + I`), whatever G90.1 asked. VCarve posts write `G91.1` near the
+top of every file, so as written it would run every move after it relative.
 
 ## Implications
 
@@ -237,6 +240,7 @@ to an int, so G91.1 and G90.1 switch G0/G1 to relative and absolute like G91 and
 | A17 | Fixed | Every check WebControl made of a line (units, positioning and the home shift, M0/M1, T and M6, G38.2, `$RST`, the restart state, the preview's G words) was case-sensitive, so a lower-case `g20`, `m0` or `g91` acted on the controller but not in WebControl (upstream #177, #102). Lines are now upper-cased before they are read or written. |
 | A18 | Fixed | R-format arcs (upstream #120) were streamed untouched, so 51.27 sent the sled straight to the end at PID speed (§9); now converted (B19). |
 | A19 | Fixed | G2/G3 under G91 were streamed untouched; every firmware runs their X/Y (and Z) as absolute, while the position, restart and Z tracking took them as relative. Now written absolute, with Z refused (B19). |
+| A20 | Fixed | G90.1 and G91.1 were streamed untouched (§9): a VCarve file's `G91.1` made every G0/G1 after it relative on the controller, while the home shift, position and preview took them as relative too and the restart as absolute; G90.1 arcs were cut about the wrong centre. Now never written, and G90.1 centres written as offsets (B19). |
 
 ### B. Rust backend requirements
 
@@ -371,17 +375,31 @@ to an int, so G91.1 and G90.1 switch G0/G1 to relative and absolute like G91 and
     standard one: G2 clockwise, G3 counter-clockwise, a negative R the arc over 180°. 51.29x gets the same bytes as
     51.27: it reads R but drops its sign (§9), and one path keeps what is cut independent of the version. The start
     is where WebControl last commanded the sled, following the controller's own parse (segments split at G and M,
-    the modal G, G20/G21, G90/G91 with G91.1 truncated to G91 for G0/G1; G2/G3 X/Y absolute); after a Stop, an
+    the modal G, G20/G21, G90/G91; G2/G3 X/Y absolute); after a Stop, an
     alarm, a line lost twice (B18), a `B` or `$` line, or with no absolute move yet, it is the last status report's MPos read while nothing
-    that moves is unacknowledged. G91.1 and G90.1 (arc-centre modes) do not make an arc relative. Refused like an
+    that moves is unacknowledged. G90.1 and G91.1 (arc-centre modes) are never written (§9): each segment whose G
+    number is 90.1 or 91.1 is left out of the line, axis words and all, and a line left blank is not written at all
+    (a job counts it as sent). WebControl keeps the mode itself (G91.1, offsets, by default and for every run from
+    the first line); under G90.1 each G2/G3 with I or J (no R) has them rewritten as offsets from its start at 4
+    decimals, the centre being I and J (0 when absent) plus the home shift the line's X and Y get, in the line's
+    units, under G90 or G91. G90.1 and G91.1 never change G90/G91 for the home shift, the position, the restart
+    state, the commanded Z or the preview. A restart ends with the file's arc-centre mode at that line (`G90.1` or
+    `G91.1`, kept, never written), so a mid-file restart converts as the file would. A file that uses either is
+    noted on the console when it loads. Arc start precision: a start taken from a status report is known to half its
+    last digit (±0.005 in its units: 0.127 mm in inches); an arc that must be rewritten from such a start is
+    refused (`Arc Start Uncertain`) when, with the sled anywhere in that square, its centre or its rewritten end
+    could fall more than 0.05 mm from where the file means. The worst case grows as |R| nears half the chord, where
+    the centre swings fastest. Resume's restart then travels to an exact commanded XY first, so the arc converts
+    from an exact start; a typed arc is refused with an alert until an absolute move. Refused like an
     unclosed comment (a job pauses before the line with an alert; a typed line is dropped with one): |R| shorter
     than half the chord by over 0.05 mm, an R arc with no X/Y change, an R arc under G18/G19, a G91 arc with a Z
     word (the firmware would take it as absolute), or no known start where one is needed. The rewritten line must
     still fit B3. Since what is sent then ends where the file means, the file-side position and restart state keep
     reading G91 arcs as relative; the commanded Z (B10) reads an arc's Z as absolute, as the firmware does. The
-    preview draws R arcs with the same centre and real-G91 arcs relative. `r_arc_converted_to_i_j_on_51_27`,
-    `r_arc_impossible_radius_pauses_the_job`, `r_arc_converted_on_51_292`, `g91_arc_written_absolute`,
-    `g91_arc_with_z_pauses_the_job`.
+    preview draws R arcs with the same centre, real-G91 arcs relative and G90.1 centres absolute.
+    `r_arc_converted_to_i_j_on_51_27`, `r_arc_impossible_radius_pauses_the_job`, `r_arc_converted_on_51_292`,
+    `g91_arc_written_absolute`, `g91_arc_with_z_pauses_the_job`, `g91_1_left_out_of_a_vcarve_file`,
+    `g90_1_arc_centres_written_as_offsets`.
 
 ### C. One-click firmware upgrade
 

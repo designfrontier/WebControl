@@ -1,5 +1,6 @@
 //! The home shift (`GCodeFile.moveLine`/`_shiftAxis`): X and Y moved by the home position in exact decimal.
 
+use crate::arc::g_numbers;
 use crate::decimal::{Written, sum_text};
 use crate::{Positioning, py, words};
 
@@ -53,14 +54,14 @@ fn shift_axis(line: &str, axis: char, shift: f64, cap: u32) -> Option<String> {
     Some(format!("{}{text}{}", &line[..=word.start], &line[word.end..]))
 }
 
-/// `_positioningModeSetBy`: the mode of the line's last G90 or G91, if it has one, in either case.
+/// `_positioningModeSetBy`: the mode of the line's last G90 or G91, if it has one, in either case. G90.1 and G91.1
+/// set arc centres, not this, since WebControl never lets the firmware truncate them to G90 and G91.
 pub fn positioning_set_by(line: &str) -> Option<Positioning> {
-    let line = line.to_ascii_uppercase();
-    match (line.rfind("G90"), line.rfind("G91")) {
-        (None, None) => None,
-        (absolute, relative) if absolute > relative => Some(Positioning::Absolute),
-        _ => Some(Positioning::Relative),
-    }
+    g_numbers(line).into_iter().rev().find_map(|code| match code {
+        90.0 => Some(Positioning::Absolute),
+        91.0 => Some(Positioning::Relative),
+        _ => None,
+    })
 }
 
 /// `_shiftToHome`: the home shift applies only to a line that runs in absolute mode.
@@ -199,9 +200,20 @@ mod tests {
         assert_eq!(positioning_set_by("G1 X1"), None);
         assert_eq!(positioning_set_by("G90 G91 X1"), Some(Positioning::Relative));
         assert_eq!(positioning_set_by("G91 G90 X1"), Some(Positioning::Absolute));
-        assert_eq!(positioning_set_by("G91.1"), Some(Positioning::Relative));
         assert_eq!(positioning_set_by("g91 g0 x1"), Some(Positioning::Relative));
         assert_eq!(positioning_set_by("g91 g90"), Some(Positioning::Absolute));
+        assert_eq!(positioning_set_by("G90G91"), Some(Positioning::Relative));
+        assert_eq!(positioning_set_by("G091 X1"), Some(Positioning::Relative));
+    }
+
+    #[test]
+    fn g90_1_and_g91_1_leave_the_positioning_alone() {
+        assert_eq!(positioning_set_by("G91.1"), None);
+        assert_eq!(positioning_set_by("G90 G91.1"), Some(Positioning::Absolute));
+        assert_eq!(positioning_set_by("G91 G90.1 X1"), Some(Positioning::Relative));
+        let shift = HomeShift { x: 1.0, y: 1.0, truncate: None };
+        assert_eq!(shift_to_home("G90 G91.1 G0 X1", Positioning::Relative, &shift), "G90 G91.1 G0 X2 ");
+        assert_eq!(shift_to_home("G91.1 ", Positioning::Relative, &shift), "G91.1 ");
     }
 
     #[test]

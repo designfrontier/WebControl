@@ -215,6 +215,8 @@ the backend had been quiet for `quiet` seconds, one line per settle.
 | `r_arc_converted_on_51_292` | 51.29x gets R arcs as I and J too, since it drops R's sign |
 | `g91_arc_written_absolute` | a G91 I/J arc goes out with the absolute X and Y it ends at; G1 under G91 as written |
 | `g91_arc_with_z_pauses_the_job` | a G91 arc with Z (which the firmware takes as absolute) is never sent; the job pauses |
+| `g91_1_left_out_of_a_vcarve_file` | a VCarve-style `G90 G91.1` goes out as `G90`, a lone `G91.1` not at all; the moves after it stay absolute |
+| `g90_1_arc_centres_written_as_offsets` | G90.1 is never sent; its arcs' centres, shifted to home, go out as I and J offsets |
 | `realtime_characters_stripped_from_lines` | `!`, `~`, backtick, `?`, control characters and comments removed from lines |
 | `typed_lower_case_g20_switches_units_then_jog` | A `g20` sent with `/sendGCode` goes out as `G20` and switches WebControl to inches (home, jog step); the mm Z panel then moves in inches |
 | `lower_case_file_g91_g90_m0_then_resume` | A lower-case file goes out upper-cased: `g91` stops the home shift, `g90` resumes it, `m0` pauses, Resume returns |
@@ -611,3 +613,13 @@ Where the Rust backend writes something different from Python by owner decision.
     that relies on it cuts from a Z that was never set. Python sent them. Rust refuses them as it refuses an unclosed
     comment: a typed line is dropped with a `Command Unsupported Probe` alert, and a job pauses before the line with
     a `Line Unsupported Probe` alert (B16). Transcript: `probe_g38_3_4_5_refused_typed_and_in_file`.
+12. **G90.1 and G91.1 never reach the controller** (2026-11-17). Every firmware truncates the G number to an int,
+    so Python's untouched `G91.1`, which VCarve posts write near the top of every file, switched every later G0/G1
+    to relative, and `G90.1` arcs were cut about the wrong centre, since the firmware always reads I and J as
+    offsets (`spec/firmware.md` §9, A20, B19). Rust leaves each G90.1 or G91.1 segment out of every line it writes
+    (a line left blank is not written; a job counts it as sent), keeps the arc-centre mode itself, and writes each
+    G90.1 arc's centre, shifted to home with its X and Y, as I and J offsets from its start. A restart's queued
+    lines end with the file's mode there (`G90.1 ` or `G91.1 `), which is taken and never written. An arc rewritten
+    from a start only a status report gives is refused (`Arc Start Uncertain`) when the report's two decimals could
+    put it more than 0.05 mm from where the file means, as an exact half circle can be. Transcripts:
+    `g91_1_left_out_of_a_vcarve_file`, `g90_1_arc_centres_written_as_offsets`.
