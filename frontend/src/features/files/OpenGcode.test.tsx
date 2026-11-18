@@ -81,7 +81,6 @@ describe("Open gcode", () => {
     await user.click(await screen.findByRole("button", { name: "Open" }));
 
     const overlay = screen.getByRole("dialog", { name: "Opening G-Code…" });
-    expect(overlay).toHaveAttribute("aria-busy", "true");
     expect(overlay).toHaveAccessibleDescription(/building its preview/);
     expect(topLayer().at(-1)).toBe(overlay);
     expect(overlay).toHaveFocus();

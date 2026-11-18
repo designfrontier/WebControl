@@ -49,14 +49,7 @@ export const LoadingOverlay = ({ title, detail }: Props) => {
 
   // Outside the route modal, so its `.dialog-body` focus rule and styles do not reach in.
   return createPortal(
-    <dialog
-      ref={ref}
-      className="loading-overlay"
-      aria-labelledby={titleId}
-      aria-describedby={detailId}
-      aria-busy="true"
-      tabIndex={-1}
-    >
+    <dialog ref={ref} className="loading-overlay" aria-labelledby={titleId} aria-describedby={detailId} tabIndex={-1}>
       <div className="loading-overlay-card">
         <span className="spinner" aria-hidden="true" />
         <div role="status">

@@ -36,13 +36,12 @@ describe("LoadingOverlay", () => {
     return view;
   };
 
-  it("opens above the route modal, outside it, with focus and a busy status", async () => {
+  it("opens above the route modal, outside it, with focus and a status", async () => {
     await start();
     expect(topLayer()).toHaveLength(2);
     expect(topLayer().at(-1)).toBe(overlay());
     expect(overlay().parentElement).toBe(document.body);
     expect(overlay()).toHaveFocus();
-    expect(overlay()).toHaveAttribute("aria-busy", "true");
     expect(overlay()).toHaveAccessibleDescription("This takes a moment.");
     expect(within(overlay()).getByRole("status")).toHaveTextContent("Loading things…This takes a moment.");
   });
