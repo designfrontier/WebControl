@@ -131,6 +131,8 @@ impl Machine {
             effects.push(alert(RESTARTED));
             self.end_job();
         }
+        self.rewind_job(effects);
+        self.job.paused_at = None;
         let (eeprom_reset, buffering) = (self.controller.eeprom_reset, self.controller.buffering);
         self.controller = Controller { eeprom_reset, buffering, ..Controller::new(now) };
         self.rewrite_notice = false;

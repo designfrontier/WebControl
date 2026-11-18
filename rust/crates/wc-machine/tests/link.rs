@@ -135,6 +135,29 @@ fn a_restart_mid_job_stops_the_job() {
 }
 
 #[test]
+fn a_restart_while_paused_rewinds_to_the_lines_it_lost_and_resume_sends_them() {
+    let mut rig = Rig::connected_with(settings(&[("Maslow Settings", "bufferOn", json!(1))]));
+    let file: String = (1..=40).map(|x| format!("G1 X{x}0 F100\n")).collect();
+    rig.machine.load_gcode(&file);
+    rig.act("startRun");
+    rig.advance(300);
+    rig.rx("ok");
+    rig.act("pauseRun");
+    assert!(rig.machine.snapshot().gcode_index > 2, "the buffer holds several lines");
+    ["PCB v1.6 TLE9201  Detected", "Grbl v1.00", "ready", "ok"].iter().for_each(|line| {
+        rig.rx(line);
+    });
+    rig.run_to_quiet();
+    let snapshot = rig.machine.snapshot();
+    assert_eq!((snapshot.upload_flag, snapshot.gcode_index), (2, 1), "G1 X20 was never acknowledged");
+    rig.rx("<Idle,MPos:10.00,0.00,0.00,WPos:0.000,0.000,0.000>");
+    rig.clear_written();
+    rig.act("resumeRun");
+    let sent = rig.run_to_quiet();
+    assert!(sent.contains(&"G1 X20 F100".to_string()), "{sent:?}");
+}
+
+#[test]
 fn no_controller_line_for_5_s_closes_the_link_and_raises_an_alarm() {
     let mut rig = Rig::connected();
     let effects = rig.advance(5100);
