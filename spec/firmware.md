@@ -6,7 +6,7 @@ upgrade flow are built against. Firmware paths are relative to `cnc_ctrl_v1/`.
 | Tag | Repo @ commit | Notes |
 |---|---|---|
 | S126 | MaslowCNC/Firmware @ e1e0d02 | Stock 1.26 |
-| H27 | madgrizzle/Firmware @ 950fb23 | Holey 51.27, bundled by the Python backend's `buildFirmware.sh`; the user's controller |
+| H27 | madgrizzle/Firmware @ 950fb23 | Holey 51.27, bundled by v0.94's `buildFirmware.sh`; `rust/firmware/docker-build.sh <dir> 51.27` rebuilds it with a newer compiler (not byte-identical), pinned in `holey-51.27.sha256`. Not the owner's controller: that runs an older "51.27" without B99 or the TLE9201 boot line, which this rebuild does not reproduce; the backup's `rollback.hex` is the only exact copy |
 | H28 | madgrizzle/Firmware @ e9cc445 | 51.28: FAKE_SERVO handling and version only |
 | H291 | Orob-Maslow/Firmware @ 97d12a6 | Tags v51.29 / v51.291 (master); reports `51.29` |
 | H292 | Orob-Maslow/Firmware @ 0064955 | Tag v51.292; the planned upgrade target |
@@ -386,5 +386,7 @@ to an int, so G91.1 and G90.1 switch G0/G1 to relative and absolute like G91 and
    says; the push after that boot skips it and verifies with `$$`; re-send units and G90.
 7. **Self-test:** with the chains slack, B04 must pass both directions on L, R and Z; re-zero Z; compare B10 chain
    lengths with pre-flight and guide B08/B02 if they differ.
-8. **Rollback:** reflash the saved hex, then push the full settings again (downgrades reset too).
+8. **Rollback:** reflash the saved hex, then push the full settings again (downgrades reset too). With no saved hex,
+   flash the pinned 51.27 rebuild (`rust/firmware/docker-build.sh <dir> 51.27`); on the owner's machine that is
+   a newer 51.27 than it ran (H27 above), so keep its `rollback.hex` safe.
 9. The parser must tolerate the 51.29x text quirks before any post-flash step runs.
