@@ -43,10 +43,11 @@ recorded outputs.
 - `cargo run -p wc-calibration --example calibrate -- <home> holey M1 … M12`: a calibration against a copy of
   `webcontrol.json`, printing the result and the `$` lines Accept would send
 - `cargo run --release -p wc-gcode --example gcode_timing -- <file.nc> [home_x home_y]`: times each step of opening
-  a gcode file, for the M3 time budget
+  a gcode file, for the load time in `spec/rust-checklists/files-boards.md`
 - `bash deploy/test.sh`: `wc-switch`, `deploy.sh` and `install-pi.sh` against stubs
 - `bash deploy/update-test.sh`: `webcontrol-update` against `scripts/release.sh`'s tarballs, a `file://` GitHub API
-  and `/api/state`, and stub `sudo`, `systemctl` and binaries (update, backup, checksum, busy, rollback, `--status`)
+  and `/api/state`, and stub `sudo`, `systemctl` and binaries (update, version order, backup, checksum, busy, rollback,
+  `--status`)
 - `WC_FIRMWARE_HEX=<hex> bash deploy/update-docker-test.sh 0.9.0=<binary> 0.9.1=<binary> 0.9.2=<binary>`:
   `webcontrol-update` for real in arm64 Debian trixie with systemd and a password for `sudo`, against three aarch64
   builds (each made with that `WC_VERSION`) packaged by `scripts/release.sh`
@@ -68,10 +69,10 @@ does, outside a job). On a disk that also has an older WebControl's `webcontrol.
 only one holds the port, and `wc-switch rust|python|status` picks the one that runs and boots (`python` means
 `webcontrol.service`). `install-pi.sh` also adds `/etc/sudoers.d/webcontrol-rs`, which lets the
 service run `systemctl poweroff` (the UI's Turn Off Raspberry Pi) and nothing else. The serial log is
-`~/.WebControl/webcontrol-rs.log` (rotated at 5 MB). Each milestone's hardware checklist is in
-`spec/rust-checklists/`. The firmware upgrade (Actions → Upgrade holey firmware to 51.292…) runs `avrdude`, which
-`install-pi.sh` installs, and keeps each backup in `~/.WebControl/firmware-backups/<time>/`; `M6.md` rehearses an
-upgrade and a rollback before the real one.
+`~/.WebControl/webcontrol-rs.log` (rotated at 5 MB). The hardware checklists for validating a release are in
+`spec/rust-checklists/`, grouped by feature. The firmware upgrade (Actions → Upgrade holey firmware to 51.292…) runs
+`avrdude`, which `install-pi.sh` installs, and keeps each backup in `~/.WebControl/firmware-backups/<time>/`;
+`firmware-upgrade.md` there walks through the upgrade, the self-test and a rollback.
 
 Behind a reverse proxy (nginx) or HTTPS, the proxy must forward the original `Host` (`proxy_set_header Host $host;`)
 and the WebSocket `Upgrade`/`Connection` headers: `wc-server` refuses a WebSocket whose `Origin` does not match
@@ -99,7 +100,7 @@ To cut a release:
 2. The Release workflow attaches the assets to a **draft** GitHub Release named after the tag. Rerunning it
    replaces a draft's assets and refuses a published release.
 3. Install the draft's tarball on the Pi (below), run the checklists in `spec/rust-checklists/` that the release
-   touches, then publish the draft.
+   touches (its `README.md` says which), then publish the draft.
 
 Actions → Release → Run workflow builds the same assets from any branch as a workflow artifact, without a release.
 On the Mac, `WC_FIRMWARE_HEX=<dir>/holey-51.292.hex scripts/release.sh [out-dir]` does what CI does (zig from
@@ -122,12 +123,17 @@ To update from the Mac with a release's binary instead of a local build:
 
 ```sh
 webcontrol-update            # the latest published release, if it is newer
-webcontrol-update --status   # installed version, the backup, the latest published release
+webcontrol-update --status   # installed version, the backup, the latest release, and whether it is an update
 webcontrol-update --rollback # put the backup back
 ```
 
 It only sees **published** releases: GitHub hides drafts from the API, so publish the draft (Releases, above) before
-updating. `--version v0.2.0` installs that tag instead, `--force` reinstalls the installed version, and
+updating. Versions compare as `MAJOR.MINOR.PATCH`, each field as a number (a leading `v` is ignored); a pre-release
+such as `0.4.0-rc.1` comes before `0.4.0`, and a `git describe` build such as `0.4.0-3-gabc1234` after it. If the
+installed version is newer than the latest release (a build pushed from the Mac, or a release installed with
+`--version`), it changes nothing and says so. An installed version it cannot parse is updated whenever it differs,
+with a warning. `--version v0.2.0` installs that tag instead, older or not (with a warning when it is older);
+`--force` reinstalls the installed version but never downgrades; and
 `--repo owner/name` (or `WEBCONTROL_REPO`) reads another fork's releases (default `designfrontier/WebControl`).
 `GITHUB_TOKEN`, if set, is sent to the API (on curl's stdin, not its arguments) to avoid its rate limit.
 

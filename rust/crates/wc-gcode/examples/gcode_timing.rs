@@ -1,4 +1,4 @@
-//! Times each step of opening a gcode file, for the M3a hardware checklist:
+//! Times each step of opening a gcode file, for the load time in spec/rust-checklists/files-boards.md:
 //! `gcode_timing <file.nc> [home_x home_y]` (home in mm).
 
 use std::time::Instant;

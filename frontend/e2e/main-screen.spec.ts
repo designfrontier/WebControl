@@ -4,6 +4,8 @@ import { closeServerDialogs, resetMachine, waitForServer } from "./helpers";
 
 // These tests jog, start runs and write units: safe only because the e2e backend runs on a temporary home with no port.
 const serverDialog = (page: Page) => page.locator("dialog[open][data-kind]");
+// With no controller, every move the server accepts comes back as this alert.
+const NOT_CONNECTED = "The controller is not connected.";
 
 test.beforeEach(async ({ page, baseURL }) => {
   await resetMachine(baseURL!);
@@ -27,7 +29,9 @@ test("rapid server alerts show one dialog at a time and leave the controls usabl
 
   // A stuck overlay would intercept this click and fail it.
   await page.getByRole("button", { name: "Up", exact: true }).click();
-  await expect(serverDialog(page)).toHaveCount(0);
+  await expect(serverDialog(page)).toContainText(NOT_CONNECTED);
+  expect(await closeServerDialogs(page)).toEqual([expect.stringContaining(NOT_CONNECTED)]);
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
 });
 
 test("switching units round-trips through the server", async ({ page }) => {
@@ -55,6 +59,10 @@ test("the Z-Axis button opens its modal, which moves Z and closes again", async 
   const zAxis = page.getByRole("dialog", { name: "Z-Axis" });
   await expect(zAxis.getByRole("button", { name: "Stop Z" })).toBeVisible();
   await zAxis.getByRole("button", { name: /Raise/ }).click();
+  // Escape closes the topmost dialog, so wait out the alert the move earns first.
+  await expect(serverDialog(page)).toContainText(NOT_CONNECTED);
+  await closeServerDialogs(page);
+  await expect(zAxis).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(zAxis).toBeHidden();
   await expect(page).toHaveURL(/\/$/);

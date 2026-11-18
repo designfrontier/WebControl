@@ -116,6 +116,17 @@ describe("PacingControl", () => {
     expect(screen.getByRole("button", { name: /612 lines\/min/ })).toBeInTheDocument();
   });
 
+  it("keeps a push that lands while the pacing is still loading", async () => {
+    const answers: ((response: Response) => void)[] = [];
+    const pending = () => new Promise<Response>((resolve) => answers.push(resolve));
+    const { socket } = renderWithProviders(<PacingControl />, { fetch: fakeFetch({ "/api/run/pacing": pending }) });
+    await waitFor(() => expect(answers).toHaveLength(1));
+    socket.serverMessage("pacingStats", stats({ mode: "minimum gap", gapMs: 25 }));
+    answers[0](jsonResponse(stats()));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.getByLabelText("Pacing")).toHaveValue("min-25");
+  });
+
   it("saves a preset at once", async () => {
     const sent: unknown[] = [];
     const routes = {

@@ -31,6 +31,16 @@ export const applyPreference = (preference: ThemePreference) =>
     ? document.documentElement.removeAttribute("data-theme")
     : document.documentElement.setAttribute("data-theme", preference);
 
+/** Each theme's --bg, for the browser chrome around the page. */
+const THEME_COLORS: Record<Theme, string> = { light: "#ffffff", dark: "#14171c" };
+
+export const applyThemeColor = (theme: Theme) => {
+  const meta =
+    document.head.querySelector('meta[name="theme-color"]') ??
+    document.head.appendChild(Object.assign(document.createElement("meta"), { name: "theme-color" }));
+  meta.setAttribute("content", THEME_COLORS[theme]);
+};
+
 export interface ThemeValue {
   preference: ThemePreference;
   theme: Theme;
