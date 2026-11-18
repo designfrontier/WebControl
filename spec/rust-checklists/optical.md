@@ -1,25 +1,27 @@
-# M7 hardware checklist: cameras for optical calibration (experimental)
+# Cameras and optical calibration (experimental)
 
 What this checklist must show on a real Pi: `webcontrol-rs` opens a camera from the **Camera Source** setting
-(Settings → Camera Settings), shows its live picture over the viewer, and closes it again, for each kind of camera
-a tester may have: a USB webcam (V4L2) and a Pi Camera Module (through `rpicam-vid`). The owner has no camera, so
-nothing here has run on hardware yet; CI only exercises fake cameras (`cargo test -p wc-optical --test camera`,
-`cargo test -p wc-server --test camera`). The camera adapters (`wc-optical/src/camera/{v4l2,rpicam}.rs`) are
-outside the coverage floor, so this checklist is their only test. The scan itself, Accept and the printed target
-have their own checklist once they land (`spec/optical-calibration.md`).
+(Settings ▸ Camera), shows its live picture over the viewer, and closes it again, for each kind of camera a tester may
+have: a USB webcam (V4L2) and a Pi Camera Module (through `rpicam-vid`); and then, with the camera on the sled, an
+optical scan of the printed target, the geometry fit and its Accept (section 6). The owner has no camera, so nothing
+here has run on hardware yet. CI only exercises fake cameras and the synthetic target (`cargo test -p wc-optical`,
+`cargo test -p wc-server --test camera`, the `optical_*` transcripts and Playwright's `optical-simulator.spec.ts`).
+The camera adapters (`wc-optical/src/camera/{v4l2,rpicam}.rs`) are outside the coverage floor, so this checklist is
+their only test. `spec/optical-calibration.md` is the design.
 
-Safety: nothing in this checklist moves the machine. Leave the router switched off anyway, and keep the controller
-disconnected or idle.
+Safety: sections 1 to 5 do not move the machine; leave the router switched off anyway, and keep the controller
+disconnected or idle. Section 6 moves the sled across the whole sheet: the README's safety applies there.
 
-You need: the Pi on Pi OS Lite 64-bit (trixie) with `webcontrol-rs` installed (`rust/README.md`), a browser, and
-one or both cameras. Tick each box; if one fails, note what you saw, the alert text, and the last lines of
-`journalctl -u webcontrol-rs -n 50`, then carry on with the next section.
+You need: the release installed (`install-update.md` section 1), a browser, and one or both cameras. For section 6,
+also the controller connected, the machine calibrated, and a printed target. Tick each box; if one fails, note what
+you saw, the alert text, and the last lines of `journalctl -u webcontrol-rs -n 50`, then carry on with the next
+section.
 
 ## 1. Turn the feature on
 
-- [ ] Settings → WebControl Settings: turn on **Optical calibration (experimental)** and save. `GET /api/state`
+- [ ] Settings ▸ WebControl: turn on **Optical calibration (experimental)** and save. `GET /api/state`
       (`curl -s http://maslow.local:5000/api/state | jq .experimental`) shows `["optical"]` without a restart.
-- [ ] Settings → Camera Settings shows **Camera Source** `auto`, **Video Image Size** `640x480` and **fps** `5`.
+- [ ] Settings ▸ Camera shows **Camera Source** `auto`, **Video Image Size** `640x480` and **fps** `5`.
 
 ## 2. USB webcam (V4L2)
 
@@ -76,8 +78,34 @@ Unplug the USB webcam, connect the camera module to the CSI port with the Pi pow
 - [ ] Connect the controller (router off). With the overlay on, jog a few mm and press **Stop** at once: the sled
       stops as promptly as with the overlay off. The capture runs on its own thread, never the machine's.
 
-## 6. What to send back
+## 6. The scan, the fit and Accept (the sled moves)
+
+Only with the camera mounted on the sled, looking down, and the router off with the bit out.
+
+- [ ] Actions ▸ Optical calibration (experimental) opens, with a note that the feature is experimental. With the
+      setting off, the entry is not listed at all.
+- [ ] Printable target (Letter) or (A4) opens a page to print. Print it at 100% and check one square's size with a
+      ruler against the target's settings: ______ mm.
+- [ ] Fix the target flat on the sheet. In the Camera card, **Test image** shows one frame, and **Find centre** finds
+      the square under the camera and fills in the optical centre. Save the settings.
+- [ ] **Start scan** with a small custom extent first (a few squares). The sled moves square to square; each square
+      shows on the heat map, and the progress bar advances. The log shows `G21`, `G90`, then `G0 X… Y…` per square
+      (`optical_scan_two_cells_mm`).
+- [ ] Press **Stop** mid-scan: the sled stops at once, nothing more is queued, and Start scan is enabled again
+      (`optical_stop_mid_scan`).
+- [ ] Cover the camera during a scan: the square fails, and **Retry square**, **Skip square** and **Stop scan**
+      appear. Uncover it and Retry: the scan carries on.
+- [ ] Let a scan finish. **Download CSV** downloads the measurements.
+- [ ] **Fit geometry** shows fitted Distance Between Motors, Motor Offset Height and the two chain tolerances beside
+      the current ones. Note both: ______.
+- [ ] **Accept…** asks to confirm; **Write settings** writes them: the log shows the `$2`, `$3`, `$40` and `$41`
+      lines, and Settings ▸ Maslow and Advanced show the new values. Put back the values you noted unless you mean to
+      keep them.
+- [ ] **Clear measurements** empties the heat map.
+
+## 7. What to send back
 
 - Which boxes failed, with the alert text and the `journalctl` lines.
 - For each camera: its name (`v4l2-ctl --list-devices` or `rpicam-hello --list-cameras`), the formats it offers,
   and the CPU figures from section 2.
+- From section 6: the CSV, the fitted values, and how the scan went (squares failed, time per square).

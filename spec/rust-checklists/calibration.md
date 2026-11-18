@@ -1,103 +1,79 @@
-# M5 checklist: calibration
+# Calibration
 
-M5a is the pure maths: `wc-kinematics` and `wc-calibration`, checked in CI against `fixtures/calibration/`.
-M5b adds the routes: `/api/calibration/{triangular,holey}` and their accepts, the cut and accept actions, and the
-computed sled position in `errorValueMessage`. The holey fit is a step-for-step port of scipy's trust-region
-algorithm, so it lands on Python's five decimals exactly (CI checks every fixture case and the
-`holey_calibration_accept_writes_settings` transcript byte for byte), not just within the fixtures' 1e-3.
+What this must show on the real machine: holey calibration from your saved measurements gives the numbers
+`wc-calibration` gives for the same settings, and Accept writes exactly the `$` lines it prints; the holey test
+pattern air-cuts; and the computed sled position follows the sled. CI checks the maths against the golden fixtures
+recorded from the original WebControl (`fixtures/calibration/`, to five decimals) and the
+`holey_calibration_accept_writes_settings` transcript.
 
-What M5 must show on the real machine: holey calibration from saved measurements gives the same numbers as Python
-(±1e-3; expect them identical) and Accept writes the same `$` lines.
-
-Safety, for every step below:
+Safety, for every step below (and the README's):
 
 - **Router switched off at its own switch, and the bit removed.**
-- Step 6 cuts the test pattern in the air and moves the sled across the whole sheet: the sled hangs freely with room
-  to move, and you can reach the controller's power.
-- Keep a hand near the UI's **Stop** button. If Stop ever fails, cut the controller's power and report it.
+- Section 4 cuts the test pattern in the air and moves the sled across the whole sheet: the sled hangs freely with
+  room to move, and you can reach the controller's power.
+- Keep a hand near **Stop**. If Stop ever fails, cut the controller's power and report it.
 
-You need: the Mac with this branch checked out, the Pi booted from the new microSD card (`pi@maslow.local`), the
-controller on USB (holey 51.27 on PCB v1.1), the Python service installed and working, a browser, and the last holey
-(and, if you use it, triangular) measurements you entered: the numbers on the calibration form, or from the log.
+You need: the release installed, the controller on USB (holey 51.27 or 51.292) and connected, the log viewer open, a
+browser, the Mac with this repository at the release's tag, and the twelve measurements of your last holey
+calibration (from the calibration form, or the log). Triangular calibration needs stock firmware; on holey it is
+checked from the Mac only (section 5).
 
-Tick each box; if one fails, note what you saw, press Stop, and run `wc-switch python`.
+## 1. The expected numbers, from the Mac
 
-## 1. CI (nothing to do on the machine)
+- [ ] Copy the settings from the Pi: `mkdir -p ~/cal-home && scp -r pi@maslow.local:.WebControl ~/cal-home/`.
+- [ ] In `rust/`: `cargo run -p wc-calibration --example calibrate -- ~/cal-home holey M1 M2 … M12` with your twelve
+      measurements. It prints the four values (Distance Between Motors, Motor Offset Height, the left and right chain
+      tolerances), the calibration error, and the `$` lines Accept would send. Note them: ______.
+- [ ] It never writes the copy: `~/cal-home/.WebControl/webcontrol.json` is unchanged.
 
-- [ ] `cd rust && cargo test -p wc-kinematics -p wc-calibration` passes: all four fixture files within their
-      tolerances, and `holey_calibrate_lands_on_python_s_five_decimals_exactly`.
-- [ ] `cargo test -p wc-machine --test transcripts` passes, including `holey_calibration_accept_writes_settings`.
-- [ ] `rust/scripts/coverage.sh` reports every crate at or above 95%.
-- [ ] `npm run test:e2e` in `frontend/` passes the calibration spec.
+## 2. Holey calibration: Calculate
 
-## 2. Python's numbers first (on Python, Calculate only)
-
-- [ ] Back up the settings (never edit the original): `scp -r pi@maslow.local:.WebControl ~/webcontrol-backup-m5/`.
-      Note the time for the journal: `date`.
-- [ ] On Python, `/calibration/holey`: enter your twelve measurements and press **Calculate** (do **not**
-      Accept). Write down the four calculated values and the calibration error.
-- [ ] Triangular, if you use it: the same at `/calibration/triangular` with your four numbers. Write down the
-      motor height, rotation radius, chain sag and calibration error.
-- [ ] Note the current values the page shows (the "Current" column) so you can put them back in step 7.
-
-## 3. Install and switch (from the Mac, repo root)
-
-- [ ] `rust/deploy.sh install` prints `Installed webcontrol-rs 0.1.0 (<commit>, contract 3) for pi.`
-- [ ] On the Pi: `wc-switch rust` prints "WebControl is now the rust backend". Connect: "Firmware: Holey 51.27".
-
-## 4. Holey on Rust: the M5 "done when"
-
-- [ ] `/calibration/holey`: the "Current" column shows the same values as on Python.
-- [ ] Enter the same twelve measurements and press **Calculate**. Each of the four values is within 0.001 of
-      Python's (expect them identical), and the calibration error matches to 6 places.
-- [ ] Type `abc` into M5 and Calculate: the form refuses it and nothing is sent. Put the number back and Calculate
+- [ ] Actions ▸ Holey calibration opens. The "Current" column shows the values in Settings ▸ Maslow and Advanced
+      (Distance Between Motors, Motor Offset Height in MM, Chain Tolerance, Left Chain and Right Chain). Note them, so
+      you can put them back: ______.
+- [ ] Enter the same twelve measurements and press **Calculate**. The four values are exactly the ones from section 1,
+      and the calibration error matches to 6 places.
+- [ ] Type `abc` into M5 and Calculate: the form refuses it, and nothing is sent. Put the number back and Calculate
       again.
-- [ ] Press **Accept results**. The page says "Accepted", the "Current" column now shows the calculated values, and
-      the log viewer (`/logs`) shows `Sent: $3=…`, `Sent: $2=…`, `Sent: $40=…`, `Sent: $41=…` with those values
-      (a value equal to the stored one within one part in a million has no line), each with its `ok`.
-- [ ] Console: `$$`. The reply lists `$2`, `$3`, `$40` and `$41` at the accepted values.
 - [ ] Reload the page: **Accept results** is disabled until you Calculate again.
 
-## 5. Triangular on Rust (if you use it)
+## 3. Holey calibration: Accept
 
-- [ ] `/calibration/triangular`: enter the same four numbers and Calculate. Motor height, rotation radius and
-      chain sag match Python exactly; the calibration error matches to 6 places.
-- [ ] Only if you want these values saved (they replace motor height, rotation radius and chain sag): lower Z a few
-      millimetres with the Z buttons, then press **Accept results**. The log shows the `$3`, `$8`, `$37` lines, then
-      `G21`, `G90`, `G40`, `G0 Z<safe height>`, `G0 X0 Y0`: Z rises fully **before** the sled moves to the centre.
-      Python moves at the current height; this is an intended difference.
+- [ ] Press **Accept results**. The page says "Accepted", and the "Current" column now shows the calculated values.
+- [ ] The log shows the `$` lines section 1 printed, in its order (`Sent: $2=…`, `$3=…`, `$40=…`, `$41=…`; a value
+      equal to the stored one within one part in a million has no line), each with its `ok`. On 51.292 each also has
+      `Change in setting, rewriting EEPROM`.
+- [ ] Actions ▸ Sync settings: the `$$` reply lists `$2`, `$3`, `$40` and `$41` at the accepted values.
+- [ ] Power-cycle the controller: the handshake writes only `$13` (`connection.md` section 1), since the controller now
+      holds the accepted values.
 
-## 6. Air-cut the holey test pattern (the sled moves)
+## 4. Air-cut the holey test pattern (the sled moves)
 
-- [ ] Raise Z about 20 mm above the sheet and press **Define Z0** there, so the pattern's `Z-5` plunges stay 15 mm in
+- [ ] Raise Z about 20 mm above the sheet and press **Set Z Zero Here**, so the pattern's `Z-5` plunges stay 15 mm in
       the air.
-- [ ] Holey calibration → **Cut test pattern**. The log shows, in order: `G21`, `G90`, `G40`, `G17`, `G0 Z5`, `M3`,
+- [ ] Holey calibration ▸ **Cut test pattern**. The log shows, in order: `G21`, `G90`, `G40`, `G17`, `G0 Z5`, `M3`,
       then for each of the six holes `G0 X… Y…`, `G1 Z-5 F500`, `G0 Z5` (top middle first, then counter-clockwise),
-      then `G0 X0 Y0`, `M5` (and `G20` if the machine is in inches). Z rises before every move and descends slowly at
-      each hole; the sled ends in the centre.
-- [ ] Cut it again and press **Stop** while the sled travels: it stops at once and nothing more of the pattern is
+      then `G0 X0 Y0`, `M5` (and `G20` if the machine is in inches). The controller answers `G17` with
+      `Command G17 unsupported and ignored.` Z rises before every move and descends slowly at each hole; the sled ends
+      in the centre.
+- [ ] Cut it again and press **Stop** while the sled travels: it stops at once, and nothing more of the pattern is
       sent after the resync.
-- [ ] Optional, only if you want the computed sled position: WebControl Settings → Computed Sled Position on. Jog a
-      little: the viewer's grey computed-sled marker sits on (or within a millimetre or two of) the sled marker.
-      Rust computes it in float32 as the firmware does, so it can differ from Python's by about 0.002 mm.
-      Turn the setting off again.
+- [ ] Settings ▸ WebControl ▸ Computed Sled Position on. Jog a little: the viewer's grey computed-sled marker sits on
+      the sled marker, or within a millimetre or two. Turn the setting back off.
 
-## 7. Back to Python
+## 5. Triangular calibration
 
-- [ ] Put the calibration back the way you want it: either keep the accepted values, or re-enter the "Current"
-      values from step 2 in Settings → Maslow / Advanced Settings (each save sends its `$` line).
-- [ ] `wc-switch python`, open Python's UI: the calibration page's "Current" column shows what Rust left, and
-      Python connects without an "EEPROM" alert.
+- [ ] On holey firmware, Actions ▸ Triangular calibration is greyed out with "Needs stock firmware; the controller
+      reports holey 51.27." (or `51.292`).
+- [ ] From the Mac: `cargo run -p wc-calibration --example calibrate -- ~/cal-home triangular cut12 cut34 cut5
+      bitDiameter` prints motor height, rotation radius and chain sag, and the lines Accept would send. They end with
+      `G21 `, `G90 `, `G40 `, `G0 Z<your safe height> `, `G0 X0 Y0 `: the bit rises before the sled moves to the
+      centre.
 
-Report: the boxes that failed, what you saw, `~/.WebControl/webcontrol-rs.log`, and
-`journalctl -u webcontrol-rs --since "<the time from step 2>"`.
+## 6. Put things back
 
-## Mac only: your settings, Python against Rust (no machine needed)
+- [ ] Keep the accepted values, or re-enter the "Current" values you noted in section 2 in Settings ▸ Maslow and
+      Advanced (each save sends its `$` line).
+- [ ] `rm -r ~/cal-home`.
 
-- [ ] Copy the settings from the Pi: `mkdir -p ~/m5-home && scp -r pi@maslow.local:.WebControl ~/m5-home/`.
-- [ ] `cd rust && cargo run -p wc-calibration --example calibrate -- ~/m5-home holey M1 M2 … M12` with your twelve
-      measurements prints the four values and the `$` lines Accept would send; they match step 2's Python values.
-- [ ] Triangular: the same with `triangular cut12 cut34 cut5 bitDiameter`; the lines end with `G21 `, `G90 `, `G40 `,
-      `G0 Z<your safe height> `, `G0 X0 Y0 `. Python's end without the `G0 Z` line: Rust raises the bit before it
-      moves to the centre (owner decision 3).
-- [ ] `rm -r ~/m5-home`.
+Report as the README says.
