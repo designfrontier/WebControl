@@ -6,9 +6,16 @@ describe("updates", () => {
   it.each([
     ["designfrontier/WebControl", "updateAvailable", "webcontrol-update"],
     ["designfrontier/WebControl", "devBuild", "webcontrol-update --force"],
+    ["designfrontier/WebControl", "ahead", "webcontrol-update --version v0.4.0"],
     ["me/fork", "upToDate", "webcontrol-update --repo me/fork"],
   ] as const)("runs webcontrol-update for %s when %s", (repo, status, command) => {
-    expect(updateCommand({ repo, status })).toBe(command);
+    expect(updateCommand({ repo, status, latest: updates().latest })).toBe(command);
+  });
+
+  it("never names a version to install without a release", () => {
+    expect(updateCommand({ repo: "designfrontier/WebControl", status: "ahead", latest: null })).toBe(
+      "webcontrol-update",
+    );
   });
 
   it("names an available update even without its release", () => {
