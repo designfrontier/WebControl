@@ -121,13 +121,37 @@ export const pidResultSchema = z.object({
 });
 export type PidResult = z.infer<typeof pidResultSchema>;
 
-/** GET /api/system/releases */
-export const releasesSchema = z.object({
-  current: z.string(),
-  latest: z.string().nullable(),
-  releases: z.array(z.object({ tag: z.string(), title: z.string(), body: z.string() })),
+export const updateStatusSchema = z
+  .enum(["upToDate", "updateAvailable", "devBuild", "ahead", "unknown"])
+  .describe(
+    "devBuild: the installed version is the latest release's but built from another commit; " +
+      "ahead: newer than the latest release; unknown: GitHub could not be asked or a version is not semver.",
+  );
+export type UpdateStatusKind = z.infer<typeof updateStatusSchema>;
+
+/** GET /api/system/updates: the installed build, the latest published release and webcontrol-update's backup. */
+export const updatesSchema = z.object({
+  installed: z.object({ version: z.string(), commit: z.string() }),
+  repo: z.string().describe("The GitHub repository releases are read from, owner/name"),
+  latest: z
+    .object({
+      tag: z.string(),
+      name: z.string(),
+      publishedAt: z.string().nullable(),
+      url: z.string(),
+      notes: z.string().describe("The release notes as GitHub markdown"),
+      commit: z.string().nullable().describe("The commit the tag points at, when GitHub said"),
+    })
+    .nullable(),
+  status: updateStatusSchema,
+  error: z.string().nullable().describe("Why GitHub could not be asked"),
+  checkedAt: z.number().nullable().describe("When GitHub was last asked, in milliseconds since the epoch"),
+  backup: z
+    .object({ version: z.string(), date: z.string() })
+    .nullable()
+    .describe("The install webcontrol-update saved before the last update, which --rollback restores"),
 });
-export type Releases = z.infer<typeof releasesSchema>;
+export type Updates = z.infer<typeof updatesSchema>;
 
 /** GET /api/system/help?path= : a docs/ page as markdown with Jekyll and raw HTML already stripped. */
 export const helpPageSchema = z.object({ path: z.string(), title: z.string(), markdown: z.string() });

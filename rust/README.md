@@ -160,3 +160,9 @@ If an older WebControl (`webcontrol.service`) is the one running, the update ins
 
 The backup only covers the last update. The deeper fallback is still the SSD or the old card (spec/INSTALL-PI.md):
 power off, boot from it, and look at the card later.
+
+The UI's Update screen (Help ▸ Update, `GET /api/system/updates`) shows the installed version and commit, the latest
+published release with its notes, whether it is newer, and the backup, with the command to run here. It never
+installs anything. The server asks GitHub at most every 10 minutes (30 s after a failure), with a 5 s timeout, and
+reads `WEBCONTROL_REPO`, `GITHUB_TOKEN` and `WC_GITHUB_API` from its own environment
+(`sudo systemctl edit webcontrol-rs` to set them), not your shell's.

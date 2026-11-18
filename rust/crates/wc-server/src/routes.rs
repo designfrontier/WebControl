@@ -7,7 +7,7 @@ use axum::routing::{get, post, put};
 use serde_json::json;
 
 use crate::forms::UPLOAD_LIMIT;
-use crate::{AppState, api, archive, assets, boards, files, help, optical, ws};
+use crate::{AppState, api, archive, assets, boards, files, help, optical, updates, ws};
 
 /// The UI's old `/next` addresses: the same path and query at the root.
 async fn from_next(uri: Uri) -> Response {
@@ -43,6 +43,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/machine/quick-configure", get(api::quick_configure).post(api::save_quick_configure))
         .route("/api/system/info", get(api::system))
         .route("/api/system/pid", get(api::pid))
+        .route("/api/system/updates", get(updates::updates))
         .route("/api/system/help", get(help::page))
         .route("/api/system/help/assets/{*path}", get(|Path(path): Path<String>| async move { help::asset(&path) }))
         .route("/api/system/pid-test", post(api::pid_test))

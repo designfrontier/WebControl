@@ -5,9 +5,9 @@ import {
   helpPageSchema,
   pidSettingsSchema,
   pidTestResponseSchema,
-  releasesSchema,
   restoreResponseSchema,
   systemInfoSchema,
+  updatesSchema,
 } from "../../protocol";
 import type { PidTestRequest } from "../../protocol";
 
@@ -18,7 +18,7 @@ export const getPidSettings = (fetchImpl: Fetch) => getJson(fetchImpl, "/system/
 export const startPidTest = (fetchImpl: Fetch, request: PidTestRequest) =>
   sendJson(fetchImpl, "POST", "/system/pid-test", request, pidTestResponseSchema);
 
-export const getReleases = (fetchImpl: Fetch) => getJson(fetchImpl, "/system/releases", releasesSchema);
+export const getUpdates = (fetchImpl: Fetch) => getJson(fetchImpl, "/system/updates", updatesSchema);
 
 export const getHelpPage = (fetchImpl: Fetch, path: string) =>
   getJson(fetchImpl, `/system/help?path=${encodeURIComponent(path)}`, helpPageSchema);

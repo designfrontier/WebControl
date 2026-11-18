@@ -2,8 +2,7 @@ import { AboutPanel } from "./AboutPanel";
 import { ActionsPanel } from "./ActionsPanel";
 import { getSystemInfo } from "./api";
 import { LogsPanel } from "./LogsPanel";
-import { ReleasesPanel } from "./ReleasesPanel";
-import { useUpdateAvailable } from "./useUpdateAvailable";
+import { UpdatesPanel } from "./UpdatesPanel";
 import { errorText, useLoad } from "./useLoad";
 import type { Load } from "./useLoad";
 import type { SystemInfo } from "../../protocol";
@@ -43,7 +42,7 @@ export const AboutModal = () => {
 
 export const UpdatesModal = () => (
   <div className="system">
-    <ReleasesPanel updateAvailable={useUpdateAvailable()} />
+    <UpdatesPanel />
   </div>
 );
 

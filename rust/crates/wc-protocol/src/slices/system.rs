@@ -170,3 +170,50 @@ impl PidTest {
         Ok(PidTest { kind, motor: motor.into(), fields })
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct InstalledBuild {
+    pub version: String,
+    pub commit: String,
+}
+
+/// A published GitHub release.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LatestRelease {
+    pub tag: String,
+    pub name: String,
+    pub published_at: Option<String>,
+    pub url: String,
+    pub notes: String,
+    pub commit: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum UpdateState {
+    UpToDate,
+    UpdateAvailable,
+    DevBuild,
+    Ahead,
+    Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct UpdateBackup {
+    pub version: String,
+    pub date: String,
+}
+
+/// `GET /api/system/updates`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Updates {
+    pub installed: InstalledBuild,
+    pub repo: String,
+    pub latest: Option<LatestRelease>,
+    pub status: UpdateState,
+    pub error: Option<String>,
+    pub checked_at: Option<u64>,
+    pub backup: Option<UpdateBackup>,
+}

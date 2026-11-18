@@ -56,8 +56,8 @@ import {
   pidSettingsSchema,
   pidTestRequestSchema,
   pidTestResponseSchema,
-  releasesSchema,
   systemInfoSchema,
+  updatesSchema,
 } from "./system";
 import { viewerSnapshotSchema } from "./viewer";
 
@@ -371,7 +371,11 @@ export const httpEndpoints: HttpEndpoint[] = [
       409: error("A job is running"),
     },
   }),
-  get("/api/system/releases", "WebControl releases on GitHub", releasesSchema),
+  get(
+    "/api/system/updates",
+    "The installed version, the latest published release on GitHub and the update backup",
+    updatesSchema,
+  ),
   api({
     method: "GET",
     path: "/api/system/help",

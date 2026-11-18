@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get-api-system-updates.200",
+  "type": "object",
+  "properties": {
+    "installed": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "commit": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "commit"
+      ]
+    },
+    "repo": {
+      "type": "string",
+      "description": "The GitHub repository releases are read from, owner/name"
+    },
+    "latest": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "publishedAt": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "url": {
+              "type": "string"
+            },
+            "notes": {
+              "type": "string",
+              "description": "The release notes as GitHub markdown"
+            },
+            "commit": {
+              "description": "The commit the tag points at, when GitHub said",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "tag",
+            "name",
+            "publishedAt",
+            "url",
+            "notes",
+            "commit"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "upToDate",
+        "updateAvailable",
+        "devBuild",
+        "ahead",
+        "unknown"
+      ],
+      "description": "devBuild: the installed version is the latest release's but built from another commit; ahead: newer than the latest release; unknown: GitHub could not be asked or a version is not semver."
+    },
+    "error": {
+      "description": "Why GitHub could not be asked",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "checkedAt": {
+      "description": "When GitHub was last asked, in milliseconds since the epoch",
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "backup": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "version": {
+              "type": "string"
+            },
+            "date": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "version",
+            "date"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The install webcontrol-update saved before the last update, which --rollback restores"
+    }
+  },
+  "required": [
+    "installed",
+    "repo",
+    "latest",
+    "status",
+    "error",
+    "checkedAt",
+    "backup"
+  ]
+}

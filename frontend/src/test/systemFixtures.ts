@@ -1,4 +1,4 @@
-import type { HelpPage, PidSettings, Releases, SystemInfo } from "../protocol";
+import type { HelpPage, PidSettings, SystemInfo, Updates } from "../protocol";
 import { fakeFetch } from "./fakeFetch";
 
 export const systemInfo = (over: Partial<SystemInfo> = {}): SystemInfo => ({
@@ -21,14 +21,24 @@ export const pidSettings = (over: Partial<PidSettings> = {}): PidSettings => ({
   ...over,
 });
 
-export const releases = (over: Partial<Releases> = {}): Releases => ({
-  current: "v0.95",
-  latest: "v0.96",
-  releases: [
-    { tag: "v0.96", title: "Faster previews", body: "* Fixes [#12](https://github.com/x/y/issues/12)" },
-    { tag: "v0.95", title: "v0.95", body: "" },
-    { tag: "v0.94", title: "Older", body: "" },
-  ],
+export const latestRelease = (over: Partial<NonNullable<Updates["latest"]>> = {}): NonNullable<Updates["latest"]> => ({
+  tag: "v0.4.0",
+  name: "webcontrol-rs 0.4.0",
+  publishedAt: "2026-11-20T10:00:00Z",
+  url: "https://github.com/designfrontier/WebControl/releases/tag/v0.4.0",
+  notes: "## Faster previews\n\n* Fixes [#12](https://github.com/x/y/issues/12)\n\n<img src=x onerror=alert(1)>",
+  commit: "1234567890abcdef1234567890abcdef12345678",
+  ...over,
+});
+
+export const updates = (over: Partial<Updates> = {}): Updates => ({
+  installed: { version: "0.3.0", commit: "dc9bdca" },
+  repo: "designfrontier/WebControl",
+  latest: latestRelease(),
+  status: "updateAvailable",
+  error: null,
+  checkedAt: Date.UTC(2026, 10, 20, 12, 0),
+  backup: { version: "0.2.0", date: "2026-11-16T18:00:00Z" },
   ...over,
 });
 
@@ -45,7 +55,7 @@ export const systemFetch = (routes: Parameters<typeof fakeFetch>[0] = {}) =>
   fakeFetch({
     "/api/system/info": systemInfo(),
     "/api/system/pid": pidSettings(),
-    "/api/system/releases": releases(),
+    "/api/system/updates": updates(),
     "/api/system/help?path=assets%2FhelpPages.md": HELP_INDEX,
     "/api/system/help?path=index.md": helpPage("index.md", "# WebControl\n\nWelcome.", "Home"),
     ...routes,

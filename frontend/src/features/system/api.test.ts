@@ -4,24 +4,24 @@ import {
   downloadUrl,
   getHelpPage,
   getPidSettings,
-  getReleases,
+  getUpdates,
   getSystemInfo,
   helpAssetUrl,
   restoreBackup,
   startPidTest,
 } from "./api";
-import { helpPage, pidSettings, releases, systemInfo } from "../../test/systemFixtures";
+import { helpPage, pidSettings, systemInfo, updates } from "../../test/systemFixtures";
 
 describe("system api", () => {
-  it("reads info, PID settings and releases", async () => {
+  it("reads info, PID settings and updates", async () => {
     const fetch = fakeFetch({
       "/api/system/info": systemInfo(),
       "/api/system/pid": pidSettings(),
-      "/api/system/releases": releases(),
+      "/api/system/updates": updates(),
     });
     await expect(getSystemInfo(fetch)).resolves.toEqual(systemInfo());
     await expect(getPidSettings(fetch)).resolves.toEqual(pidSettings());
-    await expect(getReleases(fetch)).resolves.toEqual(releases());
+    await expect(getUpdates(fetch)).resolves.toEqual(updates());
   });
 
   it("asks for a help page by its encoded docs path", async () => {

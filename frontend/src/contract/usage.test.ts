@@ -119,7 +119,7 @@ const recordUiRequests = async () => {
     () => system.getSystemInfo(fetch),
     () => system.getPidSettings(fetch),
     () => system.startPidTest(fetch, pidRequest),
-    () => system.getReleases(fetch),
+    () => system.getUpdates(fetch),
     () => system.getHelpPage(fetch, "Actions/actions.md"),
     () => system.restoreBackup(fetch, file),
     () => viewer.getViewerSnapshot(fetch),

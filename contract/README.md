@@ -70,6 +70,10 @@ ends it. **The Rust backend differs from Python here on purpose:**
   answers the new `pacingStats`; unlike the settings screens it is not refused during a job. Python has none of it.
 - `GET /api/state` carries `connectionStatus`, the same object the `connectionStatus` push carries, so a client that
   missed the connect-time push still learns the link state; a push that arrives first wins. Python never sends it.
+- `GET /api/system/updates` (contract 5) replaces Python's `/api/system/releases` and its install buttons: the
+  installed version and commit, the latest published GitHub release, `status` (`devBuild` is the released version
+  built from another commit) and `webcontrol-update`'s backup. `GET /api/system/info`'s `update` comes from the last
+  check and never waits for GitHub. Updating stays on the Pi (`rust/README.md`).
 
 HTTP `family` is `api` (JSON for this UI), `classic` (old form routes
 the UI reuses, with their old shapes) or `static`.

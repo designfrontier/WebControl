@@ -25,6 +25,7 @@ tokio = { workspace = true, features = ["fs"] }
 tokio-serial.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+ureq.workspace = true
 uuid.workspace = true
 wc-calibration.workspace = true
 wc-config.workspace = true
