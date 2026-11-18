@@ -66,8 +66,8 @@ pacing; calibration after a cut has shown jobs work, since it changes the geomet
 
 ## Before a run
 
-- [ ] Back up the settings to the Mac, into a new folder: `scp -r pi@maslow.local:.WebControl ~/webcontrol-backup-<version>/`.
-      Never edit the original.
+- [ ] Back up the settings to the Mac, into a new folder, and never edit the original:
+      `scp -r pi@maslow.local:.WebControl ~/webcontrol-backup-<version>/`.
 - [ ] Note the time, so the logs can be read from there: `date`.
 
 ## The way back

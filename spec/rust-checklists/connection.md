@@ -1,94 +1,69 @@
-# M1 hardware checklist: the serial link on the real controller
+# The serial link: connect, jog, Z, home, Stop
 
-What M1 must show on the real machine: `webcontrol-rs` opens the controller's port, resets the board, reads its
-firmware version, pushes the settings, and then jogs, moves Z, homes and stops exactly as the transcripts in
-`contract/serial/` say. **This milestone moves the sled.** Run jobs (Play) are not part of M1: a file with M0, M6 or a
-unit switch is refused with an alert, and restarting mid-file waits for M4.
+What this must show on the real machine: `webcontrol-rs` opens the controller's port, resets the board, reads its
+firmware version, writes only the settings that differ, and then jogs, moves Z, homes and stops as the transcripts in
+`contract/serial/transcripts/` say. **This checklist moves the sled.**
 
-Safety, for every step below:
+Safety, for every step below (and the README's):
 
-- **Router switched off at its own switch, and the bit removed.** Nothing in M1 turns the spindle on, but a macro
+- **Router switched off at its own switch, and the bit removed.** Nothing here turns the spindle on, but a macro
   could.
-- The sled has room to move 100 mm in every direction from where it sits, and you can reach the controller's power.
-- Keep a hand near the UI's **Stop** button. If Stop ever fails to stop the sled, cut the controller's power and
-  report it; do not continue.
+- The sled has room to move 300 mm in every direction from where it sits, and you can reach the controller's power.
+- Keep a hand near **Stop**. If Stop does not stop the sled, cut the controller's power, report it, and do not go on.
 
-You need: the Mac with this branch checked out, the Pi booted from the new microSD card (`pi@maslow.local`), the
-controller on USB (holey 51.27 on PCB v1.1), the Python service installed and working, and a browser.
+You need: the release installed (`install-update.md` section 1), the controller on USB (holey 51.27 or 51.292), the
+log viewer (Help ▸ Logs) open beside the control screen, and a browser.
 
-Tick each box; if one fails, note what you saw, press Stop, and run `wc-switch python`.
+## 1. Connect, and the boot handshake
 
-## 1. Before you start
+- [ ] Settings ▸ Maslow: note the serial port (normally `/dev/ttyACM0`).
+- [ ] `sudo systemctl restart webcontrol-rs`. Within about 5 s the status bar shows "Controller: /dev/ttyACM0" and the
+      firmware chip shows "Holey 51.27" or "Holey 51.29".
+- [ ] The board reset when the port opened (its LEDs blink as on a power-up). The log viewer shows the boot banner
+      (`PCB v1.1 Detected` or your board's, `Grbl v1.00`, `ready`), then, as `connect_boot_handshake` says:
+      `Sent: B05`, `Firmware Version 51.27` (or `51.29`), `Sent: G21` (or `G20`), `Sent: G90`, `Sent: $$` and its
+      reply, then `Sent: $13=63.5` (your sprocket's distance per rotation).
+- [ ] No other `Sent: $n=` line follows, and no second `$$`. If one does, note the key: it is a setting the
+      controller held differently from `webcontrol.json` (see `settings.md` section 2).
+- [ ] On 51.292, the `$13` write is answered with `Change in setting, rewriting EEPROM`. On 51.27 it is answered with
+      `ok` alone.
+- [ ] If the banner never appears, note it: the handshake still goes out 3 s after the port opens
+      (`connect_without_a_reset_handshakes_after_3_s`).
+- [ ] No alarm and no alert. The Controller Messages pane shows the `Firmware Version` line.
+- [ ] Press the reset button on the Arduino: a second banner and a second handshake, and the UI stays connected.
+- [ ] Unplug the USB cable: "Controller: not connected" and the alarm "Connection Failed or Invalid Firmware". Plug it
+      back in: it reconnects within 10 s, with a full handshake.
 
-- [ ] On Python, as usual: connect, the status bar shows the controller and "Firmware: Holey 51.27", and a 10 mm jog
-      works. Then close the browser tab.
-- [ ] Settings → Maslow Settings: note the serial port (normally `/dev/ttyACM0`). Rust opens the same one.
-- [ ] Back up the settings (never edit the original): `scp -r pi@maslow.local:.WebControl ~/webcontrol-backup-m1/`.
-- [ ] Note the time for the journal: `date`.
-
-## 2. Install and switch (from the Mac, repo root)
-
-- [ ] `rust/deploy.sh install` prints `Installed webcontrol-rs 0.1.0 (<commit>, contract 3) for pi.`
-- [ ] `ssh pi@maslow.local sudo cat /etc/sudoers.d/webcontrol-rs` shows
-      `pi ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff`, and `sudo visudo -c` on the Pi says `parsed OK`.
-- [ ] On the Pi: `wc-switch rust` prints "WebControl is now the rust backend".
-
-## 3. Connect (risk 5: the reset on open)
-
-- [ ] Within about 5 s the status bar shows "Controller: /dev/ttyACM0" and "Firmware: Holey 51.27".
-- [ ] The controller board reset when the port opened (its LEDs blink as on a power-up), and the log viewer
-      (`/logs`) shows the boot banner (`PCB v1.1 ...`, `Grbl v1.00`, `ready`) followed by `Sent: B05`,
-      `Firmware Version 51.27`, `Sent: G21` (or `G20`), `Sent: G90`, then one `Sent: $n=...` per setting and
-      `Sent: $$`. If the banner never appears, note it: the handshake should still go out after 3 s.
-- [ ] `~/.WebControl/webcontrol-rs.log` on the Pi holds the same lines.
-- [ ] No alarm and no alert appeared. The Controller Messages pane shows `Firmware Version 51.27`.
-- [ ] Settings are unchanged by the push: Actions → Sync settings, then compare a few values in Settings → Advanced
-      (chain pitch, gear teeth, motor spacing) with what Python showed. The `$$` reply in the log matches them.
-- [ ] Press the reset button on the Arduino: the log shows a second banner and a second full handshake, and the UI
-      stays connected.
-- [ ] Unplug the USB cable: "Controller: not connected" and the alarm "Connection Failed or Invalid Firmware". Plug
-      it back in: it reconnects by itself within 10 s.
-
-## 4. Jog, Z and home
+## 2. Jog, Z and home
 
 - [ ] Set the step to 10 mm. Each of the eight jog arrows moves the sled 10 mm that way, and the position readout
-      follows. The log shows `G91`, `G00 X.. Y..`, `G90` for each.
-- [ ] Z panel: Raise 5 mm and Lower 5 mm move Z; "Set Z Zero Here" sends `G10 Z0` and the Z readout goes to 0.
-- [ ] Switch the Z panel's units to inches and raise 0.2 in: Z moves 5.08 mm (the log shows `G00 Z5.08` on a mm
-      machine) and the main units do not change.
-- [ ] Home: Z rises to the safe height first, then the sled goes to the home position, then Z lowers to 0.
-- [ ] Actions → Return to center: Z rises to the safe height, then the sled goes to the middle of the bed.
-- [ ] If a touch plate is set up: Touch Z probes down; while it probes, the Job readout says Probing, the jog, Z and
-      Home buttons are greyed out, Actions → Clear Logs still works, and the Z panel's Stop Z still stops it.
+      follows. The log shows `G91`, `G00 X10.0` (or `Y`, or both, signed), `G90` for each (`jog_each_direction_mm`).
+- [ ] Z panel: Raise 5 mm and Lower 5 mm move Z (`G21`, `G91`, `G00 Z5.0`, `G90`). "Set Z Zero Here" sends `G10 Z0`
+      and the Z readout goes to 0 (`move_z_raise_lower_and_zero_mm`).
+- [ ] On a mm machine, switch the Z panel's units to inches and raise 0.25 in: Z moves 6.35 mm (`G00 Z6.35`) and the
+      main units do not change (`move_z_in_inches_on_a_mm_machine`). Switch it back.
+- [ ] Home: the log shows `G90`, `G00 Z<safe>`, `G00 X.. Y..`, `G00 Z0` (`home_at_safe_height_mm`). Z rises first,
+      the sled travels, then Z lowers to 0.
+- [ ] Raise Z 10 mm above the safe height (Settings ▸ Maslow, Z-Axis Safe Travel Height in MM), then Home again: the
+      first move is `G00 Z<that height>`, not the safe height. The bit never dips before the sled travels.
+- [ ] Actions ▸ Return to center: Z rises to the safe height (or stays higher), then the sled goes to `X0.0 Y0.0`
+      (`return_to_center_inches`).
+- [ ] If a touch plate is set up: Touch Z sends `G90 G38.2 Z-10 ...` (`touch_z_mm`). While it probes, the Job readout
+      says Probing and the jog, Z and Home buttons are greyed out. Touch the plate to the bit: the controller prints
+      `z axis zeroed`, Z reads 0, and no `G10 Z0` follows. Probe again and let it run out: the alert "Touch Z Failed"
+      shows and Z is left alone (`touch_z_probe_fails_leaves_z_alone`).
 
-## 5. Stop mid-jog
+## 3. Stop, and the alarm hold
 
-- [ ] Set the step to 300 mm, jog right, and press **Stop** before the sled gets there: the sled stops at once. The log
-      shows `Sent: !` right after the press, even though the jog was still running.
-- [ ] Straight after, jog left 10 mm: it goes out only once the controller has reported its status (a fraction of a
+- [ ] Set the step to 300 mm, jog right, and press **Stop** before the sled gets there: it stops at once. The log
+      shows `Sent: !` right after the press, while the jog was still running.
+- [ ] Straight after, jog left 10 mm: it goes out only once the controller has sent a status report (a fraction of a
       second), then moves normally.
-- [ ] Z panel: Lower 50 mm and press Stop mid-move (stops Z the same way).
-- [ ] Alarm hold, chains slack and the 12 V motor supply **off**: press Home. Within a second or two the alarm "Sled
-      Not Keeping Up" shows. The log has no `Sent:` after the `ALARM:` line (no `G00 Z0`) however long you wait.
-      Jog once: an alert says to press Stop, and nothing is sent. Press Stop: the alarm clears; turn the supply back on
-      and jog 10 mm: it moves.
+- [ ] Z panel: Lower 50 mm and press Stop mid-move: Z stops the same way.
+- [ ] Alarm hold: with the chains slack and the 12 V motor supply **off**, press Home. Within a second or two the
+      alarm "Sled Not Keeping Up" shows. However long you wait, the log has no `Sent:` after the `ALARM:` line (no
+      `G00 Z0`; `alarm_mid_home_holds_the_plunge_until_stop`).
+- [ ] Jog once: an alert says to press Stop, and nothing is sent. Press Stop: the alarm clears. Turn the supply back
+      on and jog 10 mm: it moves.
 
-## 6. Settings, ports, logs and power-off
-
-- [ ] Settings → Maslow Settings shows the same values as on Python, and the port list's refresh button lists
-      `/dev/ttyACM0` (and the Pi's other `/dev/tty*` ports).
-- [ ] Settings changes are not saved yet (that is M2); do not edit any.
-- [ ] The log viewer (`/logs`) shows the serial lines in "Log" and, without the `<...>` status reports, in
-      "Abridged log".
-- [ ] Actions → Clear log files empties `~/.WebControl/webcontrol-rs.log` (Python's `log.txt` and `alog.txt` are
-      left alone).
-- [ ] Actions → Turn off Raspberry Pi: the Pi powers off (its green LED stops). Power it back on: Rust starts again
-      (`wc-switch status` answers `rust`).
-
-## 7. Back to Python
-
-- [ ] `wc-switch python`, then a normal Python session: connect, jog 10 mm, read settings.
-- [ ] `~/.WebControl/webcontrol.json` has the same modification time as before step 2 (M1 never writes it).
-
-Report: the boxes that failed, what you saw, `~/.WebControl/webcontrol-rs.log`, and
-`journalctl -u webcontrol-rs --since "<the time from step 1>"`.
+Report as the README says.

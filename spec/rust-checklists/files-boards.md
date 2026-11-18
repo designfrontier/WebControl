@@ -1,99 +1,81 @@
-# M3 checklist: files and boards
+# Files, boards, backup and restore
 
-M3 is the gcode and board side of the backend. M3a is the pure `wc-gcode` crate: loading, comment and realtime
-sanitising, the home shift, the T rule, the restart state and sequence, the 3D preview payload and boards. M3b adds
-the routes: every `/api/files` and `/api/boards` endpoint, the classic form routes the React UI posts to (open,
-upload, save, edit and send gcode; open, save, edit and trim boards; the two settings imports; restore, backup and
-diagnostics), the gcode and board pushes, and the actions `clearGCode`, `createDirectory`, `boardProcessGCode`,
-`boardClearBoard` and `moveGcodeZ`/`Goto`/`Index`.
+What this must show on the real Pi: G-code files and boards load, preview, edit and save; a 100k-line file loads
+within the time budget; and backup, restore, diagnostics and the two settings imports work. Nothing here runs a job.
+**The one step that moves the sled is Send Custom GCode in section 2**; keep the router switched off at its own
+switch, and the bit out, throughout.
 
-What is left for the machine: "a 100k-line file loads and previews within 2× Python's time, and a backup made by Rust
-restores in Python". Nothing here runs a job. **The one step that moves the sled is Send G-code in section 5**; keep
-the router switched off at its own switch, and the bit out, throughout.
+You need: the release installed, the controller connected, the log viewer open, and a browser. Read the README's
+"Before a run" first: the backup it makes is the one section 5 restores.
 
-You need: the Mac with this branch checked out, `pip install ziglang` done once, the Pi booted from the microSD card
-(`pi@maslow.local`) with the Python service running, and a browser. Tick each box; if one fails, note what you
-saw and run `wc-switch python`.
+## 1. A 100k-line file and the load time
 
-## 1. CI
-
-- [ ] `cd rust && cargo test --workspace` passes, including `wc-gcode`'s fixtures (`fixtures/gcode/`,
-      `fixtures/boards/`) and `wc-server`'s `files`, `archive` and `http` tests.
-- [ ] `rust/scripts/coverage.sh` reports every crate at or above 95%.
-- [ ] `npm run test:e2e` in `frontend/` passes `files-boards.spec.ts` and `viewer.spec.ts` (and the
-      Rust smoke), on desktop and phone; `npm run test:e2e` passes the same specs on Python.
-
-## 2. Before you start
-
-- [ ] On Python, as usual: the control screen loads and the controller connects. Close the browser tab.
-- [ ] Back up the settings and libraries (never edit the original):
-      `scp -r pi@maslow.local:.WebControl ~/webcontrol-backup-m3/`.
-- [ ] Make a 100k-line file on the Mac:
-      `python3 -c "import math;print('G21 G90');[print(f'G1 X{(10+i*.004)*math.cos(i*.01):.4f} Y{(10+i*.004)*math.sin(i*.01):.4f} Z-1 F1200') for i in range(100000)]" > ~/big.nc`
+- [ ] Make the file on the Mac:
+      `awk 'BEGIN{print "G21 G90"; for(i=0;i<100000;i++){r=10+i*.004; printf "G1 X%.4f Y%.4f Z-1 F1200\n", r*cos(i*.01), r*sin(i*.01)}}' > ~/big.nc`
       (or use a real job of that size).
+- [ ] G-Code ▸ Upload `~/big.nc` into the library's root.
+- [ ] G-Code ▸ Open, pick `big.nc`, and time from pressing Open to the spiral drawn in the viewer. Do it twice and
+      note the slower time: ______ s. It must be under twice the time the previous release recorded (on a Pi 3B,
+      expect a few seconds).
+- [ ] While it loads, Play is refused with "Gcode is still loading", and nothing moves.
+- [ ] The CPU chip settles back once the preview is drawn.
 
-## 3. The time budget on Python
+## 2. Files
 
-- [ ] In the Python UI (`http://maslow.local:5000/`), G-Code → Upload `~/big.nc` into the root directory.
-- [ ] G-Code → Open, pick `big.nc`, and with a stopwatch time from pressing Open to the preview drawn on the control
-      screen. Do it twice and note the slower time: ______ s.
+- [ ] G-Code ▸ Open lists the library's folders and files, with the last folder and file selected.
+- [ ] Jog somewhere off centre and press Set Home Here, then G-Code ▸ View/Edit: the lines are as loaded (the home
+      shift applies only when the lines are sent). Actions ▸ Reset home to center afterwards.
+- [ ] The G-code index buttons (next and previous line, next and previous Z move, go to line) move the marker on the
+      preview, and the line shown matches. View/Edit numbers its lines the same way as Go to line.
+- [ ] G-Code ▸ View/Edit: change a line and apply it; View/Edit again shows the change. G-Code ▸ Save it under a new
+      name; G-Code ▸ Open lists it.
+- [ ] G-Code ▸ Upload a small file into a new folder (created from the upload screen): it opens and draws.
+- [ ] G-Code ▸ Clear GCode, and confirm: the preview empties and the run panel says "File: No file loaded".
+- [ ] With the router off and the bit out, G-Code ▸ Send Custom GCode `G91`, `G0 X5`, `G90`: the log shows
+      `Sent: G91`, `Sent: G0 X5`, `Sent: G90`, the sled moves 5 mm right, and Send Custom GCode shows the text again
+      when reopened.
+- [ ] Send Custom GCode with a lower-case line, `g0 x-5`: the log shows `Sent: G0 X-5` and the sled moves back
+      (`typed_lower_case_g20_switches_units_then_jog`).
 
-## 4. Install and switch (from the Mac, repo root)
+## 3. Files from earlier releases
 
-- [ ] `rust/deploy.sh install` prints `Installed webcontrol-rs 0.1.0 (<commit>, contract 3) for pi.`
-- [ ] On the Pi: `wc-switch rust`. `ls ~/.WebControl` still shows `gcode`, `boards` and `imports`, and
-      `webcontrol.json` is unchanged until the first setting changes (then `webcontrol.json.pre-rs` appears beside it,
-      a copy of the Python file, taken once).
+- [ ] A file saved by an earlier WebControl (v0.94 or a previous release) in `~/.WebControl` opens and draws the same
+      as it did there.
 
-## 5. Files on Rust
+## 4. Boards
 
-- [ ] Open the UI (`http://maslow.local:5000/`). G-Code → Open lists the same files and directories as on
-      Python, with the last directory and file selected.
-- [ ] Open `big.nc`: it loads and the preview draws within **twice the Python time** from step 3 (on the Mac the
-      route takes about 0.2 s; the Pi should be well inside the budget). The preview looks the same as Python's.
-- [ ] Actions → Define Home somewhere off centre, then View/Edit the gcode: the lines are as loaded (the shift is
-      applied only when streaming, as in Python). Reset Home to center afterwards.
-- [ ] Use the gcode index buttons (next/previous line, next/previous Z move, go to line): the marker on the preview
-      moves and the line shown matches.
-- [ ] G-Code → View/Edit: change a line, Apply; View/Edit again shows the change. Save it under a new name; Open
-      lists it.
-- [ ] G-Code → Upload a small file into a new directory (created from the upload screen): it opens and draws.
-- [ ] G-Code → Clear GCode: the preview empties.
-- [ ] With the router off and the bit out, G-Code → Send G-code `G91`, `G0 X5`, `G90`: the sled moves 5 mm right,
-      and Send G-code shows the text again when reopened.
+- [ ] Boards ▸ Create/Edit Board: set an ID, a size and the centre, and Save. The board button shows the new ID, and
+      the board draws on the preview.
+- [ ] Open a G-code file, then Boards ▸ Process GCode: the cut area shows on the board. Boards ▸ Clear Board, and
+      confirm: it is gone.
+- [ ] Boards ▸ Trim Board on one edge: the size in Create/Edit Board shrinks by that much.
+- [ ] Boards ▸ Save Board under a new name, then Boards ▸ Open Board: it is listed and opens.
+- [ ] A board saved by an earlier WebControl, if you have one, opens with its cut area.
 
-## 6. Boards on Rust
+## 5. Backup, restore, diagnostics and imports
 
-- [ ] Boards → Create/Edit Board: set an ID, a size and the center; Save. The board button shows the new ID and the
-      board draws on the preview.
-- [ ] Open a gcode file, then Boards → Process GCode: the cut area shows on the board. Boards → Clear Board removes
-      it.
-- [ ] Boards → Trim Board on one edge: the size in Create/Edit Board shrinks by that much.
-- [ ] Boards → Save Board under a new name, then Open Board: it is listed and opens.
-- [ ] A board saved by Python earlier (if you have one) opens on Rust with its cut area.
+- [ ] Actions ▸ Back up WebControl downloads `wc_backup_<date>-<time>.zip`. On the Pi, `ls ~/wc_backup_*.zip` shows
+      at most five.
+- [ ] Actions ▸ Download diagnostics file downloads a zip holding `webcontrol.json` and `webcontrol-rs.log`.
+- [ ] Change a setting you will notice (Settings ▸ Maslow, Distance Between Motors +1 mm) and delete one of the test
+      files from section 2. Then Actions ▸ Restore WebControl… with the backup you just made: WebControl answers
+      success, the setting and the file are back, and Actions ▸ Sync settings shows the restored `$2`.
+- [ ] Restore a backup made by the previous release, or by v0.94's Backup WebControl if you have one: it answers
+      success and its settings show. Then restore this release's backup again.
+- [ ] Actions ▸ Import webcontrol.json file, with a `webcontrol.json` whose Serial Connection differs: Settings ▸
+      Maslow shows the imported port. Put it back afterwards.
+- [ ] Actions ▸ Import groundcontrol.ini file, with one that holds only your current `motorSpacingX` under
+      `[Maslow Settings]` and a stale `distPerRot = 70` under `[Computed Settings]`. WebControl recomputes the derived
+      settings, so the stale value never reaches the controller: it answers success, and
+      `jq '."Computed Settings"[] | select(.key == "distPerRot") | .value' ~/.WebControl/webcontrol.json` prints
+      `"63.5"` (gear teeth × chain pitch).
+- [ ] Actions ▸ Import webcontrol.json file, with one that holds only
+      `{"Computed Settings": [{"key": "distPerRot", "value": "70"}]}`. The same `jq` prints `"63.5"`, and the log
+      shows `$13=63.5` before the `$$`, never `$13=70`.
 
-## 7. Backup, restore, diagnostics and imports
+## 6. Clean up
 
-- [ ] System → Backup WebControl downloads `wc_backup_<date>-<time>.zip`; `ls ~/wc_backup_*.zip` on the Pi shows at
-      most five.
-- [ ] System → Download Diagnostics downloads a zip holding `webcontrol.json` and `webcontrol-rs.log`.
-- [ ] `wc-switch python`, then in the Python UI restore the Rust backup (System → Restore): Python answers success,
-      the settings and the files saved in step 5 are there, and the controller reconnects.
-- [ ] `wc-switch rust`, then restore a Python backup (make one first on Python): Rust answers success and its
-      settings show the restored values.
-- [ ] Import a `webcontrol.json` (Settings → Import) whose COM port differs: Settings → Maslow shows the imported
-      port. Put it back afterwards.
-- [ ] Import a groundcontrol.ini (Import groundcontrol.ini file) that holds only your current `motorSpacingX` under
-      `[Maslow Settings]` and a stale `distPerRot = 70` under `[Computed Settings]`. Rust recomputes the derived
-      settings as Python does, so the stale value never reaches the controller: Rust answers success, and
-      `jq '."Computed Settings"[] | select(.key == "distPerRot") | .value' ~/.WebControl/webcontrol.json` shows
-      `"63.5"` (gear teeth × chain pitch) again.
-- [ ] Import a `webcontrol.json` that holds only `{"Computed Settings": [{"key": "distPerRot", "value": "70"}]}`.
-      Unlike Python, Rust recomputes after this import too (contract/README.md, Rust-intended differences): the same
-      `jq` shows `"63.5"`, and the serial log shows `$13=63.5` before the `$$`, never `$13=70`.
+- [ ] Delete `big.nc` and the test files and boards from the UI.
+- [ ] Compare `~/.WebControl/webcontrol.json` with the README's backup: only the values you meant to change differ.
 
-## 8. Back to Python
-
-- [ ] `wc-switch python`; the Python UI opens the files and boards saved on Rust.
-- [ ] `ssh pi@maslow.local rm ~/big.nc` if you copied it there; delete the test files and boards from the UI.
-- [ ] Compare `~/.WebControl/webcontrol.json` with the backup from step 2: only the values you changed differ.
+Report as the README says.
