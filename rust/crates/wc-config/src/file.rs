@@ -16,6 +16,16 @@ fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
     PathBuf::from(name)
 }
 
+/// A second name for the current file, so it is never missing while the new one is renamed over it.
+fn keep_backup(path: &Path, backup: &Path) -> io::Result<()> {
+    if let Err(e) = fs::remove_file(backup)
+        && e.kind() != io::ErrorKind::NotFound
+    {
+        return Err(e);
+    }
+    fs::hard_link(path, backup).or_else(|_| fs::copy(path, backup).map(drop))
+}
+
 impl Paths {
     pub fn settings_backup(&self) -> PathBuf {
         with_suffix(&self.settings_file(), ".bak")
@@ -33,7 +43,7 @@ impl Settings {
         python_json(&Value::Object(self.sections.clone()))
     }
 
-    /// Atomically: a temp file flushed to disk, the old file kept as `.bak`, then the rename.
+    /// Atomically: a temp file flushed to disk, the old file kept as `.bak`, then the rename over it.
     pub fn save(&self, paths: &Paths) -> io::Result<()> {
         let path = paths.settings_file();
         let tmp = with_suffix(&path, ".tmp");
@@ -42,7 +52,7 @@ impl Settings {
             file.write_all(self.to_python_json().as_bytes())?;
             file.sync_all()?;
             if path.exists() {
-                fs::rename(&path, paths.settings_backup())?;
+                keep_backup(&path, &paths.settings_backup())?;
             }
             fs::rename(&tmp, &path)
         })();
