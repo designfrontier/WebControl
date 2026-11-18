@@ -12,6 +12,7 @@ pub mod files;
 pub mod firmware;
 mod forms;
 pub mod gpio;
+mod guard;
 pub mod help;
 pub mod host;
 pub mod installer;

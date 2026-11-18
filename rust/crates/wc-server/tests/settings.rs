@@ -149,7 +149,9 @@ async fn an_answer_after_the_machine_stopped_is_a_503() {
     let _ = task.await;
     let app =
         router(AppState::new(machine, PingConfig::default(), Paths::new(std::path::Path::new("/nonexistent-home"))));
-    let request = Request::builder().method("POST").uri("/api/system/pid-test").body(Body::from("{}")).unwrap();
+    let request =
+        Request::builder().method("POST").uri("/api/system/pid-test").header(header::CONTENT_TYPE, "application/json");
+    let request = request.body(Body::from("{}")).unwrap();
     let response = tower::ServiceExt::oneshot(app, request).await.unwrap();
     assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
 }

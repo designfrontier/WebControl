@@ -3,7 +3,7 @@
 use axum::extract::ws::rejection::WebSocketUpgradeRejection;
 use axum::extract::ws::{Message, WebSocket};
 use axum::extract::{Query, State, WebSocketUpgrade};
-use axum::http::{HeaderMap, StatusCode, header};
+use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
@@ -21,24 +21,11 @@ pub(crate) struct WsQuery {
     ns: Option<String>,
 }
 
-/// A browser always sends `Origin`; refusing other sites' pages matches python-engineio's same-origin default.
-fn same_origin(headers: &HeaderMap) -> bool {
-    let Some(origin) = headers.get(header::ORIGIN) else {
-        return true;
-    };
-    let host = headers.get(header::HOST).and_then(|h| h.to_str().ok()).unwrap_or_default();
-    origin.to_str().is_ok_and(|o| o == format!("http://{host}") || o == format!("https://{host}"))
-}
-
 pub(crate) async fn upgrade(
     State(state): State<AppState>,
     Query(query): Query<WsQuery>,
-    headers: HeaderMap,
     upgrade: Result<WebSocketUpgrade, WebSocketUpgradeRejection>,
 ) -> Response {
-    if !same_origin(&headers) {
-        return (StatusCode::FORBIDDEN, "cross-origin WebSocket refused").into_response();
-    }
     let Some(ns) = query.ns.and_then(|ns| ns.parse::<Namespace>().ok()) else {
         return (StatusCode::BAD_REQUEST, "unknown or missing ns").into_response();
     };

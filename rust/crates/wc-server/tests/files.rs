@@ -69,8 +69,10 @@ async fn names_that_sanitise_to_nothing_or_lead_out_are_refused() {
         assert_eq!(reply.status, StatusCode::BAD_REQUEST);
         assert!(reply.json()["error"].as_str().unwrap().contains("directory name"));
     }
-    let reply = server.post_raw("/api/files/gcode/directories", "text/plain", b"nope").await;
+    let reply = server.post_raw("/api/files/gcode/directories", "application/json", b"nope").await;
     assert_eq!(reply.status, StatusCode::BAD_REQUEST);
+    let reply = server.post_raw("/api/files/gcode/directories", "text/plain", b"{\"name\": \"x\"}").await;
+    assert_eq!(reply.status, StatusCode::UNSUPPORTED_MEDIA_TYPE);
     #[cfg(unix)]
     {
         let outside = tempfile::tempdir().unwrap();
