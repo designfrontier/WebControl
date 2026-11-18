@@ -72,6 +72,23 @@ describe("theme", () => {
     await waitFor(() => expect(theme()).toBe("light"));
   });
 
+  it("colours the browser chrome after the applied theme, following the device under System", async () => {
+    const themeColor = () => document.head.querySelector('meta[name="theme-color"]')?.getAttribute("content");
+    const listeners: (() => void)[] = [];
+    const query = { matches: false, addEventListener: (_: string, on: () => void) => listeners.push(on) };
+    vi.stubGlobal("matchMedia", () => ({ ...query, removeEventListener: vi.fn() }));
+    const { socket } = renderApp("/", { fetch: fakeFetch({ "GET /api/state": startupState({ theme: "dark" }) }) });
+    await waitFor(() => expect(themeColor()).toBe("#14171c"));
+    socket.serverMessage("theme", { theme: "light" });
+    expect(themeColor()).toBe("#ffffff");
+    socket.serverMessage("theme", { theme: "system" });
+    expect(themeColor()).toBe("#ffffff");
+    query.matches = true;
+    act(() => listeners.forEach((listener) => listener()));
+    expect(themeColor()).toBe("#14171c");
+    expect(document.head.querySelectorAll('meta[name="theme-color"]')).toHaveLength(1);
+  });
+
   it("resolves System to the device's colour scheme and follows its changes", () => {
     const listeners: (() => void)[] = [];
     const query = {
