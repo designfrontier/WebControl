@@ -2540,7 +2540,7 @@ dependencies = [
 
 [[package]]
 name = "wc-calibration"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "nalgebra 0.33.3",
  "serde_json",
@@ -2552,7 +2552,7 @@ dependencies = [
 
 [[package]]
 name = "wc-config"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "serde_json",
  "tempfile",
@@ -2561,7 +2561,7 @@ dependencies = [
 
 [[package]]
 name = "wc-firmware"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "serde_json",
  "sha2 0.10.9",
@@ -2571,7 +2571,7 @@ dependencies = [
 
 [[package]]
 name = "wc-gcode"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "base64 0.22.1",
  "flate2",
@@ -2585,14 +2585,14 @@ dependencies = [
 
 [[package]]
 name = "wc-kinematics"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "wc-machine"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "base64 0.22.1",
  "flate2",
@@ -2614,7 +2614,7 @@ dependencies = [
 
 [[package]]
 name = "wc-optical"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "image",
  "imageproc",
@@ -2626,7 +2626,7 @@ dependencies = [
 
 [[package]]
 name = "wc-protocol"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "base64 0.22.1",
  "serde",
@@ -2636,7 +2636,7 @@ dependencies = [
 
 [[package]]
 name = "wc-server"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -2673,7 +2673,7 @@ dependencies = [
 
 [[package]]
 name = "wc-sim"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "tokio",
  "wc-firmware",
@@ -2681,7 +2681,7 @@ dependencies = [
 
 [[package]]
 name = "wc-testkit"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "jsonschema",
  "regex",
