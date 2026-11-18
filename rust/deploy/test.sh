@@ -116,7 +116,8 @@ deploy() { PATH="$work/bin:$PATH" WC_BINARY="$work/webcontrol-rs" WC_SKIP_BUILD=
 
 install_stages_the_sudoers_rule() {
   reset
-  deploy install pi@other.local > /dev/null && grep -q "scp .*webcontrol-rs.sudoers pi@other.local:" "$work/calls"
+  deploy install pi@other.local > /dev/null && grep -q "scp .*webcontrol-rs.sudoers .*pi@other.local:" "$work/calls" &&
+    grep -q "scp .*webcontrol-update@.service .*pi@other.local:" "$work/calls"
 }
 
 install_stages_the_updater() {
@@ -142,7 +143,7 @@ rollback_swaps_prev_back() {
   deploy rollback pi@other.local > /dev/null && grep -q "ssh pi@other.local .*webcontrol-rs.prev" "$work/calls"
 }
 
-check "install stages the power-off sudoers rule" install_stages_the_sudoers_rule
+check "install stages the sudoers rule and the update unit" install_stages_the_sudoers_rule
 check "install stages webcontrol-update" install_stages_the_updater
 check "push copies to pi@maslow.local and restarts only a running Rust backend" push_to_maslow_local_by_default
 check "push refuses while a job is in progress" push_refuses_during_a_job
@@ -151,7 +152,7 @@ check "rollback puts the previous binary back" rollback_swaps_prev_back
 stage="$work/stage"
 mkdir -p "$stage"
 cp "$here/webcontrol-rs.service" "$here/webcontrol-conflicts.conf" "$here/wc-switch" "$here/webcontrol-rs.sudoers" \
-  "$here/../webcontrol-update" "$stage/"
+  "$here/webcontrol-update@.service" "$here/../webcontrol-update" "$stage/"
 printf '#!/bin/sh\necho "webcontrol-rs test"\n' > "$stage/webcontrol-rs"
 printf '#!/bin/sh\necho "apt $*" >> "%s/apt"\n' "$work" > "$work/bin/apt"
 printf '#!/bin/sh\n[ ! -f "%s/visudo-rejects" ]\n' "$work" > "$work/bin/visudo"
@@ -178,6 +179,7 @@ installs_and_starts_when_nothing_runs() {
     cmp -s "$work/root/usr/local/bin/webcontrol-update" "$here/../webcontrol-update" &&
     [ -x "$work/root/usr/local/bin/webcontrol-update" ] &&
     grep -qx "maker ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff" "$work/root/etc/sudoers.d/webcontrol-rs" &&
+    cmp -s "$work/root/etc/systemd/system/webcontrol-update@.service" "$here/webcontrol-update@.service" &&
     [ "$(stat -c %a "$work/root/etc/sudoers.d/webcontrol-rs" 2> /dev/null ||
       stat -f %Lp "$work/root/etc/sudoers.d/webcontrol-rs")" = 440 ] &&
     [ "$(tail -1 "$work/calls")" = "systemctl enable --now webcontrol-rs" ] &&
@@ -224,7 +226,51 @@ reinstall_keeps_the_previous_binary() {
   install_pi > /dev/null && [ -f "$work/root/opt/webcontrol-rs/webcontrol-rs.prev" ]
 }
 
+# The rule allows exactly these, each with every argument, so nothing user-supplied can reach systemctl.
+allows_exactly_poweroff_update_and_rollback() {
+  reset
+  install_pi > /dev/null &&
+    [ "$(grep -v '^#' "$work/root/etc/sudoers.d/webcontrol-rs")" = "$(printf '%s\n' \
+      "maker ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff" \
+      "maker ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block webcontrol-update@update.service" \
+      "maker ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block webcontrol-update@rollback.service")" ]
+}
+
+the_sudoers_rule_parses() {
+  local visudo
+  visudo="$(PATH="/usr/sbin:/sbin:$PATH" command -v visudo)" || return 0
+  [ "$visudo" != "$work/bin/visudo" ] || return 0
+  "$visudo" -cqf "$here/webcontrol-rs.sudoers"
+}
+
+the_update_unit_runs_the_updater_as_a_oneshot() {
+  local unit="$here/webcontrol-update@.service"
+  grep -qx "Type=oneshot" "$unit" && grep -qx "ExecStart=/usr/local/bin/webcontrol-update --service %i" "$unit" &&
+    grep -qx "StateDirectory=webcontrol-rs" "$unit" && ! grep -q "^User=" "$unit"
+}
+
+# As root, as webcontrol-update@update.service runs it: id -u says 0 and nothing goes through sudo.
+installs_as_root_without_sudo() {
+  reset
+  rm -f "$work/sudo"
+  cat > "$work/bin/id" <<'EOF'
+#!/bin/sh
+if [ "$1" = -u ]; then echo 0; else exec /usr/bin/id "$@"; fi
+EOF
+  chmod +x "$work/bin/id"
+  local result=0
+  PATH="$work/bin:$PATH" WC_ROOT="$work/root" WC_USER=maker WC_APT=apt bash "$here/../install-pi.sh" "$stage" \
+    > /dev/null || result=1
+  rm -f "$work/bin/id"
+  [ "$result" = 0 ] && [ ! -e "$work/sudo" ] && grep -q "^systemctl daemon-reload" "$work/calls" &&
+    [ -f "$work/root/etc/systemd/system/webcontrol-update@.service" ]
+}
+
 check "install-pi.sh installs, enables and starts webcontrol-rs" installs_and_starts_when_nothing_runs
+check "the sudoers rule allows power-off, update and rollback, exactly" allows_exactly_poweroff_update_and_rollback
+check "the sudoers rule passes the system's visudo -c" the_sudoers_rule_parses
+check "webcontrol-update@.service runs the updater as root, once" the_update_unit_runs_the_updater_as_a_oneshot
+check "install-pi.sh as root calls nothing through sudo" installs_as_root_without_sudo
 check "install-pi.sh leaves a running older WebControl alone" leaves_an_older_webcontrol_running
 check "install-pi.sh does not restart a running webcontrol-rs" an_update_waits_for_a_restart
 check "install-pi.sh disables a stopped older WebControl so it cannot take the port at boot" \

@@ -14,6 +14,7 @@ mod forms;
 pub mod gpio;
 pub mod help;
 pub mod host;
+pub mod installer;
 mod optical;
 mod routes;
 pub mod serial;

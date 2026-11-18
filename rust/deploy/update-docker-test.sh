@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Runs webcontrol-update for real in an arm64 Debian container with systemd, against release.sh's tarballs served by
-# a fake GitHub API: install, update, update over a backup, --status, no downgrade, --rollback, and a failed update.
+# a fake GitHub API: install, update, update over a backup, --status, no downgrade, --rollback, and a failed update,
+# then the same from the UI over HTTP: POST /api/system/updates/install and /rollback, through the unit and sudoers.
 # shellcheck disable=SC2016 # Single-quoted commands expand inside the container.
 set -euo pipefail
 
@@ -43,6 +44,32 @@ answering() { as_pi 'curl -fsS http://localhost:5000/api/state' | jq -r .version
 manifest() { as_pi 'cat /opt/webcontrol-rs/backup/MANIFEST'; }
 expect() { [ "$2" = "$3" ] || fail "$1 is \"$2\", not \"$3\""; }
 
+# post <install|rollback>: the HTTP status, as the UI's button gets it; the body is left in /tmp/reply.
+post() {
+  as_pi "curl -s -o /tmp/reply -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{}' \
+    http://localhost:5000/api/system/updates/$1"
+}
+progress() { as_pi 'curl -fsS --max-time 3 http://localhost:5000/api/system/updates' 2> /dev/null | jq -c .progress; }
+
+# Polls as the Updates screen does, through the restart, until the run has a result; prints the phases it saw.
+finished_run() {
+  local deadline=$((SECONDS + 300)) now seen=""
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    now="$(progress || true)"
+    if [ -n "$now" ] && [ "$now" != null ]; then
+      seen="$seen $(jq -r .phase <<< "$now")"
+      if [ "$(jq -r .running <<< "$now")" = false ]; then
+        echo "$seen" > "$work/phases"
+        echo "$now"
+        return 0
+      fi
+    fi
+    sleep 1
+  done
+  fail "the run started from the UI did not finish within 300 s"
+  echo null
+}
+
 package() {
   WC_SKIP_BUILD=1 WC_BINARY="$2" WC_VERSION="$1" bash "$rust/scripts/release.sh" "$work/gh/dl/v$1" > /dev/null
 }
@@ -52,7 +79,8 @@ publish() {
   local v="$1" api="$work/gh/repos/designfrontier/WebControl/releases"
   mkdir -p "$api/tags"
   cat > "$api/tags/v$v" <<EOF
-{"tag_name": "v$v", "draft": false, "assets": [
+{"tag_name": "v$v", "name": "webcontrol-rs $v", "draft": false, "body": "Release $v",
+ "html_url": "https://github.com/designfrontier/WebControl/releases/tag/v$v", "assets": [
   {"name": "webcontrol-rs-$v-aarch64.tar.gz",
    "browser_download_url": "http://localhost:8080/dl/v$v/webcontrol-rs-$v-aarch64.tar.gz"},
   {"name": "SHA256SUMS", "browser_download_url": "http://localhost:8080/dl/v$v/SHA256SUMS"}]}
@@ -83,6 +111,9 @@ docker exec "$name" chown pi:pi "/home/pi/webcontrol-rs-$v0-aarch64.tar.gz"
 say "Installing $v0 from its tarball, as the README says"
 sudo_once
 as_pi "tar xzf webcontrol-rs-$v0-aarch64.tar.gz && bash webcontrol-rs-$v0-aarch64/install-pi.sh webcontrol-rs-$v0-aarch64"
+docker exec "$name" bash -c 'mkdir -p /etc/systemd/system/webcontrol-rs.service.d &&
+  printf "[Service]\nEnvironment=WC_GITHUB_API=http://localhost:8080\n" > /etc/systemd/system/webcontrol-rs.service.d/github.conf &&
+  systemctl daemon-reload'
 docker exec "$name" systemctl enable --now webcontrol-rs
 as_pi 'for _ in $(seq 30); do curl -fs -o /dev/null http://localhost:5000/api/state && exit; sleep 1; done; exit 1' ||
   fail "$v0 did not answer"
@@ -100,7 +131,7 @@ expect "the installed version" "$(installed)" "$v1"
 expect "the version /api/state reports" "$(answering)" "$v1"
 manifest | grep -qx "version=$v0" || fail "the backup is not of $v0"
 manifest | grep -qx "file=/home/pi/.WebControl/webcontrol.json" || fail "the backup lacks webcontrol.json"
-expect "the files backed up" "$(manifest | grep -c '^file=')" 7
+expect "the files backed up" "$(manifest | grep -c '^file=')" 8
 as_pi '/opt/webcontrol-rs/backup/files/opt/webcontrol-rs/webcontrol-rs --version' | grep -q " $v0 " ||
   fail "the backed-up binary is not $v0"
 
@@ -151,6 +182,60 @@ expect "the service" "$(docker exec "$name" systemctl is-active webcontrol-rs ||
 expect "webcontrol.json's owner" "$(docker exec "$name" stat -c %U /home/pi/.WebControl/webcontrol.json)" pi
 expect "the sudoers rule's owner and mode" "$(docker exec "$name" stat -c '%U %a' /etc/sudoers.d/webcontrol-rs)" "root 440"
 docker exec "$name" visudo -c > /dev/null || fail "sudoers does not parse after the rollback"
+
+say "From the UI: POST /api/system/updates/install updates $v1 to $v2, with no sudo password"
+publish "$v2"
+docker exec "$name" systemctl restart webcontrol-rs
+as_pi 'for _ in $(seq 30); do curl -fs -o /dev/null http://localhost:5000/api/state && exit; sleep 1; done; exit 1'
+as_pi 'sudo -K'
+expect "canUpdate" "$(as_pi 'curl -fsS http://localhost:5000/api/system/updates' | jq -r .canUpdate)" true
+expect "the install answer" "$(post install)" 202
+run="$(finished_run)"
+cat "$work/phases"
+expect "the run's action and result" "$(jq -r '"\(.action) \(.result)"' <<< "$run")" "update updated"
+expect "the run's versions" "$(jq -r '"\(.from) \(.to)"' <<< "$run")" "$v1 $v2"
+grep -qE "starting|checking|downloading|installing|restarting|healthCheck" "$work/phases" || fail "no progress was seen while it ran"
+expect "the installed version" "$(installed)" "$v2"
+expect "the version /api/state reports" "$(answering)" "$v2"
+manifest | grep -qx "version=$v1" || fail "the UI's update did not back up $v1"
+expect "the status file's owner and mode" "$(docker exec "$name" stat -c '%U %a' /var/lib/webcontrol-rs/update.json)" "root 644"
+expect "the unit's result" "$(docker exec "$name" systemctl show -p Result --value webcontrol-update@update)" success
+expect "a second install answer" "$(post install)" 409
+as_pi 'cat /tmp/reply' | grep -q "no newer published release" || fail "the second install was not refused for having nothing newer"
+
+say "Without a password, the sudoers rule allows those two starts exactly, and nothing more"
+# pi is in the sudo group, so anything else asks for the password, which -n refuses to do.
+needs_password() { [[ "$(as_pi "sudo -n /usr/bin/systemctl $1" 2>&1)" == *"password is required"* ]]; }
+for command in "start --no-block webcontrol-update@update.service --now" "start --no-block webcontrol-update@frob.service" \
+  "start --no-block webcontrol-update@update.service webcontrol-rs.service" "start webcontrol-update@update.service" \
+  "stop webcontrol-rs" "start --no-block webcontrol-update@*"; do
+  needs_password "$command" || fail "sudo allows systemctl $command without a password"
+done
+
+say "From the UI: POST /api/system/updates/rollback puts $v1 back, without following a link pi planted"
+docker exec "$name" bash -c 'echo untouched > /etc/wc-target && chmod 644 /etc/wc-target'
+as_pi 'ln -sf /etc/wc-target .WebControl/webcontrol.json.wc-restore'
+expect "the rollback answer" "$(post rollback)" 202
+run="$(finished_run)"
+expect "the run's action and result" "$(jq -r '"\(.action) \(.result)"' <<< "$run")" "rollback rolledBack"
+expect "the installed version" "$(installed)" "$v1"
+expect "the version /api/state reports" "$(answering)" "$v1"
+expect "the file pi's link pointed at" "$(docker exec "$name" stat -c '%U' /etc/wc-target) $(docker exec "$name" cat /etc/wc-target)" \
+  "root untouched"
+expect "webcontrol.json's owner and type" "$(docker exec "$name" stat -c '%U %F' /home/pi/.WebControl/webcontrol.json)" \
+  "pi regular file"
+
+say "From the UI: a $v2 that cannot start rolls back by itself, and the page is told"
+docker exec "$name" bash -c "cp /home/pi/bad.tar.gz /srv/gh/dl/v$v2/webcontrol-rs-$v2-aarch64.tar.gz &&
+  cd /srv/gh/dl/v$v2 && sha256sum webcontrol-rs-$v2-aarch64.tar.gz > SHA256SUMS"
+expect "the install answer" "$(post install)" 202
+run="$(finished_run)"
+expect "the run's action and result" "$(jq -r '"\(.action) \(.result)"' <<< "$run")" "update rolledBack"
+jq -e '.log | index("ROLLED BACK: webcontrol-rs '"$v1"' is running again, with its settings.")' <<< "$run" > /dev/null ||
+  fail "the log the page shows lacks the rollback"
+expect "the installed version" "$(installed)" "$v1"
+expect "the version /api/state reports" "$(answering)" "$v1"
+docker exec "$name" visudo -c > /dev/null || fail "sudoers does not parse after the UI's runs"
 
 if [ "$failures" != 0 ]; then
   echo "$failures failed"

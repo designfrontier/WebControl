@@ -17,7 +17,8 @@ numbers, or the transcripts CI replays.
 | Install from a release tarball, `webcontrol-rs --version` | [`install-update.md`](install-update.md) 1 | No |
 | Restarts, reboots, reconnects, Turn off Raspberry Pi | [`install-update.md`](install-update.md) 2 | No |
 | `webcontrol-update`: `--status`, update, `--rollback`, refusing while busy | [`install-update.md`](install-update.md) 3-5 | No |
-| `rust/deploy.sh push` and `rollback` from the Mac | [`install-update.md`](install-update.md) 6 | No |
+| Update and Roll back from the browser (Help ▸ Update) | [`install-update.md`](install-update.md) 6 | No |
+| `rust/deploy.sh push` and `rollback` from the Mac | [`install-update.md`](install-update.md) 7 | No |
 | Status bar: server, controller, firmware and version chips | [`ui.md`](ui.md) 1 | No |
 | Help pages, About, the log viewer, Clear log files | [`ui.md`](ui.md) 2 | No |
 | Display theme (Settings ▸ Display) | [`ui.md`](ui.md) 3 | No |
@@ -45,7 +46,7 @@ numbers, or the transcripts CI replays.
 
 Every release, before its draft is published:
 
-- `install-update.md` sections 1 to 4, and section 5 once it is published.
+- `install-update.md` sections 1 to 4, and sections 5 and 6 once it is published.
 - `connection.md`.
 - `jobs.md` sections 1 to 3 (the air cut).
 

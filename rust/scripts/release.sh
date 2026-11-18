@@ -65,8 +65,8 @@ package() {
   mkdir -p "$stage/$name" "$out"
   install -m 755 "$binary" "$stage/$name/webcontrol-rs"
   install -m 755 "$rust/install-pi.sh" "$rust/webcontrol-update" "$rust/deploy/wc-switch" "$stage/$name/"
-  install -m 644 "$rust/deploy/webcontrol-rs.service" "$rust/deploy/webcontrol-conflicts.conf" \
-    "$rust/deploy/webcontrol-rs.sudoers" "$rust/README.md" "$stage/$name/"
+  install -m 644 "$rust/deploy/webcontrol-rs.service" "$rust/deploy/webcontrol-update@.service" \
+    "$rust/deploy/webcontrol-conflicts.conf" "$rust/deploy/webcontrol-rs.sudoers" "$rust/README.md" "$stage/$name/"
   cp -R "$repo/spec/rust-checklists" "$stage/$name/rust-checklists"
   rm -f "$out"/webcontrol-rs-* "$out/SHA256SUMS"
   local as_root=(--uid 0 --gid 0 --uname root --gname root --no-xattrs --no-mac-metadata)

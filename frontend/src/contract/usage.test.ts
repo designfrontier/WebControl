@@ -120,6 +120,8 @@ const recordUiRequests = async () => {
     () => system.getPidSettings(fetch),
     () => system.startPidTest(fetch, pidRequest),
     () => system.getUpdates(fetch),
+    () => system.startUpdate(fetch, "update"),
+    () => system.startUpdate(fetch, "rollback"),
     () => system.getHelpPage(fetch, "Actions/actions.md"),
     () => system.restoreBackup(fetch, file),
     () => viewer.getViewerSnapshot(fetch),
@@ -150,7 +152,7 @@ describe("the HTTP contract", () => {
   it("covers every request the UI makes, and each request body fits its schema", async () => {
     const calls = await recordUiRequests();
     expect(literalApiPaths()).toContainEqual({ method: "GET", url: "/api/main" });
-    expect(calls.filter(({ body }) => body !== undefined)).toHaveLength(29);
+    expect(calls.filter(({ body }) => body !== undefined)).toHaveLength(31);
     const unlisted = [...calls, ...literalApiPaths()].filter(({ method, url }) => !endpointFor(method, url));
     expect(unlisted).toEqual([]);
 

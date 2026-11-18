@@ -30,10 +30,10 @@ export const headline = ({ status, latest, error }: Updates): { text: string; to
 const shortCommit = (sha: string) => sha.slice(0, 7);
 
 /** One sentence on what the status means for this install. */
-export const explanation = ({ status, installed, latest }: Updates) => {
+export const explanation = ({ status, installed, latest, canUpdate }: Updates) => {
   if (!latest) return "";
   if (status === "updateAvailable")
-    return `${latest.tag} is published; this Pi runs ${installed.version}. Update it on the Pi as below.`;
+    return `${latest.tag} is published; this Pi runs ${installed.version}. ${canUpdate ? "Update it with the button below." : "Update it on the Pi as below."}`;
   if (status === "upToDate") return `This Pi runs ${latest.tag}, the latest published release.`;
   if (status === "devBuild")
     return (

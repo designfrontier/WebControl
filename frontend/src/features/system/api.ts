@@ -9,7 +9,7 @@ import {
   systemInfoSchema,
   updatesSchema,
 } from "../../protocol";
-import type { PidTestRequest } from "../../protocol";
+import type { PidTestRequest, UpdateAction } from "../../protocol";
 
 export const getSystemInfo = (fetchImpl: Fetch) => getJson(fetchImpl, "/system/info", systemInfoSchema);
 
@@ -19,6 +19,12 @@ export const startPidTest = (fetchImpl: Fetch, request: PidTestRequest) =>
   sendJson(fetchImpl, "POST", "/system/pid-test", request, pidTestResponseSchema);
 
 export const getUpdates = (fetchImpl: Fetch) => getJson(fetchImpl, "/system/updates", updatesSchema);
+
+/** Starts webcontrol-update@update.service or @rollback.service; the progress follows in getUpdates. */
+export const startUpdate = (fetchImpl: Fetch, action: UpdateAction) =>
+  action === "update"
+    ? sendJson(fetchImpl, "POST", "/system/updates/install", {}, updatesSchema)
+    : sendJson(fetchImpl, "POST", "/system/updates/rollback", {}, updatesSchema);
 
 export const getHelpPage = (fetchImpl: Fetch, path: string) =>
   getJson(fetchImpl, `/system/help?path=${encodeURIComponent(path)}`, helpPageSchema);

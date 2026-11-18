@@ -128,8 +128,9 @@ bash webcontrol-rs-<version>-aarch64/install-pi.sh webcontrol-rs-<version>-aarch
 
 1. Checks that the Pi is 64-bit ARM and that the binary runs (glibc 2.36 or newer).
 2. Installs the binary in `/opt/webcontrol-rs` (keeping the previous one as `webcontrol-rs.prev`), the
-   `webcontrol-rs` systemd unit (running as `pi`, in the `dialout` group, on port 5000), `wc-switch`, and a sudoers
-   rule that lets the service run `systemctl poweroff` and nothing else.
+   `webcontrol-rs` systemd unit (running as `pi`, in the `dialout` group, on port 5000), `wc-switch`,
+   `webcontrol-update` and its `webcontrol-update@.service` unit, and a sudoers rule that lets the service run
+   `systemctl poweroff` and start an update or a rollback from the UI, and nothing else.
 3. Installs `avrdude` for the firmware upgrade, if it is missing.
 4. Enables and starts `webcontrol-rs`. If a `webcontrol.service` from an older WebControl is running on the same disk,
    it leaves that one holding the port and tells you to run `wc-switch rust` when it is idle; one that is enabled but
@@ -178,7 +179,16 @@ Either flash the same OS to the SSD with Imager and repeat steps 3–6 on it, or
 
 ## Updating
 
-With the machine idle (no job running or paused, no tool change waiting, no probe), run on the Pi as `pi`:
+From the browser: Help ▸ Update shows the latest published release with its notes. With the machine idle, press
+**Update to vX** and confirm. WebControl downloads it, checks it, backs up this install, installs it and restarts;
+the page shows each step, says it is reconnecting while WebControl restarts, and then shows the result (press
+**Reload the page** to load the new version's screens). If the new version does not come up, the backup is put back
+by itself and the page says so. **Roll back to vY** puts the last backup back the same way. The buttons stay off,
+saying why, while a job runs or is paused, a tool change waits, a probe or an optical scan runs, or a firmware upgrade
+is underway. An install older than 0.4.0 has no buttons yet: update it once from a terminal as below.
+
+From a terminal, with the machine idle (no job running or paused, no tool change waiting, no probe), run on the Pi
+as `pi`:
 
 ```sh
 webcontrol-update
@@ -192,12 +202,12 @@ an update; `--version v0.2.0` installs a particular release, even an older one.
 
 Before it installs, it checks the download's SHA-256 and backs up the current install to
 `/opt/webcontrol-rs/backup`: the binary, the systemd unit and drop-in, `wc-switch`, `webcontrol-update`, the sudoers
-rule and `~/.WebControl/webcontrol.json`. There is one backup; each update replaces the previous one once the new one
+rule, the update unit and `~/.WebControl/webcontrol.json`. There is one backup; each update replaces the previous one once the new one
 is complete. It will not restart a `webcontrol-rs` that is running but not answering, since it may be mid-job, and
 if a job starts while it installs it puts the old files back and restarts nothing. After the restart it waits up to
 a minute for the service, `/api/state` with the new version and, if one was connected, the controller. If any of
 that fails it restores the backup by itself and prints `ROLLED BACK`. To go back by hand, run
-`webcontrol-update --rollback`; it keeps the backup.
+`webcontrol-update --rollback` (or **Roll back** in the browser); it keeps the backup.
 
 The backup covers only the last update. The deeper fallback is still the SSD or the old card: power off, boot from
 it (step 8), and look at this card later.

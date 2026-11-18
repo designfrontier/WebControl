@@ -1,0 +1,246 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "post-api-system-updates-rollback.202",
+  "type": "object",
+  "properties": {
+    "installed": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "commit": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "commit"
+      ]
+    },
+    "repo": {
+      "type": "string",
+      "description": "The GitHub repository releases are read from, owner/name"
+    },
+    "latest": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "publishedAt": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "url": {
+              "type": "string"
+            },
+            "notes": {
+              "type": "string",
+              "description": "The release notes as GitHub markdown"
+            },
+            "commit": {
+              "description": "The commit the tag points at, when GitHub said",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "tag",
+            "name",
+            "publishedAt",
+            "url",
+            "notes",
+            "commit"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "upToDate",
+        "updateAvailable",
+        "devBuild",
+        "ahead",
+        "unknown"
+      ],
+      "description": "devBuild: the installed version is the latest release's but built from another commit; ahead: newer than the latest release; unknown: GitHub could not be asked or a version is not semver."
+    },
+    "error": {
+      "description": "Why GitHub could not be asked",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "checkedAt": {
+      "description": "When GitHub was last asked, in milliseconds since the epoch",
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "backup": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "version": {
+              "type": "string"
+            },
+            "date": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "version",
+            "date"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The install webcontrol-update saved before the last update, which --rollback restores"
+    },
+    "canUpdate": {
+      "type": "boolean",
+      "description": "webcontrol-update@.service is installed, so this page can update and roll back"
+    },
+    "busy": {
+      "description": "Why an update or rollback would be refused now: a job, probe, scan, ...",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "progress": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": [
+                "update",
+                "rollback"
+              ]
+            },
+            "phase": {
+              "type": "string",
+              "enum": [
+                "starting",
+                "checking",
+                "downloading",
+                "verified",
+                "backingUp",
+                "installing",
+                "restarting",
+                "healthCheck",
+                "rollingBack",
+                "finished"
+              ],
+              "description": "starting: the server started the unit and the updater has not written yet; verified: checksum OK"
+            },
+            "running": {
+              "type": "boolean"
+            },
+            "from": {
+              "description": "The version installed when it started",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "to": {
+              "description": "The release, or the backup's version for a rollback",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "startedAt": {
+              "description": "Milliseconds since the epoch",
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "finishedAt": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "result": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "updated",
+                    "upToDate",
+                    "rolledBack",
+                    "rollbackFailed",
+                    "failed",
+                    "interrupted"
+                  ],
+                  "description": "rolledBack after an update: it failed and the backup is running again; after a rollback: it worked. failed: refused, or stopped without restarting WebControl; interrupted: the updater stopped without finishing."
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "null while it runs"
+            },
+            "log": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "What the updater printed, oldest first"
+            }
+          },
+          "required": [
+            "action",
+            "phase",
+            "running",
+            "from",
+            "to",
+            "startedAt",
+            "finishedAt",
+            "result",
+            "log"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "installed",
+    "repo",
+    "latest",
+    "status",
+    "error",
+    "checkedAt",
+    "backup",
+    "canUpdate",
+    "busy",
+    "progress"
+  ]
+}

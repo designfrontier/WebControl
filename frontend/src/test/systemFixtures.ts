@@ -1,4 +1,4 @@
-import type { HelpPage, PidSettings, SystemInfo, Updates } from "../protocol";
+import type { HelpPage, PidSettings, SystemInfo, UpdateProgress, Updates } from "../protocol";
 import { fakeFetch } from "./fakeFetch";
 
 export const systemInfo = (over: Partial<SystemInfo> = {}): SystemInfo => ({
@@ -39,6 +39,22 @@ export const updates = (over: Partial<Updates> = {}): Updates => ({
   error: null,
   checkedAt: Date.UTC(2026, 10, 20, 12, 0),
   backup: { version: "0.2.0", date: "2026-11-16T18:00:00Z" },
+  canUpdate: true,
+  busy: null,
+  progress: null,
+  ...over,
+});
+
+export const updateProgress = (over: Partial<UpdateProgress> = {}): UpdateProgress => ({
+  action: "update",
+  phase: "downloading",
+  running: true,
+  from: "0.3.0",
+  to: "0.4.0",
+  startedAt: Date.UTC(2026, 10, 20, 12, 5),
+  finishedAt: null,
+  result: null,
+  log: ["Updating webcontrol-rs 0.3.0 to 0.4.0 from designfrontier/WebControl.", "Downloading SHA256SUMS"],
   ...over,
 });
 

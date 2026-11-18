@@ -44,6 +44,8 @@ pub fn router(state: AppState) -> Router {
         .route("/api/system/info", get(api::system))
         .route("/api/system/pid", get(api::pid))
         .route("/api/system/updates", get(updates::updates))
+        .route("/api/system/updates/install", post(updates::install))
+        .route("/api/system/updates/rollback", post(updates::rollback))
         .route("/api/system/help", get(help::page))
         .route("/api/system/help/assets/{*path}", get(|Path(path): Path<String>| async move { help::asset(&path) }))
         .route("/api/system/pid-test", post(api::pid_test))

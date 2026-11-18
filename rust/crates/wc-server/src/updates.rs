@@ -1,5 +1,6 @@
-//! `GET /api/system/updates`: the installed build, the latest published GitHub release and the backup
-//! `webcontrol-update` keeps. Updating itself stays with that script on the Pi: it needs sudo and restarts us.
+//! `GET /api/system/updates`: the installed build, the latest published GitHub release, the backup
+//! `webcontrol-update` keeps and the progress of an update started here. `POST .../install` and `.../rollback` start
+//! `webcontrol-update@.service` ([`crate::installer`]), which outlives this server's restart.
 
 use std::cmp::Ordering;
 use std::path::{Path, PathBuf};
@@ -8,11 +9,16 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use axum::Json;
 use axum::extract::State;
-use serde_json::Value;
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
+use serde_json::{Value, json};
 use tokio::sync::Mutex;
-use wc_protocol::system::{InstalledBuild, LatestRelease, UpdateBackup, UpdateState, UpdateStatus, Updates as Reply};
+use wc_protocol::system::{
+    InstalledBuild, LatestRelease, UpdateAction, UpdateBackup, UpdateState, UpdateStatus, Updates as Reply,
+};
 
 use crate::AppState;
+use crate::installer::{self, Installer, Pending};
 
 /// `webcontrol-update`'s defaults, and the environment variables it reads them from.
 pub const DEFAULT_REPO: &str = "designfrontier/WebControl";
@@ -245,9 +251,37 @@ struct Checker {
     last: Mutex<Option<Checked>>,
 }
 
-/// The cached update check, shared by every request.
+/// The updater's units, its status file and the start the page is waiting on.
+struct Install {
+    installer: Box<dyn Installer>,
+    status_file: PathBuf,
+    pending: std::sync::Mutex<Option<Pending>>,
+    starting: Mutex<()>,
+}
+
+impl Install {
+    fn new(installer: impl Installer, status_file: &Path) -> Arc<Install> {
+        let (pending, starting) = (std::sync::Mutex::new(None), Mutex::new(()));
+        Arc::new(Install { installer: Box::new(installer), status_file: status_file.into(), pending, starting })
+    }
+
+    /// Reads the status before asking systemd, and again if the unit has stopped, so a run that just ended is seen.
+    fn progress(&self) -> Option<wc_protocol::system::UpdateProgress> {
+        let mut pending = self.pending.lock().expect("pending lock");
+        let status = installer::read_status(&self.status_file);
+        if pending.is_some_and(|start| status.as_ref().is_some_and(|status| start.answered_by(status))) {
+            *pending = None;
+        }
+        let unfinished = pending.is_some() || status.as_ref().is_some_and(|status| status.running);
+        let running = unfinished && self.installer.running();
+        let status = if unfinished && !running { installer::read_status(&self.status_file) } else { status };
+        installer::progress(status, *pending, running)
+    }
+}
+
+/// The cached update check and the updater, shared by every request.
 #[derive(Clone)]
-pub struct Updates(Arc<Checker>);
+pub struct Updates(Arc<Checker>, Arc<Install>);
 
 fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |since| since.as_millis() as u64)
@@ -257,7 +291,13 @@ impl Updates {
     pub fn new(source: impl ReleaseSource, repo: &str, backup: &Path, timing: Timing) -> Updates {
         let source = Arc::new(source);
         let last = Mutex::new(None);
-        Updates(Arc::new(Checker { source, repo: repo.into(), backup: backup.into(), timing, last }))
+        let checker = Checker { source, repo: repo.into(), backup: backup.into(), timing, last };
+        Updates(Arc::new(checker), Install::new(installer::Off, Path::new(installer::STATUS_FILE)))
+    }
+
+    /// Updates through `installer`, reading its progress from `status_file`.
+    pub fn with_installer(self, installer: impl Installer, status_file: &Path) -> Updates {
+        Updates(self.0, Install::new(installer, status_file))
     }
 
     pub fn off() -> Updates {
@@ -271,6 +311,7 @@ impl Updates {
         let api = env("WC_GITHUB_API").unwrap_or_else(|| GITHUB_API.into());
         let github = GitHub { api, repo: repo.clone(), token: env("GITHUB_TOKEN"), timeout: timing.timeout };
         Updates::new(github, &repo, Path::new(BACKUP_DIR), timing)
+            .with_installer(installer::Systemd::default(), Path::new(installer::STATUS_FILE))
     }
 
     fn stale(&self, checked: &Checked) -> bool {
@@ -303,6 +344,11 @@ impl Updates {
     pub async fn report(&self) -> Reply {
         let checked = self.check().await;
         let manifest = tokio::fs::read_to_string(self.0.backup.join("MANIFEST")).await.ok();
+        let install = self.1.clone();
+        let (can_update, progress) =
+            tokio::task::spawn_blocking(move || (install.installer.installed(), install.progress()))
+                .await
+                .unwrap_or((false, None));
         Reply {
             installed: InstalledBuild { version: crate::VERSION.into(), commit: crate::COMMIT.into() },
             repo: self.0.repo.clone(),
@@ -311,7 +357,42 @@ impl Updates {
             error: checked.error,
             checked_at: Some(checked.checked_at),
             backup: manifest.as_deref().and_then(parse_manifest),
+            can_update,
+            busy: None,
+            progress,
         }
+    }
+
+    /// Starts `action` unless the units are missing, one already runs, there is nothing to do or the machine is busy.
+    pub async fn start(&self, action: UpdateAction, busy: Option<String>) -> Result<(), (StatusCode, String)> {
+        let conflict = |message: &str| Err((StatusCode::CONFLICT, message.to_string()));
+        let _one_at_a_time = self.1.starting.lock().await;
+        let report = self.report().await;
+        if !report.can_update {
+            return conflict(NOT_INSTALLED);
+        }
+        if report.progress.is_some_and(|progress| progress.running) {
+            return conflict("An update or rollback is already running.");
+        }
+        if let Some(busy) = busy {
+            return conflict(&busy);
+        }
+        match action {
+            UpdateAction::Update if report.status != UpdateState::UpdateAvailable => return conflict(NOTHING_NEWER),
+            UpdateAction::Rollback if report.backup.is_none() => {
+                return conflict("There is no backup to roll back to.");
+            }
+            _ => {}
+        }
+        let install = self.1.clone();
+        let started = tokio::task::spawn_blocking(move || install.installer.start(action)).await;
+        started.unwrap_or_else(|_| Err("Starting the updater failed".into())).map_err(|error| {
+            tracing::error!(%error, "could not start the updater");
+            (StatusCode::INTERNAL_SERVER_ERROR, error)
+        })?;
+        tracing::warn!(?action, "started webcontrol-update from the UI");
+        *self.1.pending.lock().expect("pending lock") = Some(Pending { action, at: Instant::now(), at_ms: now_ms() });
+        Ok(())
     }
 
     /// From the last check only, never waiting; a missing or stale one is refreshed in the background.
@@ -328,6 +409,33 @@ impl Updates {
     }
 }
 
+const NOT_INSTALLED: &str = "This install cannot update from the page: run webcontrol-update on the Pi once, \
+    which adds webcontrol-update@.service.";
+const NOTHING_NEWER: &str = "There is no newer published release to update to.";
+
+async fn reply(state: &AppState) -> Reply {
+    let busy = installer::busy_reason(&state.machine.snapshot());
+    Reply { busy, ..state.updates.report().await }
+}
+
 pub(crate) async fn updates(State(state): State<AppState>) -> Json<Reply> {
-    Json(state.updates.report().await)
+    Json(reply(&state).await)
+}
+
+async fn start(state: AppState, action: UpdateAction) -> Response {
+    let busy = installer::busy_reason(&state.machine.snapshot());
+    match state.updates.start(action, busy).await {
+        Ok(()) => (StatusCode::ACCEPTED, Json(reply(&state).await)).into_response(),
+        Err((status, error)) => (status, Json(json!({ "error": error }))).into_response(),
+    }
+}
+
+/// `POST /api/system/updates/install`: the latest published release, never an older one.
+pub(crate) async fn install(State(state): State<AppState>) -> Response {
+    start(state, UpdateAction::Update).await
+}
+
+/// `POST /api/system/updates/rollback`: the backup the last update made.
+pub(crate) async fn rollback(State(state): State<AppState>) -> Response {
+    start(state, UpdateAction::Rollback).await
 }

@@ -30,6 +30,11 @@ describe("updates", () => {
     );
   });
 
+  it("points at the button when this page can update, else at the Pi", () => {
+    expect(explanation(updates({ canUpdate: true }))).toMatch(/Update it with the button below\.$/);
+    expect(explanation(updates({ canUpdate: false }))).toMatch(/Update it on the Pi as below\.$/);
+  });
+
   it("leaves text that is not a date as it is", () => {
     expect(when("yesterday")).toBe("yesterday");
     expect(when("2026-11-16T18:00:00Z")).toMatch(/2026/);
