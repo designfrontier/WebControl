@@ -16,6 +16,7 @@ dropin="$root/etc/systemd/system/webcontrol.service.d/conflicts.conf"
 bindir="$root/usr/local/bin"
 sudoers="$root/etc/sudoers.d/webcontrol-rs"
 TAG_RE='^v?[0-9A-Za-z][0-9A-Za-z.+_-]*$'
+VERSION_RE='^v?([0-9]+)(\.([0-9]+))?(\.([0-9]+))?(-([0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*))?(\+[0-9A-Za-z.-]+)?$'
 release_files=(webcontrol-rs install-pi.sh webcontrol-rs.service webcontrol-conflicts.conf wc-switch webcontrol-rs.sudoers)
 
 usage() {
@@ -24,7 +25,11 @@ usage: webcontrol-update [--repo owner/name] [--version vX.Y.Z] [--force]
        webcontrol-update --rollback | --status | --help
 
 With no flags, installs the latest published release of $REPO if it is newer
-than the installed webcontrol-rs: it checks the machine is idle, downloads the
+than the installed webcontrol-rs. Versions compare as MAJOR.MINOR.PATCH, field
+by field as numbers; a pre-release such as 1.2.0-rc.1 comes before 1.2.0, and a
+build from git describe such as 1.2.0-3-gabc1234 after it. If the installed
+version is newer than the latest release it changes nothing; --version installs
+an older release on purpose. To update, it checks the machine is idle, downloads the
 release's tarball and SHA256SUMS, verifies the checksum, backs up the current
 install, runs the release's install-pi.sh, restarts webcontrol-rs and checks it
 for up to ${WAIT}s. If that check fails it restores the backup by itself.
@@ -34,9 +39,11 @@ without write access, so publish the draft first.
 
   --repo owner/name   the GitHub repository (or set WEBCONTROL_REPO)
   --version vX.Y.Z    install this release tag instead of the latest
-  --force             reinstall even if that version is installed
+  --force             reinstall even if that version is installed (it never
+                      downgrades; only --version does)
   --rollback          restore the backup the last update made (it is kept)
-  --status            show the installed version, the backup and the latest release
+  --status            show the installed version, the backup, the latest release
+                      and whether it is an update
   --help              this text
 
 The backup is one slot, $backup: the binary, the systemd unit and
@@ -85,6 +92,73 @@ installed_version() { "$binary" --version 2> /dev/null | awk '{ print $2 }' || t
 manifest_value() { sed -n "s/^$1=//p" "$backup/MANIFEST" 2> /dev/null | head -n 1 || true; }
 
 is_zero() { [[ "${1:-0}" =~ ^0*(\.0*)?$ ]]; }
+
+# Prints -1, 0 or 1.
+compare_text() {
+  local LC_ALL=C
+  if [ "$1" = "$2" ]; then echo 0; elif [[ "$1" < "$2" ]]; then echo -1; else echo 1; fi
+}
+
+# compare_text for two digit strings of any length, so none overflows.
+compare_numbers() {
+  local a="${1#"${1%%[!0]*}"}" b="${2#"${2%%[!0]*}"}"
+  [ "${#a}" = "${#b}" ] || { [ "${#a}" -lt "${#b}" ] && echo -1 || echo 1; return 0; }
+  compare_text "$a" "$b"
+}
+
+# Semver identifier order: numbers numerically and below words, which compare in ASCII.
+compare_identifiers() {
+  local a_num=0 b_num=0
+  [[ ! "$1" =~ ^[0-9]+$ ]] || a_num=1
+  [[ ! "$2" =~ ^[0-9]+$ ]] || b_num=1
+  [ "$a_num$b_num" != 11 ] || { compare_numbers "$1" "$2"; return 0; }
+  [ "$a_num" = "$b_num" ] || { [ "$a_num" = 1 ] && echo -1 || echo 1; return 0; }
+  compare_text "$1" "$2"
+}
+
+compare_prereleases() {
+  local -a a b
+  local i order
+  IFS=. read -ra a <<< "$1"
+  IFS=. read -ra b <<< "$2"
+  for ((i = 0; i < ${#a[@]} || i < ${#b[@]}; i++)); do
+    [ "$i" -lt "${#a[@]}" ] || { echo -1; return 0; }
+    [ "$i" -lt "${#b[@]}" ] || { echo 1; return 0; }
+    order="$(compare_identifiers "${a[i]}" "${b[i]}")"
+    [ "$order" = 0 ] || { echo "$order"; return 0; }
+  done
+  echo 0
+}
+
+# Sets V_CORE, V_RANK (0 pre-release, 1 release, 2 a git describe build past it) and V_EXTRA; fails on a non-version.
+parse_version() {
+  [[ "$1" =~ $VERSION_RE ]] || return 1
+  V_CORE=("${BASH_REMATCH[1]}" "${BASH_REMATCH[3]:-0}" "${BASH_REMATCH[5]:-0}")
+  local suffix="${BASH_REMATCH[7]}"
+  V_RANK=0
+  V_EXTRA="$suffix"
+  [ -n "$suffix" ] || V_RANK=1
+  [ "$suffix" != dirty ] || { V_RANK=2; V_EXTRA=0; }
+  [[ ! "$suffix" =~ ^([0-9]+)-g[0-9a-f]+(-dirty)?$ ]] || { V_RANK=2; V_EXTRA="${BASH_REMATCH[1]}"; }
+}
+
+# version_order <a> <b>: prints older, same or newer for a against b, or unknown if either is not a version.
+version_order() {
+  local -a core
+  local rank extra i order=0
+  parse_version "$1" || { echo unknown; return 0; }
+  core=("${V_CORE[@]}")
+  rank="$V_RANK"
+  extra="$V_EXTRA"
+  parse_version "$2" || { echo unknown; return 0; }
+  for i in 0 1 2; do
+    [ "$order" != 0 ] || order="$(compare_numbers "${core[i]}" "${V_CORE[i]}")"
+  done
+  [ "$order" != 0 ] || [ "$rank" = "$V_RANK" ] || order="$([ "$rank" -lt "$V_RANK" ] && echo -1 || echo 1)"
+  [ "$order" != 0 ] || [ "$rank" != 0 ] || order="$(compare_prereleases "$extra" "$V_EXTRA")"
+  [ "$order" != 0 ] || [ "$rank" != 2 ] || order="$(compare_numbers "$extra" "$V_EXTRA")"
+  case "$order" in -1) echo older ;; 0) echo same ;; *) echo newer ;; esac
+}
 
 preflight() {
   local arch tool
@@ -324,12 +398,22 @@ roll_back_and_check() {
 }
 
 update() {
-  local current
+  local current order
   preflight
   require_idle
   find_release
   current="$(installed_version)"
-  if [ "$current" = "$VERSION" ] && [ "$FORCE" = 0 ]; then
+  order="$(version_order "$current" "$VERSION")"
+  if [ -n "$current" ] && [ "$order" = unknown ]; then
+    say "Warning: cannot compare the installed version \"$current\" with $VERSION, so any other version counts as newer."
+    order="$([ "$current" = "$VERSION" ] && echo same || echo older)"
+  fi
+  if [ "$order" = newer ] && [ -z "$PIN" ]; then
+    say "Installed $current is newer than the latest published release $VERSION; nothing to do. Use --version v$VERSION to install it anyway."
+    return 0
+  fi
+  [ "$order" != newer ] || say "Warning: $VERSION is older than the installed $current; installing it because --version asked for it."
+  if [ "$order" = same ] && [ "$FORCE" = 0 ]; then
     say "webcontrol-rs $VERSION is installed$([ -z "$PIN" ] && echo ", the latest published release of $REPO"). Nothing to do (--force reinstalls it)."
     return 0
   fi
@@ -385,8 +469,18 @@ rollback() {
   say "The backup stays in $backup; the next update replaces it."
 }
 
+update_status() {
+  [ -n "$1" ] || { echo "not installed; webcontrol-update installs v$2"; return 0; }
+  case "$(version_order "$1" "$2")" in
+    older) echo "update available: webcontrol-update installs v$2" ;;
+    same) echo "up to date" ;;
+    newer) echo "installed $1 is newer than latest published $2; nothing to update" ;;
+    *) echo "unknown: cannot compare \"$1\" with $2" ;;
+  esac
+}
+
 status() {
-  local latest installed
+  local latest installed tag
   installed="$(installed_version)"
   say "Installed:       ${installed:+webcontrol-rs }${installed:-none}"
   say "Service:         $(systemctl is-active webcontrol-rs 2> /dev/null || true)"
@@ -396,7 +490,9 @@ status() {
     say "Backup:          none"
   fi
   if latest="$(github latest 2> /dev/null)"; then
-    say "Latest release:  $(field "$latest" tag_name) ($REPO)"
+    tag="$(field "$latest" tag_name)"
+    say "Latest release:  $tag ($REPO)"
+    say "Update:          $(update_status "$installed" "${tag#v}")"
   else
     say "Latest release:  none published in $REPO (drafts are not visible)"
   fi
