@@ -80,19 +80,29 @@ pub fn with_tool_first(line: &str, tool: i64) -> String {
     format!("T{tool} {rest}{trailing}")
 }
 
-/// A G38 word other than G38.2. The firmware's `G38()` probes only when the two characters after `G38` are `.2`;
-/// on any other it moves nothing, zeroes nothing and acks `ok` (spec/firmware.md §4).
-pub fn probe_the_firmware_ignores(line: &str) -> bool {
+/// The two bytes after each G38 word's `G38`, which the firmware's `G38()` probes on only when they are `.2`; on
+/// any other it moves nothing, zeroes nothing and acks `ok` (spec/firmware.md §4).
+fn g38_suffixes(line: &str) -> impl Iterator<Item = Option<&[u8]>> {
     let text = line.as_bytes();
-    let g_number = |at: usize| {
+    let g_number = move |at: usize| {
         let digits = text[at + 1..].iter().take_while(|b| b.is_ascii_digit() || b.is_ascii_punctuation()).count();
         let number = String::from_utf8_lossy(&text[at + 1..at + 1 + digits]);
         FIRMWARE_NUMBER.find(&number).and_then(|found| found.as_str().parse::<f64>().ok()).map(|value| value as i64)
     };
-    !is_machine_command(line)
-        && (0..text.len())
-            .filter(|&at| text[at].eq_ignore_ascii_case(&b'G'))
-            .any(|at| g_number(at) == Some(38) && text.get(at + 3..at + 5) != Some(b".2"))
+    let gcode = !is_machine_command(line);
+    (0..text.len())
+        .filter(move |&at| gcode && text[at].eq_ignore_ascii_case(&b'G') && g_number(at) == Some(38))
+        .map(move |at| text.get(at + 3..at + 5))
+}
+
+/// A G38 word other than G38.2, which the firmware acks without probing.
+pub fn probe_the_firmware_ignores(line: &str) -> bool {
+    g38_suffixes(line).any(|suffix| suffix != Some(b".2"))
+}
+
+/// A G38 word the firmware probes on: `G38.2`, but not `G038.2` or `G 38.2`.
+pub fn firmware_probes(line: &str) -> bool {
+    g38_suffixes(line).any(|suffix| suffix == Some(b".2"))
 }
 
 /// `toolChangeLine`: what to send for a line, the tool the firmware will have pending after it, and whether its M6
@@ -126,6 +136,16 @@ mod tests {
         ["G38.2 Z-10 ", "G90 G38.2 Z-1", "g38.2", "G38.25", "G1 X38.3", "G3 X1", "G 38.3", "B38.3", "$38=1", "G3.8"]
             .iter()
             .for_each(|line| assert!(!probe_the_firmware_ignores(line), "{line}"));
+    }
+
+    #[test]
+    fn the_firmware_probes_only_where_its_g38_reads_dot_2() {
+        ["G38.2 Z-10 ", "G90 G38.2 Z-1", "g38.2", "G38.25", "G38.20 Z-1", "X1G38.2"]
+            .iter()
+            .for_each(|line| assert!(firmware_probes(line), "{line}"));
+        ["G038.2 Z-1", "G 38.2 Z-1", "G38.3 Z-1", "G38", "B38.2", "$38.2", "G1 X38.2"]
+            .iter()
+            .for_each(|line| assert!(!firmware_probes(line), "{line}"));
     }
 
     #[test]

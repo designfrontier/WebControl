@@ -138,6 +138,16 @@ fn g_codes(line: &str) -> Vec<String> {
         .collect()
 }
 
+/// The two characters after `G38` in the first G38 word, which `G38()` reads: so `G038.2` does not probe.
+fn g38_suffix(line: &str) -> Option<String> {
+    let number = |word: &str| word[1..].chars().take_while(|c| c.is_ascii_digit() || *c == '.').collect::<String>();
+    let word = line
+        .match_indices('G')
+        .map(|(at, _)| &line[at..])
+        .find(|word| number(word).parse::<f64>().is_ok_and(|code| code.trunc() == 38.0))?;
+    Some(word.chars().skip(3).take_while(|c| !matches!(c, 'G' | 'M')).take(2).collect())
+}
+
 /// The tool the firmware reads: a T leading a line that also has a G or M word.
 fn leading_tool(line: &str) -> Option<u32> {
     let text = line.trim();
@@ -401,12 +411,12 @@ impl Sim {
         if has("90") || has("91") {
             self.absolute = has("90");
         }
-        if has("38.2") {
-            return self.probe(out);
-        }
-        if let Some(code) = codes.iter().find(|code| code.split('.').next() == Some("38")) {
+        if let Some(suffix) = g38_suffix(text) {
+            if suffix == ".2" {
+                return self.probe(out);
+            }
             out.push(match self.z_axis_attached {
-                true => format!("G38{} is invalid. Only G38.2 recognized.", &code[2..code.len().min(4)]),
+                true => format!("G38{suffix} is invalid. Only G38.2 recognized."),
                 false => "G38.2 gcode only valid with z-axis attached".into(),
             });
             return Some(0);
