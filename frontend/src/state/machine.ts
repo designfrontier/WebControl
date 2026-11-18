@@ -66,8 +66,44 @@ export type StoreCommand = (typeof STORE_COMMANDS)[number];
 
 export type MachineEvent =
   | { type: "socket"; status: ConnectionStatus }
-  | { type: "startup"; state: StartupState }
+  | { type: "startup"; state: StartupState; keep?: ReadonlySet<keyof MachineState> }
   | { [C in StoreCommand]: { type: "message"; command: C; data: MessageData<C> } }[StoreCommand];
+
+export type MachineMessage = Extract<MachineEvent, { type: "message" }>;
+
+const SETTING_FIELDS = new Map<string, keyof MachineState>([
+  ["units", "units"],
+  ["unitsZ", "unitsZ"],
+  ["distToMove", "distToMove"],
+  ["distToMoveZ", "distToMoveZ"],
+  ["pauseButtonSetting", "pauseButton"],
+]);
+
+/** The fields a push sets that a GET /api/state snapshot also carries. */
+export const pushedFields = (event: MachineMessage): (keyof MachineState)[] => {
+  switch (event.command) {
+    case "hostAddress":
+    case "gcodeFile":
+    case "theme":
+      return [event.command];
+    case "connectionStatus":
+      return ["controller"];
+    case "homePositionMessage":
+      return ["homePosition"];
+    case "healthMessage":
+      return event.data.controllerFirmwareVersion === undefined ? [] : ["firmwareVersion"];
+    case "statusMessage": {
+      const { jobInProgress, manualZAxisAdjust, probing } = event.data;
+      return [jobInProgress, manualZAxisAdjust, probing].some((flag) => flag !== undefined) ? ["job"] : [];
+    }
+    case "requestedSetting": {
+      const field = SETTING_FIELDS.get(event.data.setting);
+      return field ? [field] : [];
+    }
+    default:
+      return [];
+  }
+};
 
 export const CONTROLLER_MESSAGE_LIMIT = 100;
 /** UIProcessor sends -999999 for the computed position when forward kinematics are off. */
@@ -128,7 +164,7 @@ const controllerOf = ({
   fakeServo: fakeServoStatus ?? false,
 });
 
-const applyMessage = (state: MachineState, event: Extract<MachineEvent, { type: "message" }>): MachineState => {
+const applyMessage = (state: MachineState, event: MachineMessage): MachineState => {
   switch (event.command) {
     case "hostAddress":
       return { ...state, hostAddress: event.data.hostAddress };
@@ -227,6 +263,7 @@ export const machineReducer = (state: MachineState, event: MachineEvent): Machin
         gcodeFile,
         theme,
       } = event.state;
+      const kept = Object.fromEntries([...(event.keep ?? [])].map((field) => [field, state[field]]));
       return {
         ...state,
         job: { inProgress: jobInProgress, manualZAxisAdjust, probing },
@@ -244,6 +281,7 @@ export const machineReducer = (state: MachineState, event: MachineEvent): Machin
         theme: theme ?? state.theme,
         controller:
           connectionStatus && state.controller.status === "unknown" ? controllerOf(connectionStatus) : state.controller,
+        ...kept,
       };
     }
     case "message":

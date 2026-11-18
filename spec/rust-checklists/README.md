@@ -1,66 +1,103 @@
-# Rust backend hardware checklists: the order to run them
+# Hardware checklists
 
-These were written while the Python backend ran beside Rust on the same card, and they took Rust from "installed
-beside Python" to "cutting and upgrading firmware". The Python backend has since been removed (it is in git history
-up to `220aa0e`). The steps that use it (`wc-switch python`, "on Python", comparing with Python's numbers) are the
-record of how each milestone was accepted; they only work on a card that still has that install. On a fresh install,
-the way back is the boot disk with v0.94 (`spec/INSTALL-PI.md`, step 8) or `rust/deploy.sh rollback` for a bad
-binary, and the rest of each checklist still applies to a release.
+These checklists validate a WebControl release (`webcontrol-rs` and the React UI) on a real Maslow: a Raspberry Pi
+on Raspberry Pi OS Lite 64-bit (`pi@maslow.local`) and a controller on holey 51.27 or 51.292. CI already covers
+everything that runs without the machine: the Rust and frontend tests, the transcripts in `contract/serial/` and
+Playwright against the simulator. These cover the rest. Start from a green `master` and a release tarball.
 
-These checklists take `webcontrol-rs` from "installed beside Python" to "cutting and upgrading firmware" on the
-microSD card (`pi@maslow.local`). The SSD with v0.94 is never touched. Run them in the order below. Each one
-assumes every earlier one passed. CI already covers everything that can run without the machine (each checklist's
-section 1 or "CI" boxes), so start each one with a green `master`.
+They are grouped by feature. Until 0.3.0 there was one file per milestone of the Rust port (`M0.md` to `M7.md`, in
+git history up to `dc9bdca`), written while the Python backend still ran beside Rust and checked against it. The
+Python backend is gone, so each comparison with it is now a check against the expected serial lines, the expected
+numbers, or the transcripts CI replays.
 
-## The way back, at every step
+## Index
 
-The Python backend stays installed and working on the card throughout. Only one backend holds port 5000 at a time.
+| Feature | Checklist, section | Moves the machine |
+| --- | --- | --- |
+| Install from a release tarball, `webcontrol-rs --version` | [`install-update.md`](install-update.md) 1 | No |
+| Restarts, reboots, reconnects, Turn off Raspberry Pi | [`install-update.md`](install-update.md) 2 | No |
+| `webcontrol-update`: `--status`, update, `--rollback`, refusing while busy | [`install-update.md`](install-update.md) 3-5 | No |
+| `rust/deploy.sh push` and `rollback` from the Mac | [`install-update.md`](install-update.md) 6 | No |
+| Status bar: server, controller, firmware and version chips | [`ui.md`](ui.md) 1 | No |
+| Help pages, About, the log viewer, Clear log files | [`ui.md`](ui.md) 2 | No |
+| Display theme (Settings ▸ Display) | [`ui.md`](ui.md) 3 | No |
+| The loaded file's name | [`ui.md`](ui.md) 4 | No |
+| Phone and iPad layouts | [`ui.md`](ui.md) 5 | No |
+| Connect, the boot handshake, reset on open, unplug and replug | [`connection.md`](connection.md) 1 | No |
+| Jog, Z, Home, Return to center, Touch Z | [`connection.md`](connection.md) 2 | Yes |
+| Stop mid-move, the alarm hold | [`connection.md`](connection.md) 3 | Yes |
+| Editing settings, `$$` after every boot, `$38` | [`settings.md`](settings.md) 1-3 | No |
+| Quick configure, setup screens, motors, sprockets, chains, PID | [`settings.md`](settings.md) 4-6 | Yes |
+| G-code files, the editor, Send Custom GCode, the load time | [`files-boards.md`](files-boards.md) 1-3 | One 5 mm move |
+| Boards | [`files-boards.md`](files-boards.md) 4 | No |
+| Backup, restore, diagnostics, imports | [`files-boards.md`](files-boards.md) 5 | No |
+| Jobs: Play, Pause, Resume, Stop, M0, tool change, restart mid-file | [`jobs.md`](jobs.md) 1-3 | Yes: an air cut |
+| The job lock, refusals, probes in a file, a lost USB link | [`jobs.md`](jobs.md) 4 | Yes |
+| Buffered mode, GPIO buttons and LEDs | [`jobs.md`](jobs.md) 5, 6 | Yes |
+| The first real cut | [`jobs.md`](jobs.md) 7 | Yes: router on |
+| Lost-line recovery | [`pacing.md`](pacing.md) 1 | Yes: an air cut |
+| Line pacing: presets, custom, mid-job changes, run-panel stats, `PACING` log lines | [`pacing.md`](pacing.md) 2-4 | Yes: an air cut |
+| Holey and triangular calibration, the test pattern, computed sled position | [`calibration.md`](calibration.md) | Yes: the pattern, in the air |
+| Firmware upgrade to holey 51.292, self-test, chain lengths, rollback | [`firmware-upgrade.md`](firmware-upgrade.md) | Yes: the self-test |
+| Cameras and optical calibration (experimental, for testers) | [`optical.md`](optical.md) | Yes: the scan |
 
-- **On the Pi:** `wc-switch python` stops `webcontrol-rs`, starts the Python `webcontrol` service and makes it the one
-  that boots. `wc-switch status` says which one is running.
-- **If a box fails:** note what you saw, press Stop if anything moves, run `wc-switch python`, and report the box
-  together with `~/.WebControl/webcontrol-rs.log` and `journalctl -u webcontrol-rs --since "<time you started>"`.
-- **If the sled does not stop within a second:** cut the controller's power first, then `wc-switch python`.
-- **A bad binary:** `rust/deploy.sh rollback` (from the Mac) puts the previous `webcontrol-rs` back. Python is not
-  affected.
-- **A bad card:** power off, pull the microSD card, power on. The Pi boots v0.94 from the SSD as before
-  (`spec/INSTALL-PI.md`, step 8).
+## Which ones a release needs
 
-Each checklist installs with `rust/deploy.sh` from the Mac. A release tarball installs the same files: on the Pi,
-`bash webcontrol-rs-<version>-aarch64/install-pi.sh webcontrol-rs-<version>-aarch64` (`rust/README.md`, Releases).
-It then prints the release version where a checklist expects `0.1.0`.
+Every release, before its draft is published:
 
-Both backends share `~/.WebControl`. Each checklist that writes it starts with a backup to the Mac
-(`scp -r pi@maslow.local:.WebControl ~/webcontrol-backup-<milestone>/`). Never edit the original.
+- `install-update.md` sections 1 to 4, and section 5 once it is published.
+- `connection.md`.
+- `jobs.md` sections 1 to 3 (the air cut).
 
-## Order
+Then each checklist whose feature the release changes (`git log v<previous>..v<new>`). A change to streaming, the
+job or the serial link (`wc-machine`, `wc-firmware`) also runs `jobs.md` and `pacing.md` in full, real cut included.
+A change to the upgrade or a new firmware pin runs `firmware-upgrade.md`.
 
-| # | Checklist | What it proves | Moves the machine | Way back |
-| --- | --- | --- | --- | --- |
-| 0 | [`../INSTALL-PI.md`](../INSTALL-PI.md) | The card boots 64-bit Raspberry Pi OS Lite (trixie, or bookworm) with the Python backend working | No | Pull the card |
-| 1 | [`M0.md`](M0.md) | `rust/deploy.sh install`, `wc-switch rust`: the UI over plain WebSockets, the help pages, the log viewer, restarts | No (the port is never opened) | `wc-switch python` |
-| 2 | [`M1.md`](M1.md) | The serial link: connect, firmware version, jog, Z, home, Stop mid-jog, ports, power-off | Yes: jogs | `wc-switch python` |
-| 3 | [`M2.md`](M2.md) | Settings saved in Python's format, the `$$` check after every controller boot, writing only what differs and `$13`, setup screens | Yes: motors and sprockets | `wc-switch python`, then check Python reads the shared file |
-| 4 | [`M3.md`](M3.md) | Gcode and board files, the time budget, backup, restore, diagnostics and imports (M3a and M3b) | No | `wc-switch python`; Python opens what Rust saved |
-| 5 | [`M4.md`](M4.md) | Jobs: an air cut (Play, Pause, Resume, Stop, restart, M0, tool change), refusals, GPIO, then one real cut | Yes: an air cut, then a real cut | `wc-switch python`; Play there once |
-| 6 | [`M5.md`](M5.md) | Calibration: holey and triangular Calculate and Accept give Python's numbers, and the holey test pattern is air-cut (M5a and M5b) | Yes: the test pattern, in the air | `wc-switch python`; the calibration page shows what Rust left |
-| 7 | [`M6.md`](M6.md) | The holey 51.292 upgrade: rehearsal, self-test, rollback to 51.27, and then the real upgrade | Yes: the self-test turns motors | `wc-switch python` after each part; the rollback in section 6 restores 51.27 |
+For a full run, go in the order of the index. Connection comes before anything else that moves; settings before
+anything that writes them; files before jobs, since Play needs a file; the air cut before the real cut and before
+pacing; calibration after a cut has shown jobs work, since it changes the geometry; the firmware upgrade last.
 
-Why this order:
+## Safety, in every checklist
 
-- M0 never opens the serial port, so it checks the install and `wc-switch` before anything can move.
-- M2 comes before any later step that changes settings. It proves that Rust writes `webcontrol.json` in a form Python
-  reads back, so `wc-switch python` stays a safe way back.
-- M3 comes before M4, because Play needs a loaded file.
-- M4's real cut runs on the calibration Python already made. M5 then changes the calibration, so it comes after the
-  cut has proved that jobs work.
-- M6 comes last. It changes the controller's firmware, and every earlier checklist assumes holey 51.27. Do not start
-  the real upgrade (M6 section 7) until the rollback rehearsal (section 6) has passed. After the upgrade, Python also
-  runs against 51.292 (M6 section 7), so `wc-switch python` is still the way back.
+- **Router switched off at its own switch, and the bit removed**, except for the real cuts: `jobs.md` section 7 and
+  `pacing.md` section 5.
+- The sled has room to move, and you can reach the controller's power.
+- Keep a hand near the UI's **Stop** button. If Stop does not stop the sled within a second, cut the controller's
+  power, report it, and do not go on.
+
+## Before a run
+
+- [ ] Back up the settings to the Mac, into a new folder, and never edit the original:
+      `scp -r pi@maslow.local:.WebControl ~/webcontrol-backup-<version>/`.
+- [ ] Note the time, so the logs can be read from there: `date`.
+
+## The way back
+
+- **A box fails:** note what you saw, press Stop if anything moves, and report it (below).
+- **A bad release:** on the Pi, `webcontrol-update --rollback` puts back the install the last update replaced
+  (`install-update.md` section 3). A release installed from its tarball made no such backup: install the previous
+  release's tarball the same way. A binary pushed from the Mac: `rust/deploy.sh rollback`.
+- **Bad firmware:** `firmware-upgrade.md` section 7 puts holey 51.27 back.
+- **A bad card:** boot the old disk with v0.94 (`spec/INSTALL-PI.md`, step 8), but **only with the controller on
+  51.27**. v0.94 never writes `$18`, so on 51.292 its Z speed is whatever the EEPROM holds, and after any EEPROM
+  reset that is the factory 126, about ten times too fast. Roll the firmware back first.
+
+## Reading the logs
+
+The log viewer (Help ▸ Logs, `/logs`) and `~/.WebControl/webcontrol-rs.log` on the Pi show each line written as
+`Sent: <line>`, followed by what the controller printed. Where a box lists expected lines, read them there. Where it
+names a transcript, `contract/serial/transcripts/<name>.json` holds the exact bytes CI replays for that case; the
+real machine should send the same lines in the same order (timing and status reports aside).
+
+## Recording and reporting
+
+- Some boxes ask for a number (`______`). Note them in the draft release's notes on GitHub, so the next release has
+  numbers to compare against.
+- Report the boxes that failed, what you saw, `~/.WebControl/webcontrol-rs.log`,
+  `journalctl -u webcontrol-rs --since "<the time you noted>"`, and the zip from Actions ▸ Download diagnostics file.
 
 ## Not covered on the machine
 
-- The camera and optical calibration are dropped; the UI no longer offers optical calibration.
-- Stock-firmware and custom-hex upgrades: the wizard refuses them and points to another tool.
-- With no controller attached, Rust refuses machine commands (jog, Z, sprockets) with "The controller is not
-  connected." Python queues them instead.
+- Stock and custom firmware upgrades: the wizard refuses them and points to another tool.
+- With no controller connected, WebControl refuses machine commands (jog, Z, sprockets) with "The controller is not
+  connected."

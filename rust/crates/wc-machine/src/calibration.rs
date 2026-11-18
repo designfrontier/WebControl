@@ -9,7 +9,6 @@ use wc_config::{Settings, python_float_str};
 use wc_protocol::calibration::{
     HoleyCalculation, HoleyForm, HoleyParameters, TriangularCalculation, TriangularForm, TriangularParameters,
 };
-use wc_protocol::float;
 use wc_protocol::main::Units;
 
 use crate::clearance::Raise;
@@ -22,8 +21,6 @@ const NOT_CALIBRATED: &str = "The machine could not be calibrated. Check the wor
 const NO_FIT: &str = "The calibration could not be calculated from these measurements.";
 const NOTHING_TO_ACCEPT: &str =
     "There is no calculated result to accept. Enter the measurements and press Calculate first.";
-const NO_SAFE_HEIGHT: &str =
-    "Set the Z-axis safe height to a number before accepting, so the bit rises before it moves.";
 const JOB_RUNNING: &str = "Stop the job before accepting a calibration result.";
 pub(crate) const COMMANDS: [&str; 4] = [
     "cutTriangularCalibrationPattern",
@@ -39,10 +36,10 @@ pub enum Kind {
 }
 
 /// Why Accept saved nothing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum NotAccepted {
     Nothing,
-    NoSafeHeight,
+    NoSafeHeight(String),
     NotFinite,
 }
 
@@ -50,7 +47,7 @@ impl NotAccepted {
     fn message(self, nothing: &str) -> String {
         match self {
             NotAccepted::Nothing => nothing.into(),
-            NotAccepted::NoSafeHeight => NO_SAFE_HEIGHT.into(),
+            NotAccepted::NoSafeHeight(refused) => refused,
             NotAccepted::NotFinite => CalibrationError::NotFinite.to_string(),
         }
     }
@@ -194,8 +191,7 @@ impl Machine {
         match kind {
             Kind::Triangular => {
                 let result = self.calibration.triangular.as_ref().ok_or(NotAccepted::Nothing)?;
-                let safe_height = self.settings.value(MASLOW, "zAxisSafeHeight").and_then(float);
-                Ok(result.accept(safe_height.filter(|height| height.is_finite()).ok_or(NotAccepted::NoSafeHeight)?))
+                Ok(result.accept(self.safe_height("accepting").map_err(NotAccepted::NoSafeHeight)?))
             }
             Kind::Holey => self.calibration.holey.as_ref().map(HoleyResult::accept).ok_or(NotAccepted::Nothing),
         }
@@ -212,7 +208,7 @@ impl Machine {
         accept.writes.iter().for_each(|write| {
             self.write_setting(write.section, write.key, &Value::from(write.value.clone()));
         });
-        let safe_height_mm = self.settings.value(MASLOW, "zAxisSafeHeight").and_then(float).unwrap_or(f64::NAN);
+        let safe_height_mm = self.safe_height_mm().unwrap_or(f64::NAN);
         let raise = Raise::Accept { safe_height_mm };
         // Triangular Accept rises to the safe height before it travels; the raise is settled when it goes out.
         let raise_at_safe_height = raise.lines(None);

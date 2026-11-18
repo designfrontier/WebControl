@@ -51,8 +51,8 @@ These also override anything below; `contract/README.md` ("Rust-intended differe
   calibration Accept refuses non-finite values; the live computed X/Y uses float32, as the firmware does;
   `deploy.sh build` without Docker warns and builds without the 51.292 image rather than failing; stored settings
   keep their JSON types.
-- **3. Triangular Accept raises Z** to the Z-axis safe height before its `G0 X0 Y0`, and is refused without a finite
-  safe height. A Rust-intended deviation (`contract/serial/README.md`).
+- **3. Triangular Accept raises Z** to the Z-axis safe height before its `G0 X0 Y0`, and is refused without a safe
+  height above 0. A Rust-intended deviation (`contract/serial/README.md`).
 - **5. Holey calibration uses `wc-calibration/src/trf.rs`**, the scipy TRF port, not the `levenberg-marquardt` crate.
 - **Never lower before travel.** Before the XY travel of every resume and restart (Pause, M0, tool change, Play
   mid-file, Play after an alarm), and of Home, Return to Center and triangular Accept, Z goes to max(safe height, the
@@ -60,6 +60,11 @@ These also override anything below; `contract/README.md` ("Rust-intended differe
   for a fresh status report and is refused with an alert after 3 s. A Rust-intended deviation.
 - **51.29x spindle speed.** A restart that restores `M3`/`M4` on 51.29x follows it with the file's last `S` on its own
   line (B13); 51.27 and stock are unchanged. A Rust-intended deviation.
+- **A safe height of 0 or less is refused** (2026-11-17) by every action that raises before travel (Home, Return to
+  Center, Play mid-file, Resume, triangular Accept, an optical scan), with an alert naming `zAxisSafeHeight` and its
+  value, and by the settings form (`spec/firmware.md` B10). A Rust-intended deviation.
+- **G38.3, G38.4 and G38.5 are refused** (2026-11-17): 51.27 and 51.292 ack them without probing, so a typed one is
+  dropped with an alert and a file pauses before one (`spec/firmware.md` B16). A Rust-intended deviation.
 
 ## 0. Recommendations up front
 
@@ -424,7 +429,8 @@ which the tool does not count). The frontend keeps its 95%. Python has no floor 
 Every milestone ships as a stack of PRs under 1000 source lines each (tests and fixtures excluded). Each PR is split
 by behaviour, with only the next one ready for review. **Each milestone is tested on the owner's microSD card**: run
 `wc-switch rust`, follow the milestone's hardware checklist (`spec/rust-checklists/Mx.md`, written with the
-milestone), then `wc-switch python`. Python stays the default service until M4 passes a real cut.
+milestone; since reorganised by feature, see that directory's `README.md`), then `wc-switch python`. Python stays the
+default service until M4 passes a real cut.
 
 | M | Scope (contract items) | Done when | Size | Needs | Parallel with |
 |---|---|---|---|---|---|

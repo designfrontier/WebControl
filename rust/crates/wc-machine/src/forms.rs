@@ -154,8 +154,16 @@ fn setting_error(field: &SettingField, value: &Value, enable_custom: bool, ports
     } else if field.numeric && !is_number(Some(value)) {
         Some("Must be a number")
     } else {
-        pid_error(&field.key, value).or_else(|| pacing_error(&field.key, value))
+        pid_error(&field.key, value)
+            .or_else(|| pacing_error(&field.key, value))
+            .or_else(|| safe_height_error(&field.key, value))
     }
+}
+
+/// Home, Return to Center, a restart and Accept refuse to raise to a safe height of 0 or less.
+fn safe_height_error(key: &str, value: &Value) -> Option<&'static str> {
+    let height = wc_config::python_float(value)?;
+    (key == "zAxisSafeHeight" && height <= 0.0).then_some("Must be more than 0")
 }
 
 fn pacing_error(key: &str, value: &Value) -> Option<&'static str> {

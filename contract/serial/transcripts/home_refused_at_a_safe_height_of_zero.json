@@ -1,0 +1,32 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "home_refused_at_a_safe_height_of_zero",
+    "description": "With zAxisSafeHeight 0 or less, Home and Return to Center would travel with the bit at or below the work surface, so each is refused with an alert naming the setting and its value, and nothing is written. Python sent G00 Z0.0 and travelled.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.29",
+      "build": "51.292"
+    },
+    "webcontrolCommit": "rust"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 100.5,
+      "y": -50.25
+    },
+    "settings": {
+      "Maslow Settings": {
+        "zAxisSafeHeight": "0"
+      }
+    }
+  },
+  "events": [
+    {"type": "expect", "state": {"firmwareBuild": "51.292"}},
+    {"type": "ui", "action": {"command": "home", "arg": "", "arg1": ""}},
+    {"type": "expect", "alerts": [{"message": "Set the Z-axis safe height (Maslow Settings, zAxisSafeHeight) to a number above 0 before returning to home, so the bit rises before it moves. It holds \"0\"."}]},
+    {"type": "ui", "action": {"command": "returnToCenter", "arg": "", "arg1": ""}},
+    {"type": "expect", "alerts": [{"message": "to a number above 0 before returning to center"}], "comment": "nothing is written: no G90, no raise, no travel"}
+  ]
+}

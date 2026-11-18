@@ -2,6 +2,7 @@
 //! comments and realtime characters removed, and a refusal for a line the controller cannot safely take.
 
 use crate::arc::ArcProblem;
+use crate::firmware_gcode::probe_the_firmware_ignores;
 use crate::shift::{HomeShift, shift_to_home};
 use crate::{Positioning, py, words};
 
@@ -28,6 +29,8 @@ pub enum LineProblem {
     TooLong { written: usize },
     /// An arc that cannot be rewritten as I and J with absolute X and Y.
     Arc(ArcProblem),
+    /// G38.3, G38.4 or G38.5 (any G38 but G38.2): the firmware acks it without moving or zeroing Z.
+    UnsupportedProbe,
 }
 
 impl LineProblem {
@@ -36,6 +39,7 @@ impl LineProblem {
             LineProblem::UnclosedComment => "Unclosed Comment",
             LineProblem::TooLong { .. } => "Too Long",
             LineProblem::Arc(problem) => problem.title(),
+            LineProblem::UnsupportedProbe => "Unsupported Probe",
         }
     }
 
@@ -47,6 +51,10 @@ impl LineProblem {
                 format!("is {written} characters; the controller accepts at most {BUFFER_SIZE}.")
             }
             LineProblem::Arc(problem) => problem.reason().to_string(),
+            LineProblem::UnsupportedProbe => "is a G38 probe other than G38.2 (such as G38.3, G38.4 or G38.5), which \
+                                             the controller's firmware does not run: it moves nothing and does not \
+                                             set Z."
+                .to_string(),
         }
     }
 
@@ -59,6 +67,10 @@ impl LineProblem {
                  and load it again."
             }
             LineProblem::Arc(problem) => problem.advice(),
+            LineProblem::UnsupportedProbe => {
+                "Resume stops here again: stop the job, change the probe to G38.2 (or remove it) and load the file \
+                 again."
+            }
         };
         (format!("Line {}", self.title()), format!("Line {} {} {advice}", index + 1, self.reason()))
     }
@@ -72,6 +84,8 @@ pub fn problem_with(line: &str) -> Option<LineProblem> {
         Some(LineProblem::UnclosedComment)
     } else if written > BUFFER_SIZE {
         Some(LineProblem::TooLong { written })
+    } else if probe_the_firmware_ignores(line) {
+        Some(LineProblem::UnsupportedProbe)
     } else {
         None
     }
@@ -100,6 +114,17 @@ mod tests {
         assert_eq!(sanitise("g20 (inch) ; Mm"), "G20  ");
         assert_eq!(sanitise("$rst=$"), "$RST=$");
         assert_eq!(sanitise("g0 xü1").len(), "g0 xü1".len());
+    }
+
+    #[test]
+    fn a_probe_the_firmware_ignores_is_refused() {
+        let problem = problem_with("G38.3 Z-10 ");
+        assert_eq!(problem, Some(LineProblem::UnsupportedProbe));
+        let (title, text) = problem.unwrap().alert(4);
+        assert_eq!(title, "Line Unsupported Probe");
+        assert!(text.starts_with("Line 5 is a G38 probe other than G38.2"), "{text}");
+        assert!(text.ends_with("change the probe to G38.2 (or remove it) and load the file again."), "{text}");
+        assert_eq!(problem_with("G38.2 Z-10 "), None);
     }
 
     #[test]

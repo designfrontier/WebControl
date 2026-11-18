@@ -71,6 +71,14 @@ describe("ActionsPanel", () => {
     expect(socket.actions()).toEqual([[command, "", ""]]);
   });
 
+  it("names the files clearing the logs empties and deletes", async () => {
+    const { user } = renderActions();
+    await user.click(screen.getByRole("button", { name: "Clear log files" }));
+    expect(dialog()).toHaveTextContent(
+      "This empties webcontrol-rs.log and deletes webcontrol-rs.log.1. Download a diagnostics file first if you need them.",
+    );
+  });
+
   it("cancelling sends nothing and leaves the page usable, unlike the classic stuck backdrop", async () => {
     const { user, socket } = renderActions();
     const trigger = screen.getByRole("button", { name: "Upgrade stock firmware" });

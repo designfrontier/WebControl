@@ -6,7 +6,7 @@ use std::sync::LazyLock;
 use regex::Regex;
 use wc_protocol::main::Units;
 
-use crate::firmware_gcode::{changes_tool, tool_named_by};
+use crate::firmware_gcode::{changes_tool, firmware_probes, probe_the_firmware_ignores, tool_named_by};
 use crate::{GcodeError, Positioning, py, words};
 
 /// A restart lowers the bit at this feed when the file has not set a Z feed.
@@ -182,10 +182,10 @@ impl StateParser {
             self.moved(1, relative);
         }
         let state = &mut self.state;
-        if has(38.2) {
+        if firmware_probes(line) {
             // A touching probe zeroes Z; a miss holds the job at the probe line.
             state.z = Some(0.0);
-        } else if line.contains('Z') {
+        } else if line.contains('Z') && !probe_the_firmware_ignores(line) {
             let z = word(line, 'Z')?;
             state.z = if relative { state.z.map(|current| current + z) } else { Some(z) };
         }
@@ -440,6 +440,14 @@ mod tests {
         cases.iter().for_each(|lines| {
             let queued = restart(lines, lines.len() - 1);
             assert!(queued.iter().any(|line| line.starts_with("G1 Z0.0 ")), "{queued:?}");
+        });
+    }
+
+    #[test]
+    fn a_probe_the_firmware_ignores_leaves_z_where_it_was() {
+        ["G38.3 Z-10", "G038.2 Z-10"].iter().for_each(|probe| {
+            let queued = restart(&["G90", "G0 Z5", probe, "G0 X1"], 3);
+            assert!(queued.iter().any(|line| line.starts_with("G1 Z5.0 ")), "{probe}: {queued:?}");
         });
     }
 

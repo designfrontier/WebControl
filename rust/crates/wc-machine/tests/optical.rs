@@ -446,8 +446,14 @@ fn a_scan_needs_the_setting_a_connected_idle_machine_and_squares_on_the_bed() {
     assert_eq!(world.scan(&[]), (400, json!({"error": "The extents hold no squares."})));
     let mut narrow = World::on(rig_with(&[("Maslow Settings", "bedWidth", json!(1000.0))]));
     assert_eq!(narrow.scan(&[(7, 0)]).1["error"], "Square (7, 0) is outside the work area.");
-    let mut unsafe_height = World::on(rig_with(&[("Maslow Settings", "zAxisSafeHeight", json!("high"))]));
-    assert_eq!(unsafe_height.scan(&[(0, 0)]), (409, json!({"error": optical::NO_SAFE_HEIGHT})));
+    ["high", "0", "-1"].into_iter().for_each(|height| {
+        let mut unsafe_height = World::on(rig_with(&[("Maslow Settings", "zAxisSafeHeight", json!(height))]));
+        let refused = format!(
+            "Set the Z-axis safe height (Maslow Settings, zAxisSafeHeight) to a number above 0 before scanning, so \
+             the bit rises before it moves. It holds \"{height}\"."
+        );
+        assert_eq!(unsafe_height.scan(&[(0, 0)]), (409, json!({"error": refused})));
+    });
     let mut disconnected = World::new();
     disconnected.rig.send(Event::PortClosed);
     assert_eq!(disconnected.scan(&[(0, 0)]), (409, json!({"error": optical::NOT_CONNECTED})));

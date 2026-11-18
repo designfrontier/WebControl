@@ -118,17 +118,27 @@ describe("Viewer loading", () => {
     expect(screen.queryByText("Loading preview…")).not.toBeInTheDocument();
     expect(screen.getByText("2 cut and 1 rapid moves")).toBeInTheDocument();
     socket.serverRaw({ command: "gcodeUpdateCompressed", data: "", dataFormat: "base64" });
-    expect(screen.getByText("No gcode loaded")).toBeInTheDocument();
+    expect(screen.getByText("No file loaded")).toBeInTheDocument();
   });
 
   it("names the loaded file in the footer and follows its pushes", async () => {
     const { socket } = await loaded();
     const footer = within(screen.getByRole("figure"));
-    expect(footer.getByText("File:").parentElement).toHaveTextContent("File: No file loaded");
+    expect(footer.queryByText("File:")).not.toBeInTheDocument();
     socket.serverMessage("gcodeFile", { file: "jobs/leg.nc" });
     expect(footer.getByText("File:").parentElement).toHaveTextContent("File: leg.nc in jobs");
+    socket.serverRaw({ command: "gcodeUpdateCompressed", data: "", dataFormat: "base64" });
+    expect(footer.getByText("No gcode loaded")).toBeInTheDocument();
     socket.serverMessage("gcodeFile", { file: null });
-    expect(footer.getByText("File:").parentElement).toHaveTextContent("File: No file loaded");
+    expect(footer.queryByText("File:")).not.toBeInTheDocument();
+  });
+
+  it("says just once that no file is loaded", async () => {
+    const { socket } = await loaded();
+    socket.serverRaw({ command: "gcodeUpdateCompressed", data: "", dataFormat: "base64" });
+    const footer = within(screen.getByRole("figure"));
+    expect(footer.getAllByText(/no (file|gcode) loaded/i).map((text) => text.textContent)).toEqual(["No file loaded"]);
+    expect(footer.queryByText("File:")).not.toBeInTheDocument();
   });
 
   it("lets a long file name wrap only after its dots, dashes and underscores", async () => {

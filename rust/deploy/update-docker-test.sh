@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Runs webcontrol-update for real in an arm64 Debian container with systemd, against release.sh's tarballs
-# served by a fake GitHub API: install, update, update over a backup, --status, --rollback, and a failed update.
+# Runs webcontrol-update for real in an arm64 Debian container with systemd, against release.sh's tarballs served by
+# a fake GitHub API: install, update, update over a backup, --status, no downgrade, --rollback, and a failed update.
 # shellcheck disable=SC2016 # Single-quoted commands expand inside the container.
 set -euo pipefail
 
@@ -14,7 +14,6 @@ EOF
 
 here="$(cd "$(dirname "$0")" && pwd)"
 rust="$(dirname "$here")"
-repo="$(dirname "$rust")"
 distro="${DEBIAN:-trixie}"
 name="webcontrol-update-test-$distro"
 work="$(mktemp -d)"
@@ -68,7 +67,7 @@ package "$v1" "$b1"
 package "$v2" "$b2"
 
 say "Starting Debian $distro arm64 with systemd"
-docker build -q --platform linux/arm64 --build-arg "DEBIAN=$distro" -t "$name" "$repo/tools/test-install" > /dev/null
+docker build -q --platform linux/arm64 --build-arg "DEBIAN=$distro" -t "$name" "$here/pi-image" > /dev/null
 docker rm -f "$name" > /dev/null 2>&1 || true
 docker run -d --platform linux/arm64 --name "$name" --privileged --cgroupns=host \
   -v /sys/fs/cgroup:/sys/fs/cgroup:rw --tmpfs /run --tmpfs /run/lock "$name" > /dev/null
@@ -117,6 +116,19 @@ say "--status"
 updater --status | tee "$work/out"
 grep -q "Backup: *webcontrol-rs $v1" "$work/out" || fail "--status does not show the backup"
 grep -q "Latest release: *v$v2" "$work/out" || fail "--status does not show the latest release"
+
+say "A latest release older than $v2: nothing changes, and sudo is not asked for"
+publish "$v1"
+before="$(manifest)"
+as_pi "sudo -K && WC_GITHUB_API=http://localhost:8080 webcontrol-update < /dev/null" | tee "$work/out" ||
+  fail "refusing a downgrade failed"
+grep -q "Installed $v2 is newer than the latest published release $v1; nothing to do" "$work/out" ||
+  fail "an older latest release was not refused"
+expect "the installed version" "$(installed)" "$v2"
+expect "the backup" "$(manifest)" "$before"
+updater --status | tee "$work/out"
+grep -q "Update: *installed $v2 is newer than latest published $v1" "$work/out" || fail "--status does not say $v2 is newer"
+publish "$v2"
 
 say "--rollback to $v1"
 updater --rollback | tee "$work/out" || fail "--rollback failed"
