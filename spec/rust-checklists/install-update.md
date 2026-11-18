@@ -1,82 +1,89 @@
-# M0 hardware checklist: the Rust skeleton on the microSD card
+# Install and update
 
-What M0 must show on the real Pi: `wc-switch rust` serves the same UI over plain WebSockets with the controller shown
-as not connected, and `wc-switch python` brings the Python service back. M0 never opens the serial port, so nothing
-here can move the machine. Still, leave the router switched off.
+What this must show on the real Pi: a release tarball installs and starts, `webcontrol-rs` reports the release's
+version everywhere, it comes back after restarts and reboots, and `webcontrol-update` updates, refuses while the
+machine is busy, and rolls back. Nothing here moves the machine. Leave the router switched off anyway.
 
-You need: the Mac with this branch checked out, the Pi booted from the new microSD card (`pi@maslow.local`, see
-`spec/INSTALL-PI.md`), the Python service installed there and working, and a browser.
+You need: the Pi (`pi@maslow.local`) with the previous release installed, the controller on USB, the draft release's
+`webcontrol-rs-<version>-aarch64.tar.gz` and its `.sha256`, and a browser. Read the README's safety and "Before a
+run" first. Below, `<version>` is the new release (for example `0.3.0`) and `<previous>` the release before it.
 
-Tick each box; if one fails, note what you saw and run `wc-switch python`.
+## 1. Install the draft from its tarball
 
-## 1. Before you start
+- [ ] On the Pi, before installing: `webcontrol-update --status` prints `Installed: webcontrol-rs <previous>`,
+      `Service: active` and `Latest release: v<previous>`. Note the backup line: ______.
+- [ ] Copy the tarball and its `.sha256` to the Pi (`scp webcontrol-rs-<version>-aarch64.tar.gz* pi@maslow.local:`).
+      On the Pi, `sha256sum -c webcontrol-rs-<version>-aarch64.tar.gz.sha256` prints `OK`.
+- [ ] `tar xzf webcontrol-rs-<version>-aarch64.tar.gz`, then
+      `bash webcontrol-rs-<version>-aarch64/install-pi.sh webcontrol-rs-<version>-aarch64` prints
+      `Installed webcontrol-rs <version> (<commit>, contract <n>) for pi.` and, since the service was running,
+      "webcontrol-rs is still running the previous binary, so a job carries on."
+- [ ] `sudo systemctl restart webcontrol-rs`. `/opt/webcontrol-rs/webcontrol-rs --version` prints the same line as
+      the install, and `<commit>` is the tag's commit (`git rev-parse --short v<version>` on the Mac).
+- [ ] `systemctl status webcontrol-rs` shows it active, running as `pi`. `journalctl -u webcontrol-rs -n 20` shows
+      `webcontrol-rs listening on 0.0.0.0:5000` and `settings loaded` with `source=File`.
+- [ ] `sudo visudo -c` says `parsed OK`, and `sudo cat /etc/sudoers.d/webcontrol-rs` allows only
+      `/usr/bin/systemctl poweroff`.
+- [ ] `avrdude -? 2>&1 | head -1` prints avrdude's usage (the firmware upgrade needs it).
+- [ ] Open `http://maslow.local:5000/`. The version chip in the status bar reads `WebControl <version> · <commit>`,
+      and Help ▸ About shows `v<version>`.
+- [ ] `curl -s http://maslow.local:5000/api/state | jq '{backend, version}'` shows `"rust"` and `"<version>"`.
 
-- [ ] `ssh pi@maslow.local systemctl is-active webcontrol` prints `active`, and
-      `http://maslow.local:5000/` shows the UI with "Controller:" connected or not, as usual.
-- [ ] Note the time, so the journal can be read from here: `date`.
-- [ ] Back up the settings (never edit the original): `scp -r pi@maslow.local:.WebControl ~/webcontrol-backup-m0/`.
+## 2. Restarts, reboots and power-off
 
-## 2. Build and install (from the Mac, repo root)
+- [ ] `sudo systemctl restart webcontrol-rs` with the page open: the status bar shows "Server: not connected", then
+      "Server: connected" again within a few seconds, without reloading. The controller reconnects too.
+- [ ] `sudo reboot`: once the Pi is back, `systemctl is-enabled webcontrol-rs` prints `enabled`, the page reconnects,
+      and the controller shows its firmware again.
+- [ ] Leave the page open for a minute: it stays connected (the server pings every 25 s).
+- [ ] Actions ▸ Turn off Raspberry Pi, and confirm: the Pi powers off (its green LED stops). Power it back on:
+      WebControl starts by itself and the page reconnects.
 
-- [ ] `pip install ziglang` once if `rust/deploy.sh build` says zig is missing.
-- [ ] `rust/deploy.sh build` ends with `built .../webcontrol-rs`.
-- [ ] `rust/deploy.sh install` prints `Installed webcontrol-rs 0.1.0 (<commit>, contract 3) for pi.` and, with
-      Python's `webcontrol.service` running, "webcontrol.service, an older WebControl, is running and keeps port 5000".
-- [ ] Python still runs: `ssh pi@maslow.local systemctl is-active webcontrol webcontrol-rs` prints `active` then
-      `inactive`.
-- [ ] `ssh pi@maslow.local /opt/webcontrol-rs/webcontrol-rs --version` prints the same commit as
-      `git rev-parse --short HEAD`.
+## 3. `webcontrol-update` on the draft: update to the previous release and roll back
 
-## 3. Switch to Rust (on the Pi: `ssh pi@maslow.local`)
+A draft is invisible to `webcontrol-update`, so this checks its download, backup, health check and rollback against
+the previous published release. With the draft installed, plain `webcontrol-update` would install the latest
+published release, which is the older one; use `--version` so the downgrade is deliberate.
 
-- [ ] `wc-switch status` shows `webcontrol active, enabled` and `webcontrol-rs inactive, disabled`, answering
-      `python`.
-- [ ] `wc-switch rust` prints "WebControl is now the rust backend at http://localhost:5000 (and starts on boot)."
-- [ ] `wc-switch status` shows `webcontrol inactive, disabled` and `webcontrol-rs active, enabled`, answering `rust`.
-- [ ] `systemctl status webcontrol-rs` shows it running as `pi`; `journalctl -u webcontrol-rs -n 20` shows
-      `listening on 0.0.0.0:5000` and `settings loaded` with `source=File`.
+- [ ] The machine is idle: no file running or paused, no tool change waiting.
+- [ ] `webcontrol-update --version v<previous>` asks for the `sudo` password once, then prints
+      `Updating webcontrol-rs <version> to <previous> ...`, `Checksum OK.`,
+      `Backed up webcontrol-rs <version> to /opt/webcontrol-rs/backup.`, `Restarting webcontrol-rs.`,
+      `webcontrol-rs <previous> is running and answering at http://localhost:5000, with the controller connected.`
+      and `Updated webcontrol-rs to <previous>.`
+- [ ] The open page reconnects by itself, and the version chip now reads `WebControl <previous>`.
+- [ ] `webcontrol-update --status` shows `Installed: webcontrol-rs <previous>` and
+      `Backup: webcontrol-rs <version>, made <date>`.
+- [ ] `webcontrol-update --rollback` prints `Rolling back webcontrol-rs <previous> to <version> ...`, one
+      `restored <path>` per file, and `ROLLED BACK: webcontrol-rs <version> is running again, with its settings.`
+- [ ] The version chip reads `WebControl <version>` again, and the settings are unchanged (Settings ▸ Maslow shows
+      your values, not the defaults).
 
-## 4. The UI on Rust (browser on the Mac or a phone)
+## 4. The updater refuses while the machine is busy
 
-- [ ] `http://maslow.local:5000/` shows the UI, and `http://maslow.local:5000/next/logs` redirects to `/logs`.
-- [ ] The status bar shows "Server: connected", "Controller: not connected", "Firmware: unknown". Hovering "Server"
-      shows "WebControl at <the Pi's address>:5000".
-- [ ] The top bar has no "Classic UI" link: Rust serves no classic UI.
-- [ ] No alert pops up on load. (The viewer may say it could not load the preview: `/api/viewer` arrives in M1.)
-- [ ] In the browser's developer tools, Network, filter `ws`: one connection to `/ws?ns=%2FMaslowCNC`, status 101, and
-      no `socket.io` requests at all.
-- [ ] Clicking a control that is enabled (for example a menu action such as Actions → Home) shows an alert
-      "Function not currently implemented.. Sorry.[...]", and nothing else happens.
-- [ ] Open the log viewer (`/logs`): a second WebSocket to `/ws?ns=%2FMaslowCNCLogs` opens and the page says
-      "Logging active". The panes stay empty, as nothing talks to the controller.
-- [ ] Help → Help opens the offline help on "WebControl", its screenshot loads, and "First Steps" opens.
-- [ ] Leave the page open for a minute: the WebSocket stays connected (the server pings every 25 s).
-- [ ] The units and step sizes shown match what Python showed (they come from the same `~/.WebControl/webcontrol.json`).
+- [ ] Open a file (any small one, router off, bit out, Z raised), press Play, then Pause. On the Pi,
+      `webcontrol-update --version v<previous>` stops at once with
+      `webcontrol-update: Not now: a job is running or paused. Finish or stop it, then run webcontrol-update again.`
+      Nothing is downloaded and the job stays paused.
+- [ ] `webcontrol-update --rollback` refuses the same way. `webcontrol-update --status` still works.
+- [ ] Press Stop. Both commands would now run; do not run them.
 
-## 5. Restarts and reconnects
+## 5. After publishing: update the way an owner does
 
-- [ ] `sudo systemctl restart webcontrol-rs`: the page shows "Server: not connected", then "connected" again within a
-      few seconds, without reloading the page.
-- [ ] `sudo reboot`: after the Pi is back, `wc-switch status` still answers `rust` (enabled is what boots), and the
-      page reconnects.
-- [ ] Rust did not touch the settings: `ls -l ~/.WebControl` shows no new files, and `webcontrol.json` has the same
-      modification time as before the switch.
+Run this once the draft is published, on the Pi or a spare card with the previous release installed.
 
-## 6. Back to Python, with the page left open
+- [ ] `webcontrol-update --status` shows `Latest release: v<version>`.
+- [ ] `webcontrol-update` (no flags) updates from `<previous>` to `<version>` with the lines of section 3, and the
+      version chip follows.
+- [ ] `webcontrol-update` again prints
+      `webcontrol-rs <version> is installed, the latest published release of designfrontier/WebControl. Nothing to do`
+      and changes nothing.
+- [ ] `webcontrol-update --rollback` puts `<previous>` back, and `webcontrol-update` brings `<version>` back.
 
-- [ ] `wc-switch python` prints "WebControl is now the python backend ...".
-- [ ] The page that was open on Rust reloads by itself within about 20 s and then shows the controller and firmware as
-      Python reports them, over socket.io (developer tools: `socket.io` requests, no `/ws`).
-- [ ] `wc-switch status` shows `webcontrol active, enabled` and `webcontrol-rs inactive, disabled`.
-- [ ] Both cannot run at once: `sudo systemctl start webcontrol-rs` stops `webcontrol`
-      (`systemctl is-active webcontrol` prints `inactive`); then run `wc-switch python` again.
-- [ ] `sudo reboot`: Python comes back as the boot default, and a normal session works (connect, jog, read settings).
+## 6. From the Mac (development builds only)
 
-## 7. Deploy updates
-
-- [ ] `rust/deploy.sh push` from the Mac while Python is active: it prints "pushed ... restarted only if webcontrol-rs
-      was running", and `systemctl is-active webcontrol` is still `active`.
-- [ ] `rust/deploy.sh rollback` swaps back to the previous binary (`/opt/webcontrol-rs/webcontrol-rs --version`
-      changes).
-
-Report: the boxes that failed, what you saw, and `journalctl -u webcontrol-rs --since "<the time from step 1>"`.
+- [ ] `rust/deploy.sh push` while a job is paused prints "A job is running or paused on pi@maslow.local; stop it
+      first." and changes nothing. With the machine idle it copies the
+      binary, restarts the service, and the version chip shows the new commit.
+- [ ] `rust/deploy.sh rollback` puts the previous binary back (`/opt/webcontrol-rs/webcontrol-rs --version`
+      changes back). A tarball install afterwards replaces both.
