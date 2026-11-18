@@ -20,7 +20,7 @@ fn scale(from: Units, to: Units) -> f64 {
 
 /// A jog: G91, one rapid, G90, rounded to 4 places. `diagonal` keeps a diagonal jog's length at `distance`.
 pub fn jog(direction: &str, distance: f64, diagonal: bool) -> Option<Vec<String>> {
-    let diag = round4(if diagonal { (distance * distance / 2.0).sqrt() } else { distance });
+    let diag = round4(if diagonal { (distance * distance / 2.0).sqrt().copysign(distance) } else { distance });
     let distance = round4(distance);
     let (x, y) = match direction {
         "upLeft" => (Some(-diag), Some(diag)),

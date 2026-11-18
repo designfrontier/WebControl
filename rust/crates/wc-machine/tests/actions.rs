@@ -71,6 +71,16 @@ fn a_jog_is_rounded_to_four_places_like_z_jogs_and_move_to() {
 }
 
 #[test]
+fn a_negative_jog_reverses_diagonals_as_it_does_straight_moves() {
+    let mut rig = Rig::connected();
+    rig.act_with("move", json!("right"), json!("-10"));
+    assert_eq!(rig.run_to_quiet(), ["G91", "G00 X-10.0", "G90"]);
+    let mut diagonal = Rig::connected_with(settings(&[("WebControl Settings", "diagonalMove", json!(1))]));
+    diagonal.act_with("move", json!("upRight"), json!("-10"));
+    assert_eq!(diagonal.run_to_quiet(), ["G91", "G00 X-7.0711 Y-7.0711", "G90"]);
+}
+
+#[test]
 fn move_to_takes_inches_and_stays_on_the_bed() {
     let mut rig = Rig::connected();
     rig.act_with("moveTo", json!(10), json!("5"));

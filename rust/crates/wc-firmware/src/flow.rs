@@ -80,6 +80,11 @@ impl Accounting {
         self.unacked.iter().rev().map(|sent| sent.text.as_ref().map(|_| sent)).collect()
     }
 
+    /// The unacknowledged lines' bytes, `~` left out.
+    pub fn texts(&self) -> impl Iterator<Item = &str> {
+        self.unacked.iter().filter_map(|sent| sent.text.as_deref())
+    }
+
     pub fn space(&self) -> i64 {
         self.space
     }

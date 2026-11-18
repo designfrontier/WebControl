@@ -221,7 +221,7 @@ impl Machine {
 
     /// `POST /api/calibration/{kind}/accept`. Python took it mid-job or mid-probe; here it waits, as the action gates do.
     pub(crate) fn accept_calibration(&mut self, kind: Kind) -> Response {
-        if self.job.flow.in_job() {
+        if self.gcode_locked() {
             return Response::error(409, JOB_RUNNING);
         }
         if self.probing {
@@ -229,6 +229,9 @@ impl Machine {
         }
         if self.alarm_held() {
             return Response::error(409, crate::alarm::HELD);
+        }
+        if let Some(refusal) = self.restart_refusal() {
+            return Response::error(409, refusal);
         }
         if let Err(refused) = self.accept_result(kind) {
             return Response::error(409, &refused.message(NOTHING_TO_ACCEPT));
