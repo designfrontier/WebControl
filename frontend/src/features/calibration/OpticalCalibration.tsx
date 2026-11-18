@@ -44,6 +44,15 @@ const RUNNING: readonly Progress["state"][] = ["orienting", "moving", "settling"
 const TERMINAL: readonly Progress["state"][] = ["failed", "done", "stopped"];
 const MAX_TURN_DEG = 15;
 
+/** The status line once a scan ends, waits on a failed square or resumes after one. */
+const scanOutcome = ({ state, done, total }: Progress, previous?: Progress["state"]): Status | null => {
+  const count = `${done} of ${total} squares`;
+  if (state === "done") return { tone: "ok", message: `Scan done: ${count}.` };
+  if (state === "stopped") return { tone: "info", message: `Scan stopped after ${count}.` };
+  if (state === "failed") return { tone: "error", message: `Scan waiting on a failed square after ${count}.` };
+  return previous === "failed" ? { tone: "info", message: `Scan resumed after ${count}.` } : null;
+};
+
 const firmwareNote = (version: number | null) => {
   if (version === null) return "No controller has reported its firmware yet.";
   if (version >= 50 && version < 100) return `The controller reports holey firmware ${version}, which uses all four.`;
@@ -108,6 +117,8 @@ const Workbench = ({ initial }: { initial: OpticalState }) => {
 
   useServerMessage("opticalScanProgress", (next) => {
     if (next.done !== progress?.done || TERMINAL.includes(next.state)) void refresh();
+    const outcome = next.state === progress?.state ? null : scanOutcome(next, progress?.state);
+    if (outcome) setStatus(outcome);
     setProgress(next);
   });
   useServerMessage("opticalOrientation", setOrientation);
@@ -229,7 +240,14 @@ const Workbench = ({ initial }: { initial: OpticalState }) => {
           {STATE_TEXT[state]}
           {progress?.cell && `: ${cellName(progress.cell)}, attempt ${progress.attempt}`}
         </p>
-        {progress && <progress aria-label="Scan progress" value={progress.done} max={Math.max(progress.total, 1)} />}
+        {progress && (
+          <progress
+            className="scan-progress"
+            aria-label="Scan progress"
+            value={progress.done}
+            max={Math.max(progress.total, 1)}
+          />
+        )}
         {state === "failed" && (
           <div className="optical-failure" role="alert">
             <p>

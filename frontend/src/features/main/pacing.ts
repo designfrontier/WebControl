@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ApiError, getJson, sendJson } from "../../api/http";
 import type { Fetch } from "../../api/http";
 import { useFetch, useMachine, useServerMessage } from "../../app/context";
@@ -70,13 +70,20 @@ export const usePacingStats = () => {
   const fetch = useFetch();
   const socket = useMachine((s) => s.socket);
   const [stats, setStats] = useState<PacingStats | null>(null);
-  useServerMessage("pacingStats", setStats);
+  const updates = useRef(0);
+  const update = (next: PacingStats) => {
+    updates.current += 1;
+    setStats(next);
+  };
+  useServerMessage("pacingStats", update);
   useEffect(() => {
     if (socket !== "connected") return;
     let live = true;
+    const issued = updates.current;
     getJson(fetch, "/run/pacing", pacingStatsSchema).then(
       (loaded) => {
-        if (live) setStats(loaded);
+        // A push or save since the request is newer than this answer.
+        if (live && updates.current === issued) setStats(loaded);
       },
       // The next push brings the same numbers.
       () => {},
@@ -85,5 +92,5 @@ export const usePacingStats = () => {
       live = false;
     };
   }, [socket, fetch]);
-  return [stats, setStats] as const;
+  return [stats, update] as const;
 };

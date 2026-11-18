@@ -271,6 +271,30 @@ describe("optical scan", () => {
     expect(bodyOf(fetch, `POST ${OPTICAL}/scan`)).toEqual({ settings: opticalSettings() });
   });
 
+  it("replaces Scan started with how the scan ended", async () => {
+    const { user, ready, socket } = setup({ routes: { [`POST ${OPTICAL}/scan`]: { total: 465 } } });
+    await ready;
+    await user.click(button("Start scan"));
+    await waitFor(() => expect(status()).toHaveTextContent("Scan started: 465 squares."));
+    socket.serverMessage("opticalScanProgress", progress({ state: "moving", done: 3 }));
+    expect(status()).toHaveTextContent("Scan started: 465 squares.");
+
+    socket.serverMessage("opticalScanProgress", progress({ state: "failed", done: 3 }));
+    expect(status()).toHaveTextContent("Scan waiting on a failed square after 3 of 465 squares.");
+    expect(status()).toHaveAttribute("data-tone", "error");
+    socket.serverMessage("opticalScanProgress", progress({ state: "measuring", done: 3 }));
+    expect(status()).toHaveTextContent("Scan resumed after 3 of 465 squares.");
+    socket.serverMessage("opticalScanProgress", progress({ state: "stopped", done: 4 }));
+    expect(status()).toHaveTextContent("Scan stopped after 4 of 465 squares.");
+
+    await user.click(button("Start scan"));
+    await waitFor(() => expect(status()).toHaveTextContent("Scan started: 465 squares."));
+    socket.serverMessage("opticalScanProgress", progress({ state: "done", cell: null, done: 465 }));
+    expect(status()).toHaveTextContent("Scan done: 465 of 465 squares.");
+    expect(status()).toHaveAttribute("data-tone", "ok");
+    expect(screen.getByRole("progressbar", { name: "Scan progress" })).toHaveClass("scan-progress");
+  });
+
   it("shows why a scan could not start", async () => {
     const { user, ready } = setup({
       routes: { [`POST ${OPTICAL}/scan`]: () => jsonResponse({ error: "A job is running." }, 409) },
