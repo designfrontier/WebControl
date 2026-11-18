@@ -41,6 +41,28 @@ fn saving_keeps_the_previous_file_as_a_backup() {
 }
 
 #[test]
+fn the_settings_file_never_goes_missing_during_a_save() {
+    let home = tempfile::tempdir().unwrap();
+    let paths = Paths::new(home.path());
+    let mut settings = Settings::open(&paths).unwrap();
+    let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let watcher = {
+        let (file, done) = (paths.settings_file(), done.clone());
+        std::thread::spawn(move || {
+            let mut missing = 0;
+            while !done.load(std::sync::atomic::Ordering::Relaxed) {
+                missing += usize::from(!file.exists());
+            }
+            missing
+        })
+    };
+    (0..300).for_each(|n| saved_with_port(&paths, &mut settings, &format!("/dev/ttyACM{n}")));
+    done.store(true, std::sync::atomic::Ordering::Relaxed);
+    assert_eq!(watcher.join().unwrap(), 0);
+    assert_eq!(port_of(&read(&paths.settings_backup())), "/dev/ttyACM298");
+}
+
+#[test]
 fn a_failed_write_leaves_the_settings_file_intact() {
     let home = tempfile::tempdir().unwrap();
     let paths = Paths::new(home.path());

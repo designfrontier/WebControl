@@ -535,6 +535,36 @@ fn accept_refuses_a_fit_made_against_other_geometry() {
 }
 
 #[test]
+fn a_fit_of_squares_scanned_under_other_geometry_is_refused() {
+    let mut world = World::new();
+    world.scan(&[(0, 0), (1, 0)]);
+    world.run(3000);
+    assert_eq!(world.edit(Request::OpticalFitted(Box::new(fit()))).0, 200);
+    assert_eq!(world.edit(Request::OpticalAccept).0, 200);
+    world.run(500);
+    let again = GeometryFit { current: fit().fitted, fitted: fit().fitted, ..fit() };
+    let stale = (409, json!({"error": optical::SCANNED_UNDER_OTHER_GEOMETRY}));
+    assert_eq!(world.edit(Request::OpticalFitted(Box::new(again))), stale, "a second fit of the same scan");
+    assert_eq!(world.edit(Request::OpticalAccept), (409, json!({"error": optical::NOTHING_TO_ACCEPT})));
+    world.scan(&[(2, 0)]);
+    world.run(3000);
+    assert_eq!(world.view().grid.measured().len(), 1, "one square under new geometry starts a new grid");
+    let again = GeometryFit { current: fit().fitted, fitted: fit().fitted, ..fit() };
+    assert_eq!(world.edit(Request::OpticalFitted(Box::new(again))).0, 200);
+}
+
+#[test]
+fn a_fit_after_any_model_setting_changed_is_refused() {
+    let mut world = World::new();
+    world.scan(&[(0, 0), (1, 0)]);
+    world.run(3000);
+    let sag = json!({"values": {"chainSagCorrection": "31.5"}});
+    assert_eq!(world.edit(Request::UpdateSettings { section: "advanced".into(), body: sag }).0, 200);
+    let stale = (409, json!({"error": optical::SCANNED_UNDER_OTHER_GEOMETRY}));
+    assert_eq!(world.edit(Request::OpticalFitted(Box::new(fit()))), stale);
+}
+
+#[test]
 fn the_fit_needs_measured_squares() {
     let settings = Settings::defaults();
     assert_eq!(optical::fit(&settings, &[]), Err((409, optical::NOTHING_MEASURED.into())));

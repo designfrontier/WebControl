@@ -14,6 +14,10 @@ pub const MEASUREMENTS: usize = trf::M;
 /// The holes each of M1 to M11 spans, numbered 1 to 6 as on the pattern. M12 runs from hole 2 to the top edge.
 const MEASUREMENT_MAP: [(usize, usize); 11] =
     [(1, 2), (2, 3), (4, 5), (5, 6), (1, 4), (2, 5), (3, 6), (2, 4), (1, 5), (3, 5), (2, 6)];
+/// Bounds on a believable fit, five or more times what the noisy fixtures and the owner's calibration reach.
+const MAX_TOTAL_ERROR_MM: f64 = 10.0;
+const MAX_CHAIN_TOLERANCE: f64 = 2.0;
+const MAX_GEOMETRY_CHANGE_MM: f64 = 300.0;
 /// Counter-clockwise from the top middle hole.
 const CUT_ORDER: [usize; 6] = [1, 0, 3, 4, 5, 2];
 
@@ -147,13 +151,29 @@ pub fn calibrate_measurements(
     if !deltas.iter().all(|d| d.is_finite()) {
         return Err(CalibrationError::NoSolution);
     }
-    Ok(HoleyResult {
+    let result = HoleyResult {
         distance_between_motors: python::round(deltas[0] + base.d, 5),
         motor_y_offset: python::round(deltas[1] + base.motor_offset_y, 5),
         left_chain_tolerance: python::round(deltas[2] + base.left_chain_tolerance, 5),
         right_chain_tolerance: python::round(deltas[3] + base.right_chain_tolerance, 5),
         total_error: fitted.f.norm(),
-    })
+    };
+    implausibility(&result, deltas[0], deltas[1])
+        .map_or(Ok(result), |reason| Err(CalibrationError::Implausible(reason)))
+}
+
+fn implausibility(result: &HoleyResult, d_change: f64, y_change: f64) -> Option<String> {
+    let tolerance = result.left_chain_tolerance.abs().max(result.right_chain_tolerance.abs());
+    match () {
+        _ if result.total_error > MAX_TOTAL_ERROR_MM => {
+            Some(format!("leaves {:.1} mm of the measurements unexplained", result.total_error))
+        }
+        _ if tolerance > MAX_CHAIN_TOLERANCE => Some(format!("gives a chain tolerance of {tolerance:.2}%")),
+        _ if d_change.abs().max(y_change.abs()) > MAX_GEOMETRY_CHANGE_MM => {
+            Some(format!("moves the motors {:.0} mm", d_change.abs().max(y_change.abs())))
+        }
+        _ => None,
+    }
 }
 
 impl HoleyResult {

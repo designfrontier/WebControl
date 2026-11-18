@@ -153,7 +153,7 @@ fn capture(shared: &Shared, open: impl Fn() -> wc_optical::Result<Box<dyn Camera
 }
 
 fn run(shared: &Shared, camera: &mut dyn Camera, fps: f64) -> Option<OpticalError> {
-    let period = Duration::from_secs_f64(1.0 / fps);
+    let period = Duration::try_from_secs_f64(1.0 / fps).unwrap_or(Duration::from_secs(10));
     let (mut sequence, mut misses) = (0, 0);
     while shared.users().count > 0 {
         let at = Instant::now();

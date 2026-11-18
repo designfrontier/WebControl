@@ -33,6 +33,8 @@ pub enum CalibrationError {
     OpticalGrid(String),
     /// The optical geometry fit converged but fails its quality checks.
     OpticalFit(String),
+    /// The holey fit converged on a machine no measurement of a real one gives.
+    Implausible(String),
 }
 
 impl fmt::Display for CalibrationError {
@@ -51,6 +53,12 @@ impl fmt::Display for CalibrationError {
                 write!(f, "The calibration result is not a finite number, so it was not saved. Calculate it again.")
             }
             CalibrationError::OpticalGrid(reason) | CalibrationError::OpticalFit(reason) => write!(f, "{reason}"),
+            CalibrationError::Implausible(reason) => {
+                write!(
+                    f,
+                    "The fit {reason}, which no real machine gives. Check the twelve measurements and measure again."
+                )
+            }
             CalibrationError::NotCalibrated => write!(
                 f,
                 "The machine was not able to be calibrated. Please ensure the work area dimensions are correct and try again."

@@ -6,9 +6,11 @@ use std::time::Duration;
 
 use serde_json::Value;
 use wc_calibration::CalibrationError;
+use wc_calibration::MachineSettings;
 use wc_calibration::holey::HoleyResult;
 use wc_config::{Settings, python_float_str};
 use wc_optical::grid::{self, ErrorGrid};
+use wc_protocol::calibration::HoleyParameters;
 use wc_protocol::optical::{
     Cell, GeometryFit, Measurement, OpticalSettings, Orientation, PixelPoint, ScanImage, ScanProgress, ScanStarted,
     ScanState, Session, SettingsSaved,
@@ -29,6 +31,7 @@ pub const RUNNING: &str = "Optical calibration is running; press Stop first";
 pub const NOTHING_MEASURED: &str = "Nothing has been measured yet. Scan the target first.";
 pub const NOTHING_TO_ACCEPT: &str = "There is no fitted geometry to accept. Scan the target and press Fit first.";
 pub const GEOMETRY_CHANGED: &str = "The geometry changed after the fit. Press Fit again before accepting.";
+pub const SCANNED_UNDER_OTHER_GEOMETRY: &str = "The geometry changed since this scan. Scan again before fitting.";
 pub const JOB_RUNNING: &str = "Stop the job before running optical calibration.";
 pub const NOT_CONNECTED: &str = "The controller is not connected.";
 /// A measurement that is not a number would reach the controller as `G1 Xnan`.
@@ -198,6 +201,8 @@ pub(crate) struct Optical {
     state: Option<ScanState>,
     settings: Option<OpticalSettings>,
     grid: ErrorGrid,
+    /// Every setting the fit's model reads, as the grid was measured under them.
+    scanned_under: Option<MachineSettings>,
     orientation: Option<Orientation>,
     fit: Option<GeometryFit>,
     next_id: u64,
@@ -245,6 +250,17 @@ impl Optical {
             View { session, grid: self.grid.clone(), scan: self.scan.as_ref().map(|s| s.id), fit: self.fit.clone() };
         self.view = Arc::new(view);
     }
+}
+
+/// Within the fit's rounding to five decimals.
+fn same_geometry(a: &HoleyParameters, b: &HoleyParameters) -> bool {
+    let pairs = [
+        (a.motor_yoffset, b.motor_yoffset),
+        (a.distance_between_motors, b.distance_between_motors),
+        (a.left_chain_tolerance, b.left_chain_tolerance),
+        (a.right_chain_tolerance, b.right_chain_tolerance),
+    ];
+    pairs.iter().all(|(a, b)| (a - b).abs().partial_cmp(&1e-4) == Some(std::cmp::Ordering::Less))
 }
 
 fn hypot((x, y): (f64, f64)) -> f64 {
@@ -305,10 +321,13 @@ impl Machine {
             return Response::error(400, &problem);
         }
         let restore_inches = self.units() == wc_protocol::main::Units::Inches;
+        let model = crate::calibration::machine_settings(&self.settings);
         let optical = &mut self.optical;
-        if cells.len() > 1 || optical.settings.is_none() {
+        let same = optical.scanned_under.is_some() && optical.scanned_under == model;
+        if cells.len() > 1 || optical.settings.is_none() || !same {
             optical.grid = ErrorGrid::new();
             optical.orientation = None;
+            optical.scanned_under = model;
         }
         optical.fit = None;
         optical.settings = Some(settings);
@@ -642,6 +661,10 @@ impl Machine {
         if let Some(refusal) = self.optical.holds().then_some(RUNNING) {
             return Response::error(409, refusal);
         }
+        let model = crate::calibration::machine_settings(&self.settings);
+        if self.optical.scanned_under.as_ref().is_some_and(|under| Some(under) != model.as_ref()) {
+            return Response::error(409, SCANNED_UNDER_OTHER_GEOMETRY);
+        }
         let body = serde_json::to_value(&fit).unwrap_or(Value::Null);
         self.optical.fit = Some(fit);
         Response { status: 200, body }
@@ -655,17 +678,7 @@ impl Machine {
         let Some(fit) = self.optical.fit.take() else {
             return Response::error(409, NOTHING_TO_ACCEPT);
         };
-        let now = crate::calibration::holey_parameters(&self.settings);
-        let (was, is) = (fit.current, now);
-        let pairs = [
-            (was.motor_yoffset, is.motor_yoffset),
-            (was.distance_between_motors, is.distance_between_motors),
-            (was.left_chain_tolerance, is.left_chain_tolerance),
-            (was.right_chain_tolerance, is.right_chain_tolerance),
-        ];
-        // The fit rounds to five decimals.
-        let close = |(was, is): &(f64, f64)| (was - is).abs().partial_cmp(&1e-4) == Some(std::cmp::Ordering::Less);
-        if !pairs.iter().all(close) {
+        if !same_geometry(&fit.current, &crate::calibration::holey_parameters(&self.settings)) {
             return Response::error(409, GEOMETRY_CHANGED);
         }
         let fitted = fit.fitted;

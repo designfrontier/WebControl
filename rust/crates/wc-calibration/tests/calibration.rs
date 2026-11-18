@@ -163,6 +163,19 @@ fn the_fit_refuses_when_the_kinematics_cannot_place_a_hole() {
 }
 
 #[test]
+fn a_fit_no_real_machine_could_give_is_refused() {
+    let refused = holey::calibrate_measurements(&settings(&USER), &[0.0; holey::MEASUREMENTS]).expect_err("refused");
+    assert!(matches!(refused, CalibrationError::Implausible(_)), "{refused:?}");
+    assert!(refused.to_string().ends_with("Check the twelve measurements and measure again."), "{refused}");
+    let mut typo = holey::ideal_lengths(&settings(&[]));
+    typo[8] += 100.0;
+    assert!(matches!(holey::calibrate_measurements(&settings(&[]), &typo), Err(CalibrationError::Implausible(_))));
+    let configured = settings(&USER);
+    let worn = holey::simulate_measurements(&configured, 3040.0, 410.0, 0.6, -0.6).expect("holes");
+    assert!(holey::calibrate_measurements(&configured, &worn).is_ok(), "a worn machine far from its settings");
+}
+
+#[test]
 fn the_fit_refuses_measurements_that_are_not_finite() {
     let mut measured = holey::ideal_lengths(&settings(&[]));
     measured[3] = f64::NAN;
