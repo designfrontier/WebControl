@@ -407,6 +407,17 @@ fn resume_inside_a_run_of_modal_arcs_writes_the_files_g3() {
 }
 
 #[test]
+fn play_mid_file_inside_a_run_of_modal_g90_1_arcs_writes_the_g2_and_converts_the_centre() {
+    let mut rig = Rig::connected();
+    job(&mut rig, &["G21", "G90", "G90.1", "G0 X10 Y10", "G1 Z-1 F100", "G2 X20 Y0 I10 J0", "X10 Y10 I10 J0"]);
+    rig.act_with("moveGcodeGoto", json!(6), json!(""));
+    rig.act("startRun");
+    let sent = rig.run_to_quiet();
+    assert!(sent.contains(&"G0 X20.0 Y0.0".to_string()), "{sent:?}");
+    assert_eq!(sent.last().unwrap(), "G2 X10 Y10 I-10.0000 J0.0000", "{sent:?}");
+}
+
+#[test]
 fn play_mid_file_in_a_g91_file_writes_the_arc_from_where_the_restart_put_the_sled() {
     let mut rig = Rig::connected();
     job(&mut rig, &["G21", "G0 X10 Y10", "G91", "G1 Z-1 F100", "G2 X10 Y-10 I0 J-10", "G1 X1"]);
