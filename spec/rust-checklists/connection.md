@@ -38,20 +38,20 @@ log viewer (Help ▸ Logs) open beside the control screen, and a browser.
 
 - [ ] Set the step to 10 mm. Each of the eight jog arrows moves the sled 10 mm that way, and the position readout
       follows. The log shows `G91`, `G00 X10.0` (or `Y`, or both, signed), `G90` for each (`jog_each_direction_mm`).
-- [ ] Z panel: Raise 5 mm and Lower 5 mm move Z (`G21`, `G91`, `G00 Z5.0`, `G90`). "Set Z Zero Here" sends `G10 Z0`
-      and the Z readout goes to 0 (`move_z_raise_lower_and_zero_mm`).
-- [ ] On a mm machine, switch the Z panel's units to inches and raise 0.25 in: Z moves 6.35 mm (`G00 Z6.35`) and the
-      main units do not change (`move_z_in_inches_on_a_mm_machine`). Switch it back.
+- [ ] Z-Axis (beside the jog pad): Raise 5 mm and Lower 5 mm move Z (`G21`, `G91`, `G00 Z5.0`, `G90`). "Set Z Zero Here"
+      sends `G10 Z0` and the Z readout goes to 0 (`move_z_raise_lower_and_zero_mm`).
+- [ ] On a mm machine, switch the Z-Axis dialog's units to inches and raise 0.25 in: Z moves 6.35 mm (`G00 Z6.35`) and
+      the main units do not change (`move_z_in_inches_on_a_mm_machine`). Switch it back.
 - [ ] Home: the log shows `G90`, `G00 Z<safe>`, `G00 X.. Y..`, `G00 Z0` (`home_at_safe_height_mm`). Z rises first,
       the sled travels, then Z lowers to 0.
 - [ ] Raise Z 10 mm above the safe height (Settings ▸ Maslow, Z-Axis Safe Travel Height in MM), then Home again: the
       first move is `G00 Z<that height>`, not the safe height. The bit never dips before the sled travels.
 - [ ] Actions ▸ Return to center: Z rises to the safe height (or stays higher), then the sled goes to `X0.0 Y0.0`
       (`return_to_center_inches`).
-- [ ] If a touch plate is set up: Touch Z sends `G90 G38.2 Z-10 ...` (`touch_z_mm`). While it probes, the Job readout
-      says Probing and the jog, Z and Home buttons are greyed out. Touch the plate to the bit: the controller prints
-      `z axis zeroed`, Z reads 0, and no `G10 Z0` follows. Probe again and let it run out: the alert "Touch Z Failed"
-      shows and Z is left alone (`touch_z_probe_fails_leaves_z_alone`).
+- [ ] If a touch plate is set up (enabled in Settings ▸ Advanced): Z-Axis ▸ Touch Plate sends `G90 G38.2 Z-10 ...`
+      (`touch_z_mm`). While it probes, the Job readout says Probing and the jog, Z and Home buttons are greyed out.
+      Touch the plate to the bit: the controller prints `z axis zeroed`, Z reads 0, and no `G10 Z0` follows. Probe again
+      and let it run out: the alert "Touch Z Failed" shows and Z is left alone (`touch_z_probe_fails_leaves_z_alone`).
 
 ## 3. Stop, and the alarm hold
 
@@ -59,7 +59,7 @@ log viewer (Help ▸ Logs) open beside the control screen, and a browser.
       shows `Sent: !` right after the press, while the jog was still running.
 - [ ] Straight after, jog left 10 mm: it goes out only once the controller has sent a status report (a fraction of a
       second), then moves normally.
-- [ ] Z panel: Lower 50 mm and press Stop mid-move: Z stops the same way.
+- [ ] Z-Axis: Lower 50 mm and press Stop Z mid-move: Z stops the same way.
 - [ ] Alarm hold: with the chains slack and the 12 V motor supply **off**, press Home. Within a second or two the
       alarm "Sled Not Keeping Up" shows. However long you wait, the log has no `Sent:` after the `ALARM:` line (no
       `G00 Z0`; `alarm_mid_home_holds_the_plunge_until_stop`).

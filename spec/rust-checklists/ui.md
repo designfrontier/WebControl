@@ -17,7 +17,8 @@ and an iPad if you have one. Read the README's safety and "Before a run" first.
       firmware chip, the version chip and the CPU chip. Hovering "Server" shows "WebControl at <the Pi's address>:5000".
 - [ ] The firmware chip reads "Holey 51.27" on 51.27, and "Holey 51.29" on 51.292 (the firmware reports only two
       decimals). Hovering it shows "Controller firmware".
-- [ ] The version chip reads `WebControl <version> · <commit>`, the same as `webcontrol-rs --version` on the Pi.
+- [ ] The version chip reads `WebControl <version> · <commit>`, the version and commit that
+      `/opt/webcontrol-rs/webcontrol-rs --version` prints on the Pi.
 - [ ] Unplug the controller's USB cable: "Controller: not connected", the alarm "Connection Failed or Invalid
       Firmware". Plug it back in: it reconnects by itself within 10 s, and the firmware chip shows the
       same version.
@@ -68,8 +69,9 @@ and an iPad if you have one. Read the README's safety and "Before a run" first.
 
 On the iPad use Safari, and check each box in landscape and in portrait.
 
-- [ ] Load a file with a tool change (for example `jobs.md`'s `aircut.nc`, router off, bit out, Z raised) and Play
-      it until it stops at the tool change. Leave it there for the boxes below.
+- [ ] Load a file with a tool change (for example `jobs.md`'s `aircut.nc`, router off, bit out, Z raised) and Play it,
+      press Resume at the M0, and let it run until it stops at the tool change (`T2 M6`). Leave it there for the boxes
+      below.
 - [ ] Landscape: the menus and the status bar share one header row. Portrait: the header takes two rows.
 - [ ] The page does not scroll in either direction. Play, Resume and Stop, the "File:" line, the line pacing control,
       the Job, Line and Complete readouts, the jog arrows and the Controller Messages are all in view at once.

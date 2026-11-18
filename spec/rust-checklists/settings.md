@@ -24,8 +24,8 @@ section 1 passed), the log viewer open, and a browser.
 - [ ] Reload the page: the new value is still there. On the Pi,
       `jq '."Maslow Settings"[] | select(.key == "motorSpacingX") | .value' ~/.WebControl/webcontrol.json` prints it,
       and `webcontrol.json.bak` beside it holds the previous version.
-- [ ] Type `abc` into Distance Between Motors and Save: the form says "Must be a number", and nothing is sent or
-      saved.
+- [ ] Type `abc` into Distance Between Motors and Save: the field says "Enter a number" (and "Fix the highlighted
+      settings."), and nothing is sent or saved.
 - [ ] Type the value with a decimal comma (for example `2978,4`): it is taken as `2978.4`. Type `1,500`: it is
       refused, since it reads as a thousands group. Put the value back to what you noted, and Save: one `Sent: $2=`.
 - [ ] Change Units on the control screen (mm ↔ inches): the log shows `Sent: G20` (or `G21`), the jog step and the
@@ -56,9 +56,10 @@ section 1 passed), the log viewer open, and a browser.
 
 - [ ] Actions ▸ Quick configure shows your kit (Ring or Custom, the chain side, spacing and offset). Save it
       unchanged: the log shows no `Sent: $` line for values that did not change.
-- [ ] Actions ▸ Set sprockets and chains and Actions ▸ Set Z-axis open and show the chain extend length.
+- [ ] Actions ▸ Set sprockets and chains opens, and its Extend buttons show the chain extend length ("Extend left
+      chain to <n> mm"). Actions ▸ Set Z-axis opens.
 - [ ] Actions ▸ PID tuning (advanced) shows the gains Kp, Ki and Kd for velocity and position. They match `$21` to
-      `$36` in the `$$` reply from section 3.
+      `$23` (position) and `$25` to `$27` (velocity) in the `$$` reply from section 3.
 - [ ] On 51.27: Actions ▸ Set Z-axis limits is greyed out with "Needs holey firmware 51.292 or later; the controller
       reports holey 51.27."
 - [ ] On 51.292: Actions ▸ Set Z-axis limits opens. Report Z limits sends `B20` and the controller answers with both
@@ -69,16 +70,15 @@ section 1 passed), the log viewer open, and a browser.
 
 - [ ] Actions ▸ Test motors and encoders, and confirm: the log shows `Sent: B04`, each motor turns both ways, and the
       controller's report appears in Controller Messages.
-- [ ] Set sprockets and chains: turn the left sprocket +5° and −5°. The log shows `G91`, `B09 L<distance>`, `G90`,
-      and the sprocket moves a little.
-- [ ] Automatic sprocket alignment: the log shows `B10 L`, the controller's `[Measure: ...]`, `B10 R`, its reply,
-      then `G91`, `B09 L...`, `B09 R...`, `G90`, and both sprockets end with a tooth at 12 o'clock.
-- [ ] Actions ▸ Fake servo (advanced): turn it on and off. The log shows `B99 ON` and `B99 OFF` and the controller's
-      reply to each, and the controller chip says "fake servo on" while it is on.
+- [ ] Set sprockets and chains: turn the left sprocket 1° clockwise and 1° counter-clockwise. The log shows
+      `G91`, `B09 L<distance>`, `G90`, and the sprocket moves a little.
+- [ ] Actions ▸ Fake servo (advanced): type `42` in Secret code to enable, press Enable fake servo, then Disable fake
+      servo. The log shows `B99 ON` and `B99 OFF` and the controller's reply to each, and the controller chip says "fake
+      servo on" while it is on.
 
 ## 6. Chains (only if you are re-hanging the chains anyway)
 
-- [ ] Extend the left chain: after the 5 s countdown the log shows `B02 L1 R0` then `B10 L`. When the measurement
+- [ ] Extend the left chain: after the 6 s countdown the log shows `B02 L1 R0` then `B10 L`. When the measurement
       comes back WebControl sends `!` and the chain stops. Press Stop yourself if it does not stop at the extend
       length.
 - [ ] Actions ▸ Reset chains, with the marked link on each top tooth: "I have reset both chains with the marked link

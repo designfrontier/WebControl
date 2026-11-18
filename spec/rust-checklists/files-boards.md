@@ -6,7 +6,7 @@ within the time budget; and backup, restore, diagnostics and the two settings im
 switch, and the bit out, throughout.
 
 You need: the release installed, the controller connected, the log viewer open, and a browser. Read the README's
-"Before a run" first: the backup it makes is the one section 5 restores.
+"Before a run" first: section 6 compares against the copy it makes.
 
 ## 1. A 100k-line file and the load time
 
@@ -58,8 +58,9 @@ You need: the release installed, the controller connected, the log viewer open, 
       at most five.
 - [ ] Actions ▸ Download diagnostics file downloads a zip holding `webcontrol.json` and `webcontrol-rs.log`.
 - [ ] Change a setting you will notice (Settings ▸ Maslow, Distance Between Motors +1 mm) and delete one of the test
-      files from section 2. Then Actions ▸ Restore WebControl… with the backup you just made: WebControl answers
-      success, the setting and the file are back, and Actions ▸ Sync settings shows the restored `$2`.
+      files from section 2 (`ssh pi@maslow.local rm .WebControl/gcode/<file>`). Then Actions ▸ Restore WebControl… with
+      the backup you just made: WebControl answers success, the setting and the file are back, and Actions ▸ Sync
+      settings shows the restored `$2`.
 - [ ] Restore a backup made by the previous release, or by v0.94's Backup WebControl if you have one: it answers
       success and its settings show. Then restore this release's backup again.
 - [ ] Actions ▸ Import webcontrol.json file, with a `webcontrol.json` whose Serial Connection differs: Settings ▸
@@ -75,7 +76,8 @@ You need: the release installed, the controller connected, the log viewer open, 
 
 ## 6. Clean up
 
-- [ ] Delete `big.nc` and the test files and boards from the UI.
+- [ ] Delete `big.nc` and the test files and boards on the Pi, under `~/.WebControl/gcode/` and
+      `~/.WebControl/boards/` (the UI has no delete).
 - [ ] Compare `~/.WebControl/webcontrol.json` with the README's backup: only the values you meant to change differ.
 
 Report as the README says.
