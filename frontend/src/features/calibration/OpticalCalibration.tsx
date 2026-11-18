@@ -106,6 +106,7 @@ const Workbench = ({ initial }: { initial: OpticalState }) => {
   const [errors, setErrors] = useState<Partial<Record<OpticalKey, string>>>({});
   const [session, setSession] = useState<OpticalSession | null>(initial.session);
   const [progress, setProgress] = useState<Progress | null>(null);
+  const [scans, setScans] = useState(0);
   const [orientation, setOrientation] = useState(initial.session?.orientation ?? null);
   const [image, setImage] = useState<MessageData<"opticalImage"> | null>(null);
   const [status, setStatus] = useState<Status | null>(null);
@@ -119,6 +120,7 @@ const Workbench = ({ initial }: { initial: OpticalState }) => {
     if (next.done !== progress?.done || TERMINAL.includes(next.state)) void refresh();
     const outcome = next.state === progress?.state ? null : scanOutcome(next, progress?.state);
     if (outcome) setStatus(outcome);
+    if (RUNNING.includes(next.state) && !RUNNING.includes(progress?.state ?? "idle")) setScans((n) => n + 1);
     setProgress(next);
   });
   useServerMessage("opticalOrientation", setOrientation);
@@ -281,7 +283,7 @@ const Workbench = ({ initial }: { initial: OpticalState }) => {
         </div>
       </div>
 
-      <OpticalFitPanel measured={summarise(cells).measured} onStatus={setStatus} />
+      <OpticalFitPanel key={scans} measured={summarise(cells).measured} onStatus={setStatus} />
       <StatusLine status={status} />
     </>
   );

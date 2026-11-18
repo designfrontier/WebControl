@@ -18,7 +18,10 @@ const change = (fit: OpticalFit, key: keyof HoleyParameters) => {
   return `${delta > 0 ? "+" : ""}${formatValue(Number(delta.toFixed(4)))}`;
 };
 
-/** Fits the holey geometry to the measured grid; nothing is written until the confirm dialog's Write. */
+/**
+ * Fits the holey geometry to the measured grid; nothing is written until the confirm dialog's Write. The server
+ * refuses a fit of squares scanned under other geometry, so after an accept the next fit waits for a new scan.
+ */
 export const OpticalFitPanel = ({ measured, onStatus }: { measured: number; onStatus: (status: Status) => void }) => {
   const fetchImpl = useFetch();
   const [fit, setFit] = useState<OpticalFit | null>(null);
@@ -62,7 +65,7 @@ export const OpticalFitPanel = ({ measured, onStatus }: { measured: number; onSt
         for where the sheet is pinned. Needs a scan first.
       </p>
       <div className="button-row">
-        <button type="button" disabled={measured === 0 || busy} onClick={runFit}>
+        <button type="button" disabled={measured === 0 || accepted || busy} onClick={runFit}>
           Fit geometry
         </button>
         <button
@@ -74,6 +77,7 @@ export const OpticalFitPanel = ({ measured, onStatus }: { measured: number; onSt
           Accept…
         </button>
       </div>
+      {accepted && <p>Scan again to fit the accepted geometry.</p>}
       {fit && (
         <>
           <table className="results">

@@ -490,6 +490,29 @@ describe("optical geometry fit", () => {
     expect(button("Accept…")).toBeDisabled();
   });
 
+  it("needs a new scan before fitting again after an accept", async () => {
+    const { user, ready, socket } = setup({
+      routes: {
+        [OPTICAL]: measured(),
+        [`POST ${OPTICAL}/fit`]: opticalFit(),
+        [`POST ${OPTICAL}/accept`]: opticalFit().fitted,
+      },
+    });
+    await ready;
+    await user.click(button("Fit geometry"));
+    await user.click(await screen.findByRole("button", { name: "Accept…" }));
+    await user.click(screen.getByRole("button", { name: "Write settings" }));
+    await waitFor(() => expect(status()).toHaveTextContent("Accepted."));
+    expect(button("Fit geometry")).toBeDisabled();
+    expect(screen.getByText("Scan again to fit the accepted geometry.")).toBeInTheDocument();
+
+    socket.serverMessage("opticalScanProgress", progress({ state: "done", cell: null, done: 465 }));
+    expect(button("Fit geometry")).toBeDisabled();
+    socket.serverMessage("opticalScanProgress", progress({ state: "moving", done: 0 }));
+    await waitFor(() => expect(button("Fit geometry")).toBeEnabled());
+    expect(screen.queryByText("Scan again to fit the accepted geometry.")).not.toBeInTheDocument();
+  });
+
   it("shows why a fit or an accept failed", async () => {
     const { user, ready } = setup({
       routes: {
