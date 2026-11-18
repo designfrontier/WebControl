@@ -41,7 +41,9 @@ version is newer than the latest release it changes nothing; --version installs
 an older release on purpose. To update, it checks the machine is idle, downloads the
 release's tarball and SHA256SUMS, verifies the checksum, backs up the current
 install, runs the release's install-pi.sh, restarts webcontrol-rs and checks it
-for up to ${WAIT}s. If that check fails it restores the backup by itself.
+for up to ${WAIT}s. If that check fails it restores the backup by itself. While
+webcontrol.service (an older WebControl) runs, it installs or restores the
+files without restarting anything; wc-switch rust starts them when it is idle.
 
 Only PUBLISHED releases are seen. GitHub hides draft releases from anyone
 without write access, so publish the draft first.
@@ -142,6 +144,10 @@ state_url() {
 api_state() { curl -fsS --max-time 3 "$URL/api/state" 2> /dev/null || true; }
 
 rust_active() { systemctl is-active --quiet webcontrol-rs 2> /dev/null; }
+
+# Starting webcontrol-rs would stop it (Conflicts=), and it may be mid-job: v0.94 has no /api/state to ask.
+python_active() { systemctl is-active --quiet webcontrol 2> /dev/null; }
+PYTHON_RUNNING="webcontrol.service, an older WebControl, is running and keeps port 5000. When it is idle: wc-switch rust"
 
 installed_version() { "$binary" --version 2> /dev/null | awk '{ print $2 }' || true; }
 
@@ -264,7 +270,8 @@ require_idle() {
   reason="$(busy_reason "$body")"
   [ -z "$reason" ] || fail "Not now: $reason. Finish or stop it, then run webcontrol-update again."
   if [ -z "$body" ]; then
-    say "webcontrol-rs is not running, so no job is; carrying on."
+    python_active && say "webcontrol.service, an older WebControl, is running; it is left running."
+    python_active || say "webcontrol-rs is not running, so no job is; carrying on."
     return 0
   fi
   if is_zero "$(field "$body" controllerFirmwareVersion)"; then
@@ -459,11 +466,20 @@ roll_back_and_check() {
   # Stopped first, so the failed version cannot write webcontrol.json over the restored one.
   root_do systemctl stop webcontrol-rs || true
   restore_backup || restored=0
-  restart || true
-  if healthy "$version" && [ "$restored" = 1 ]; then
-    say "ROLLED BACK: webcontrol-rs $version is running again, with its settings."
-    RESULT=rolledBack
-    return 0
+  if python_active; then
+    say "$PYTHON_RUNNING"
+    if [ "$restored" = 1 ]; then
+      say "ROLLED BACK: the files of webcontrol-rs $version are back, not started."
+      RESULT=rolledBack
+      return 0
+    fi
+  else
+    restart || true
+    if healthy "$version" && [ "$restored" = 1 ]; then
+      say "ROLLED BACK: webcontrol-rs $version is running again, with its settings."
+      RESULT=rolledBack
+      return 0
+    fi
   fi
   RESULT=rollbackFailed
   if [ "$restored" = 0 ]; then
@@ -510,6 +526,11 @@ update() {
   local installed=1 reason
   phase installing
   bash "$STAGE/install-pi.sh" "$STAGE" || installed=0
+  if [ "$installed" = 1 ] && python_active; then
+    say "Installed webcontrol-rs $VERSION without starting it: $PYTHON_RUNNING"
+    RESULT=updated
+    return 0
+  fi
   if [ "$installed" = 1 ]; then
     reason="$(busy_reason "$(api_state)")"
     [ -z "$reason" ] || job_started_during_the_update "$reason"

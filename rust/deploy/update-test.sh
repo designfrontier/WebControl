@@ -59,6 +59,7 @@ printf '%s\n' "\$config" | exec "$real_curl" "\$@"
 EOF
 # A BROKEN binary never answers and scribbles on webcontrol.json when stopped. A working one answers with its version
 # (or stale-version) and the controller (unless controller-lost); with job-starts, install-pi.sh's reload starts a job.
+# python-active is a running webcontrol.service, which starting webcontrol-rs stops (Conflicts=).
 cat > "$work/bin/systemctl" <<EOF
 #!/usr/bin/env bash
 echo "systemctl \$*" >> "$work/calls"
@@ -73,6 +74,7 @@ case "\$1" in
   is-active)
     s=inactive
     [ "\${*: -1}" != webcontrol-rs ] || s="\$(cat "$work/active" 2> /dev/null || echo inactive)"
+    [ "\${*: -1}" != webcontrol ] || [ ! -f "$work/python-active" ] || s=active
     [ "\$2" = --quiet ] || echo "\$s"
     [ "\$s" = active ]
     exit ;;
@@ -81,6 +83,7 @@ case "\$1" in
     rm -f "$work/srv/api/state" "$work/running"
     echo inactive > "$work/active"
     [ "\$1" = stop ] && exit 0
+    rm -f "$work/python-active"
     cp "\$bin" "$work/running"
     echo active > "$work/active"
     grep -q BROKEN "\$bin" && exit 0
@@ -141,7 +144,7 @@ installed() {
 fresh() {
   rm -rf "${work:?}/root" "${work:?}/home" "$work/srv" "$work/gh" "$work/x" "$work/calls" "$work/active" \
     "$work/as-root" "$work/service-env" "$work/phases" "$work/controller" "$work/controller-lost" "$work/stale-version" "$work/running" "$work/out" "$work/err" \
-    "$work/fail-cp" "$work/job-starts"
+    "$work/fail-cp" "$work/job-starts" "$work/python-active"
   mkdir -p "$work/root" "$work/home/.WebControl" "$work/srv/api" "$work/x"
   echo '{"owner": "settings"}' > "$work/home/.WebControl/webcontrol.json"
   echo aarch64 > "$work/arch"
@@ -804,6 +807,51 @@ abc1234 unknown 0.3.0
 EOF
 }
 
+# installed_under_python <version>: that release installed, stopped, with the older WebControl serving instead.
+installed_under_python() {
+  installed "$1"
+  PATH="$work/bin:$PATH" systemctl stop webcontrol-rs
+  touch "$work/python-active"
+  rm -f "$work/calls"
+}
+
+python_keeps_running() {
+  [ -f "$work/python-active" ] && ! grep -qE "systemctl (restart|start) webcontrol-rs" "$work/calls" &&
+    grep -q "When it is idle: wc-switch rust" "$work/out"
+}
+
+update_leaves_a_running_python_alone() {
+  fresh
+  installed_under_python 1.0
+  publish 1.1
+  latest 1.1
+  update > "$work/out" && [ "$(version_of "$opt/webcontrol-rs")" = 1.1 ] && python_keeps_running &&
+    grep -q "Installed webcontrol-rs 1.1 without starting it" "$work/out" && ! grep -q "Health check" "$work/out"
+}
+
+service_update_leaves_a_running_python_alone() {
+  fresh
+  installed_under_python 1.0
+  publish 1.1
+  latest 1.1
+  touch "$work/as-root"
+  update --service update > "$work/out" && [ "$(version_of "$opt/webcontrol-rs")" = 1.1 ] && python_keeps_running &&
+    progress '.result == "updated" and (.log[-1] | test("wc-switch rust"))'
+}
+
+rollback_leaves_a_running_python_alone() {
+  fresh
+  installed 1.0
+  publish 1.1
+  latest 1.1
+  update > /dev/null || return 1
+  PATH="$work/bin:$PATH" systemctl stop webcontrol-rs
+  touch "$work/python-active"
+  rm -f "$work/calls"
+  update --rollback > "$work/out" && [ "$(version_of "$opt/webcontrol-rs")" = 1.0 ] && python_keeps_running &&
+    grep -q "ROLLED BACK: the files of webcontrol-rs 1.0 are back" "$work/out"
+}
+
 help_and_bad_flags() {
   update --help > "$work/out" && grep -q "Only PUBLISHED releases" "$work/out" && grep -q -- "--rollback" "$work/out" &&
     ! update --frobnicate > /dev/null 2>&1
@@ -857,6 +905,10 @@ check "--version installs an older release with a warning" pinning_an_older_vers
 check "an installed version that is not semver updates with a warning" unparseable_installed_version_updates_with_a_warning
 check "--status says update available, up to date or newer" status_compares_versions
 check "versions order like semver" orders_versions_like_semver
+check "an update while the older WebControl runs installs without restarting" update_leaves_a_running_python_alone
+check "--service update while the older WebControl runs installs without restarting" \
+  service_update_leaves_a_running_python_alone
+check "--rollback while the older WebControl runs restores without restarting" rollback_leaves_a_running_python_alone
 
 if [ "$failures" != 0 ]; then
   echo "$failures failed"
