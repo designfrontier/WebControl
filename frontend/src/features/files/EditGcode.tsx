@@ -5,21 +5,21 @@ import { selectGcodeLocked } from "../../state/machine";
 import { CloseButton } from "../../app/CloseButton";
 import { useCloseModal } from "../../app/modalHistory";
 import { editGcode, getGcodeText } from "./api";
-import { useResource, useSubmit } from "./hooks";
-import { FormError, GcodeEditor, GcodeLoadingNote, Loaded, SubPage } from "./ui";
+import { GCODE_LOAD, useResource, useSubmit } from "./hooks";
+import { FormError, GcodeEditor, GcodeLoadingOverlay, Loaded, SubPage } from "./ui";
 
 const EditForm = ({ initial }: { initial: string }) => {
   const fetchImpl = useFetch();
   const close = useCloseModal();
   const [text, setText] = useState(initial);
   const locked = useMachine(selectGcodeLocked);
-  const { busy, error, run } = useSubmit();
+  const { busy, error, run } = useSubmit(GCODE_LOAD);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    return run(async () => {
+    return run(async (signal) => {
       await editGcode(fetchImpl, text.trimEnd());
-      close();
+      if (!signal.aborted) close();
     }, "Could not apply the edited gcode.");
   };
 
@@ -33,7 +33,7 @@ const EditForm = ({ initial }: { initial: string }) => {
       />
       <FormError message={error} />
       {locked && <p className="muted">A job is running or paused. Stop the job first to apply changes.</p>}
-      {busy && <GcodeLoadingNote />}
+      {busy && <GcodeLoadingOverlay title="Applying G-Code changes…" />}
       <div className="actions">
         <button
           type="submit"

@@ -3,6 +3,7 @@ import type { FormEvent, ReactNode } from "react";
 import { CloseButton } from "../../app/CloseButton";
 import type { CreatedDirectory, Library, LibraryFile } from "../../protocol";
 import { useSubmit } from "./hooks";
+import type { SubmitOptions } from "./hooks";
 import { fileNameProblem, filesIn, initialDirectory, initialFile } from "./library";
 import type { Listing } from "./library";
 import { FormError, LibraryPicker, NewDirectoryForm } from "./ui";
@@ -10,23 +11,24 @@ import { FormError, LibraryPicker, NewDirectoryForm } from "./ui";
 interface OpenProps {
   library: Library;
   legend: string;
-  open: (file: LibraryFile) => Promise<void>;
+  open: (file: LibraryFile, signal: AbortSignal) => Promise<void>;
   /** Why opening is refused right now, such as a job holding the gcode. */
   lockedReason?: string;
   /** Shown while the open request is in flight. */
   busyNote?: ReactNode;
+  submitOptions?: SubmitOptions;
 }
 
 /** Choose a file from a library (gcode or boards) and open it. */
-export const OpenFromLibrary = ({ library, legend, open, lockedReason, busyNote }: OpenProps) => {
+export const OpenFromLibrary = ({ library, legend, open, lockedReason, busyNote, submitOptions }: OpenProps) => {
   const [directory, setDirectory] = useState(() => initialDirectory(library));
   const [selected, setSelected] = useState(() => initialFile(library, initialDirectory(library)));
-  const { busy, error, setError, run } = useSubmit();
+  const { busy, error, setError, run } = useSubmit(submitOptions);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (!selected) return setError("Choose a file to open.");
-    return run(() => open({ directory, name: selected }), `Could not open ${selected}.`);
+    return run((signal) => open({ directory, name: selected }, signal), `Could not open ${selected}.`);
   };
 
   return (

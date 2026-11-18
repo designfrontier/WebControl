@@ -1,0 +1,57 @@
+.loading-overlay[open] {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: var(--space-4);
+  border: 0;
+  background: var(--backdrop);
+  color: var(--text);
+  overscroll-behavior: contain;
+}
+
+.loading-overlay::backdrop {
+  background: transparent;
+}
+
+.loading-overlay:focus {
+  outline: none;
+}
+
+.loading-overlay-card {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+  width: min(420px, 100%);
+  padding: var(--space-6) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.loading-overlay-card .spinner {
+  width: 48px;
+  height: 48px;
+  margin: 0;
+  border-width: 4px;
+}
+
+.loading-overlay-card h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.loading-overlay-card p {
+  margin: var(--space-2) 0 0;
+  color: var(--muted);
+}
+
+.loading-overlay-card .stop-button {
+  min-height: var(--control);
+  padding: 0 var(--space-4);
+}

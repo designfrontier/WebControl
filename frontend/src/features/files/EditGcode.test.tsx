@@ -1,7 +1,8 @@
 import { fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { fakeFetch } from "../../test/fakeFetch";
-import { expectPath, pending, recorder } from "../../test/filesBoards";
+import { fakeFetch, jsonResponse } from "../../test/fakeFetch";
+import { topLayer } from "../../test/dialogPolyfill";
+import { deferred, expectPath, recorder } from "../../test/filesBoards";
 import { renderApp } from "../../test/render";
 
 const page = () => within(screen.getByRole("dialog", { name: /G-Code/ }));
@@ -54,15 +55,34 @@ describe("View or edit gcode", () => {
     await expectPath("/");
   });
 
-  it("shows it is busy until the server has built the preview", async () => {
-    const fetch = fakeFetch({ "/api/files/gcode/text": { text: "G0 X1" }, "POST /editGCode": pending });
-    const { user } = renderApp("/files/edit", { fetch });
+  it("covers the page with a loading overlay until the server has built the preview", async () => {
+    const answer = deferred();
+    const { user } = setup({ respond: answer.respond } as unknown as ReturnType<typeof recorder>);
     await user.type(await screen.findByLabelText("Loaded gcode"), "\nM2");
     await user.click(screen.getByRole("button", { name: "Apply changes" }));
 
     expect(screen.getByRole("button", { name: "Applying…" })).toBeDisabled();
-    expect(screen.getByText(/building its preview/)).toHaveAttribute("role", "status");
+    const overlay = screen.getByRole("dialog", { name: "Applying G-Code changes…" });
+    expect(overlay).toHaveAccessibleDescription(/building its preview/);
+    expect(topLayer().at(-1)).toBe(overlay);
+    await user.keyboard("{Escape}");
     await expectPath("/files/edit");
+
+    answer.settle.resolve(jsonResponse({ status: 200 }));
+    await expectPath("/");
+    expect(screen.queryByRole("dialog", { name: "Applying G-Code changes…" })).not.toBeInTheDocument();
+  });
+
+  it("clears the overlay when applying fails", async () => {
+    const answer = deferred();
+    const { user } = setup({ respond: answer.respond } as unknown as ReturnType<typeof recorder>);
+    await user.type(await screen.findByLabelText("Loaded gcode"), "\nM2");
+    await user.click(screen.getByRole("button", { name: "Apply changes" }));
+    expect(screen.getByRole("dialog", { name: "Applying G-Code changes…" })).toBeInTheDocument();
+
+    answer.settle.resolve(jsonResponse({ status: 409, error: "Stop the job first." }, 409));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Stop the job first.");
+    expect(screen.queryByRole("dialog", { name: "Applying G-Code changes…" })).not.toBeInTheDocument();
   });
 
   it("explains a failure and keeps the edits", async () => {

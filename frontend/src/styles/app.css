@@ -425,6 +425,12 @@ button.danger[data-alarm="true"] {
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 3s;
+  }
+}
+
 /* Full pages outside the control screen: calibration and logs. */
 .page {
   display: grid;

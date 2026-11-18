@@ -1,10 +1,10 @@
 import { useClient, useFetch, useMachine } from "../../app/context";
 import { useCloseModal } from "../../app/modalHistory";
 import { getGcodeLibrary, openGcode } from "./api";
-import { useResource } from "./hooks";
+import { GCODE_LOAD, useResource } from "./hooks";
 import { OpenFromLibrary } from "./LibraryForms";
 import { selectGcodeLocked } from "../../state/machine";
-import { GCODE_LOCKED_NOTE, GcodeLoadingNote, Loaded, SubPage } from "./ui";
+import { GCODE_LOCKED_NOTE, GcodeLoadingOverlay, Loaded, SubPage } from "./ui";
 
 export const OpenGcode = () => {
   const fetchImpl = useFetch();
@@ -21,11 +21,12 @@ export const OpenGcode = () => {
             library={library}
             legend="Gcode files"
             lockedReason={locked ? GCODE_LOCKED_NOTE : undefined}
-            busyNote={<GcodeLoadingNote />}
-            open={async (file) => {
+            busyNote={<GcodeLoadingOverlay title="Opening G-Code…" />}
+            submitOptions={GCODE_LOAD}
+            open={async (file, signal) => {
               await openGcode(fetchImpl, file);
               client.emit("checkForGCodeUpdate", { data: "Please" });
-              close();
+              if (!signal.aborted) close();
             }}
           />
         )}

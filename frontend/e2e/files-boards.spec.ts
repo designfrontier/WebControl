@@ -69,6 +69,35 @@ test("uploads, opens, edits, saves and clears gcode from the G-Code menu", async
   await closeServerDialogs(page);
 });
 
+test("blocks the whole page while gcode loads, through Escape, until the server answers", async ({ page }) => {
+  await page.goto("/files/upload");
+  await waitForServer(page);
+  await page.getByLabel("Gcode files").setInputFiles(gcode(["G21", "G0 X5 Y5"]));
+  await page.getByRole("button", { name: "Upload and open" }).click();
+  await atControl(page);
+
+  let release = () => {};
+  await page.route("**/openGCode", (route) => {
+    release = () => void route.continue();
+  });
+  await page.goto("/files/open");
+  await page.getByRole("button", { name: "Open", exact: true }).click();
+  const overlay = page.getByRole("dialog", { name: "Opening G-Code…" });
+  await expect(overlay).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await expect(overlay).toBeVisible();
+  await expect(page).toHaveURL(/\/files\/open$/);
+  const covered = await page.evaluate(() => document.elementFromPoint(5, 5)?.closest(".loading-overlay") != null);
+  expect(covered).toBe(true);
+
+  release();
+  await atControl(page);
+  await expect(overlay).toBeHidden();
+});
+
 test("edits, trims and saves the current board from the Boards menu", async ({ page }) => {
   await page.goto("/");
   await waitForServer(page);
