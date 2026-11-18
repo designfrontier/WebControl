@@ -69,3 +69,16 @@ export const recorder = (status = 200, body: unknown = { status }) => {
 
 /** A responder that never answers, to observe busy states. */
 export const pending = () => new Promise<Response>(() => {});
+
+/** A responder the test answers later, to watch a busy state start and end. */
+export const deferred = () => {
+  const settle = { resolve: (_: Response) => {}, reject: (_: unknown) => {} };
+  const respond = vi.fn(
+    () =>
+      new Promise<Response>((resolve, reject) => {
+        settle.resolve = resolve;
+        settle.reject = reject;
+      }),
+  );
+  return { respond, settle };
+};

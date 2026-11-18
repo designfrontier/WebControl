@@ -5,14 +5,14 @@ import { CloseButton } from "../../app/CloseButton";
 import { useCloseModal } from "../../app/modalHistory";
 import type { CreatedDirectory, GcodeLibrary } from "../../protocol";
 import { createGcodeDirectory, getGcodeLibrary, uploadGcode } from "./api";
-import { useResource, useSubmit } from "./hooks";
+import { GCODE_LOAD, useResource, useSubmit } from "./hooks";
 import { initialDirectory } from "./library";
 import { selectGcodeLocked } from "../../state/machine";
 import {
   DirectorySelect,
   FormError,
   GCODE_LOCKED_NOTE,
-  GcodeLoadingNote,
+  GcodeLoadingOverlay,
   Loaded,
   NewDirectoryForm,
   SubPage,
@@ -25,14 +25,14 @@ const UploadForm = ({ library }: { library: GcodeLibrary }) => {
   const [directories, setDirectories] = useState(library.directories);
   const [directory, setDirectory] = useState(() => initialDirectory(library));
   const [files, setFiles] = useState<File[]>([]);
-  const { busy, error, setError, run } = useSubmit();
+  const { busy, error, setError, run } = useSubmit(GCODE_LOAD);
   const locked = useMachine(selectGcodeLocked);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (files.length === 0) return setError("Choose at least one gcode file to upload.");
-    return run(async () => {
-      await uploadGcode(fetchImpl, directory, files);
+    return run(async (signal) => {
+      await uploadGcode(fetchImpl, directory, files, signal);
       client.emit("checkForGCodeUpdate", { data: "Please" });
       close();
     }, "The upload failed, or the first file could not be opened as gcode.");
@@ -65,7 +65,7 @@ const UploadForm = ({ library }: { library: GcodeLibrary }) => {
         </div>
         <FormError message={error} />
         {locked && <p className="muted">{GCODE_LOCKED_NOTE}</p>}
-        {busy && <GcodeLoadingNote />}
+        {busy && <GcodeLoadingOverlay title="Uploading gcode…" />}
         <div className="actions">
           <button type="submit" className="primary" disabled={busy || locked}>
             {busy ? "Uploading…" : "Upload and open"}

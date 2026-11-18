@@ -1,8 +1,10 @@
-import { screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
-import { fakeFetch } from "../../test/fakeFetch";
-import { expectPath, gcodeLibrary, pending, recorder } from "../../test/filesBoards";
-import { renderApp } from "../../test/render";
+import { act, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { topLayer } from "../../test/dialogPolyfill";
+import { fakeFetch, jsonResponse } from "../../test/fakeFetch";
+import { deferred, expectPath, gcodeLibrary, pending, recorder } from "../../test/filesBoards";
+import { currentPath, renderApp } from "../../test/render";
+import { GCODE_LOAD } from "./hooks";
 
 const setup = (open = recorder(), library = gcodeLibrary()) => {
   const fetch = fakeFetch({ "/api/files/gcode": library, "POST /openGCode": open.respond });
@@ -73,12 +75,93 @@ describe("Open gcode", () => {
     await expectPath("/files/open");
   });
 
-  it("shows progress while the server parses the file", async () => {
-    const fetch = fakeFetch({ "/api/files/gcode": gcodeLibrary(), "POST /openGCode": pending });
-    const { user } = renderApp("/files/open", { fetch });
+  it("covers the whole page with a loading overlay until the server answers", async () => {
+    const answer = deferred();
+    const { user } = setup({ respond: answer.respond } as unknown as ReturnType<typeof recorder>);
     await user.click(await screen.findByRole("button", { name: "Open" }));
+
+    const overlay = screen.getByRole("dialog", { name: "Opening gcode…" });
+    expect(overlay).toHaveAttribute("aria-busy", "true");
+    expect(overlay).toHaveAccessibleDescription(/building its preview/);
+    expect(topLayer().at(-1)).toBe(overlay);
+    expect(overlay).toHaveFocus();
     expect(screen.getByRole("button", { name: "Opening…" })).toBeDisabled();
-    expect(screen.getByText(/building its preview/)).toHaveAttribute("role", "status");
+
+    await user.keyboard("{Escape}");
+    expect(overlay).toBeInTheDocument();
+    expect(currentPath()).toBe("/files/open");
+
+    answer.settle.resolve(jsonResponse({ status: 200 }));
+    await expectPath("/");
+    expect(screen.queryByRole("dialog", { name: "Opening gcode…" })).not.toBeInTheDocument();
+    expect(topLayer()).toEqual([]);
+  });
+
+  describe("clears the overlay and explains when the load fails", () => {
+    const failsWith = async (respond: () => Response | Promise<Response>, message: string | RegExp) => {
+      const { user } = setup({ respond } as unknown as ReturnType<typeof recorder>);
+      await user.click(await screen.findByRole("button", { name: "Open" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent(message);
+      expect(screen.queryByRole("dialog", { name: "Opening gcode…" })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Open" })).toBeEnabled();
+      expect(currentPath()).toBe("/files/open");
+    };
+
+    it("on a network failure", () =>
+      failsWith(() => Promise.reject(new TypeError("Failed to fetch")), "Could not open leg.nc."));
+
+    it("on an error status without a body", () =>
+      failsWith(() => new Response("Bad Gateway", { status: 502 }), "Could not open leg.nc."));
+
+    it("on an error body of the wrong shape", () =>
+      failsWith(() => jsonResponse({ error: 42 }, 500), "Could not open leg.nc."));
+
+    it("on an error thrown after the server answered", async () => {
+      const fetch = fakeFetch({ "/api/files/gcode": gcodeLibrary(), "POST /openGCode": { status: 200 } });
+      const { user, socket } = renderApp("/files/open", { fetch });
+      const open = await screen.findByRole("button", { name: "Open" });
+      vi.spyOn(socket, "emit").mockImplementation(() => {
+        throw new Error("socket gone");
+      });
+      await user.click(open);
+      expect(await screen.findByRole("alert")).toHaveTextContent("Could not open leg.nc.");
+      expect(screen.queryByRole("dialog", { name: "Opening gcode…" })).not.toBeInTheDocument();
+    });
+  });
+
+  it("drops the overlay and the request when the screen closes mid-load, as Back does", async () => {
+    const answer = deferred();
+    const fetch = fakeFetch({ "/api/files/gcode": gcodeLibrary(), "POST /openGCode": answer.respond });
+    const { user, socket } = renderApp("/files/open", { fetch });
+    await user.click(await screen.findByRole("button", { name: "Open" }));
+    expect(screen.getByRole("dialog", { name: "Opening gcode…" })).toBeInTheDocument();
+
+    act(() => screen.getByRole("button", { name: "Cancel" }).click());
+    await expectPath("/");
+    expect(screen.queryByRole("dialog", { name: "Opening gcode…" })).not.toBeInTheDocument();
+    expect(topLayer()).toEqual([]);
+    expect(fetch.mock.calls.find(([path]) => path === "/openGCode")?.[1]?.signal?.aborted).toBe(true);
+
+    await act(async () => answer.settle.resolve(jsonResponse({ status: 200 })));
+    expect(socket.emittedEvents("checkForGCodeUpdate")).toEqual([]);
+  });
+
+  describe("when the server never answers", () => {
+    afterEach(() => vi.useRealTimers());
+
+    it("gives up after the timeout, clears the overlay and says so", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const fetch = fakeFetch({ "/api/files/gcode": gcodeLibrary(), "POST /openGCode": pending });
+      const { user } = renderApp("/files/open", { fetch });
+      await user.click(await screen.findByRole("button", { name: "Open" }));
+      expect(screen.getByRole("dialog", { name: "Opening gcode…" })).toBeInTheDocument();
+
+      await act(() => vi.advanceTimersByTimeAsync(GCODE_LOAD.timeoutMs));
+      expect(screen.getByRole("alert")).toHaveTextContent(GCODE_LOAD.timeoutMessage);
+      expect(screen.queryByRole("dialog", { name: "Opening gcode…" })).not.toBeInTheDocument();
+      expect(fetch.mock.calls.find(([path]) => path === "/openGCode")?.[1]?.signal?.aborted).toBe(true);
+      expect(currentPath()).toBe("/files/open");
+    });
   });
 
   it("cancels back to the files screen", async () => {
