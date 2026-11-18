@@ -392,8 +392,9 @@ top of every file, so as written it would run every move after it relative.
     the centre swings fastest. Resume's restart then travels to an exact commanded XY first, so the arc converts
     from an exact start; a typed arc is refused with an alert until an absolute move. Refused like an
     unclosed comment (a job pauses before the line with an alert; a typed line is dropped with one): |R| shorter
-    than half the chord by over 0.05 mm, an R arc with no X/Y change, an R arc under G18/G19, a G91 arc with a Z
-    word (the firmware would take it as absolute), or no known start where one is needed. The rewritten line must
+    than half the chord by over 0.05 mm, an R arc with no X/Y change, any arc under G18/G19, an arc with X, Y or
+    Z but no I, J or R, a G91 arc with a Z word (the firmware would take it as absolute), or no known start where
+    one is needed. The rewritten line must
     still fit B3. Since what is sent then ends where the file means, the file-side position and restart state keep
     reading G91 arcs as relative; the commanded Z (B10) reads an arc's Z as absolute, as the firmware does. The
     preview draws R arcs with the same centre, real-G91 arcs relative and G90.1 centres absolute.

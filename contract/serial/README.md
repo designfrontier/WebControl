@@ -628,3 +628,10 @@ Where the Rust backend writes something different from Python by owner decision.
     `G20` and ran a millimetre file in inches. Rust drops one leading U+FEFF before it filters the file, so what is
     streamed, drawn and restarted from all start at the first word. No transcript has such a file (`wc-machine`
     test `a_byte_order_mark_does_not_hide_the_files_units_from_a_restart`).
+14. **No arc outside G17 or with no centre** (2026-11-18). Every firmware ignores G17/G18/G19 and cuts each arc in XY
+    (`spec/firmware.md` §9), and an arc with no I, J or R has radius 0, so the sled goes straight to its end at PID
+    speed; Python sent both. Rust refuses, as in 9, any G2/G3 (or modal arc) with an axis or centre word while
+    G18 or G19 is in effect (`Unsupported Arc`), not only an R arc, and any arc with an X, Y or Z word but no I, J
+    or R (`Impossible Arc`). An arc segment with neither, such as a bare `F500`, still goes out. No transcript has
+    such an arc (`wc-machine` tests `a_job_pauses_before_an_arc_in_the_g18_plane`,
+    `a_typed_arc_with_no_centre_is_refused_with_an_alert`).

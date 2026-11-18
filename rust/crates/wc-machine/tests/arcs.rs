@@ -76,6 +76,40 @@ fn a_typed_r_arc_no_i_and_j_can_give_is_refused_with_an_alert() {
 }
 
 #[test]
+fn a_typed_arc_with_no_centre_is_refused_with_an_alert() {
+    let mut rig = Rig::connected();
+    let mut effects = rig.send(Event::Request { id: 1, request: Request::SendGcode("G2 X10 Y0\nG0 X1".into()) });
+    (0..10).for_each(|_| effects.extend(rig.advance(100)));
+    assert_eq!(
+        alerts(&effects),
+        [
+            "That command is an arc with no centre (I or J) and no radius (R); the controller would move straight to its \
+          end at full speed."
+        ]
+    );
+    assert_eq!(written(&effects), ["G0 X1"]);
+}
+
+#[test]
+fn a_job_pauses_before_an_arc_in_the_g18_plane() {
+    let mut rig = Rig::connected();
+    job(&mut rig, &["G21", "G0 X0 Y0", "G18", "G2 X10 Z-5 I5 K0", "G0 X1"]);
+    rig.act("startRun");
+    let mut effects = Vec::new();
+    (0..10).for_each(|_| {
+        effects.extend(rig.advance(100));
+        effects.extend(rig.rx("ok"));
+    });
+    assert_eq!(written(&effects), ["G0 X0 Y0", "G18"]);
+    assert_eq!(
+        alerts(&effects),
+        ["Line 4 is an arc in the G18 or G19 plane; the controller ignores the plane and would cut it in X and Y. \
+          Resume stops here again: stop the job, fix the file and load it again."]
+    );
+    assert_eq!(rig.machine.snapshot().gcode_index, 3);
+}
+
+#[test]
 fn an_r_arc_that_fits_the_buffer_only_with_its_r_is_refused_as_too_long() {
     let mut rig = Rig::connected();
     let line = format!("G2 X10 Y10 R10{}", " ".repeat(100));
