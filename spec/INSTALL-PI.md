@@ -182,9 +182,10 @@ webcontrol-update
 ```
 
 It asks for the `sudo` password once, then installs the latest **published** GitHub Release if it is newer than
-the installed one. A release stays a draft until you publish it on GitHub, and drafts are invisible to the updater,
-so publish the release first. `webcontrol-update --status` shows the installed version, the backup and the latest
-published release; `--version v0.2.0` installs a particular release.
+the installed one; if the installed one is newer (say, a build pushed from the Mac), it changes nothing. A release
+stays a draft until you publish it on GitHub, and drafts are invisible to the updater, so publish the release first.
+`webcontrol-update --status` shows the installed version, the backup, the latest published release and whether it is
+an update; `--version v0.2.0` installs a particular release, even an older one.
 
 Before it installs, it checks the download's SHA-256 and backs up the current install to
 `/opt/webcontrol-rs/backup`: the binary, the systemd unit and drop-in, `wc-switch`, `webcontrol-update`, the sudoers
