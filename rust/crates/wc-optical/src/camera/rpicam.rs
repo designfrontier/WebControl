@@ -20,6 +20,7 @@ struct Latest {
     jpeg: Vec<u8>,
     ended: bool,
     stderr: String,
+    stderr_read: bool,
 }
 
 type Shared = Arc<(Mutex<Latest>, Condvar)>;
@@ -46,7 +47,8 @@ impl RpicamCamera {
             if latest.sequence > seen {
                 return Ok(latest.jpeg.clone());
             }
-            if latest.ended {
+            // Both pipes close when it exits; waiting for stderr too keeps its reason in the error.
+            if latest.ended && latest.stderr_read {
                 let why = latest.stderr.trim();
                 return Err(OpticalError::Camera(format!("{} stopped: {why}", self.program.display())));
             }
@@ -87,7 +89,10 @@ fn read_stderr(mut stderr: impl Read, shared: Shared) {
     let mut text = String::new();
     let _ = stderr.read_to_string(&mut text);
     let tail = text.char_indices().rev().nth(STDERR_KEPT).map_or(0, |(at, _)| at);
-    update(&shared, |latest| latest.stderr = text[tail..].to_string());
+    update(&shared, |latest| {
+        latest.stderr = text[tail..].to_string();
+        latest.stderr_read = true;
+    });
 }
 
 impl Camera for RpicamCamera {
@@ -120,7 +125,10 @@ impl Camera for RpicamCamera {
         let (out, err) = (self.shared.clone(), self.shared.clone());
         // Each reader ends when its pipe closes; a restart gives the new ones a fresh `Shared`.
         std::thread::spawn(move || stdout.map_or((), |stdout| read_frames(stdout, out)));
-        std::thread::spawn(move || stderr.map_or((), |stderr| read_stderr(stderr, err)));
+        std::thread::spawn(move || match stderr {
+            Some(stderr) => read_stderr(stderr, err),
+            None => update(&err, |latest| latest.stderr_read = true),
+        });
         self.child = Some(child);
         self.size = (config.width, config.height);
         Ok(())
