@@ -62,6 +62,7 @@ fn the_camera_settings_give_the_size_and_rate() {
         assert_eq!(config(size, f64::NAN), CameraConfig { width: 640, height: 480, fps: 5.0 }, "{size:?}")
     });
     assert_eq!(config("640x480", -1.0).fps, 5.0);
+    assert_eq!(config("640x480", 1e-30).fps, 0.1, "a frame period that fits a Duration");
 }
 
 fn gradient(width: u32, height: u32) -> Frame {
