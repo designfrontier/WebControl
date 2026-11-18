@@ -245,18 +245,6 @@ impl Machine {
         None
     }
 
-    /// The safe height, or why there is none, naming the setting and what it holds.
-    fn safe_height(&self, moving: &str) -> Result<f64, String> {
-        let stored = self.settings.value("Maslow Settings", "zAxisSafeHeight");
-        stored.and_then(float).ok_or_else(|| {
-            let held = stored.map(python_str).unwrap_or_default();
-            format!(
-                "Set the Z-axis safe height (Maslow Settings, zAxisSafeHeight) to a number before {moving}, so the \
-                 bit rises before it moves. It holds \"{held}\"."
-            )
-        })
-    }
-
     fn home(&mut self) -> Option<String> {
         let safe = match self.safe_height("returning to home") {
             Ok(safe) => safe,

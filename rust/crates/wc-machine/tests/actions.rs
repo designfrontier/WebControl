@@ -105,13 +105,31 @@ fn home_and_center_name_the_safe_height_they_cannot_read() {
     let mut broken = Rig::connected_with(settings(&[("Maslow Settings", "zAxisSafeHeight", json!("0,01"))]));
     let refusal = |moving: &str| {
         format!(
-            "Set the Z-axis safe height (Maslow Settings, zAxisSafeHeight) to a number before {moving}, so the bit \
-             rises before it moves. It holds \"0,01\"."
+            "Set the Z-axis safe height (Maslow Settings, zAxisSafeHeight) to a number above 0 before {moving}, so \
+             the bit rises before it moves. It holds \"0,01\"."
         )
     };
     assert_eq!(alerts(&broken.act("home")), [refusal("returning to home")]);
     assert_eq!(alerts(&broken.act("returnToCenter")), [refusal("returning to center")]);
     assert!(broken.run_to_quiet().is_empty());
+}
+
+/// A safe height of 0 or less would travel with the bit at or below the work surface.
+#[test]
+fn home_and_center_refuse_a_safe_height_of_zero_or_less() {
+    [json!("0"), json!("-5"), json!(-0.5)].into_iter().for_each(|height| {
+        let mut rig = Rig::connected_with(settings(&[("Maslow Settings", "zAxisSafeHeight", height.clone())]));
+        let held = height.as_str().map_or(height.to_string(), str::to_string);
+        let refusal = |moving: &str| {
+            format!(
+                "Set the Z-axis safe height (Maslow Settings, zAxisSafeHeight) to a number above 0 before {moving}, \
+                 so the bit rises before it moves. It holds \"{held}\"."
+            )
+        };
+        assert_eq!(alerts(&rig.act("home")), [refusal("returning to home")]);
+        assert_eq!(alerts(&rig.act("returnToCenter")), [refusal("returning to center")]);
+        assert!(rig.run_to_quiet().is_empty(), "{height}");
+    });
 }
 
 #[test]

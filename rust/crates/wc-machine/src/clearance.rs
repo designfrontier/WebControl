@@ -3,9 +3,10 @@
 
 use std::time::Duration;
 
-use wc_config::python_float_str;
+use wc_config::{python_float_str, python_str};
 use wc_gcode::commanded_z::CommandedZ;
 use wc_gcode::restart::{GcodeState, Options, round_up, sequence};
+use wc_protocol::float;
 use wc_protocol::main::{ActivateModal, PauseButton, Units};
 
 use crate::gpio::Led;
@@ -116,6 +117,22 @@ impl Raise {
 }
 
 impl Machine {
+    /// `zAxisSafeHeight` in mm when it is a number above 0, which every raise before travel needs.
+    pub(crate) fn safe_height_mm(&self) -> Option<f64> {
+        self.settings.value("Maslow Settings", "zAxisSafeHeight").and_then(float).filter(|&height| height > 0.0)
+    }
+
+    /// The safe height, or the alert refusing `moving` that names the setting and what it holds.
+    pub(crate) fn safe_height(&self, moving: &str) -> Result<f64, String> {
+        self.safe_height_mm().ok_or_else(|| {
+            let held = self.settings.value("Maslow Settings", "zAxisSafeHeight").map(python_str).unwrap_or_default();
+            format!(
+                "Set the Z-axis safe height (Maslow Settings, zAxisSafeHeight) to a number above 0 before {moving}, \
+                 so the bit rises before it moves. It holds \"{held}\"."
+            )
+        })
+    }
+
     pub(crate) fn queue_raise(&mut self, raise: Raise) {
         self.controller.queue.push_back(Queued::Raise(raise));
     }
