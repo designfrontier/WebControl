@@ -1,5 +1,6 @@
 //! `Actions.findPositionAt`: the file's X, Y and Z target before a line, for `gcodePositionMessage`.
 
+use crate::arc::ArcCentres;
 use crate::{GcodeError, Positioning, py, words};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -44,10 +45,15 @@ fn split_at_g(line: &str) -> Vec<String> {
 }
 
 fn read(line: &str, position: &mut Position, positioning: &mut Positioning) -> Result<(), ()> {
-    if line.contains("G90") {
+    let codes = words::numbers('G', line);
+    // WebControl leaves a G90.1 or G91.1 command out of what it writes, axis words and all.
+    if codes.iter().any(|&code| ArcCentres::set_by(code).is_some()) {
+        return Ok(());
+    }
+    if codes.contains(&90.0) {
         *positioning = Positioning::Absolute;
     }
-    if line.contains("G91") {
+    if codes.contains(&91.0) {
         *positioning = Positioning::Relative;
     }
     let relative = *positioning == Positioning::Relative;
@@ -110,6 +116,13 @@ mod tests {
         assert_eq!(split_at_g("X1 G1"), ["GX1 ", "GG", "G1"]);
         let lines = file(&["G0 X10", "G91 G0 X1 G90 G0 Y2"]);
         assert_eq!(find_position_at(&lines, 2).unwrap().x, 11.0);
+    }
+
+    #[test]
+    fn g90_1_and_g91_1_set_arc_centres_not_relative_moves() {
+        let lines = file(&["G21", "G0 X10 Y10", "G71G91.1", "G1 X20", "G90.1 X99", "G91", "G90.1", "G1 X1"]);
+        assert_eq!(find_position_at(&lines, 4).unwrap().x, 20.0);
+        assert_eq!(find_position_at(&lines, 8).unwrap().x, 21.0);
     }
 
     #[test]

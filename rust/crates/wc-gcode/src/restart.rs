@@ -6,6 +6,7 @@ use std::sync::LazyLock;
 use regex::Regex;
 use wc_protocol::main::Units;
 
+use crate::arc::ArcCentres;
 use crate::firmware_gcode::{changes_tool, tool_named_by};
 use crate::{GcodeError, Positioning, py, words};
 
@@ -20,6 +21,8 @@ static DWELL_CODE: LazyLock<Regex> = LazyLock::new(|| Regex::new("^G0*4").expect
 pub struct GcodeState {
     pub units: Units,
     pub positioning: Positioning,
+    /// What the file's arcs' I and J measure from, which a restart must restore for the arcs after it.
+    pub arc_centres: ArcCentres,
     pub x: f64,
     pub y: f64,
     /// `None` until the file sets Z for the current tool; a restart must not lower the bit to a guess.
@@ -86,6 +89,7 @@ impl StateParser {
         let state = GcodeState {
             units: machine,
             positioning: Positioning::Absolute,
+            arc_centres: ArcCentres::Offsets,
             x: home_x,
             y: home_y,
             z: None,
@@ -144,6 +148,11 @@ impl StateParser {
 
     fn motion_words(&mut self, line: &str) -> Result<(), ()> {
         let codes = words::numbers('G', line);
+        if let Some(centres) = codes.iter().rev().find_map(|&code| ArcCentres::set_by(code)) {
+            // WebControl writes none of the command, so its axis words move nothing.
+            self.state.arc_centres = centres;
+            return Ok(());
+        }
         let has = |code: f64| codes.contains(&code);
         let state = &mut self.state;
         state.motion = (0..4u8).find(|&code| has(f64::from(code))).or(state.motion);
@@ -264,7 +273,8 @@ pub fn clearance(units: Units, safe_height_mm: f64, current_z_mm: Option<f64>) -
 }
 
 /// `queueRestartSequence`: rise to the travel height, move to the state's XY, restore tool, spindle, laser and dwell,
-/// lower the bit to its Z target at the plunge feed, then restore the file's modal G0/G1, feed and positioning.
+/// lower the bit to its Z target at the plunge feed, then restore the file's modal G0/G1, feed and positioning, and
+/// its arc-centre mode, which WebControl keeps and leaves out of what it writes.
 pub fn sequence(state: &GcodeState, options: &Options) -> Restart {
     let number = |value: f64| py::repr(py::round(value, 4));
     let travel_height = clearance(state.units, options.safe_height_mm, options.current_z_mm);
@@ -299,6 +309,7 @@ pub fn sequence(state: &GcodeState, options: &Options) -> Restart {
         None => {}
     }
     lines.push(positioning_word(state.positioning).to_string());
+    lines.push(state.arc_centres.word().to_string());
     Restart { lines, stopped_at_tool_change: false }
 }
 
@@ -314,6 +325,7 @@ mod tests {
     use super::*;
 
     const SAFE_Z_MM: &str = "G0 Z5.0 ";
+    const OFFSETS: &str = "G91.1 ";
 
     fn file(lines: &[&str]) -> Vec<String> {
         lines.iter().map(|line| format!("{line} ")).collect()
@@ -392,7 +404,10 @@ mod tests {
 
     #[test]
     fn restart_mid_file_keeps_machine_mm_when_file_has_no_units() {
-        assert_eq!(restart(&METRIC_FILE, 3), ["G21 ", "G90 ", SAFE_Z_MM, "G0 X10.0 Y20.0 ", "G1 Z-3.0 F12.8 ", "G90 "]);
+        assert_eq!(
+            restart(&METRIC_FILE, 3),
+            ["G21 ", "G90 ", SAFE_Z_MM, "G0 X10.0 Y20.0 ", "G1 Z-3.0 F12.8 ", "G90 ", OFFSETS]
+        );
     }
 
     #[test]
@@ -403,7 +418,10 @@ mod tests {
     #[test]
     fn restart_mid_file_uses_the_files_units_over_the_machines() {
         let lines = ["G20", "G90", "G0 X10 Y20", "G1 Z-3", "G1 X30 Y40"];
-        assert_eq!(restart(&lines, 4), ["G20 ", "G90 ", "G0 Z0.1969 ", "G0 X10.0 Y20.0 ", "G1 Z-3.0 F0.5039 ", "G90 "]);
+        assert_eq!(
+            restart(&lines, 4),
+            ["G20 ", "G90 ", "G0 Z0.1969 ", "G0 X10.0 Y20.0 ", "G1 Z-3.0 F0.5039 ", "G90 ", OFFSETS]
+        );
     }
 
     #[test]
@@ -430,7 +448,7 @@ mod tests {
             ("G0 Z-2 F1000", "G1 Z-2.0 F12.8 ", "G0 F1000.0 "),
         ];
         cases.iter().for_each(|&(line, plunge, feed)| {
-            assert_eq!(restart(&["G90", "G1 Z-1", line, "G1 X1"], 3)[4..], [plunge, feed, "G90 "], "{line}");
+            assert_eq!(restart(&["G90", "G1 Z-1", line, "G1 X1"], 3)[4..], [plunge, feed, "G90 ", OFFSETS], "{line}");
         });
     }
 
@@ -446,10 +464,10 @@ mod tests {
     #[test]
     fn restart_sets_no_feed_when_the_file_has_set_none() {
         let cases: [(&[&str], &[&str]); 4] = [
-            (&["G90", "G1 Z-1", "G1 X10", "G1 X1"], &["G1 Z-1.0 F12.8 ", "G90 "]),
-            (&["G90", "G1 Z-1", "G0 X10", "X1"], &["G1 Z-1.0 F12.8 ", "G0 ", "G90 "]),
-            (&["G90", "G1 X10 Y20", "X1"], &["G0 X10.0 Y20.0 ", "G1 ", "G90 "]),
-            (&["G90", "G0 X10 Y20", "X1"], &["G0 X10.0 Y20.0 ", "G90 "]),
+            (&["G90", "G1 Z-1", "G1 X10", "G1 X1"], &["G1 Z-1.0 F12.8 ", "G90 ", OFFSETS]),
+            (&["G90", "G1 Z-1", "G0 X10", "X1"], &["G1 Z-1.0 F12.8 ", "G0 ", "G90 ", OFFSETS]),
+            (&["G90", "G1 X10 Y20", "X1"], &["G0 X10.0 Y20.0 ", "G1 ", "G90 ", OFFSETS]),
+            (&["G90", "G0 X10 Y20", "X1"], &["G0 X10.0 Y20.0 ", "G90 ", OFFSETS]),
         ];
         cases.iter().for_each(|(lines, restored)| {
             let queued = restart(lines, lines.len() - 1);
@@ -461,7 +479,7 @@ mod tests {
     #[test]
     fn restart_before_the_file_sets_z_restores_the_feed_without_lowering() {
         let lines = ["G90", "G1 X10 Y20 F300", "G1 X1"];
-        assert_eq!(restart(&lines, 2), ["G21 ", "G90 ", SAFE_Z_MM, "G0 X10.0 Y20.0 ", "G1 F300.0 ", "G90 "]);
+        assert_eq!(restart(&lines, 2), ["G21 ", "G90 ", SAFE_Z_MM, "G0 X10.0 Y20.0 ", "G1 F300.0 ", "G90 ", OFFSETS]);
     }
 
     #[test]
@@ -498,13 +516,26 @@ mod tests {
     fn restart_does_not_mistake_g91_1_arc_centres_for_relative_moves() {
         let queued = restart(&["G90", "G91.1", "G0 X10 Y20", "G0 X30 Y40", "G1 Z-1"], 5);
         assert_eq!(queued[3], "G0 X30.0 Y40.0 ");
-        assert_eq!(queued.last().unwrap(), "G90 ");
+        assert_eq!(queued[queued.len() - 2..], ["G90 ", OFFSETS]);
+    }
+
+    #[test]
+    fn a_restart_ends_in_the_arc_centre_mode_the_file_set_last() {
+        let lines = ["G21", "G90", "G90.1", "G0 X10 Y20", "G2 X20 Y10 I20 J20", "G91.1 X99", "G1 X5"];
+        let absolute = restart(&lines, 5);
+        assert_eq!(absolute.last().unwrap(), "G90.1 ");
+        assert_eq!(absolute[3], "G0 X20.0 Y10.0 ");
+        let offsets = restart(&lines, 7);
+        assert_eq!(offsets.last().unwrap(), OFFSETS);
+        assert_eq!(offsets[3], "G0 X5.0 Y10.0 ");
+        let state = state_at(&file(&["g90.1", "g1 x1"]), 2, 0.0, 0.0, Units::Mm).unwrap();
+        assert_eq!((state.arc_centres, state.positioning), (ArcCentres::Absolute, Positioning::Absolute));
     }
 
     #[test]
     fn restart_converts_the_default_plunge_feed_to_inches() {
         let queued = restart_with(&["G90", "G0 X1 Y1", "G1 Z-0.1", "G1 X2"], 3, (0.0, 0.0), Units::Inches, 0);
-        assert_eq!(queued[2..], ["G0 Z0.1969 ", "G0 X1.0 Y1.0 ", "G1 Z-0.1 F0.5039 ", "G90 "]);
+        assert_eq!(queued[2..], ["G0 Z0.1969 ", "G0 X1.0 Y1.0 ", "G1 Z-0.1 F0.5039 ", "G90 ", OFFSETS]);
     }
 
     #[test]
@@ -512,19 +543,19 @@ mod tests {
         let lines = ["G21", "G1 Z-2.54 F254", "G1 X25.4 F508", "G20", "G1 X2"];
         assert_eq!(
             restart(&lines, 4),
-            ["G20 ", "G90 ", "G0 Z0.1969 ", "G0 X1.0 Y0.0 ", "G1 Z-0.1 F10.0 ", "G1 F20.0 ", "G90 "]
+            ["G20 ", "G90 ", "G0 Z0.1969 ", "G0 X1.0 Y0.0 ", "G1 Z-0.1 F10.0 ", "G1 F20.0 ", "G90 ", OFFSETS]
         );
     }
 
     #[test]
     fn restart_follows_modal_and_numbered_moves_without_a_g_word() {
         let modal = ["G90", "G1 X10 Y20 F300", "X30 Y40", "Y50", "G1 Z-1"];
-        assert_eq!(restart(&modal, 4)[3..], ["G0 X30.0 Y50.0 ", "G1 F300.0 ", "G90 "]);
+        assert_eq!(restart(&modal, 4)[3..], ["G0 X30.0 Y50.0 ", "G1 F300.0 ", "G90 ", OFFSETS]);
         let numbered = ["N1 G90", "N2 G1 X10 Y20 F300", "N3 X30 Y40", "N4 G1 Z-1"];
-        assert_eq!(restart(&numbered, 3)[3..], ["G0 X30.0 Y40.0 ", "G1 F300.0 ", "G90 "]);
+        assert_eq!(restart(&numbered, 3)[3..], ["G0 X30.0 Y40.0 ", "G1 F300.0 ", "G90 ", OFFSETS]);
         assert_eq!(
             restart(&["G90", "G1 F450", "G1 X10 Y20", "G1 X30"], 3)[3..],
-            ["G0 X10.0 Y20.0 ", "G1 F450.0 ", "G90 "]
+            ["G0 X10.0 Y20.0 ", "G1 F450.0 ", "G90 ", OFFSETS]
         );
     }
 
@@ -538,7 +569,7 @@ mod tests {
         ];
         cases.iter().for_each(|(lines, modal)| {
             let queued = restart(lines, 3);
-            assert_eq!(queued[queued.len() - 2..], [modal.to_string(), "G90 ".to_string()]);
+            assert_eq!(queued[queued.len() - 3..], [modal.to_string(), "G90 ".to_string(), OFFSETS.to_string()]);
         });
     }
 
