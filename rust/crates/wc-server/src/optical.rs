@@ -86,6 +86,11 @@ fn annotated(frames: &[Frame], settings: &OpticalSettings) -> wc_optical::Result
     Ok(base64::engine::general_purpose::STANDARD.encode(png))
 }
 
+/// Image maths runs on a blocking thread: the runtime's two workers also drive the machine.
+async fn off_runtime<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) -> T {
+    tokio::task::spawn_blocking(work).await.expect("vision does not panic")
+}
+
 type MeasureFn = fn(&[Frame], &OpticalSettings, Option<&Orientation>) -> wc_optical::Result<Measurement>;
 type OrientFn = fn(PixelPoint, PixelPoint, PixelPoint, f64) -> wc_optical::Result<Orientation>;
 
@@ -107,13 +112,14 @@ impl Eyes {
             Vision::Measure { id, settings, orientation, .. } => {
                 let measure = self.measure;
                 let (result, png) = match capture(lease).await {
-                    Ok(frames) => tokio::task::spawn_blocking(move || {
-                        let measured = measure(&frames, &settings, orientation.as_ref());
-                        let png = measured.as_ref().ok().and_then(|_| annotated(&frames, &settings).ok());
-                        (measured, png)
-                    })
-                    .await
-                    .expect("vision does not panic"),
+                    Ok(frames) => {
+                        off_runtime(move || {
+                            let measured = measure(&frames, &settings, orientation.as_ref());
+                            let png = measured.as_ref().ok().and_then(|_| annotated(&frames, &settings).ok());
+                            (measured, png)
+                        })
+                        .await
+                    }
                     Err(error) => (Err(error), None),
                 };
                 Seen::Measured { id, result: result.map_err(|e| e.to_string()), png }
@@ -221,11 +227,12 @@ async fn test_image(State(state): State<AppState>, body: Bytes) -> Response {
         Ok(captured) => captured,
         Err(refused) => return refused,
     };
-    match annotated(&frames, &settings) {
-        Ok(png) => {
-            let measurement = wc_optical::measure::measure(&frames, &settings, None).ok();
-            Json(TestImage { png, measurement }).into_response()
-        }
+    let image = off_runtime(move || {
+        let measurement = || wc_optical::measure::measure(&frames, &settings, None).ok();
+        annotated(&frames, &settings).map(|png| TestImage { png, measurement: measurement() })
+    });
+    match image.await {
+        Ok(image) => Json(image).into_response(),
         Err(problem) => error(StatusCode::UNPROCESSABLE_ENTITY, &problem.to_string()),
     }
 }
@@ -238,7 +245,7 @@ async fn find_center(State(state): State<AppState>, body: Bytes) -> Response {
         Ok(captured) => captured,
         Err(refused) => return refused,
     };
-    match wc_optical::measure::find_centre(&frames, &settings) {
+    match off_runtime(move || wc_optical::measure::find_centre(&frames, &settings)).await {
         Ok(centre) => Json(CenterFound { optical_center_x: centre.x, optical_center_y: centre.y }).into_response(),
         Err(problem) => error(StatusCode::UNPROCESSABLE_ENTITY, &problem.to_string()),
     }
@@ -253,8 +260,7 @@ async fn fit(State(state): State<AppState>) -> Response {
         return error(StatusCode::CONFLICT, optical::RUNNING);
     }
     let (settings, measured) = (snapshot.settings.0.clone(), snapshot.optical.grid.measured());
-    let fitted = tokio::task::spawn_blocking(move || optical::fit(&settings, &measured)).await;
-    match fitted.expect("the fit does not panic") {
+    match off_runtime(move || optical::fit(&settings, &measured)).await {
         Ok(fit) => reply(edit(&state, Request::OpticalFitted(Box::new(fit))).await),
         Err((code, message)) => error(status(code), &message),
     }
@@ -455,6 +461,12 @@ mod tests {
         machine.send(Event::Action(wc_protocol::Action::new("stopRun", json!(""), json!(""))));
         until(&machine, |s| state(s) == Some(ScanState::Stopped)).await;
         assert!(pressed.elapsed() < Duration::from_millis(100), "{:?}", pressed.elapsed());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn image_work_leaves_the_runtime_thread_free() {
+        let runtime = std::thread::current().id();
+        assert_ne!(off_runtime(move || std::thread::current().id()).await, runtime);
     }
 
     #[test]
