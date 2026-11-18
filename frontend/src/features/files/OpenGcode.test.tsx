@@ -129,7 +129,7 @@ describe("Open gcode", () => {
     });
   });
 
-  it("drops the overlay and the request when the screen closes mid-load, as Back does", async () => {
+  it("drops the overlay but lets the server finish when the screen closes mid-load, as Back does", async () => {
     const answer = deferred();
     const fetch = fakeFetch({ "/api/files/gcode": gcodeLibrary(), "POST /openGCode": answer.respond });
     const { user, socket } = renderApp("/files/open", { fetch });
@@ -140,10 +140,11 @@ describe("Open gcode", () => {
     await expectPath("/");
     expect(screen.queryByRole("dialog", { name: "Opening gcode…" })).not.toBeInTheDocument();
     expect(topLayer()).toEqual([]);
-    expect(fetch.mock.calls.find(([path]) => path === "/openGCode")?.[1]?.signal?.aborted).toBe(true);
+    expect(fetch.mock.calls.find(([path]) => path === "/openGCode")?.[1]?.signal).toBeUndefined();
 
     await act(async () => answer.settle.resolve(jsonResponse({ status: 200 })));
-    expect(socket.emittedEvents("checkForGCodeUpdate")).toEqual([]);
+    expect(socket.emittedEvents("checkForGCodeUpdate")).toHaveLength(1);
+    expect(currentPath()).toBe("/");
   });
 
   describe("when the server never answers", () => {
@@ -159,7 +160,19 @@ describe("Open gcode", () => {
       await act(() => vi.advanceTimersByTimeAsync(GCODE_LOAD.timeoutMs));
       expect(screen.getByRole("alert")).toHaveTextContent(GCODE_LOAD.timeoutMessage);
       expect(screen.queryByRole("dialog", { name: "Opening gcode…" })).not.toBeInTheDocument();
-      expect(fetch.mock.calls.find(([path]) => path === "/openGCode")?.[1]?.signal?.aborted).toBe(true);
+      expect(currentPath()).toBe("/files/open");
+    });
+
+    it("still shows a load that finishes after the timeout, without closing the screen", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const answer = deferred();
+      const fetch = fakeFetch({ "/api/files/gcode": gcodeLibrary(), "POST /openGCode": answer.respond });
+      const { user, socket } = renderApp("/files/open", { fetch });
+      await user.click(await screen.findByRole("button", { name: "Open" }));
+      await act(() => vi.advanceTimersByTimeAsync(GCODE_LOAD.timeoutMs));
+
+      await act(async () => answer.settle.resolve(jsonResponse({ status: 200 })));
+      expect(socket.emittedEvents("checkForGCodeUpdate")).toHaveLength(1);
       expect(currentPath()).toBe("/files/open");
     });
   });

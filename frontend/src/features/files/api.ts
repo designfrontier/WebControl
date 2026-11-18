@@ -37,35 +37,28 @@ export class FormRouteError extends ApiError {
 }
 
 /** Posts to one of the classic form routes, which answer 200 or an error, mostly without a useful body. */
-export const postForm = async (
-  fetchImpl: Fetch,
-  path: string,
-  fields: Record<string, FormValue>,
-  signal?: AbortSignal,
-) => {
+export const postForm = async (fetchImpl: Fetch, path: string, fields: Record<string, FormValue>) => {
   const body = new FormData();
   Object.entries(fields).forEach(([key, value]) =>
     (Array.isArray(value) ? value : [value]).forEach((item) => body.append(key, item)),
   );
-  const response = await fetchImpl(path, { method: "POST", body, signal });
-  signal?.throwIfAborted();
+  const response = await fetchImpl(path, { method: "POST", body });
   if (response.ok) return;
   const errorBody: unknown = await response.json().catch(() => undefined);
   throw new FormRouteError(response.status, `POST ${path} failed with ${response.status}`, errorBody);
 };
 
-export const openGcode = (fetchImpl: Fetch, file: LibraryFile, signal?: AbortSignal) =>
-  postForm(fetchImpl, "/openGCode", { selectedGCode: libraryPath(file) }, signal);
+export const openGcode = (fetchImpl: Fetch, file: LibraryFile) =>
+  postForm(fetchImpl, "/openGCode", { selectedGCode: libraryPath(file) });
 
-export const uploadGcode = (fetchImpl: Fetch, directory: string, files: File[], signal?: AbortSignal) =>
-  postForm(fetchImpl, "/uploadGCode", { selectedDirectory: directory, "file[]": files }, signal);
+export const uploadGcode = (fetchImpl: Fetch, directory: string, files: File[]) =>
+  postForm(fetchImpl, "/uploadGCode", { selectedDirectory: directory, "file[]": files });
 
 export const saveGcode = (fetchImpl: Fetch, directory: string, fileName: string) =>
   postForm(fetchImpl, "/saveGCode", { selectedDirectory: directory, fileName });
 
 /** Replaces the loaded gcode in memory; the file on disk is untouched. */
-export const editGcode = (fetchImpl: Fetch, gcode: string, signal?: AbortSignal) =>
-  postForm(fetchImpl, "/editGCode", { gcode }, signal);
+export const editGcode = (fetchImpl: Fetch, gcode: string) => postForm(fetchImpl, "/editGCode", { gcode });
 
 export const sendGcode = (fetchImpl: Fetch, gcode: string) => postForm(fetchImpl, "/sendGCode", { gcode });
 

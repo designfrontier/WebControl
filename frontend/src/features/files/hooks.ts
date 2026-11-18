@@ -47,7 +47,7 @@ export interface SubmitOptions {
 
 /**
  * Runs one request at a time, exposing busy and a failure message (the server's own, when it gives one).
- * The task's signal aborts on timeout or unmount; busy clears either way.
+ * On timeout or unmount it stops waiting and aborts the task's signal, so the task can skip its follow-ups.
  */
 export const useSubmit = ({ timeoutMs, timeoutMessage = "The server did not answer in time." }: SubmitOptions = {}) => {
   const [busy, setBusy] = useState(false);
@@ -57,6 +57,7 @@ export const useSubmit = ({ timeoutMs, timeoutMessage = "The server did not answ
   useEffect(() => () => inFlight.current?.abort(), []);
 
   const run = async (task: (signal: AbortSignal) => Promise<void>, failure: string) => {
+    // Not for fetch: a dropped connection cancels the server's load halfway, and Play stays refused.
     const controller = new AbortController();
     inFlight.current = controller;
     const timer =

@@ -18,8 +18,8 @@ const EditForm = ({ initial }: { initial: string }) => {
   const submit = (event: FormEvent) => {
     event.preventDefault();
     return run(async (signal) => {
-      await editGcode(fetchImpl, text.trimEnd(), signal);
-      close();
+      await editGcode(fetchImpl, text.trimEnd());
+      if (!signal.aborted) close();
     }, "Could not apply the edited gcode.");
   };
 

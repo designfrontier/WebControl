@@ -32,9 +32,9 @@ const UploadForm = ({ library }: { library: GcodeLibrary }) => {
     event.preventDefault();
     if (files.length === 0) return setError("Choose at least one gcode file to upload.");
     return run(async (signal) => {
-      await uploadGcode(fetchImpl, directory, files, signal);
+      await uploadGcode(fetchImpl, directory, files);
       client.emit("checkForGCodeUpdate", { data: "Please" });
-      close();
+      if (!signal.aborted) close();
     }, "The upload failed, or the first file could not be opened as gcode.");
   };
 

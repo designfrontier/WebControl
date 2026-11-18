@@ -24,9 +24,9 @@ export const OpenGcode = () => {
             busyNote={<GcodeLoadingOverlay title="Opening gcode…" />}
             submitOptions={GCODE_LOAD}
             open={async (file, signal) => {
-              await openGcode(fetchImpl, file, signal);
+              await openGcode(fetchImpl, file);
               client.emit("checkForGCodeUpdate", { data: "Please" });
-              close();
+              if (!signal.aborted) close();
             }}
           />
         )}
