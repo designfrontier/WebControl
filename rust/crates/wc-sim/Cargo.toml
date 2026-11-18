@@ -1,7 +1,7 @@
 [package]
 name = "wc-sim"
 description = "A model of the Maslow firmware's serial behaviour (not its motion), for tests, e2e and --simulate"
-version = "0.4.0"
+version = "0.4.1"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
