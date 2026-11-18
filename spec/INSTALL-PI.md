@@ -148,24 +148,27 @@ bash webcontrol-rs-<version>-aarch64/install-pi.sh webcontrol-rs-<version>-aarch
    cut (Actions → Holey Calibration).
 
 If something is wrong: `journalctl -u webcontrol-rs -n 100 --no-pager` and `~/.WebControl/webcontrol-rs.log`.
-`spec/rust-checklists/` has the full hardware checklists.
+`spec/rust-checklists/` has the full hardware checklists; its `README.md` says which to run.
 
 ## 7. Firmware
 
 Install WebControl before flashing firmware 51.292 to the controller, and flash it from WebControl: Actions → Upgrade
 holey firmware to 51.292…. The wizard backs up the controller's flash and settings to
-`~/.WebControl/firmware-backups/`, and `spec/rust-checklists/M6.md` rehearses an upgrade and a rollback before the
-real one. Installing first matters: the flash resets the controller's EEPROM, and WebControl writes your settings
-back, where an older WebControl could adopt 51.292's defaults (`spec/firmware.md`, A2). v0.94 was never run against
-51.292, so roll the firmware back to 51.27 (`M6.md`, section 6) before going back to v0.94.
+`~/.WebControl/firmware-backups/`, and `spec/rust-checklists/firmware-upgrade.md` walks through the upgrade, the
+self-test, the chain lengths and a rollback. Installing first matters: the flash resets the controller's EEPROM, and
+WebControl writes your settings back, where an older WebControl could adopt 51.292's defaults (`spec/firmware.md`,
+A2). v0.94 was never run against 51.292 and never writes `$18`, so roll the firmware back to 51.27
+(`firmware-upgrade.md`, section 7) before going back to v0.94.
 
 ## 8. Roll back
 
-Power off (`sudo poweroff`, then wait for the green LED), remove the card, power on. The Pi boots v0.94 from the SSD
-at `http://192.168.86.155:5000`, exactly as before. Nothing on the SSD was changed. To go back to WebControl, put the
-card back in.
+If the controller runs 51.292, roll it back to 51.27 first (`spec/rust-checklists/firmware-upgrade.md`, section 7):
+v0.94 must not drive 51.292. Then power off (`sudo poweroff`, then wait for the green LED), remove the card, power
+on. The Pi boots v0.94 from the SSD at `http://192.168.86.155:5000`, exactly as before. Nothing on the SSD was
+changed. To go back to WebControl, put the card back in.
 
-A bad WebControl update needs no disk swap: `rust/deploy.sh rollback` from the Mac puts the previous binary back.
+A bad WebControl update needs no disk swap: `webcontrol-update --rollback` on the Pi puts the install before the last
+update back (see Updating), and `rust/deploy.sh rollback` from the Mac puts back the binary before the last push.
 
 ## 9. Later: making it permanent
 

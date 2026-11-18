@@ -424,7 +424,8 @@ which the tool does not count). The frontend keeps its 95%. Python has no floor 
 Every milestone ships as a stack of PRs under 1000 source lines each (tests and fixtures excluded). Each PR is split
 by behaviour, with only the next one ready for review. **Each milestone is tested on the owner's microSD card**: run
 `wc-switch rust`, follow the milestone's hardware checklist (`spec/rust-checklists/Mx.md`, written with the
-milestone), then `wc-switch python`. Python stays the default service until M4 passes a real cut.
+milestone; since reorganised by feature, see that directory's `README.md`), then `wc-switch python`. Python stays the
+default service until M4 passes a real cut.
 
 | M | Scope (contract items) | Done when | Size | Needs | Parallel with |
 |---|---|---|---|---|---|
