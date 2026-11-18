@@ -159,7 +159,8 @@ from madgrizzle/Firmware @ 950fb23. Flash it the same way.
 ## 8. If something goes wrong
 
 - The wizard rolls back by itself when the flash fails (a lost avrdude sync is retried once first), when the board's
-  banner changes after the flash, or when the controller does not answer B05 with 51.29 within 30 s. Wait for "Rolled back" or "The upgrade failed".
+  banner changes after the flash, or when the controller does not answer B05 with 51.29 within 30 s. Wait for "Rolled back" or "The upgrade
+  failed".
 - "The upgrade failed" names the backup's `rollback.hex`: flash it as in section 7, part B.
 - `$18` at 126, or Z running too fast: press Stop. Settings ▸ Advanced, Max Z-Axis RPM must read 12.6; Save it, and
   check the log shows `Sent: $18=12.6`. If it will not stay, roll back (section 7).
