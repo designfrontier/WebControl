@@ -623,3 +623,8 @@ Where the Rust backend writes something different from Python by owner decision.
     from a start only a status report gives is refused (`Arc Start Uncertain`) when the report's two decimals could
     put it more than 0.05 mm from where the file means, as an exact half circle can be. Transcripts:
     `g91_1_left_out_of_a_vcarve_file`, `g90_1_arc_centres_written_as_offsets`.
+13. **A byte order mark is dropped at load** (2026-11-18). Python read files as plain UTF-8, so a file saved with a
+    BOM began `\u{feff}G21`; the restart state never saw that G21, and Play mid-file on a machine set to inches sent
+    `G20` and ran a millimetre file in inches. Rust drops one leading U+FEFF before it filters the file, so what is
+    streamed, drawn and restarted from all start at the first word. No transcript has such a file (`wc-machine`
+    test `a_byte_order_mark_does_not_hide_the_files_units_from_a_restart`).

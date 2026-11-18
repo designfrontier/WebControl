@@ -14,10 +14,10 @@ pub fn universal_newlines(raw: &str) -> String {
     raw.replace("\r\n", "\n").replace('\r', "\n")
 }
 
-/// The lines of `raw` as WebControl streams them: spaced words, single spaces, an optional truncation of long
+/// The lines of `raw` as WebControl streams them: no leading byte order mark, spaced words, single spaces, an optional truncation of long
 /// decimals to `truncate` digits, no leading space, and one trailing space.
 pub fn filter(raw: &str, truncate: Option<usize>) -> Result<Vec<String>, GcodeError> {
-    let text = raw.replace("\n\n", "\n");
+    let text = raw.strip_prefix('\u{feff}').unwrap_or(raw).replace("\n\n", "\n");
     let text = WORD_AFTER_DIGIT.replace_all(&text, "$1 $2");
     let mut text = SPACE_RUNS.replace_all(&text, " ").into_owned();
     if let Some(digits) = truncate {
@@ -91,6 +91,12 @@ mod tests {
         assert_eq!(lines("  G0   X 1  Y 2"), ["G0 X1 Y2 "]);
         assert_eq!(lines("G1 X1T2M6"), ["G1 X1 T2 M6 "]);
         assert_eq!(lines("g1x1m3"), ["g1 x1 m3 "], "the firmware upper-cases it, so it is spaced as upper case");
+    }
+
+    #[test]
+    fn a_leading_byte_order_mark_is_dropped_and_no_other() {
+        assert_eq!(lines("\u{feff}G21\nG0 X1"), ["G21 ", "G0 X1 "]);
+        assert_eq!(lines("G21\n\u{feff}G0 X1"), ["G21 ", "\u{feff}G0 X1 "]);
     }
 
     #[test]
