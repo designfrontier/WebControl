@@ -61,14 +61,15 @@ describe("system modals", () => {
     expect(within(screen.getByRole("menuitem", { name: "Update" })).getByText("New")).toBeInTheDocument();
   });
 
-  it("badges Help when pyinstallUpdate arrives, and the Update modal says so", async () => {
+  it("badges Help when pyinstallUpdate arrives, and the Update modal shows the server's check", async () => {
     const { socket, user } = renderApp("/", { fetch: systemFetch() });
     expect(within(helpMenu()).queryByText("New")).not.toBeInTheDocument();
     await user.click(helpMenu());
     await user.click(screen.getByRole("menuitem", { name: "Update" }));
     socket.serverMessage("pyinstallUpdate", "on");
     expect(within(screen.getByRole("button", { name: "Help", hidden: true })).getByText("New")).toBeInTheDocument();
-    expect(within(screen.getByRole("dialog", { name: "Update" })).getByText("An update is available")).toBeVisible();
+    const dialog = within(screen.getByRole("dialog", { name: "Update" }));
+    expect(await dialog.findByRole("heading", { name: "Update available: v0.4.0" })).toBeVisible();
   });
 
   it("retries when system info fails", async () => {

@@ -14,7 +14,7 @@ use wc_machine::{Request, Response as Answer};
 use wc_protocol::calibration::{HoleyParameters, TriangularParameters};
 use wc_protocol::machine::{MachineSetup, QuickConfigure};
 use wc_protocol::main::{Backend, GcodeLine, Macro, MainScreen, PacingStats, Point, StartupState, Units};
-use wc_protocol::system::{BundledFirmware, PidSettings, SystemInfo, UpdateStatus};
+use wc_protocol::system::{BundledFirmware, PidSettings, SystemInfo};
 use wc_protocol::viewer::{MachineFrame, ViewerSnapshot};
 
 use crate::AppState;
@@ -193,7 +193,7 @@ pub(crate) async fn system(State(state): State<AppState>) -> Json<SystemInfo> {
         four_motor: version >= CUSTOM_FIRMWARE_VERSION,
         firmware_supports_zaxis_limit: supports_z_limits(snapshot.firmware_build.as_deref()),
         firmware_build: snapshot.firmware_build.clone(),
-        update: UpdateStatus { available: false, version: None },
+        update: state.updates.status(),
         firmware_upgrade: Some(snapshot.firmware_upgrade.clone()),
     })
 }

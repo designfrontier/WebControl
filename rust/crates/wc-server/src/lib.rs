@@ -17,6 +17,7 @@ pub mod host;
 mod optical;
 mod routes;
 pub mod serial;
+pub mod updates;
 mod ws;
 
 use std::time::Duration;
@@ -74,6 +75,7 @@ pub struct AppState {
     platform: Platform,
     closing: Arc<watch::Sender<bool>>,
     cameras: camera::Cameras,
+    updates: updates::Updates,
 }
 
 impl AppState {
@@ -81,7 +83,12 @@ impl AppState {
     pub fn new(machine: MachineHandle, ping: PingConfig, paths: Paths) -> AppState {
         let closing = Arc::new(watch::channel(false).0);
         let cameras = camera::Cameras::default();
-        AppState { machine, paths, ping, platform: Platform::current(), closing, cameras }
+        let updates = updates::Updates::off();
+        AppState { machine, paths, ping, platform: Platform::current(), closing, cameras, updates }
+    }
+
+    pub fn with_updates(self, updates: updates::Updates) -> AppState {
+        AppState { updates, ..self }
     }
 
     pub fn with_cameras(self, cameras: camera::Cameras) -> AppState {

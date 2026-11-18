@@ -70,3 +70,45 @@ test("Help ▸ Logs opens the logs in a new tab", async ({ page, isMobile }) => 
   await expect(tab).toHaveURL(/\/logs$/);
   await tab.close();
 });
+
+test("the Update screen says when GitHub can't be reached and how to update on the Pi", async ({ page }) => {
+  await page.goto("/updates");
+  const updates = page.getByRole("dialog", { name: "Update" });
+  await expect(updates.getByRole("heading", { name: "Couldn't reach GitHub" })).toBeVisible();
+  await expect(updates.getByRole("alert")).toContainText("Couldn't reach GitHub");
+  await expect(updates.getByText(/^webcontrol-rs \d+\.\d+\.\d+.* \(commit \w+\)$/)).toBeVisible();
+  const steps = updates.getByRole("region", { name: "How to update" });
+  await expect(steps.getByText("webcontrol-update", { exact: true })).toBeVisible();
+  await expect(steps.getByText("ssh pi@localhost")).toBeVisible();
+});
+
+test("the Update screen shows a newer release with its notes, and no install button", async ({ page }) => {
+  await page.route("**/api/system/updates", (route) =>
+    route.fulfill({
+      json: {
+        installed: { version: "0.3.0", commit: "dc9bdca" },
+        repo: "designfrontier/WebControl",
+        latest: {
+          tag: "v0.4.0",
+          name: "webcontrol-rs 0.4.0",
+          publishedAt: "2026-11-20T10:00:00Z",
+          url: "https://github.com/designfrontier/WebControl/releases/tag/v0.4.0",
+          notes: "## Faster previews\n\n<script>window.injected = true</script>",
+          commit: null,
+        },
+        status: "updateAvailable",
+        error: null,
+        checkedAt: Date.now(),
+        backup: { version: "0.2.0", date: "2026-11-16T18:00:00Z" },
+      },
+    }),
+  );
+  await page.goto("/updates");
+  const updates = page.getByRole("dialog", { name: "Update" });
+  await expect(updates.getByRole("heading", { name: "Update available: v0.4.0" })).toBeVisible();
+  await expect(updates.getByRole("heading", { name: "Faster previews" })).toBeVisible();
+  await expect(updates.getByText(/^0\.2\.0 from /)).toBeVisible();
+  await expect(updates.getByRole("link", { name: "View on GitHub" })).toHaveAttribute("target", "_blank");
+  await expect(updates.getByRole("button", { name: /install/i })).toHaveCount(0);
+  expect(await page.evaluate(() => "injected" in window)).toBe(false);
+});

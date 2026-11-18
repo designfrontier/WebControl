@@ -134,6 +134,7 @@ pub async fn serve(options: Options, shutdown: impl Future<Output = ()> + Send +
     std::io::stdout().flush()?;
     let streaming = cameras.stream_to(machine.clone());
     let state = AppState::new(machine, PingConfig::default(), paths).with_cameras(cameras);
+    let state = state.with_updates(crate::updates::Updates::from_env());
     let closing = state.clone();
     let stopped = async move {
         tokio::select! {

@@ -3,6 +3,8 @@ import { simulatorPort } from "./e2e/simulator";
 
 const port = Number(process.env.E2E_BACKEND_PORT ?? 5055);
 const binary = `"\${CARGO_TARGET_DIR:-../rust/target}/debug/webcontrol-rs"`;
+/** Nothing listens on port 9, so update checks fail at once instead of asking GitHub. */
+const offline = { WC_GITHUB_API: "http://127.0.0.1:9" };
 
 /** `webcontrol-rs` built with this dist embedded, on a throwaway home and with no controller. */
 const backendCommand =
@@ -27,13 +29,14 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI && !process.env.E2E_BACKEND_PORT,
       // A CI run whose Cargo.lock changed rebuilds the server from a cold cache before it can answer.
       timeout: process.env.CI ? 600_000 : 180_000,
-      env: { E2E_BACKEND_PORT: String(port) },
+      env: { E2E_BACKEND_PORT: String(port), ...offline },
     },
     {
       command: `${binary} --port ${simulatorPort} --home "$(mktemp -d)" --simulate`,
       url: `http://localhost:${simulatorPort}/`,
       reuseExistingServer: false,
       timeout: 60_000,
+      env: offline,
     },
   ],
 });

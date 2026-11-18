@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "generatedFrom": "frontend/src/protocol (npm run contract)",
   "socket": {
     "path": "/socket.io",
@@ -1235,13 +1235,13 @@
     },
     {
       "method": "GET",
-      "path": "/api/system/releases",
+      "path": "/api/system/updates",
       "family": "api",
-      "summary": "WebControl releases on GitHub",
+      "summary": "The installed version, the latest published release on GitHub and the update backup",
       "responses": {
         "200": {
           "contentType": "application/json",
-          "schema": "schemas/http/get-api-system-releases.200.json"
+          "schema": "schemas/http/get-api-system-updates.200.json"
         }
       }
     },
