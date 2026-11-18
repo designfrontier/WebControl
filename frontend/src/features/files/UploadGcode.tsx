@@ -65,7 +65,7 @@ const UploadForm = ({ library }: { library: GcodeLibrary }) => {
         </div>
         <FormError message={error} />
         {locked && <p className="muted">{GCODE_LOCKED_NOTE}</p>}
-        {busy && <GcodeLoadingOverlay title="Uploading gcode…" />}
+        {busy && <GcodeLoadingOverlay title="Uploading G-Code…" />}
         <div className="actions">
           <button type="submit" className="primary" disabled={busy || locked}>
             {busy ? "Uploading…" : "Upload and open"}

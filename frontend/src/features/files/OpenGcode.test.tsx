@@ -80,7 +80,7 @@ describe("Open gcode", () => {
     const { user } = setup({ respond: answer.respond } as unknown as ReturnType<typeof recorder>);
     await user.click(await screen.findByRole("button", { name: "Open" }));
 
-    const overlay = screen.getByRole("dialog", { name: "Opening gcode…" });
+    const overlay = screen.getByRole("dialog", { name: "Opening G-Code…" });
     expect(overlay).toHaveAttribute("aria-busy", "true");
     expect(overlay).toHaveAccessibleDescription(/building its preview/);
     expect(topLayer().at(-1)).toBe(overlay);
@@ -93,7 +93,7 @@ describe("Open gcode", () => {
 
     answer.settle.resolve(jsonResponse({ status: 200 }));
     await expectPath("/");
-    expect(screen.queryByRole("dialog", { name: "Opening gcode…" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Opening G-Code…" })).not.toBeInTheDocument();
     expect(topLayer()).toEqual([]);
   });
 
@@ -102,7 +102,7 @@ describe("Open gcode", () => {
       const { user } = setup({ respond } as unknown as ReturnType<typeof recorder>);
       await user.click(await screen.findByRole("button", { name: "Open" }));
       expect(await screen.findByRole("alert")).toHaveTextContent(message);
-      expect(screen.queryByRole("dialog", { name: "Opening gcode…" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("dialog", { name: "Opening G-Code…" })).not.toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Open" })).toBeEnabled();
       expect(currentPath()).toBe("/files/open");
     };
@@ -125,7 +125,7 @@ describe("Open gcode", () => {
       });
       await user.click(open);
       expect(await screen.findByRole("alert")).toHaveTextContent("Could not open leg.nc.");
-      expect(screen.queryByRole("dialog", { name: "Opening gcode…" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("dialog", { name: "Opening G-Code…" })).not.toBeInTheDocument();
     });
   });
 
@@ -134,11 +134,11 @@ describe("Open gcode", () => {
     const fetch = fakeFetch({ "/api/files/gcode": gcodeLibrary(), "POST /openGCode": answer.respond });
     const { user, socket } = renderApp("/files/open", { fetch });
     await user.click(await screen.findByRole("button", { name: "Open" }));
-    expect(screen.getByRole("dialog", { name: "Opening gcode…" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Opening G-Code…" })).toBeInTheDocument();
 
     act(() => screen.getByRole("button", { name: "Cancel" }).click());
     await expectPath("/");
-    expect(screen.queryByRole("dialog", { name: "Opening gcode…" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Opening G-Code…" })).not.toBeInTheDocument();
     expect(topLayer()).toEqual([]);
     expect(fetch.mock.calls.find(([path]) => path === "/openGCode")?.[1]?.signal).toBeUndefined();
 
@@ -155,11 +155,11 @@ describe("Open gcode", () => {
       const fetch = fakeFetch({ "/api/files/gcode": gcodeLibrary(), "POST /openGCode": pending });
       const { user } = renderApp("/files/open", { fetch });
       await user.click(await screen.findByRole("button", { name: "Open" }));
-      expect(screen.getByRole("dialog", { name: "Opening gcode…" })).toBeInTheDocument();
+      expect(screen.getByRole("dialog", { name: "Opening G-Code…" })).toBeInTheDocument();
 
       await act(() => vi.advanceTimersByTimeAsync(GCODE_LOAD.timeoutMs));
       expect(screen.getByRole("alert")).toHaveTextContent(GCODE_LOAD.timeoutMessage);
-      expect(screen.queryByRole("dialog", { name: "Opening gcode…" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("dialog", { name: "Opening G-Code…" })).not.toBeInTheDocument();
       expect(currentPath()).toBe("/files/open");
     });
 

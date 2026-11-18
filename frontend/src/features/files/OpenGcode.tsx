@@ -21,7 +21,7 @@ export const OpenGcode = () => {
             library={library}
             legend="Gcode files"
             lockedReason={locked ? GCODE_LOCKED_NOTE : undefined}
-            busyNote={<GcodeLoadingOverlay title="Opening gcode…" />}
+            busyNote={<GcodeLoadingOverlay title="Opening G-Code…" />}
             submitOptions={GCODE_LOAD}
             open={async (file, signal) => {
               await openGcode(fetchImpl, file);

@@ -82,7 +82,7 @@ test("blocks the whole page while gcode loads, through Escape, until the server 
   });
   await page.goto("/files/open");
   await page.getByRole("button", { name: "Open", exact: true }).click();
-  const overlay = page.getByRole("dialog", { name: "Opening gcode…" });
+  const overlay = page.getByRole("dialog", { name: "Opening G-Code…" });
   await expect(overlay).toBeVisible();
 
   await page.keyboard.press("Escape");

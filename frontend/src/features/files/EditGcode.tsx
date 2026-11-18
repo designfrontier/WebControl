@@ -33,7 +33,7 @@ const EditForm = ({ initial }: { initial: string }) => {
       />
       <FormError message={error} />
       {locked && <p className="muted">A job is running or paused. Stop the job first to apply changes.</p>}
-      {busy && <GcodeLoadingOverlay title="Applying gcode changes…" />}
+      {busy && <GcodeLoadingOverlay title="Applying G-Code changes…" />}
       <div className="actions">
         <button
           type="submit"

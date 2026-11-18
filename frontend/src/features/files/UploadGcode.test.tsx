@@ -55,13 +55,13 @@ describe("Upload gcode", () => {
     await user.upload(await screen.findByLabelText("Gcode files"), nc("a.nc"));
     await user.click(screen.getByRole("button", { name: "Upload and open" }));
     expect(screen.getByRole("button", { name: "Uploading…" })).toBeDisabled();
-    const overlay = screen.getByRole("dialog", { name: "Uploading gcode…" });
+    const overlay = screen.getByRole("dialog", { name: "Uploading G-Code…" });
     expect(overlay).toHaveAccessibleDescription(/building its preview/);
     expect(topLayer().at(-1)).toBe(overlay);
 
     answer.settle.resolve(jsonResponse({ status: 200 }));
     await expectPath("/");
-    expect(screen.queryByRole("dialog", { name: "Uploading gcode…" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Uploading G-Code…" })).not.toBeInTheDocument();
   });
 
   it("clears the overlay when the upload fails", async () => {
@@ -69,11 +69,11 @@ describe("Upload gcode", () => {
     const { user } = setup({ respond: answer.respond } as unknown as ReturnType<typeof recorder>);
     await user.upload(await screen.findByLabelText("Gcode files"), nc("a.nc"));
     await user.click(screen.getByRole("button", { name: "Upload and open" }));
-    expect(screen.getByRole("dialog", { name: "Uploading gcode…" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Uploading G-Code…" })).toBeInTheDocument();
 
     answer.settle.reject(new TypeError("Failed to fetch"));
     expect(await screen.findByRole("alert")).toHaveTextContent("The upload failed");
-    expect(screen.queryByRole("dialog", { name: "Uploading gcode…" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Uploading G-Code…" })).not.toBeInTheDocument();
   });
 
   it("creates a directory and selects it", async () => {
