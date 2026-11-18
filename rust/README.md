@@ -46,7 +46,8 @@ recorded outputs.
   a gcode file, for the load time in `spec/rust-checklists/files-boards.md`
 - `bash deploy/test.sh`: `wc-switch`, `deploy.sh` and `install-pi.sh` against stubs
 - `bash deploy/update-test.sh`: `webcontrol-update` against `scripts/release.sh`'s tarballs, a `file://` GitHub API
-  and `/api/state`, and stub `sudo`, `systemctl` and binaries (update, backup, checksum, busy, rollback, `--status`)
+  and `/api/state`, and stub `sudo`, `systemctl` and binaries (update, version order, backup, checksum, busy, rollback,
+  `--status`)
 - `WC_FIRMWARE_HEX=<hex> bash deploy/update-docker-test.sh 0.9.0=<binary> 0.9.1=<binary> 0.9.2=<binary>`:
   `webcontrol-update` for real in arm64 Debian trixie with systemd and a password for `sudo`, against three aarch64
   builds (each made with that `WC_VERSION`) packaged by `scripts/release.sh`
@@ -126,12 +127,17 @@ To update from the Mac with a release's binary instead of a local build:
 
 ```sh
 webcontrol-update            # the latest published release, if it is newer
-webcontrol-update --status   # installed version, the backup, the latest published release
+webcontrol-update --status   # installed version, the backup, the latest release, and whether it is an update
 webcontrol-update --rollback # put the backup back
 ```
 
 It only sees **published** releases: GitHub hides drafts from the API, so publish the draft (Releases, above) before
-updating. `--version v0.2.0` installs that tag instead, `--force` reinstalls the installed version, and
+updating. Versions compare as `MAJOR.MINOR.PATCH`, each field as a number (a leading `v` is ignored); a pre-release
+such as `0.4.0-rc.1` comes before `0.4.0`, and a `git describe` build such as `0.4.0-3-gabc1234` after it. If the
+installed version is newer than the latest release (a build pushed from the Mac, or a release installed with
+`--version`), it changes nothing and says so. An installed version it cannot parse is updated whenever it differs,
+with a warning. `--version v0.2.0` installs that tag instead, older or not (with a warning when it is older);
+`--force` reinstalls the installed version but never downgrades; and
 `--repo owner/name` (or `WEBCONTROL_REPO`) reads another fork's releases (default `designfrontier/WebControl`).
 `GITHUB_TOKEN`, if set, is sent to the API (on curl's stdin, not its arguments) to avoid its rate limit.
 

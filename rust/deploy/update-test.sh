@@ -522,6 +522,122 @@ refuses_a_bad_version_flag() {
     ! grep -qs "^curl" "$work/calls"
 }
 
+installed_newer_is_left_alone() {
+  fresh
+  installed 1.2
+  publish 1.1
+  latest 1.1
+  local before
+  before="$(snapshot)"
+  update > "$work/out" &&
+    grep -qx "Installed 1.2 is newer than the latest published release 1.1; nothing to do. Use --version v1.1 to install it anyway." \
+      "$work/out" && no_changes_since "$before" && ! grep -qs "sudo" "$work/calls" &&
+    ! grep -qs "aarch64.tar.gz" "$work/calls" || return 1
+  update --force > "$work/out" && grep -q "is newer than the latest published release" "$work/out" &&
+    no_changes_since "$before" && ! grep -qs "sudo" "$work/calls"
+}
+
+numeric_fields_update() {
+  fresh
+  installed 1.9.0
+  publish 1.10.0
+  latest 1.10.0
+  update > "$work/out" && grep -q "Updated webcontrol-rs to 1.10.0" "$work/out" &&
+    [ "$(version_of "$opt/webcontrol-rs")" = 1.10.0 ]
+}
+
+equal_but_spelled_differently_is_up_to_date() {
+  fresh
+  installed 1.0
+  publish 1.0.0
+  latest 1.0.0
+  update > "$work/out" && grep -q "1.0.0 is installed, the latest published release" "$work/out" &&
+    ! grep -qs "sudo" "$work/calls"
+}
+
+release_after_its_prerelease_updates() {
+  fresh
+  installed 2.0.0-rc.1
+  publish 2.0.0
+  latest 2.0.0
+  update > /dev/null && [ "$(version_of "$opt/webcontrol-rs")" = 2.0.0 ] || return 1
+  publish 2.0.0-rc.2
+  latest 2.0.0-rc.2
+  update > "$work/out" && grep -q "Installed 2.0.0 is newer than the latest published release 2.0.0-rc.2" "$work/out" &&
+    [ "$(version_of "$opt/webcontrol-rs")" = 2.0.0 ]
+}
+
+pinning_an_older_version_warns() {
+  fresh
+  installed 1.2
+  publish 1.1
+  latest 1.1
+  update --version v1.1 > "$work/out" &&
+    grep -qx "Warning: 1.1 is older than the installed 1.2; installing it because --version asked for it." "$work/out" &&
+    [ "$(version_of "$opt/webcontrol-rs")" = 1.1 ]
+}
+
+unparseable_installed_version_updates_with_a_warning() {
+  fresh
+  installed abc1234
+  publish 1.1
+  latest 1.1
+  update > "$work/out" && grep -q 'Warning: cannot compare the installed version "abc1234" with 1.1' "$work/out" &&
+    [ "$(version_of "$opt/webcontrol-rs")" = 1.1 ]
+}
+
+# status_says <installed> <latest> <wording>
+status_says() {
+  fresh
+  installed "$1"
+  publish "$2"
+  latest "$2"
+  update --status > "$work/out" && grep -qE "^Update: +$3" "$work/out" && ! grep -qs sudo "$work/calls"
+}
+
+status_compares_versions() {
+  status_says 1.1 1.2 "update available: webcontrol-update installs v1.2$" &&
+    status_says 1.2 1.2 "up to date$" &&
+    status_says 1.3 1.2 "installed 1.3 is newer than latest published 1.2" &&
+    status_says abc1234 1.2 'unknown: cannot compare "abc1234" with 1.2$'
+}
+
+# The updater's functions, without running main.
+order() { (eval "$(sed '$d' "$rust/webcontrol-update")" && version_order "$1" "$2"); }
+
+orders_versions_like_semver() {
+  local a want b got
+  while read -r a want b; do
+    got="$(order "$a" "$b")"
+    [ "$got" = "$want" ] || { echo "  $a against $b should be $want, got $got" >&2; return 1; }
+  done <<'EOF'
+0.4.0 newer 0.3.0
+v0.3.0 older 0.4.0
+0.10.0 newer 0.9.0
+1.0 same 1.0.0
+v1.0.0 same 1.0.0
+007.1 same 7.1
+1.0.0+build.5 same 1.0.0
+99999999999999999999.0 newer 99999999999999999998.0
+1.0.0-rc.1 older 1.0.0
+1.0.0-alpha older 1.0.0-alpha.1
+1.0.0-alpha.1 older 1.0.0-alpha.beta
+1.0.0-alpha.beta older 1.0.0-beta
+1.0.0-beta.2 older 1.0.0-beta.11
+1.0.0-beta.11 older 1.0.0-rc.1
+1.0.0-rc.1 same 1.0.0-rc.1
+0.3.0-5-gabc1234 newer 0.3.0
+0.3.0-5-gabc1234-dirty older 0.3.1
+0.3.0-dirty newer 0.3.0
+0.3.0-12-gaaa1 newer 0.3.0-5-gbbb2
+0.3.0-rc.1-3-gabc1234 older 0.3.0-rc.2
+0.3.0-rc.1-3-gabc1234 newer 0.3.0-rc.1
+0.3.0-rc.1-dirty older 0.3.0
+abc1234 unknown 0.3.0
+0.3.0 unknown ../x
+EOF
+}
+
 help_and_bad_flags() {
   update --help > "$work/out" && grep -q "Only PUBLISHED releases" "$work/out" && grep -q -- "--rollback" "$work/out" &&
     ! update --frobnicate > /dev/null 2>&1
@@ -555,6 +671,14 @@ check "a job started during the update: files put back, nothing restarted" job_s
 check "a restore skips a sudoers rule visudo rejects" restore_skips_a_sudoers_rule_visudo_rejects
 check "refuses a tarball holding a link" refuses_a_tarball_with_a_link
 check "refuses a --version that is not a tag" refuses_a_bad_version_flag
+check "an installed version newer than the latest is left alone, even with --force" installed_newer_is_left_alone
+check "versions compare field by field as numbers" numeric_fields_update
+check "1.0 and 1.0.0 are the same version" equal_but_spelled_differently_is_up_to_date
+check "a release comes after its pre-releases" release_after_its_prerelease_updates
+check "--version installs an older release with a warning" pinning_an_older_version_warns
+check "an installed version that is not semver updates with a warning" unparseable_installed_version_updates_with_a_warning
+check "--status says update available, up to date or newer" status_compares_versions
+check "versions order like semver" orders_versions_like_semver
 
 if [ "$failures" != 0 ]; then
   echo "$failures failed"

@@ -61,6 +61,63 @@ describe("bindMachineStore", () => {
     expect(store.getState().units).toBe("MM");
   });
 
+  it("keeps what the server pushed while the startup snapshot was on its way", async () => {
+    const pending: ((state: ReturnType<typeof startupState>) => void)[] = [];
+    const { socket, store } = setup(vi.fn(() => new Promise((resolve) => pending.push(resolve))));
+    socket.serverConnect();
+    socket.serverMessage("gcodeFile", { file: "jobs/new.nc" });
+    socket.serverMessage("theme", { theme: "dark" });
+    socket.serverMessage("requestedSetting", { setting: "units", value: "MM" });
+    socket.serverMessage("requestedSetting", { setting: "pauseButtonSetting", value: "Resume" });
+    socket.serverMessage("homePositionMessage", { xval: 5, yval: 6 });
+    socket.serverMessage("hostAddress", { hostAddress: "10.0.0.9:5000" });
+    socket.serverMessage("statusMessage", { uploadFlag: 1, positioningMode: 0, currentTool: 0, jobInProgress: true });
+    socket.serverMessage("healthMessage", { cpuUsage: 1, bufferSize: 0, controllerFirmwareVersion: 51.29 });
+    socket.serverMessage("requestedSetting", { setting: "someOtherSetting", value: 1 });
+    socket.serverMessage("alarm", { message: "Alarm" });
+
+    pending[0](
+      startupState({
+        gcodeFile: "jobs/old.nc",
+        theme: "light",
+        units: "INCHES",
+        unitsZ: "INCHES",
+        pauseButtonSetting: "Pause",
+        homePosition: { x: 0, y: 0 },
+        hostAddress: "10.0.0.1:5000",
+        jobInProgress: false,
+        controllerFirmwareVersion: 0,
+      }),
+    );
+    await flush();
+
+    expect(store.getState()).toMatchObject({
+      gcodeFile: "jobs/new.nc",
+      theme: "dark",
+      units: "MM",
+      unitsZ: "INCHES",
+      pauseButton: "Resume",
+      homePosition: { x: 5, y: 6 },
+      hostAddress: "10.0.0.9:5000",
+      job: { inProgress: true },
+      firmwareVersion: 51.29,
+    });
+  });
+
+  it("lets the next snapshot replace values pushed before it was requested", async () => {
+    const pending: ((state: ReturnType<typeof startupState>) => void)[] = [];
+    const { socket, store } = setup(vi.fn(() => new Promise((resolve) => pending.push(resolve))));
+    socket.serverConnect();
+    socket.serverMessage("gcodeFile", { file: "jobs/new.nc" });
+    socket.serverMessage("statusMessage", { uploadFlag: 0, positioningMode: 0, currentTool: 0 });
+    socket.serverMessage("healthMessage", { cpuUsage: 1, bufferSize: 0 });
+    socket.serverDisconnect();
+    socket.serverConnect();
+    pending[1](startupState({ gcodeFile: null, jobInProgress: true, controllerFirmwareVersion: 51.29 }));
+    await flush();
+    expect(store.getState()).toMatchObject({ gcodeFile: null, job: { inProgress: true }, firmwareVersion: 51.29 });
+  });
+
   it("feeds store commands into the store", () => {
     const { socket, store } = setup();
     socket.serverConnect();

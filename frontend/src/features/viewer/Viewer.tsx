@@ -48,6 +48,7 @@ export const Viewer = ({ currentLine = "" }: { currentLine?: string }) => {
   const fetch = useFetch();
   const socket = useMachine((state) => state.socket);
   const units = useMachine((state) => state.units);
+  const gcodeFile = useMachine((state) => state.gcodeFile);
   const position = useMachine((state) => state.position);
   const homePosition = useMachine((state) => state.homePosition);
   const gcodePosition = useMachine((state) => state.gcodePosition);
@@ -286,8 +287,14 @@ export const Viewer = ({ currentLine = "" }: { currentLine?: string }) => {
       </div>
 
       <figcaption className="viewer-caption">
-        <LoadedFile className="viewer-file" />
-        <span>{data.gcode ? `${cutSegments} cut and ${rapidSegments} rapid moves` : "No gcode loaded"}</span>
+        {gcodeFile === null && !data.gcode ? (
+          <span>No file loaded</span>
+        ) : (
+          <>
+            {gcodeFile === null ? null : <LoadedFile className="viewer-file" />}
+            <span>{data.gcode ? `${cutSegments} cut and ${rapidSegments} rapid moves` : "No gcode loaded"}</span>
+          </>
+        )}
         {data.error ? <span role="alert">{data.error}</span> : null}
       </figcaption>
 
