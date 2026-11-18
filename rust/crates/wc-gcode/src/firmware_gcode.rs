@@ -80,6 +80,21 @@ pub fn with_tool_first(line: &str, tool: i64) -> String {
     format!("T{tool} {rest}{trailing}")
 }
 
+/// A G38 word other than G38.2. The firmware's `G38()` probes only when the two characters after `G38` are `.2`;
+/// on any other it moves nothing, zeroes nothing and acks `ok` (spec/firmware.md §4).
+pub fn probe_the_firmware_ignores(line: &str) -> bool {
+    let text = line.as_bytes();
+    let g_number = |at: usize| {
+        let digits = text[at + 1..].iter().take_while(|b| b.is_ascii_digit() || b.is_ascii_punctuation()).count();
+        let number = String::from_utf8_lossy(&text[at + 1..at + 1 + digits]);
+        FIRMWARE_NUMBER.find(&number).and_then(|found| found.as_str().parse::<f64>().ok()).map(|value| value as i64)
+    };
+    !is_machine_command(line)
+        && (0..text.len())
+            .filter(|&at| text[at].eq_ignore_ascii_case(&b'G'))
+            .any(|at| g_number(at) == Some(38) && text.get(at + 3..at + 5) != Some(b".2"))
+}
+
 /// `toolChangeLine`: what to send for a line, the tool the firmware will have pending after it, and whether its M6
 /// changes tool.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -102,6 +117,16 @@ pub fn tool_change_line(line: &str, next_tool: i64, current_tool: i64) -> ToolCh
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_g38_but_g38_2_is_a_probe_the_firmware_ignores() {
+        ["G38.3 Z-10 ", "G90 G38.4 Z-1", "g38.5 z-2", "G38 Z-1", "G38.1", "G038.2 Z-1", "G38.35", "G38G1"]
+            .iter()
+            .for_each(|line| assert!(probe_the_firmware_ignores(line), "{line}"));
+        ["G38.2 Z-10 ", "G90 G38.2 Z-1", "g38.2", "G38.25", "G1 X38.3", "G3 X1", "G 38.3", "B38.3", "$38=1", "G3.8"]
+            .iter()
+            .for_each(|line| assert!(!probe_the_firmware_ignores(line), "{line}"));
+    }
 
     #[test]
     fn the_firmware_reads_t_only_where_its_parser_does() {

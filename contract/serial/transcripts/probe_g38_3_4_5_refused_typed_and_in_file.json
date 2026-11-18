@@ -1,0 +1,44 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "probe_g38_3_4_5_refused_typed_and_in_file",
+    "description": "51.27 and 51.292 probe only on G38.2: any other G38 word prints `G38.n is invalid. Only G38.2 recognized.` and acks `ok` with no move and no `z axis zeroed` (holey GCode.cpp G38), so a file that relies on it would cut from a Z that was never set. Typed, G38.3 and G38.5 are refused with an alert and the lines after them still go; in a file, G38.4 pauses the job before it with an alert, as an unclosed comment does. Python sent them.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "rust"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    },
+    "gcode": {
+      "lines": [
+        "G21",
+        "G0 Z5",
+        "G38.4 Z-10 F100",
+        "G1 Z-1 F200"
+      ]
+    }
+  },
+  "events": [
+    {"type": "http", "method": "POST", "path": "/sendGCode", "form": {"gcode": "G38.3 Z-10\nG0 X1"}, "status": 200},
+    {"type": "tx", "bytes": "G0 X1 \n"},
+    {"type": "rx", "line": "G0 X1"},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "alerts": [{"title": "Command Unsupported Probe", "message": "That command is a G38 probe other than G38.2"}], "state": {"probing": false}},
+    {"type": "http", "method": "POST", "path": "/sendGCode", "form": {"gcode": "g90 g38.5 z-10"}, "status": 200},
+    {"type": "expect", "alerts": [{"title": "Command Unsupported Probe"}], "state": {"probing": false}},
+    {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "G21"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 Z5  \n"},
+    {"type": "rx", "line": "G0 Z5"},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "state": {"uploadFlag": 2, "jobInProgress": true, "gcodeIndex": 2, "probing": false}, "alerts": [{"title": "Line Unsupported Probe", "message": "Line 3 is a G38 probe other than G38.2"}]}
+  ]
+}

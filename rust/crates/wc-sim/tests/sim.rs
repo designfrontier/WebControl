@@ -143,6 +143,17 @@ fn a_missed_probe_drops_the_lines_behind_it() {
 }
 
 #[test]
+fn a_g38_other_than_g38_2_acks_without_moving() {
+    let mut sim = sim();
+    sim.receive(b"G0 Z5\n", 0);
+    assert_eq!(send(&mut sim, "G38.3 Z-10\n"), ["G38.3 is invalid. Only G38.2 recognized.", "ok"]);
+    assert_eq!(send(&mut sim, "G90 G38.4 Z-10\n"), ["G38.4 is invalid. Only G38.2 recognized.", "ok"]);
+    sim.z_axis_attached = false;
+    assert_eq!(send(&mut sim, "G38.5 Z-10\n"), ["G38.2 gcode only valid with z-axis attached", "ok"]);
+    assert_eq!(sim.position()[2], 5.0);
+}
+
+#[test]
 fn a_probe_without_a_z_axis_acks_without_zeroing() {
     let mut sim = sim();
     sim.z_axis_attached = false;

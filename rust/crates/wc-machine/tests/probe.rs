@@ -4,7 +4,8 @@ mod rig;
 
 use rig::{Rig, alerts, pushed, settings, written};
 use serde_json::json;
-use wc_machine::Effect;
+use wc_machine::files::Request;
+use wc_machine::{Effect, Event};
 
 const PROBING: &str = "Wait for Touch Z to finish or press Stop";
 const NOT_ZEROED: &str = "Probe finished but Z was not zeroed";
@@ -191,4 +192,40 @@ fn pause_during_a_probe_in_a_file_resumes_at_the_zeroed_z() {
     rig.act("resumeRun");
     let resumed = rig.run_to_quiet();
     assert!(resumed.iter().any(|line| line.starts_with("G1 Z0.0")), "{resumed:?}");
+}
+
+/// 51.27 and 51.292 answer any G38 but G38.2 with `ok` and no move, so the bit was never zeroed: nothing is sent.
+#[test]
+fn a_typed_probe_the_firmware_ignores_is_refused_with_an_alert() {
+    ["G38.3 Z-10", "g90 g38.4 z-10", "G38.5 Z-10 F100"].into_iter().for_each(|typed| {
+        let mut rig = Rig::connected();
+        let mut effects = rig.send(Event::Request { id: 1, request: Request::SendGcode(format!("{typed}\nG0 X1")) });
+        (0..10).for_each(|_| effects.extend(rig.advance(100)));
+        let modal = pushed(&effects, "activateModal");
+        assert_eq!(modal.iter().map(|m| m["title"].clone()).collect::<Vec<_>>(), ["Command Unsupported Probe"]);
+        assert!(alerts(&effects)[0].starts_with("That command is a G38 probe other than G38.2"), "{typed}");
+        assert_eq!(written(&effects), ["G0 X1"], "{typed}");
+        assert!(!rig.machine.snapshot().probing, "{typed}");
+    });
+}
+
+#[test]
+fn a_probe_the_firmware_ignores_in_a_file_pauses_the_job_before_it() {
+    let mut rig = Rig::connected();
+    rig.machine.load_gcode(&file(&["G21", "G0 Z5", "G38.4 Z-10 F100", "G1 Z-1 F200", "G1 X10"]));
+    let mut effects = rig.act("startRun");
+    (0..2).for_each(|_| {
+        effects.extend(rig.advance(100));
+        effects.extend(rig.rx("ok"));
+    });
+    effects.extend(rig.advance(100));
+    assert_eq!(written(&effects), ["G21", "G0 Z5"]);
+    let modal = pushed(&effects, "activateModal");
+    assert_eq!(modal.last().map(|m| m["title"].clone()), Some(json!("Line Unsupported Probe")));
+    assert!(alerts(&effects).last().unwrap().starts_with("Line 3 is a G38 probe other than G38.2"));
+    assert_eq!(flags(&rig), (2, true, 2, false));
+    rig.clear_written();
+    let mut sent = written(&rig.act("resumeRun"));
+    sent.extend(rig.run_to_quiet());
+    assert!(!sent.iter().any(|line| line.contains("G38")), "Resume stops at the probe again: {sent:?}");
 }

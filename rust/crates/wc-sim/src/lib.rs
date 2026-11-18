@@ -404,6 +404,13 @@ impl Sim {
         if has("38.2") {
             return self.probe(out);
         }
+        if let Some(code) = codes.iter().find(|code| code.split('.').next() == Some("38")) {
+            out.push(match self.z_axis_attached {
+                true => format!("G38{} is invalid. Only G38.2 recognized.", &code[2..code.len().min(4)]),
+                false => "G38.2 gcode only valid with z-axis attached".into(),
+            });
+            return Some(0);
+        }
         if has("10") {
             self.position[2] = 0.0;
             return Some(0);
