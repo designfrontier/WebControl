@@ -439,3 +439,33 @@ fn a_resume_refused_and_pressed_again_still_lowers_to_the_paused_z() {
     let sent = resume(&mut rig);
     assert!(sent.contains(&"G1 Z-1.0 F100.0".to_string()), "{sent:?}");
 }
+
+/// A safe height of 0 or less would travel with the bit at or below the work surface, so nothing is sent.
+#[test]
+fn resume_and_play_mid_file_refuse_a_safe_height_of_zero_or_less() {
+    let refusal = |moving: &str, held: &str| {
+        format!(
+            "Set the Z-axis safe height (Maslow Settings, zAxisSafeHeight) to a number above 0 before {moving}, so \
+             the bit rises before it moves. It holds \"{held}\"."
+        )
+    };
+    ["0", "-3"].into_iter().for_each(|held| {
+        let safe_height = || settings(&[("Maslow Settings", "zAxisSafeHeight", json!(held))]);
+        let mut paused = Rig::connected_with(safe_height());
+        pause_at(&mut paused, &JOB, 6);
+        paused.clear_written();
+        assert_eq!(alerts(&paused.act("resumeRun")), [refusal("resuming the job", held)]);
+        assert!(paused.run_to_quiet().is_empty(), "no `~` and no raise");
+        let snapshot = paused.machine.snapshot();
+        assert_eq!((snapshot.upload_flag, snapshot.job_in_progress, snapshot.gcode_index), (2, true, 6));
+
+        let mut mid_file = Rig::connected_with(safe_height());
+        mid_file.machine.load_gcode(&file(&JOB));
+        mid_file.act_with("moveGcodeGoto", json!(4), json!(""));
+        mid_file.clear_written();
+        assert_eq!(alerts(&mid_file.act("startRun")), [refusal("starting the file mid-way", held)]);
+        assert!(mid_file.run_to_quiet().is_empty());
+        let snapshot = mid_file.machine.snapshot();
+        assert_eq!((snapshot.job_in_progress, snapshot.gcode_index), (false, 4));
+    });
+}

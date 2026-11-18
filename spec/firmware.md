@@ -73,7 +73,10 @@ the raw line, re-send B05 on any boot banner (`PCB v1.`, `Grbl v1.00`, `ready`),
   `ok`, and sets `sys.stop`, which drops every line the firmware held (H27 `GCode.cpp:936-937`, H292
   `GCode.cpp:1061-1062`). It acks with `ok` and no `z axis zeroed` when Z is not attached (`G38.2 gcode only valid
   with z-axis attached`), when the target equals the current Z (no move at all), and for `G38.<n>` other than `.2`
-  (H27 `GCode.cpp:836-948`). `M2` and
+  (H27 `GCode.cpp:836-948`). That last case is every G38 word whose two characters after `G38` are not `.2`
+  (G38.3, G38.4, G38.5, a bare `G38`, even `G038.2`): it prints `G38.3 is invalid. Only G38.2 recognized.` (or the
+  z-axis message without Z), moves nothing, ignores X, Y, Z and F, leaves the modal G alone and acks `ok`. `G38()`
+  is byte-identical on 51.292 (H292 `GCode.cpp:961-1073`), so neither version implements G38.3–.5 (B16). `M2` and
   `M30` only turn the spindle off. The firmware reads T only when it leads a line that also has a G or M word (`T2 M6`, `T2 G0 X1`):
   in `M6 T2`, `N10 T2 M6`, `G0 X1 T2` and a lone `T2` line the T is ignored, and a lone `T2` runs as a modal move.
 - `$` keys: units match WebControl's assumptions. `$13` is the only path that sets R. `$37` is used only when
@@ -300,7 +303,12 @@ to an int, so G91.1 and G90.1 switch G0/G1 to relative and absolute like G91 and
     rounded up, never used to restore an exact Z (B15). A report read before the handshake's G20/G21, or while a line
     that moves Z or changes units is unacknowledged, is not used. With no report since then, the raise
     waits for one read after every line before it is acked (about every 200 ms, §2) and is refused with an alert
-    after 3 s; it never guesses the safe height.
+    after 3 s; it never guesses the safe height. The safe height (`zAxisSafeHeight`) must be a number above 0
+    (owner decision, 2026-11-17): at 0 or below every raise before travel would leave the bit at or under the work
+    surface, so Home, Return to Center, Play mid-file, every Resume that returns to the file, triangular Accept and
+    an optical scan are refused with an alert (a 409 over HTTP) naming the setting and what it holds, and nothing is
+    sent (no `~`; a paused job stays paused). The settings form refuses to save such a value (`Must be more than
+    0`); an import or a hand-edited file can still hold one, which is why each action checks again.
 11. Never auto-send `~`; stop streaming before any line the firmware will pause on (using its T semantics); emit
     `T<n> M6`. After an ALARM or `Buffer overflow!`, Play resumes from the oldest unacknowledged line, returning at
     safe height (`alarm_mid_cut_rewinds_and_resumes`); Stop also clears it (owner decision, 2026-11-15).
@@ -317,7 +325,13 @@ to an int, so G91.1 and G90.1 switch G0/G1 to relative and absolute like G91 and
 16. Touch Z: send `G38.2` alone; no `G10 Z0` after it; a probe `error:` alerts and zeroes nothing; until the probe
     answers, refuse every action that moves the machine (Resume included), except Stop. A `G38.2` streamed from a file
     is the same: stream nothing behind it, hold the job at the probe line on a miss, and take Z as 0 after a touch.
-    An `ok` without `z axis zeroed` alerts that Z was not zeroed and pauses a job.
+    An `ok` without `z axis zeroed` alerts that Z was not zeroed and pauses a job. G38.3, G38.4, G38.5 and every
+    other G38 word but G38.2 (2026-11-17) are never sent: 51.27 and 51.292 run no probe for them, only print that
+    they are invalid and ack `ok` (§4), so there is nothing to track, and a file that relies on one would cut from
+    a Z it never set (WebControl would also take the probe's Z limit as the bit's height). Typed or in a macro the
+    line is dropped with a `Command Unsupported Probe` alert; in a file the job pauses before the line with a
+    `Line Unsupported Probe` alert, as for an unclosed comment, and Resume stops there again. A restart's state
+    ignores such a line's Z. `probe_g38_3_4_5_refused_typed_and_in_file`.
 
 17. Alarm hold (2026-11-15): after `ALARM:`, `Buffer overflow!` or `Message: Unable to find valid machine position`
     (other than zero chain lengths), write nothing that can move the machine until the user clears it. Queued

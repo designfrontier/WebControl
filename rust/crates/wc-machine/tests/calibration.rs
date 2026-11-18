@@ -237,11 +237,14 @@ fn triangular_accept_rises_to_the_configured_safe_height() {
 /// Without a safe height the bit could drag to the centre, so nothing is saved and the result is kept.
 #[test]
 fn triangular_accept_refuses_without_a_safe_height() {
-    ["high", "nan", "inf"].into_iter().for_each(|height| {
+    ["high", "nan", "inf", "0", "-2.5"].into_iter().for_each(|height| {
         let mut rig = Rig::connected_with(settings(&[("Maslow Settings", "zAxisSafeHeight", json!(height))]));
         calculate_on(&mut rig, Kind::Triangular, triangular_body());
         let refused = accept_on(&mut rig, Kind::Triangular);
-        let message = "Set the Z-axis safe height to a number before accepting, so the bit rises before it moves.";
+        let message = format!(
+            "Set the Z-axis safe height (Maslow Settings, zAxisSafeHeight) to a number above 0 before accepting, so \
+             the bit rises before it moves. It holds \"{height}\"."
+        );
         assert_eq!((refused.status, refused.body), (409, json!({"error": message})), "{height}");
         assert_eq!(alerts(&rig.act("acceptTriangularCalibrationResults")), [message], "{height}");
         assert_eq!(rig.run_to_quiet(), Vec::<String>::new(), "{height}");

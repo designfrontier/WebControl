@@ -196,7 +196,7 @@ impl Machine {
 
     /// Queues the restart, whose height is settled once the lines before it are answered; `None` if it cannot be built.
     fn queue_restart(&mut self, state: GcodeState, z_target: Option<f64>, change_tool: bool) -> Option<Restart> {
-        let safe_height = self.settings.value("Maslow Settings", "zAxisSafeHeight").and_then(python_float)?;
+        let safe_height = self.safe_height_mm()?;
         let version = self.firmware_version;
         let options = Options {
             z_target,
@@ -222,6 +222,9 @@ impl Machine {
         self.job.z_target = self.position.z;
         let mut flow = Flow::Streaming;
         if self.index > 0 {
+            if let Err(refused) = self.safe_height("starting the file mid-way") {
+                return Some(refused);
+            }
             let restart = match self.restart_state() {
                 Ok(state) => self.queue_restart(state, None, true),
                 Err(Unbuilt::XyUnknown) => return Some(XY_UNKNOWN.into()),
@@ -264,6 +267,9 @@ impl Machine {
             return None;
         }
         let restarts = !manual && self.job.flow.in_job();
+        if let Some(Err(refused)) = restarts.then(|| self.safe_height("resuming the job")) {
+            return Some(refused);
+        }
         let state = match restarts.then(|| self.restart_state()) {
             // Refused before the `~`, so the job stays paused where it is.
             Some(Err(Unbuilt::XyUnknown)) => return Some(XY_UNKNOWN.into()),
