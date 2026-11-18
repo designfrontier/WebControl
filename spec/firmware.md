@@ -6,7 +6,7 @@ upgrade flow are built against. Firmware paths are relative to `cnc_ctrl_v1/`.
 | Tag | Repo @ commit | Notes |
 |---|---|---|
 | S126 | MaslowCNC/Firmware @ e1e0d02 | Stock 1.26 |
-| H27 | madgrizzle/Firmware @ 950fb23 | Holey 51.27, bundled by v0.94's `buildFirmware.sh`; `rust/firmware/docker-build.sh <dir> 51.27` rebuilds it with a newer compiler (not byte-identical), pinned in `holey-51.27.sha256`. Not the owner's controller: that runs an older "51.27" without B99 or the TLE9201 boot line, which this rebuild does not reproduce; the backup's `rollback.hex` is the only exact copy |
+| H27 | madgrizzle/Firmware @ 950fb23 | Holey 51.27, bundled by v0.94's `buildFirmware.sh`; `rust/firmware/docker-build.sh <dir> 51.27` rebuilds it with a newer compiler (not byte-identical), pinned in `holey-51.27.sha256`. Not the owner's controller: that ran an older "51.27" without B99 or the TLE9201 boot line, which this rebuild does not reproduce; the backup's `rollback.hex` is the only exact copy |
 | H28 | madgrizzle/Firmware @ e9cc445 | 51.28: FAKE_SERVO handling and version only |
 | H291 | Orob-Maslow/Firmware @ 97d12a6 | Tags v51.29 / v51.291 (master); reports `51.29` |
 | H292 | Orob-Maslow/Firmware @ 0064955 | Tag v51.292; the planned upgrade target |
@@ -62,7 +62,7 @@ the raw line, re-send B05 on any boot banner (`PCB v1.`, `Grbl v1.00`, `ready`),
 
 ## 4. Commands WebControl sends
 
-- B02, B04, B05, B06, B08, B09, B10, B11, B13, B14 work on every version; B99 on 51.27+.
+- B02, B04, B05, B06, B08, B09, B10, B11, B13, B14 work on every version; B99 on H27 and later, but not on every build that reports 51.27 (the owner's former one predates it).
 - **Z limits B17–B20:** `Invalid statement` on 1.26/51.27/51.28. On 51.291 B17/B18 overwrite `$43`/`$44`. On
   51.292 B17/B18 store nothing but report success; only `$63`/`$64` (mm) work, and B20 reads them back.
 - G17 is unsupported (sent by both calibration patterns). G38.2 moves at a fixed 60 mm/min, but touchZ's `F1` still
