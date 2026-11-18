@@ -1,6 +1,7 @@
 //! The gcode library and the loaded gcode: `api/files.py` and the classic gcode form routes in `main.py`.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use axum::Json;
 use axum::body::Bytes;
@@ -224,12 +225,24 @@ pub(crate) async fn open(State(state): State<AppState>, request: Request) -> Res
     reply_status(detached(&state, |loading| load_file(loading, target, None, Origin::Open)).await)
 }
 
-/// In order, stopping at the first that fails, as Python's loop does.
+/// Written to a hidden file beside `target` and renamed over it, so no reader sees half an upload.
+fn save_upload(target: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    static UPLOADS: AtomicU64 = AtomicU64::new(0);
+    let name = target.file_name().unwrap_or_default().to_string_lossy();
+    let partial = target.with_file_name(format!(".{name}.{}.part", UPLOADS.fetch_add(1, Ordering::Relaxed)));
+    std::fs::write(&partial, bytes).and_then(|()| std::fs::rename(&partial, target)).inspect_err(|_| {
+        let _ = std::fs::remove_file(&partial);
+    })
+}
+
+/// In order, stopping at the first that fails, as Python's loop does; off the handler, so a client leaving
+/// cannot stop it part way.
 async fn save_uploads(uploads: &[&forms::Upload], targets: &[PathBuf]) -> std::io::Result<()> {
-    for (upload, target) in uploads.iter().zip(targets) {
-        tokio::fs::write(target, &upload.bytes).await?;
-    }
-    Ok(())
+    let files: Vec<(PathBuf, Bytes)> =
+        uploads.iter().zip(targets).map(|(upload, target)| (target.clone(), upload.bytes.clone())).collect();
+    let saved =
+        tokio::task::spawn_blocking(move || files.iter().try_for_each(|(target, bytes)| save_upload(target, bytes)));
+    saved.await.map_err(std::io::Error::other)?
 }
 
 pub(crate) async fn upload(State(state): State<AppState>, request: Request) -> Response {

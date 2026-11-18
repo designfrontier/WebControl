@@ -187,6 +187,10 @@ async fn uploading_saves_every_file_and_opens_the_first() {
     assert_eq!(reply.status, StatusCode::OK);
     assert!(server.dir().join("gcode/jobs/My_Part.nc").is_file());
     assert!(server.dir().join("gcode/jobs/second.nc").is_file());
+    let mut saved: Vec<_> =
+        std::fs::read_dir(server.dir().join("gcode/jobs")).unwrap().map(|e| e.unwrap().file_name()).collect();
+    saved.sort();
+    assert_eq!(saved, ["My_Part.nc", "second.nc"], "no partial upload is left beside them");
     let loaded = server.get("/api/files/gcode/loaded").await.json();
     assert_eq!(loaded, json!({"directory": "jobs", "name": "My_Part.nc", "lineCount": 10}));
     let none = server.post_unchecked("/uploadGCode", &[Part::Field("selectedDirectory", ".")]).await;
