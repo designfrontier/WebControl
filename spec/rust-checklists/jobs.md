@@ -52,7 +52,7 @@ the log viewer open beside the control screen, and a browser.
 ## 2. Set up the air cut
 
 - [ ] **Router off at its switch, bit out.** Jog the sled to the middle of the bed and press Set Home Here.
-- [ ] Z panel: raise Z 30 mm, then **Set Z Zero Here**. Every Z in the file is now in the air.
+- [ ] Z-Axis (beside the jog pad): raise Z 30 mm, then **Set Z Zero Here**. Every Z in the file is now in the air.
 - [ ] G-Code ▸ Upload `~/aircut.nc` and open it. The preview shows the two squares around home, and the run panel
       shows "File: aircut.nc".
 
@@ -72,7 +72,7 @@ Watch the sled and the log viewer side by side. The lines after each press are t
 - [ ] **Tool change.** After `Sent: T2 M6` the controller prints `Tool Change: Please insert tool 2` and
       `Maslow Paused`; the Job readout says "Waiting for tool change", the prompt shows with a Resume button, and the
       sled stays at the safe height.
-- [ ] While the tool change waits: Z panel, raise 10 mm. The log shows `Sent: ~` once, then the Z move. Raise 10 mm
+- [ ] While the tool change waits: Z-Axis, raise 10 mm. The log shows `Sent: ~` once, then the Z move. Raise 10 mm
       again: no second `~`. Press **Set Z Zero Here**: `Sent: G10 Z0` (`tool_change_jog_and_zero_z_then_resume`). For
       the air cut this re-zeroes Z 50 mm up; that is fine.
 - [ ] **Resume.** `Sent: ~`, then `G21`, `G90`, `G0 Z5.0`, the XY where the M6 was, `G0 F600.0`, `G90`, and the second
@@ -83,12 +83,12 @@ Watch the sled and the log viewer side by side. The lines after each press are t
       **Resume**: it returns to where it paused at the safe height, lowers to the depth it paused at
       (`G1 Z-2.0 F100.0` relative to your new zero), and carries on (`pause_jog_resume_returns_to_file_position`).
 - [ ] **Never lower before travel.** While the second square runs, **Pause** mid-side (the bit is at the file's Z-2),
-      then raise Z with the Z panel until it is above the safe height, for example `<safe>` + 10 mm. Note the Z
-      readout. **Resume**: after `G21` and `G90` the log shows `G0 Z<that Z>` (to 0.01 mm, not `G0 Z<safe>`), then
-      the XY move. The bit never dips before the sled travels, and only then lowers to `G1 Z-2.0 F100.0`
-      (`resume_above_safe_height_never_lowers_before_travel`). Pause again, raise Z the same way, then Actions ▸
-      Return to center: the log shows `G00 Z<that Z>` before `G00 X0.0 Y0.0`, and the bit does not dip. **Resume**:
-      the job carries on.
+      then raise Z with Z-Axis until it is above the safe height, for example `<safe>` + 10 mm. Note the Z readout.
+      **Resume**: after `G21` and `G90` the log shows `G0 Z<that Z>` (to 0.01 mm, not `G0 Z<safe>`), then the XY
+      move. The bit never dips before the sled travels, and only then lowers to `G1 Z-2.0 F100.0`
+      (`resume_above_safe_height_never_lowers_before_travel`). Pause again, raise Z the same way, then right-click
+      (long-press on a tablet) the viewer and press Return to center: the log shows `G00 Z<that Z>` before
+      `G00 X0.0 Y0.0`, and the bit does not dip. **Resume**: the job carries on.
 - [ ] **Stop** mid-square. The log shows `Sent: !` at once, the sled stops within about a second, the job ends (the
       index goes back to line 1), the Stop LED lights, and the next manual command goes out only after a status
       report (about 0.3 s). `journalctl -u webcontrol-rs` may say "a Stop cut short the line being written" or "lines
@@ -104,29 +104,35 @@ Watch the sled and the log viewer side by side. The lines after each press are t
 
 ## 4. The job lock and other refusals
 
-- [ ] While a job streams, every jog, Home and setting button alerts "Cannot issue command while sending gcode." and
-      sends nothing; Stop, Pause and Resume still work.
-- [ ] While paused, G-Code ▸ Open another file: it is refused ("Cannot load gcode while a job is running or paused.
-      Stop the job first."). Set Home Here is refused until Stop.
+- [ ] While a job streams, the jog arrows, Home, the macros, the Z-Axis dialog's Raise, Lower and Set Z Zero Here,
+      Set Home Here and the Units switch are disabled, and so is Settings Save; Stop and Pause still work.
+- [ ] While paused, G-Code ▸ Open, Upload and Clear GCode are greyed out with "Stop the job first", and Set Home Here
+      stays disabled until Stop.
 - [ ] While paused: Settings ▸ Maslow shows "A job is running or paused. Stop the job first to change the settings."
       and Save stays disabled even after changing Serial Connection; the jog panel's Units switch is disabled; G-Code ▸
-      Send Custom GCode, the imports and Actions ▸ Restore WebControl… are disabled with the same kind of note.
+      Send Custom GCode and the imports are disabled with the same kind of note, and Actions ▸ Restore WebControl…
+      is disabled.
 - [ ] From the Mac, while paused, a settings write and a send are refused and nothing reaches the log:
-      `curl -s -X PUT -H 'Content-Type: application/json' -d '{"values":{"COMport":"/dev/ttyUSB0"}}'
-      http://maslow.local:5000/api/settings/maslow` answers `409` with "Cannot change settings while a job is
-      running or paused. Stop the job first.", and `curl -s -F gcode='G0 X5' http://maslow.local:5000/sendGCode`
-      answers `409` with "Cannot send gcode while a job is running or paused. Stop the job first.". The log shows no
-      `Sent: G0 X5`, and the port stays connected. Resume finishes the square. After Stop, Save works again.
+
+  ```sh
+  curl -s -w ' %{http_code}\n' -X PUT -H 'Content-Type: application/json' \
+    -d '{"values":{"COMport":"/dev/ttyUSB0"}}' http://maslow.local:5000/api/settings/maslow
+  curl -s -w ' %{http_code}\n' -F gcode='G0 X5' http://maslow.local:5000/sendGCode
+  ```
+
+  The first ends `409` after "Cannot change settings while a job is running or paused. Stop the job first.", the
+  second `409` after "Cannot send gcode while a job is running or paused. Stop the job first.". The log shows no
+  `Sent: G0 X5`, and the port stays connected. Resume finishes the square. After Stop, Save works again.
 - [ ] The display theme and the line pacing are not locked: both change while paused (`ui.md` section 3,
       `pacing.md` section 2).
 - [ ] Make a file with an unclosed comment on line 3 (`G1 X5 (rough`) and Play it: the job pauses before line 3 with
       the alert "Line Unclosed Comment", and line 3 is never sent (`unclosed_comment_pauses_the_job`). Stop.
-- [ ] Only with a touch plate set up and clipped to the bit: make `~/probe.nc` with the lines `G21`, `G90`, `G0 Z5`,
-      `G38.2 Z-10 F100`, `G0 Z5`, `G0 X10` and Play it (air-cut setup, holding the plate in your hand). The Job
-      readout says Probing, and nothing after the `G38.2` is sent until you touch the plate to the bit; then Z reads 0
-      and the job finishes (`probe_in_file_waits_for_the_touch`). Play it again and let the probe run out: the alert
-      "Touch Z Failed" shows, the job stays paused on the `G38.2` line (Resume shown), and Play raises Z, returns and
-      probes again (`probe_in_file_misses_and_waits_at_the_probe`). Stop.
+- [ ] Only with a touch plate set up, its clip on the collet (router off, bit still out): make `~/probe.nc` with the
+      lines `G21`, `G90`, `G0 Z5`, `G38.2 Z-10 F100`, `G0 Z5`, `G0 X10` and Play it, holding the plate in your hand.
+      The Job readout says Probing, and nothing after the `G38.2` is sent until you touch the plate to the collet;
+      then Z reads 0 and the job finishes (`probe_in_file_waits_for_the_touch`). Play it again and let the probe run
+      out: the alert "Touch Z Failed" shows, the job stays paused on the `G38.2` line, and **Resume** raises Z,
+      returns and probes again (`probe_in_file_misses_and_waits_at_the_probe`). Stop.
 - [ ] Optional, since a controller reset can lose the chain lengths: with the sled moving in a job, unplug the USB
       cable for 6 s and plug it back in. The UI shows "Connection Lost"; the job stays paused (Resume shown); the
       controller reboots and its handshake (`$$`, then `$13`) goes out. Press **Resume**: the sled returns at the safe
@@ -134,9 +140,11 @@ Watch the sled and the log viewer side by side. The lines after each press are t
 
 ## 5. Buffered mode (optional; off by default)
 
-- [ ] Settings ▸ Maslow ▸ Buffer Gcode on, power-cycle the controller, and air-cut `~/aircut.nc` again from Play.
-      Several lines go out before each `ok`, the health bar shows the buffer filling, there is no `Buffer overflow!`,
-      and the M0 and tool change still stop exactly where they did. Turn Buffer Gcode back off.
+- [ ] Settings ▸ Maslow ▸ Buffer Gcode on, then unplug the controller's USB for 6 s and plug it back in (WebControl
+      reads Buffer Gcode when the port opens). Air-cut `~/aircut.nc` again from Play. Several lines go out before each
+      `ok`, the status bar's "Buffer <n>" chip (free space, 127 when empty) drops below 127, there is no
+      `Buffer overflow!`, and the M0 and tool change still stop exactly where they did. Turn Buffer Gcode back off and
+      replug the USB.
 
 ## 6. GPIO (only if buttons or LEDs are wired)
 
@@ -169,7 +177,7 @@ clear of every clamp.
       G0 X0 Y0
       EOF
 
-- [ ] Fit the bit. Jog over the scrap, press Set Home Here, and zero Z on the surface (Touch Z with the plate, or
+- [ ] Fit the bit. Jog over the scrap, press Set Home Here, and zero Z on the surface (Z-Axis ▸ Touch Plate, or
       lower by hand and Set Z Zero Here). Raise Z 5 mm.
 - [ ] Open `~/firstcut.nc`; the preview shows the square on the board. **Router on.** Play.
 - [ ] Pause once mid-side and Resume: the bit lifts, returns, lowers to 1 mm at the plunge feed, and carries on.
@@ -185,7 +193,7 @@ Report as the README says.
 For testers who know WebControl v0.94; `contract/serial/README.md` ("Rust-intended deviations") has the full list.
 
 - **A `$38` write resets the controller** (`settings.md` section 2).
-- **Stop Z** (the Z panel's Stop) ends a running or paused job too.
+- **Stop Z** (in the Z-Axis dialog) ends a running or paused job too.
 - **A lost link** pauses the job at the first line the controller had not acknowledged, not at the next one WebControl
   had not sent.
 - **A lost line** is sent again once, and a line lost twice pauses the job at it (`pacing.md` section 1). v0.94 waited

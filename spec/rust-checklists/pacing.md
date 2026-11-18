@@ -22,19 +22,20 @@ running `journalctl -u webcontrol-rs -f`.
 
 ## 1. Lost-line recovery
 
-Check this whenever a job loses a line, in any checklist. `grep "did not reach" ~/.WebControl/webcontrol-rs.log`
-finds them.
+Check this whenever a job loses a line, in any checklist. The Controller Messages pane shows each one, and on the
+Pi `journalctl -u webcontrol-rs | grep "never received the lines"` finds them.
 
 - [ ] A lost line looks like this in the log: `Sent: <line>`, then no echo and no `ok`, only status reports
       (`<Idle,MPos:...>` with the same MPos, and `[PE:...]` with a free space of 127) for about 0.6 to 0.8 s; then the
-      controller message "Line <n> did not reach the controller, so it was sent again: <line>", the same
-      `Sent: <line>` again, its echo and its `ok` (`stream_lost_line_is_sent_again`).
+      same `Sent: <line>` again, its echo and its `ok`. Controller Messages shows "Line <n> did not reach the
+      controller, so it was sent again: <line>" (`stream_lost_line_is_sent_again`).
 - [ ] The job carries on by itself, the sled does not stop for longer than that second, and the cut shows no gap or
       double pass at that line.
 - [ ] The run panel's "Lost" count went up by one for each such message.
 - [ ] A line lost twice shows the alert "Line Not Received": "The controller did not receive line <n> (<line>), even
-      when it was sent again. The job is paused at that line." The job is paused (Resume shown). **Resume** returns
-      to the file at that line at the safe height and sends it (`stream_line_lost_twice_pauses_until_resume`).
+      when it was sent again. The job is paused at that line. Press Resume to send it again, or Stop." The job is
+      paused (Resume shown). **Resume** returns to the file at that line at the safe height and sends it
+      (`stream_line_lost_twice_pauses_until_resume`).
 - [ ] A jog or Z move lost twice is dropped with the commands queued after it, with a "Line Not Received" alert, and
       the log shows `Sent: G21` (or `G20`) and `Sent: G90` to put the controller back in step.
 
@@ -67,7 +68,7 @@ finds them.
       and the Min 25 ms segment's `duration_s` does not count the 30 s pause.
 - [ ] Let the job finish. The logs show the last `PACING SEGMENT ... ended_by=job_end`, a `PACING JOB` line for the
       whole job, and `PACING JOB END file_line_end=<last line> ... ended_by=job_end`.
-- [ ] The job's `lines` is the number of file lines streamed (about 3,006, without resends), and its `duration_s` is
+- [ ] The job's `lines` is the number of file lines streamed (3,007, without resends), and its `duration_s` is
       within a few seconds of the time the job took, less the pause. Note `lines_per_min` for each segment:
       v0.94 50 ms ______, Min 25 ms ______, Min 0 ms ______.
 - [ ] Play again and press **Stop** after a few seconds: the segment and job lines end with `ended_by=stop`.
