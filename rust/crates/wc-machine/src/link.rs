@@ -63,7 +63,7 @@ impl Machine {
             return;
         }
         tracing::warn!(why, "controller link lost");
-        if self.job.flow.upload_flag() > 0 {
+        if self.job.flow.in_job() {
             effects.push(broadcast(&ActivateModal::titled_alert("Connection Lost", CONNECTION_LOST)));
             self.pause_for_lost_link(effects);
         } else {

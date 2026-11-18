@@ -181,6 +181,43 @@ fn losing_the_port_mid_job_pauses_it_at_the_line_the_controller_lost() {
 }
 
 #[test]
+fn losing_the_port_while_draining_to_an_m0_pauses_at_the_oldest_lost_line() {
+    let mut rig = Rig::connected_with(settings(&[("Maslow Settings", "bufferOn", json!(1))]));
+    rig.machine.load_gcode("G1 X10 F100\nM0\nG1 X20\n");
+    rig.act("startRun");
+    rig.advance(300);
+    assert_eq!(rig.machine.snapshot().upload_flag, -1);
+    let effects = rig.send(Event::PortClosed);
+    assert!(messages(&effects).iter().any(|(_, d)| d["title"] == "Connection Lost"));
+    assert!(pushed(&effects, "alarm").is_empty());
+    let snapshot = rig.machine.snapshot();
+    assert_eq!((snapshot.upload_flag, snapshot.job_in_progress, snapshot.gcode_index), (2, true, 0));
+    rig.advance(5100);
+    rig.open();
+    rig.advance(3100);
+    rig.run_to_quiet();
+    rig.rx("<Idle,MPos:0.00,0.00,0.00,WPos:0.000,0.000,0.000>");
+    rig.clear_written();
+    rig.act("resumeRun");
+    let sent = rig.run_to_quiet();
+    assert!(sent.contains(&"G1 X10 F100".to_string()), "{sent:?}");
+}
+
+#[test]
+fn losing_the_port_while_the_controller_holds_the_job_pauses_it() {
+    let mut rig = Rig::connected();
+    rig.machine.load_gcode("G0 X1\nG0 X2\nG0 X3\n");
+    rig.act("startRun");
+    rig.advance(100);
+    rig.rx("Maslow Paused");
+    assert_eq!(rig.machine.snapshot().upload_flag, 0);
+    let effects = rig.send(Event::PortClosed);
+    assert!(messages(&effects).iter().any(|(_, d)| d["title"] == "Connection Lost"));
+    let snapshot = rig.machine.snapshot();
+    assert_eq!((snapshot.upload_flag, snapshot.gcode_index), (2, 0));
+}
+
+#[test]
 fn the_firmware_build_tells_51_292_by_its_rewrite_notice_until_the_next_boot() {
     let mut rig = Rig::connected();
     rig.rx("Firmware Version 51.29");
