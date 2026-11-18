@@ -245,8 +245,9 @@ top of every file, so as written it would run every move after it relative.
 ### B. Rust backend requirements
 
 1. 57600 8N1; send `\n`, parse `\r\n`; don't gate the first send only on the boot `ok`.
-2. Treat any line containing `PCB v1.`, `Grbl v1.00` or `ready` as a boot. On each boot reset units, G90, tool and
-   accounting, then B05 → units → G90 → `$$` → write only the keys `$$` shows differ (at the printed precision, B9)
+2. Treat any line containing `PCB v1.`, `Grbl v1.00` or `ready` as a boot. On each boot reset units, G90, tool,
+   a manual Z wait and accounting (a paused job rewinds to the oldest unacknowledged line, with an alert), then B05
+   → units → G90 → `$$` → write only the keys `$$` shows differ (at the printed precision, B9)
    or hold a value the firmware refuses (a PID weight outside [0, 1] or a negative gain, §4, even when it compares
    equal), plus `$13` once (§6) → `$$` again only if a key other than `$13` was written. Every `$` value goes out as
    text `readFloat` reads as the nearest float32 (§4). `connect_repairs_a_pid_weight_above_one`. Keys `$$` does not report are not

@@ -39,6 +39,8 @@ const CONNECTION_LOST: &str = "Message: USB connection lost. This has likely cau
                                remove the sled, and perform the chain calibration process. Press Continue to \
                                override and proceed with the cut.";
 const RESTARTED: &str = "The controller restarted, so the job was stopped. Check the sled before starting again.";
+const RESTARTED_PAUSED: &str = "The controller restarted while the job was paused. Check the sled before \
+                                pressing Resume, which returns to the first line the controller lost.";
 
 fn controller_message(text: &str) -> Effect {
     broadcast(&ControllerMessage(text.into()))
@@ -130,6 +132,8 @@ impl Machine {
         if matches!(self.job.flow, Flow::Streaming | Flow::Draining) {
             effects.push(alert(RESTARTED));
             self.end_job();
+        } else if self.job.flow.in_job() && self.controller.boot_deadline.is_none() {
+            effects.push(alert(RESTARTED_PAUSED));
         }
         self.rewind_job(effects);
         self.job.paused_at = None;

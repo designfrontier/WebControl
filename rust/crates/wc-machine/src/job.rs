@@ -96,8 +96,9 @@ impl Default for Job {
 }
 
 impl Job {
-    /// A reset controller is not paused and has tool 0.
+    /// A reset controller is not paused, waits for no Z by hand, and has tool 0.
     pub fn controller_reset(&mut self) {
+        self.manual_z = self.manual_z.filter(|&tool_change| tool_change);
         self.firmware_paused = false;
         self.holds_job_lines = false;
         self.tool = 0;

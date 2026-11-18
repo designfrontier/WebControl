@@ -144,9 +144,9 @@ fn a_restart_while_paused_rewinds_to_the_lines_it_lost_and_resume_sends_them() {
     rig.rx("ok");
     rig.act("pauseRun");
     assert!(rig.machine.snapshot().gcode_index > 2, "the buffer holds several lines");
-    ["PCB v1.6 TLE9201  Detected", "Grbl v1.00", "ready", "ok"].iter().for_each(|line| {
-        rig.rx(line);
-    });
+    let booted: Vec<Effect> =
+        ["PCB v1.6 TLE9201  Detected", "Grbl v1.00", "ready", "ok"].iter().flat_map(|line| rig.rx(line)).collect();
+    assert!(alerts(&booted).iter().any(|text| text.starts_with("The controller restarted while the job was paused")));
     rig.run_to_quiet();
     let snapshot = rig.machine.snapshot();
     assert_eq!((snapshot.upload_flag, snapshot.gcode_index), (2, 1), "G1 X20 was never acknowledged");
@@ -155,6 +155,27 @@ fn a_restart_while_paused_rewinds_to_the_lines_it_lost_and_resume_sends_them() {
     rig.act("resumeRun");
     let sent = rig.run_to_quiet();
     assert!(sent.contains(&"G1 X20 F100".to_string()), "{sent:?}");
+}
+
+#[test]
+fn after_a_restart_a_manual_z_prompt_is_forgotten_and_resume_returns_to_the_file() {
+    let mut rig = Rig::connected();
+    rig.machine.load_gcode("G1 X1\nG1 Z-3\nG1 X2\n");
+    rig.act("startRun");
+    rig.advance(60);
+    rig.rx("ok");
+    rig.rx("Message: Please adjust Z-Axis to a depth of -3.00 mm");
+    rig.rx("Maslow Paused");
+    ["Grbl v1.00", "ready", "ok"].iter().for_each(|line| {
+        rig.rx(line);
+    });
+    rig.run_to_quiet();
+    assert!(!rig.machine.snapshot().manual_z_axis_adjust);
+    rig.rx("<Idle,MPos:1.00,0.00,0.00,WPos:0.000,0.000,0.000>");
+    rig.clear_written();
+    rig.act("resumeRun");
+    let sent = rig.run_to_quiet();
+    assert_eq!(sent[..3], ["~", "G21", "G90"], "{sent:?}");
 }
 
 #[test]
