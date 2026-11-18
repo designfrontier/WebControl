@@ -14,7 +14,6 @@ EOF
 
 here="$(cd "$(dirname "$0")" && pwd)"
 rust="$(dirname "$here")"
-repo="$(dirname "$rust")"
 distro="${DEBIAN:-trixie}"
 name="webcontrol-update-test-$distro"
 work="$(mktemp -d)"
@@ -68,7 +67,7 @@ package "$v1" "$b1"
 package "$v2" "$b2"
 
 say "Starting Debian $distro arm64 with systemd"
-docker build -q --platform linux/arm64 --build-arg "DEBIAN=$distro" -t "$name" "$repo/tools/test-install" > /dev/null
+docker build -q --platform linux/arm64 --build-arg "DEBIAN=$distro" -t "$name" "$here/pi-image" > /dev/null
 docker rm -f "$name" > /dev/null 2>&1 || true
 docker run -d --platform linux/arm64 --name "$name" --privileged --cgroupns=host \
   -v /sys/fs/cgroup:/sys/fs/cgroup:rw --tmpfs /run --tmpfs /run/lock "$name" > /dev/null
