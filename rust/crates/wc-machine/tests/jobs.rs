@@ -506,3 +506,19 @@ fn play_is_refused_while_a_load_builds_and_a_failed_load_ends_every_spinner() {
     assert!(alerts(&loaded.act("startRun")).is_empty());
     assert_eq!(flags(&loaded).0, 1);
 }
+
+#[test]
+fn a_byte_order_mark_does_not_hide_the_files_units_from_a_restart() {
+    let inches = || settings(&[("Computed Settings", "units", json!("INCHES"))]);
+    let mut rig = Rig::connected_with(inches());
+    let text = wc_gcode::load::universal_newlines("\u{feff}G21\r\nG90\r\nG0 X100 Y50\r\nG1 Z-1 F100\r\nG1 X200\r\n");
+    let gcode = Box::new(Gcode::parse(&text, &inches()).unwrap());
+    assert_eq!(gcode.lines[0], "G21 ");
+    rig.send(Event::Request { id: 1, request: Request::LoadStarting });
+    rig.send(Event::Request { id: 2, request: Request::LoadGcode { gcode, file: None, origin: Origin::Open } });
+    rig.act_with("moveGcodeGoto", json!(3), json!(""));
+    rig.clear_written();
+    rig.act("startRun");
+    let sent = rig.run_to_quiet();
+    assert_eq!(sent[..4], ["G21", "G90", SAFE_Z, "G0 X100.0 Y50.0"], "{sent:?}");
+}

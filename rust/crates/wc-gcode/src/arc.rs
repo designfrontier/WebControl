@@ -55,6 +55,8 @@ pub enum ArcProblem {
     FullCircle,
     /// G18 or G19, which the firmware ignores, cutting the arc in XY.
     Plane,
+    /// No I, J or R: the firmware's radius is 0, so it sends the sled straight to the end at full speed.
+    NoCentre,
     /// The firmware reads an arc's Z as absolute even under G91.
     RelativeZ,
     /// Neither a commanded position nor a status report says where the arc starts.
@@ -66,7 +68,7 @@ pub enum ArcProblem {
 impl ArcProblem {
     pub fn title(&self) -> &'static str {
         match self {
-            ArcProblem::RadiusTooSmall | ArcProblem::FullCircle => "Impossible Arc",
+            ArcProblem::RadiusTooSmall | ArcProblem::FullCircle | ArcProblem::NoCentre => "Impossible Arc",
             ArcProblem::Plane | ArcProblem::RelativeZ => "Unsupported Arc",
             ArcProblem::StartUnknown => "Arc Start Unknown",
             ArcProblem::StartUncertain => "Arc Start Uncertain",
@@ -78,7 +80,11 @@ impl ArcProblem {
             ArcProblem::RadiusTooSmall => "is an arc whose radius (R) is shorter than half the distance to its end.",
             ArcProblem::FullCircle => "is an arc with a radius (R) that ends where it starts, so no circle is defined.",
             ArcProblem::Plane => {
-                "is an arc with a radius (R) in the G18 or G19 plane, which the controller cannot cut."
+                "is an arc in the G18 or G19 plane; the controller ignores the plane and would cut it in X and Y."
+            }
+            ArcProblem::NoCentre => {
+                "is an arc with no centre (I or J) and no radius (R); the controller would move straight to its end \
+                 at full speed."
             }
             ArcProblem::RelativeZ => {
                 "is a relative (G91) arc with a Z move; the controller takes an arc's Z as absolute."
@@ -276,6 +282,10 @@ impl Interpreter {
         self.arc_centres = arc_centres;
     }
 
+    pub fn set_plane(&mut self, plane: u32) {
+        self.plane = plane;
+    }
+
     /// Places the sled, exactly or, from a status report, to within `spread_mm` on each axis.
     pub fn set_xy_mm(&mut self, xy_mm: Option<[f64; 2]>, spread_mm: f64) {
         self.xy_mm = xy_mm;
@@ -341,6 +351,9 @@ impl Interpreter {
                 let arc = code >= 2;
                 let has_centre = segment.contains(['I', 'J']);
                 let radius = firmware_value(segment, 'R').filter(|_| arc && !has_centre);
+                if arc && convert.is_some() {
+                    Self::arc_refused(self.plane, segment, has_centre || radius.is_some())?;
+                }
                 let absolute_centre = arc && has_centre && self.arc_centres == ArcCentres::Absolute;
                 let relative_moves = self.positioning == Positioning::Relative;
                 let rewrite = convert.is_some() && (radius.is_some() || absolute_centre || arc && relative_moves);
@@ -371,6 +384,18 @@ impl Interpreter {
         Ok((edits, moved))
     }
 
+    /// An arc segment the firmware would cut somewhere else; one with no axis or centre word moves nothing.
+    fn arc_refused(plane: u32, segment: &str, has_centre: bool) -> Result<(), ArcProblem> {
+        let moves = segment.contains(['X', 'Y', 'Z']);
+        if plane != 17 && (moves || segment.contains(['I', 'J', 'K', 'R'])) {
+            return Err(ArcProblem::Plane);
+        }
+        if moves && !has_centre {
+            return Err(ArcProblem::NoCentre);
+        }
+        Ok(())
+    }
+
     /// Where a move ends, in mm; `None` when the start or the units it needs are unknown.
     fn end_of(&self, segment: &str, relative: bool) -> Option<[f64; 2]> {
         let (x, y) = (firmware_value(segment, 'X'), firmware_value(segment, 'Y'));
@@ -397,9 +422,6 @@ impl Interpreter {
         home: [f64; 2],
     ) -> Result<Vec<Edit>, ArcProblem> {
         let relative = self.positioning == Positioning::Relative;
-        if radius.is_some() && self.plane != 17 {
-            return Err(ArcProblem::Plane);
-        }
         if relative && segment.contains('Z') {
             return Err(ArcProblem::RelativeZ);
         }
@@ -558,7 +580,7 @@ mod tests {
         assert_eq!(converted(&at, "G3 X20 Y0 I20 ").unwrap(), "G3 X20 Y0 I10.0000 J-10.0000 ");
         assert_eq!(converted(&at, "G3 X20 Y0 J10 ").unwrap(), "G3 X20 Y0 I-10.0000 J0.0000 ");
         assert_eq!(converted(&at, "G2 X20 Y0 R10 ").unwrap(), "G2 X20 Y0 I0.0000 J-10.0000 ");
-        assert_eq!(converted(&at, "G2 X20 Y0 ").unwrap(), "G2 X20 Y0 ");
+        assert_eq!(converted(&at, "G2 X20 Y0 ").unwrap_err(), ArcProblem::NoCentre);
         assert_eq!(converted(&at, "G1 X5 I3 ").unwrap(), "G1 X5 I3 ");
         assert_eq!(converted(&at, "G91.1 G2 X20 Y0 I0 J-10 ").unwrap(), "G2 X20 Y0 I0 J-10 ");
         assert_eq!(converted(&after(&["G21 ", "G90.1 "]), "G2 I1 J0 ").unwrap_err(), ArcProblem::StartUnknown);
@@ -720,6 +742,30 @@ mod tests {
     }
 
     #[test]
+    fn any_arc_outside_g17_is_refused_because_the_firmware_cuts_it_in_xy() {
+        let at = after(&["G21 ", "G0 X0 Y0 ", "G18 "]);
+        assert_eq!(converted(&at, "G2 X10 Z-5 I5 K0 ").unwrap_err(), ArcProblem::Plane);
+        assert_eq!(converted(&at, "G3 X10 Y0 I5 J0 ").unwrap_err(), ArcProblem::Plane);
+        assert_eq!(converted(&after(&["G21 ", "G19 "]), "G2 Y10 Z-5 J5 K0 ").unwrap_err(), ArcProblem::Plane);
+        assert_eq!(converted(&at, "G1 X10 Z-5 ").unwrap(), "G1 X10 Z-5 ");
+        assert_eq!(converted(&at, "G17 G2 X10 Y0 I5 J0 ").unwrap(), "G17 G2 X10 Y0 I5 J0 ");
+        let modal = after(&["G21 ", "G0 X0 Y0 ", "G2 X10 Y0 I5 J0 ", "G18 "]);
+        assert_eq!(converted(&modal, "X20 I5 K0 ").unwrap_err(), ArcProblem::Plane);
+        assert_eq!(converted(&modal, "F500 ").unwrap(), "F500 ");
+    }
+
+    #[test]
+    fn an_arc_that_moves_with_no_centre_or_radius_is_refused() {
+        let at = after(&["G21 ", "G0 X0 Y0 "]);
+        assert_eq!(converted(&at, "G2 X10 Y0 ").unwrap_err(), ArcProblem::NoCentre);
+        assert_eq!(converted(&at, "G3 Z-1 ").unwrap_err(), ArcProblem::NoCentre);
+        assert_eq!(converted(&after(&["G21 ", "G2 X10 Y0 I5 J0 "]), "X20 Y0 ").unwrap_err(), ArcProblem::NoCentre);
+        assert_eq!(converted(&at, "G2 X10 Y0 I5 ").unwrap(), "G2 X10 Y0 I5 ");
+        assert_eq!(converted(&at, "G2 F300 ").unwrap(), "G2 F300 ");
+        assert_eq!(converted(&after(&["G21 ", "G2 X10 Y0 I5 J0 "]), "S1000 ").unwrap(), "S1000 ");
+    }
+
+    #[test]
     fn the_position_follows_what_the_firmware_does_with_each_line() {
         let mut at = after(&["G21 ", "G0 X10 Y10 "]);
         assert!(!at.written("G1 Z-1 F100 "));
@@ -758,6 +804,7 @@ mod tests {
             ArcProblem::RadiusTooSmall,
             ArcProblem::FullCircle,
             ArcProblem::Plane,
+            ArcProblem::NoCentre,
             ArcProblem::RelativeZ,
             ArcProblem::StartUnknown,
             ArcProblem::StartUncertain,

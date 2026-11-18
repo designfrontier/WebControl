@@ -23,6 +23,8 @@ pub struct GcodeState {
     pub positioning: Positioning,
     /// What the file's arcs' I and J measure from, which a restart must restore for the arcs after it.
     pub arc_centres: ArcCentres,
+    /// G17, G18 or G19, which only WebControl keeps: the firmware ignores them and cuts every arc in XY.
+    pub plane: u32,
     pub x: f64,
     pub y: f64,
     /// `None` until the file sets Z for the current tool; a restart must not lower the bit to a guess.
@@ -90,6 +92,7 @@ impl StateParser {
             units: machine,
             positioning: Positioning::Absolute,
             arc_centres: ArcCentres::Offsets,
+            plane: 17,
             x: home_x,
             y: home_y,
             z: None,
@@ -155,6 +158,11 @@ impl StateParser {
         }
         let has = |code: f64| codes.contains(&code);
         let state = &mut self.state;
+        state.plane = codes
+            .iter()
+            .rev()
+            .find_map(|&code| [17.0, 18.0, 19.0].contains(&code).then_some(code as u32))
+            .unwrap_or(state.plane);
         state.motion = (0..4u8).find(|&code| has(f64::from(code))).or(state.motion);
         if has(90.0) {
             state.positioning = Positioning::Absolute;
@@ -311,6 +319,17 @@ pub fn sequence(state: &GcodeState, options: &Options) -> Restart {
     lines.push(positioning_word(state.positioning).to_string());
     lines.push(state.arc_centres.word().to_string());
     Restart { lines, stopped_at_tool_change: false }
+}
+
+/// A file line after a restart, which left the controller in G0 or G1: one that moves on the file's modal G2 or G3
+/// gets it written. True once the line settles the motion, so the lines after it need nothing.
+pub fn continue_arc(line: &str, motion: u8) -> (String, bool) {
+    let moves = !line.trim_start().starts_with(['$', 'B']) && line.contains(['X', 'Y', 'Z', 'I', 'J', 'R']);
+    if !line.contains('G') && moves {
+        return (format!("G{motion} {line}"), true);
+    }
+    let sets_motion = words::numbers('G', line).iter().any(|code| [0.0, 1.0, 2.0, 3.0].contains(code));
+    (line.to_string(), sets_motion)
 }
 
 pub fn positioning_word(positioning: Positioning) -> &'static str {
@@ -541,6 +560,15 @@ mod tests {
     }
 
     #[test]
+    fn the_state_keeps_the_plane_the_file_set_last() {
+        let plane = |lines: &[&str]| state_at(&file(lines), lines.len(), 0.0, 0.0, Units::Mm).unwrap().plane;
+        assert_eq!(plane(&["G21", "G1 X1"]), 17);
+        assert_eq!(plane(&["G18", "G1 X1"]), 18);
+        assert_eq!(plane(&["g18", "G17 G19 G1 X1"]), 19);
+        assert_eq!(plane(&["G19", "G90 G17"]), 17);
+    }
+
+    #[test]
     fn restart_converts_the_default_plunge_feed_to_inches() {
         let queued = restart_with(&["G90", "G0 X1 Y1", "G1 Z-0.1", "G1 X2"], 3, (0.0, 0.0), Units::Inches, 0);
         assert_eq!(queued[2..], ["G0 Z0.1969 ", "G0 X1.0 Y1.0 ", "G1 Z-0.1 F0.5039 ", "G90 ", OFFSETS]);
@@ -686,5 +714,16 @@ mod tests {
             Err(GcodeError::IndexOutOfRange { index: 2, len: 1 })
         );
         assert!(state_at(&file(&["(c)", "G1 F"]), 2, 0.0, 0.0, Units::Mm).is_err());
+    }
+
+    #[test]
+    fn a_line_moving_on_the_files_modal_arc_gets_it_and_settles_the_motion() {
+        assert_eq!(continue_arc("X20 Y0 I5 J0 ", 2), ("G2 X20 Y0 I5 J0 ".to_string(), true));
+        assert_eq!(continue_arc("N10 Z-1 ", 3), ("G3 N10 Z-1 ".to_string(), true));
+        assert_eq!(continue_arc("G03 X1 I1 ", 2), ("G03 X1 I1 ".to_string(), true));
+        assert_eq!(continue_arc("G90 G1 X1 ", 2), ("G90 G1 X1 ".to_string(), true));
+        ["F500 ", " ", "M3 S1000 ", "G21 ", "G90 X1 ", "G91.1 ", "$13=R ", "B08 "]
+            .iter()
+            .for_each(|line| assert_eq!(continue_arc(line, 2), (line.to_string(), false), "{line}"));
     }
 }

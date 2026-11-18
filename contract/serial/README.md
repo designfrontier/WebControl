@@ -623,3 +623,27 @@ Where the Rust backend writes something different from Python by owner decision.
     from a start only a status report gives is refused (`Arc Start Uncertain`) when the report's two decimals could
     put it more than 0.05 mm from where the file means, as an exact half circle can be. Transcripts:
     `g91_1_left_out_of_a_vcarve_file`, `g90_1_arc_centres_written_as_offsets`.
+13. **A byte order mark is dropped at load** (2026-11-18). Python read files as plain UTF-8, so a file saved with a
+    BOM began `\u{feff}G21`; the restart state never saw that G21, and Play mid-file on a machine set to inches sent
+    `G20` and ran a millimetre file in inches. Rust drops one leading U+FEFF before it filters the file, so what is
+    streamed, drawn and restarted from all start at the first word. No transcript has such a file (`wc-machine`
+    test `a_byte_order_mark_does_not_hide_the_files_units_from_a_restart`).
+14. **No arc outside G17 or with no centre** (2026-11-18). Every firmware ignores G17/G18/G19 and cuts each arc in XY
+    (`spec/firmware.md` §9), and an arc with no I, J or R has radius 0, so the sled goes straight to its end at PID
+    speed; Python sent both. Rust refuses, as in 9, any G2/G3 (or modal arc) with an axis or centre word while
+    G18 or G19 is in effect (`Unsupported Arc`), not only an R arc, and any arc with an X, Y or Z word but no I, J
+    or R (`Impossible Arc`). An arc segment with neither, such as a bare `F500`, still goes out. The plane is the
+    file's, since the firmware keeps none: a job run from its first line starts in G17, the G17, G18 and G19 it
+    streams change it, and a restart takes it from the lines before the restart point, as it does the units. A typed
+    G17, G18 or G19 sets it for the typed arcs after it, until the next job starts. No transcript has such an arc
+    (`wc-machine` tests `a_job_pauses_before_an_arc_in_the_g18_plane`,
+    `play_mid_file_in_a_g18_section_refuses_its_arc_though_g18_never_went_out`,
+    `a_g18_from_a_typed_line_or_an_earlier_run_is_forgotten_by_the_next_run_and_by_a_restart_after_g17`,
+    `a_typed_arc_with_no_centre_is_refused_with_an_alert`).
+15. **A restart inside a run of modal arcs keeps cutting arcs** (2026-11-18). A restart's moves leave the firmware
+    in G0 or G1, and Python restored only G0/G1, so a bare `X20 Y0 I5 J0` after `G2 ... ` was cut as a straight
+    G1 line after Play mid-file or Resume. Rust writes the file's `G2 ` or `G3 ` before the first file line after
+    the restart that has an X, Y, Z, I, J or R word and no G word, then converts it as any arc; a line with G0 to G3
+    of its own needs none, and lines with neither (comments, `F`, `M`, `S`) pass untouched until one comes. No
+    transcript restarts mid-arc (`wc-machine` tests `play_mid_file_inside_a_run_of_modal_arcs_writes_the_files_g2`,
+    `resume_inside_a_run_of_modal_arcs_writes_the_files_g3`).

@@ -76,6 +76,87 @@ fn a_typed_r_arc_no_i_and_j_can_give_is_refused_with_an_alert() {
 }
 
 #[test]
+fn a_typed_arc_with_no_centre_is_refused_with_an_alert() {
+    let mut rig = Rig::connected();
+    let mut effects = rig.send(Event::Request { id: 1, request: Request::SendGcode("G2 X10 Y0\nG0 X1".into()) });
+    (0..10).for_each(|_| effects.extend(rig.advance(100)));
+    assert_eq!(
+        alerts(&effects),
+        [
+            "That command is an arc with no centre (I or J) and no radius (R); the controller would move straight to its \
+          end at full speed."
+        ]
+    );
+    assert_eq!(written(&effects), ["G0 X1"]);
+}
+
+#[test]
+fn a_job_pauses_before_an_arc_in_the_g18_plane() {
+    let mut rig = Rig::connected();
+    job(&mut rig, &["G21", "G0 X0 Y0", "G18", "G2 X10 Z-5 I5 K0", "G0 X1"]);
+    rig.act("startRun");
+    let mut effects = Vec::new();
+    (0..10).for_each(|_| {
+        effects.extend(rig.advance(100));
+        effects.extend(rig.rx("ok"));
+    });
+    assert_eq!(written(&effects), ["G0 X0 Y0", "G18"]);
+    assert_eq!(
+        alerts(&effects),
+        ["Line 4 is an arc in the G18 or G19 plane; the controller ignores the plane and would cut it in X and Y. \
+          Resume stops here again: stop the job, fix the file and load it again."]
+    );
+    assert_eq!(rig.machine.snapshot().gcode_index, 3);
+}
+
+const G18_SECTION: [&str; 7] = ["G21", "G0 X0 Y0", "G18", "G1 X5", "G2 X10 Z-5 I5 K0", "G17", "G2 X20 Y0 I5 J0"];
+
+#[test]
+fn play_mid_file_in_a_g18_section_refuses_its_arc_though_g18_never_went_out() {
+    let mut rig = Rig::connected();
+    job(&mut rig, &G18_SECTION);
+    rig.act_with("moveGcodeGoto", json!(4), json!(""));
+    rig.act("startRun");
+    let mut effects = Vec::new();
+    (0..20).for_each(|_| {
+        effects.extend(rig.advance(100));
+        effects.extend(rig.rx("ok"));
+    });
+    assert!(!written(&effects).contains(&"G18".to_string()), "{:?}", written(&effects));
+    assert!(alerts(&effects)[0].starts_with("Line 5 is an arc in the G18 or G19 plane"), "{:?}", alerts(&effects));
+    assert_eq!(rig.machine.snapshot().gcode_index, 4);
+}
+
+#[test]
+fn a_g18_from_a_typed_line_or_an_earlier_run_is_forgotten_by_the_next_run_and_by_a_restart_after_g17() {
+    let mut rig = Rig::connected();
+    assert_eq!(typed(&mut rig, "G18"), ["G18"]);
+    job(&mut rig, &["G21", "G0 X0 Y0", "G2 X10 Y0 I5 J0"]);
+    rig.act("startRun");
+    assert_eq!(rig.run_to_quiet()[2..], ["G2 X10 Y0 I5 J0"]);
+    typed(&mut rig, "G18");
+    job(&mut rig, &G18_SECTION);
+    rig.act_with("moveGcodeGoto", json!(6), json!(""));
+    rig.act("startRun");
+    assert_eq!(rig.run_to_quiet().last().unwrap(), "G2 X20 Y0 I5 J0");
+}
+
+#[test]
+fn a_typed_g18_refuses_the_typed_arcs_after_it_until_a_g17() {
+    let mut rig = Rig::connected();
+    let mut effects =
+        rig.send(Event::Request { id: 1, request: Request::SendGcode("G0 X0 Y0\nG18\nG2 X10 Z-5 I5 K0".into()) });
+    (0..10).for_each(|_| {
+        effects.extend(rig.advance(100));
+        effects.extend(rig.rx("ok"));
+    });
+    assert_eq!(written(&effects), ["G0 X0 Y0", "G18"]);
+    assert!(alerts(&effects)[0].contains("G18 or G19 plane"), "{:?}", alerts(&effects));
+    rig.clear_written();
+    assert_eq!(typed(&mut rig, "G17\nG2 X10 Y0 I5 J0"), ["G17", "G2 X10 Y0 I5 J0"]);
+}
+
+#[test]
 fn an_r_arc_that_fits_the_buffer_only_with_its_r_is_refused_as_too_long() {
     let mut rig = Rig::connected();
     let line = format!("G2 X10 Y10 R10{}", " ".repeat(100));
@@ -281,6 +362,59 @@ fn play_mid_file_converts_the_r_arc_from_the_restart_position() {
     let sent = rig.run_to_quiet();
     assert!(sent.contains(&"G0 X10.0 Y10.0".to_string()), "{sent:?}");
     assert_eq!(sent[sent.len() - 2..], ["G2 X20 Y0 I0.0000 J-10.0000", "G0 Z5"]);
+}
+
+const MODAL_ARCS: [&str; 10] = [
+    "G21",
+    "G90",
+    "G0 X0 Y0",
+    "G1 Z-1 F100",
+    "G2 X10 Y0 I5 J0 F500",
+    "(next)",
+    "X20 Y0 I5 J0",
+    "X30 Y0 R5",
+    "G1 X40",
+    "X50",
+];
+
+#[test]
+fn play_mid_file_inside_a_run_of_modal_arcs_writes_the_files_g2() {
+    let mut rig = Rig::connected();
+    job(&mut rig, &MODAL_ARCS);
+    rig.act_with("moveGcodeGoto", json!(5), json!(""));
+    rig.act("startRun");
+    let sent = rig.run_to_quiet();
+    assert!(sent.contains(&"G0 X10.0 Y0.0".to_string()), "{sent:?}");
+    assert_eq!(sent[sent.len() - 4..], ["G2 X20 Y0 I5 J0", "X30 Y0 I5.0000 J0.0000", "G1 X40", "X50"], "{sent:?}");
+}
+
+#[test]
+fn resume_inside_a_run_of_modal_arcs_writes_the_files_g3() {
+    let mut rig = Rig::connected();
+    job(&mut rig, &["G21", "G0 X0 Y0", "G91", "G3 X10 Y0 I5 J0 F500", "X10 Y0 I5 J0", "X10 Y0 I5 J0"]);
+    rig.act("startRun");
+    while rig.machine.snapshot().gcode_index < 4 {
+        rig.advance(60);
+        rig.rx("ok");
+    }
+    rig.act("pauseRun");
+    rig.rx("ok");
+    rig.advance(100);
+    rig.clear_written();
+    rig.act("resumeRun");
+    let sent = rig.run_to_quiet();
+    assert_eq!(sent[sent.len() - 2..], ["G3 X20.0000 Y0.0000 I5 J0", "X30.0000 Y0.0000 I5 J0"], "{sent:?}");
+}
+
+#[test]
+fn play_mid_file_inside_a_run_of_modal_g90_1_arcs_writes_the_g2_and_converts_the_centre() {
+    let mut rig = Rig::connected();
+    job(&mut rig, &["G21", "G90", "G90.1", "G0 X10 Y10", "G1 Z-1 F100", "G2 X20 Y0 I10 J0", "X10 Y10 I10 J0"]);
+    rig.act_with("moveGcodeGoto", json!(6), json!(""));
+    rig.act("startRun");
+    let sent = rig.run_to_quiet();
+    assert!(sent.contains(&"G0 X20.0 Y0.0".to_string()), "{sent:?}");
+    assert_eq!(sent.last().unwrap(), "G2 X10 Y10 I-10.0000 J0.0000", "{sent:?}");
 }
 
 #[test]
