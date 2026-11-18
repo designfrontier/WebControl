@@ -635,3 +635,10 @@ Where the Rust backend writes something different from Python by owner decision.
     or R (`Impossible Arc`). An arc segment with neither, such as a bare `F500`, still goes out. No transcript has
     such an arc (`wc-machine` tests `a_job_pauses_before_an_arc_in_the_g18_plane`,
     `a_typed_arc_with_no_centre_is_refused_with_an_alert`).
+15. **A restart inside a run of modal arcs keeps cutting arcs** (2026-11-18). A restart's moves leave the firmware
+    in G0 or G1, and Python restored only G0/G1, so a bare `X20 Y0 I5 J0` after `G2 ... ` was cut as a straight
+    G1 line after Play mid-file or Resume. Rust writes the file's `G2 ` or `G3 ` before the first file line after
+    the restart that has an X, Y, Z, I, J or R word and no G word, then converts it as any arc; a line with G0 to G3
+    of its own needs none, and lines with neither (comments, `F`, `M`, `S`) pass untouched until one comes. No
+    transcript restarts mid-arc (`wc-machine` tests `play_mid_file_inside_a_run_of_modal_arcs_writes_the_files_g2`,
+    `resume_inside_a_run_of_modal_arcs_writes_the_files_g3`).

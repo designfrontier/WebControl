@@ -313,6 +313,17 @@ pub fn sequence(state: &GcodeState, options: &Options) -> Restart {
     Restart { lines, stopped_at_tool_change: false }
 }
 
+/// A file line after a restart, which left the controller in G0 or G1: one that moves on the file's modal G2 or G3
+/// gets it written. True once the line settles the motion, so the lines after it need nothing.
+pub fn continue_arc(line: &str, motion: u8) -> (String, bool) {
+    let moves = !line.trim_start().starts_with(['$', 'B']) && line.contains(['X', 'Y', 'Z', 'I', 'J', 'R']);
+    if !line.contains('G') && moves {
+        return (format!("G{motion} {line}"), true);
+    }
+    let sets_motion = words::numbers('G', line).iter().any(|code| [0.0, 1.0, 2.0, 3.0].contains(code));
+    (line.to_string(), sets_motion)
+}
+
 pub fn positioning_word(positioning: Positioning) -> &'static str {
     match positioning {
         Positioning::Absolute => "G90 ",
@@ -686,5 +697,16 @@ mod tests {
             Err(GcodeError::IndexOutOfRange { index: 2, len: 1 })
         );
         assert!(state_at(&file(&["(c)", "G1 F"]), 2, 0.0, 0.0, Units::Mm).is_err());
+    }
+
+    #[test]
+    fn a_line_moving_on_the_files_modal_arc_gets_it_and_settles_the_motion() {
+        assert_eq!(continue_arc("X20 Y0 I5 J0 ", 2), ("G2 X20 Y0 I5 J0 ".to_string(), true));
+        assert_eq!(continue_arc("N10 Z-1 ", 3), ("G3 N10 Z-1 ".to_string(), true));
+        assert_eq!(continue_arc("G03 X1 I1 ", 2), ("G03 X1 I1 ".to_string(), true));
+        assert_eq!(continue_arc("G90 G1 X1 ", 2), ("G90 G1 X1 ".to_string(), true));
+        ["F500 ", " ", "M3 S1000 ", "G21 ", "G90 X1 ", "G91.1 ", "$13=R ", "B08 "]
+            .iter()
+            .for_each(|line| assert_eq!(continue_arc(line, 2), (line.to_string(), false), "{line}"));
     }
 }

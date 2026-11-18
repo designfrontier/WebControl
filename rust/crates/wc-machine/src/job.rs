@@ -9,7 +9,7 @@ use wc_config::python_float;
 use wc_firmware::settings::reinitialises_axes;
 use wc_gcode::firmware_gcode::{only_selects_tool, pauses_firmware, tool_change_line};
 use wc_gcode::position::{Position, line_target, word};
-use wc_gcode::restart::{GcodeState, Options, Restart, sequence, state_at};
+use wc_gcode::restart::{GcodeState, Options, Restart, continue_arc, sequence, state_at};
 use wc_gcode::sanitise::{LineProblem, problem_with, sanitise};
 use wc_gcode::shift::{HomeShift, positioning_set_by, shift_to_home};
 use wc_gcode::{Positioning, py};
@@ -75,6 +75,8 @@ pub(crate) struct Job {
     pub z_target: f64,
     /// The last streamed line's target, for `gcodePositionMessage`.
     pub streamed: Position,
+    /// The file's modal G2 or G3 at a restart, until a file line settles the motion the restart left as G0 or G1.
+    pub arc_after_restart: Option<u8>,
 }
 
 impl Default for Job {
@@ -91,6 +93,7 @@ impl Default for Job {
             paused_at: None,
             z_target: 0.0,
             streamed: Position { x: 0.0, y: 0.0, z: 0.0, feed_rate: None },
+            arc_after_restart: None,
         }
     }
 }
@@ -178,6 +181,7 @@ impl Machine {
 
     pub(crate) fn end_job(&mut self) {
         self.job.flow = Flow::Idle;
+        self.job.arc_after_restart = None;
         self.index = 0;
     }
 
@@ -212,6 +216,7 @@ impl Machine {
             speed_after_spindle: (51.29..51.3).contains(&version),
         };
         let restart = sequence(&state, &options);
+        self.job.arc_after_restart = state.motion.filter(|&code| code >= 2);
         self.queue_raise(Raise::Restart(Box::new((state, options))));
         Some(restart)
     }
@@ -372,10 +377,18 @@ impl Machine {
         }
     }
 
+    /// A file line with the modal arc a restart left out, if it moves on it; true once the motion is settled.
+    fn after_restart(&self, line: String) -> (String, bool) {
+        match self.job.arc_after_restart {
+            Some(motion) => continue_arc(&line, motion),
+            None => (line, false),
+        }
+    }
+
     /// The next line as it would go out, or `None` when nothing of it is written.
     fn next_line_written(&self) -> Option<Result<String, LineProblem>> {
         let line = sanitise(self.gcode.get(self.index)?);
-        let to_send = tool_change_line(&line, self.job.next_tool, self.job.tool).line;
+        let to_send = self.after_restart(tool_change_line(&line, self.job.next_tool, self.job.tool).line).0;
         let written =
             !line.is_empty() && !py::isspace(&line) && !only_selects_tool(&line) && !reinitialises_axes(&line);
         written.then(|| self.as_written(&to_send)).filter(|line| !line.as_ref().is_ok_and(|line| blank(line)))
@@ -421,11 +434,14 @@ impl Machine {
             return self.end_job();
         };
         let line = sanitise(raw);
-        let to_send = tool_change_line(&line, self.job.next_tool, self.job.tool).line;
+        let (to_send, settled) = self.after_restart(tool_change_line(&line, self.job.next_tool, self.job.tool).line);
         let shifted = match self.as_written(&to_send) {
             Ok(shifted) => shifted,
             Err(problem) => return self.refuse_line(problem.alert(self.index), effects),
         };
+        if settled {
+            self.job.arc_after_restart = None;
+        }
         self.sled.sent(&to_send);
         self.manage_pause(&line, effects);
         let line = self.manage_tool_change(&line);

@@ -317,6 +317,48 @@ fn play_mid_file_converts_the_r_arc_from_the_restart_position() {
     assert_eq!(sent[sent.len() - 2..], ["G2 X20 Y0 I0.0000 J-10.0000", "G0 Z5"]);
 }
 
+const MODAL_ARCS: [&str; 10] = [
+    "G21",
+    "G90",
+    "G0 X0 Y0",
+    "G1 Z-1 F100",
+    "G2 X10 Y0 I5 J0 F500",
+    "(next)",
+    "X20 Y0 I5 J0",
+    "X30 Y0 R5",
+    "G1 X40",
+    "X50",
+];
+
+#[test]
+fn play_mid_file_inside_a_run_of_modal_arcs_writes_the_files_g2() {
+    let mut rig = Rig::connected();
+    job(&mut rig, &MODAL_ARCS);
+    rig.act_with("moveGcodeGoto", json!(5), json!(""));
+    rig.act("startRun");
+    let sent = rig.run_to_quiet();
+    assert!(sent.contains(&"G0 X10.0 Y0.0".to_string()), "{sent:?}");
+    assert_eq!(sent[sent.len() - 4..], ["G2 X20 Y0 I5 J0", "X30 Y0 I5.0000 J0.0000", "G1 X40", "X50"], "{sent:?}");
+}
+
+#[test]
+fn resume_inside_a_run_of_modal_arcs_writes_the_files_g3() {
+    let mut rig = Rig::connected();
+    job(&mut rig, &["G21", "G0 X0 Y0", "G91", "G3 X10 Y0 I5 J0 F500", "X10 Y0 I5 J0", "X10 Y0 I5 J0"]);
+    rig.act("startRun");
+    while rig.machine.snapshot().gcode_index < 4 {
+        rig.advance(60);
+        rig.rx("ok");
+    }
+    rig.act("pauseRun");
+    rig.rx("ok");
+    rig.advance(100);
+    rig.clear_written();
+    rig.act("resumeRun");
+    let sent = rig.run_to_quiet();
+    assert_eq!(sent[sent.len() - 2..], ["G3 X20.0000 Y0.0000 I5 J0", "X30.0000 Y0.0000 I5 J0"], "{sent:?}");
+}
+
 #[test]
 fn play_mid_file_in_a_g91_file_writes_the_arc_from_where_the_restart_put_the_sled() {
     let mut rig = Rig::connected();
