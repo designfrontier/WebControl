@@ -1,4 +1,4 @@
-//! Streaming, ported from test_serial_streaming and test_message_processor, and the checklist's air cut run against
+//! Streaming, ported from test_serial_streaming and test_message_processor, and jobs.md's air cut run against
 //! `wc-sim`: the home shift, the Z target, refused lines, halts, buffered flow control and a whole job.
 
 mod rig;
@@ -177,8 +177,8 @@ fn buffered_streaming_against_the_simulator_never_overfills_its_ring() {
     assert_eq!(rig.sim.position()[0], 59.0);
 }
 
-/// The checklist's air cut, simulated: a file with an M0 and a tool change, Pause and Resume, Stop, then a restart
-/// mid-file that finishes the job.
+/// The air cut of spec/rust-checklists/jobs.md, simulated: a file with an M0 and a tool change, Pause and Resume,
+/// Stop, then a restart mid-file that finishes the job.
 #[test]
 fn an_air_cut_against_the_simulator_runs_every_pause_and_ends_where_the_file_does() {
     let lines = [
