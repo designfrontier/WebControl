@@ -114,7 +114,10 @@ fn calculate_triangular(settings: &Settings, body: &Value) -> Result<TriangularR
 fn calculate_holey(settings: &Settings, body: &Value) -> Result<HoleyResult, Refused> {
     let form = HoleyForm::parse(body).map_err(|message| Refused { status: 400, message })?;
     let machine = machine_settings(settings).ok_or_else(|| Refused::new(422, NO_FIT))?;
-    holey::calibrate_measurements(&machine, &form.measurements).map_err(|_| Refused::new(422, NO_FIT))
+    holey::calibrate_measurements(&machine, &form.measurements).map_err(|error| match error {
+        wc_calibration::CalibrationError::Implausible(_) => Refused::new(422, &error.to_string()),
+        _ => Refused::new(422, NO_FIT),
+    })
 }
 
 /// `POST /api/calibration/{kind}`'s checks and calculation, from the settings in force.

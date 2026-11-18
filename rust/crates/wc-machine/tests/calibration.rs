@@ -169,6 +169,18 @@ fn holey_answers_422_when_no_fit_is_found() {
 }
 
 #[test]
+fn holey_says_to_measure_again_when_the_fit_is_implausible() {
+    let owner = [
+        ("Maslow Settings", "motorSpacingX", json!("3011.16237")),
+        ("Maslow Settings", "motorOffsetY", json!("433.68186")),
+    ];
+    let mut rig = Rig::with(settings(&owner));
+    let response = calculate_on(&mut rig, Kind::Holey, json!({ "measurements": vec![0; 12] }));
+    assert_eq!(response.status, 422);
+    assert!(response.body["error"].as_str().unwrap().ends_with("measure again."), "{}", response.body);
+}
+
+#[test]
 fn accept_refuses_until_something_is_calculated() {
     let mut rig = Rig::connected();
     [Kind::Triangular, Kind::Holey].into_iter().for_each(|kind| {
