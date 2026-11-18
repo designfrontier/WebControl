@@ -146,15 +146,23 @@ writes every setting back.
 - [ ] avrdude reports `bytes of flash verified` and ends with `avrdude done.` WebControl connects, the log shows
       `error: EEPROM read fail`, `Firmware Version 51.27`, the full settings push, one restart for `$38`, and `$$`.
 
-**Either way:**
+**C. If no backup is left**, rebuild the 51.27 that v0.94 bundled (madgrizzle/Firmware @ 950fb23), with a newer
+compiler. It is not the owner's firmware: the owner's controller ran an older "51.27" without B99 (FAKE_SERVO) or
+the TLE9201 boot line, and no build here reproduces it. The backup's `rollback.hex` is the only exact copy, so keep a
+copy of it off the Pi. On the Mac, with Docker, from the repository root:
+
+- [ ] `bash rust/firmware/docker-build.sh ~/holey-51.27 51.27` ends with
+      `/out/holey-51.27.hex: <sha>`, the same SHA-256 as `rust/firmware/holey-51.27.sha256` (it fails otherwise).
+- [ ] `scp ~/holey-51.27/holey-51.27.hex pi@maslow.local:` and, on the Pi, `sha256sum holey-51.27.hex` prints that
+      SHA-256 again.
+- [ ] Flash it as in part B, with `-Uflash:w:$HOME/holey-51.27.hex:i`, and check the same replies.
+
+**Whichever part you used:**
 
 - [ ] The firmware chip reads "Holey 51.27". Actions ▸ Sync settings: the reply matches the 51.27 `$$` the upgrade
       saved, `settings-dump.txt` in the backup directory (`$45` may differ in its last digits).
 - [ ] Jog Z 1 mm: the speed is as before. Check the chain lengths as in section 5.
 - [ ] Only now may the Pi boot v0.94 from the old disk.
-
-If no backup is left, the original 51.27 image is the one `buildFirmware.sh` (in git history at `220aa0e`) builds
-from madgrizzle/Firmware @ 950fb23. Flash it the same way.
 
 ## 8. If something goes wrong
 

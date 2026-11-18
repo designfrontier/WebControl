@@ -56,6 +56,10 @@ recorded outputs.
 - `bash firmware/docker-build.sh <dir>`: builds the holey 51.292 hex from the Orob-Maslow/Firmware v51.292 tag in
   arm64 Docker and fails unless it matches `firmware/holey-51.292.sha256`; `WC_FIRMWARE_HEX=<dir>/holey-51.292.hex`
   then embeds it in any build (CI's cross-build and `deploy.sh build` do). Without it the upgrade wizard refuses
+- `bash firmware/docker-build.sh <dir> 51.27`: builds `<dir>/holey-51.27.hex`, the holey 51.27 that v0.94 bundled
+  (madgrizzle/Firmware @ 950fb23), and fails unless it matches `firmware/holey-51.27.sha256`. It is never embedded;
+  it is the last-resort rollback image when no firmware backup is left (`spec/rust-checklists/firmware-upgrade.md`
+  section 7)
 - `cargo test -p wc-machine --test upgrade`: the upgrade rehearsal against `wc-sim` with a fake avrdude (success,
   sync failure and retry, wrong banner and rollback, EEPROM reset and migration)
 - `npm run test:e2e` in `frontend/`: every Playwright spec against the binary

@@ -91,7 +91,7 @@ export const actionGroups: ActionGroup[] = [
         allowed: "paused",
         confirm: {
           title: "Clear log files?",
-          body: "This deletes log.txt and alog.txt. Download a diagnostics file first if you need them.",
+          body: "This empties webcontrol-rs.log and deletes webcontrol-rs.log.1. Download a diagnostics file first if you need them.",
           confirmLabel: "Clear logs",
           danger: true,
         },
