@@ -410,7 +410,7 @@ describe("optical scan", () => {
     const { ready, socket } = setup();
     await ready;
     socket.serverMessage("opticalImage", { cell: { i: 0, j: 0 }, png: "SU1BR0U=" });
-    expect(screen.getByRole("img", { name: "Latest scan image, column 0, row 0" })).toHaveAttribute(
+    expect(await screen.findByRole("img", { name: "Latest scan image, column 0, row 0" })).toHaveAttribute(
       "src",
       "data:image/png;base64,SU1BR0U=",
     );
