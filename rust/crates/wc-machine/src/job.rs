@@ -217,6 +217,7 @@ impl Machine {
         };
         let restart = sequence(&state, &options);
         self.job.arc_after_restart = state.motion.filter(|&code| code >= 2);
+        self.sled.set_plane(state.plane);
         self.queue_raise(Raise::Restart(Box::new((state, options))));
         Some(restart)
     }
@@ -230,7 +231,7 @@ impl Machine {
             return Some("No GCode file loaded.".into());
         }
         self.job.z_target = self.position.z;
-        self.sled.arc_centres_reset();
+        self.sled.file_modes_reset();
         let mut flow = Flow::Streaming;
         if self.index > 0 {
             if let Err(refused) = self.safe_height("starting the file mid-way") {

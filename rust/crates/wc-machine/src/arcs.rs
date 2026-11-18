@@ -45,9 +45,16 @@ impl Sled {
         self.commanded.follow_arc_centres(line);
     }
 
-    /// A job run from its first line starts with I and J as offsets, whatever an earlier file or command set.
-    pub fn arc_centres_reset(&mut self) {
+    /// A job run from its first line starts with I and J as offsets and in G17, whatever an earlier file or command
+    /// set.
+    pub fn file_modes_reset(&mut self) {
         self.commanded.set_arc_centres(ArcCentres::Offsets);
+        self.commanded.set_plane(17);
+    }
+
+    /// The file's plane at a restart, which no line the restart writes carries.
+    pub fn set_plane(&mut self, plane: u32) {
+        self.commanded.set_plane(plane);
     }
 
     pub fn settled(&mut self) {

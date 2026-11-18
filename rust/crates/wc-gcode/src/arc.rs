@@ -282,6 +282,10 @@ impl Interpreter {
         self.arc_centres = arc_centres;
     }
 
+    pub fn set_plane(&mut self, plane: u32) {
+        self.plane = plane;
+    }
+
     /// Places the sled, exactly or, from a status report, to within `spread_mm` on each axis.
     pub fn set_xy_mm(&mut self, xy_mm: Option<[f64; 2]>, spread_mm: f64) {
         self.xy_mm = xy_mm;

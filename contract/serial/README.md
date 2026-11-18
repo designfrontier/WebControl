@@ -632,8 +632,13 @@ Where the Rust backend writes something different from Python by owner decision.
     (`spec/firmware.md` §9), and an arc with no I, J or R has radius 0, so the sled goes straight to its end at PID
     speed; Python sent both. Rust refuses, as in 9, any G2/G3 (or modal arc) with an axis or centre word while
     G18 or G19 is in effect (`Unsupported Arc`), not only an R arc, and any arc with an X, Y or Z word but no I, J
-    or R (`Impossible Arc`). An arc segment with neither, such as a bare `F500`, still goes out. No transcript has
-    such an arc (`wc-machine` tests `a_job_pauses_before_an_arc_in_the_g18_plane`,
+    or R (`Impossible Arc`). An arc segment with neither, such as a bare `F500`, still goes out. The plane is the
+    file's, since the firmware keeps none: a job run from its first line starts in G17, the G17, G18 and G19 it
+    streams change it, and a restart takes it from the lines before the restart point, as it does the units. A typed
+    G17, G18 or G19 sets it for the typed arcs after it, until the next job starts. No transcript has such an arc
+    (`wc-machine` tests `a_job_pauses_before_an_arc_in_the_g18_plane`,
+    `play_mid_file_in_a_g18_section_refuses_its_arc_though_g18_never_went_out`,
+    `a_g18_from_a_typed_line_or_an_earlier_run_is_forgotten_by_the_next_run_and_by_a_restart_after_g17`,
     `a_typed_arc_with_no_centre_is_refused_with_an_alert`).
 15. **A restart inside a run of modal arcs keeps cutting arcs** (2026-11-18). A restart's moves leave the firmware
     in G0 or G1, and Python restored only G0/G1, so a bare `X20 Y0 I5 J0` after `G2 ... ` was cut as a straight

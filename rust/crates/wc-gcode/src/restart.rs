@@ -23,6 +23,8 @@ pub struct GcodeState {
     pub positioning: Positioning,
     /// What the file's arcs' I and J measure from, which a restart must restore for the arcs after it.
     pub arc_centres: ArcCentres,
+    /// G17, G18 or G19, which only WebControl keeps: the firmware ignores them and cuts every arc in XY.
+    pub plane: u32,
     pub x: f64,
     pub y: f64,
     /// `None` until the file sets Z for the current tool; a restart must not lower the bit to a guess.
@@ -90,6 +92,7 @@ impl StateParser {
             units: machine,
             positioning: Positioning::Absolute,
             arc_centres: ArcCentres::Offsets,
+            plane: 17,
             x: home_x,
             y: home_y,
             z: None,
@@ -155,6 +158,11 @@ impl StateParser {
         }
         let has = |code: f64| codes.contains(&code);
         let state = &mut self.state;
+        state.plane = codes
+            .iter()
+            .rev()
+            .find_map(|&code| [17.0, 18.0, 19.0].contains(&code).then_some(code as u32))
+            .unwrap_or(state.plane);
         state.motion = (0..4u8).find(|&code| has(f64::from(code))).or(state.motion);
         if has(90.0) {
             state.positioning = Positioning::Absolute;
@@ -549,6 +557,15 @@ mod tests {
         assert_eq!(offsets[3], "G0 X5.0 Y10.0 ");
         let state = state_at(&file(&["g90.1", "g1 x1"]), 2, 0.0, 0.0, Units::Mm).unwrap();
         assert_eq!((state.arc_centres, state.positioning), (ArcCentres::Absolute, Positioning::Absolute));
+    }
+
+    #[test]
+    fn the_state_keeps_the_plane_the_file_set_last() {
+        let plane = |lines: &[&str]| state_at(&file(lines), lines.len(), 0.0, 0.0, Units::Mm).unwrap().plane;
+        assert_eq!(plane(&["G21", "G1 X1"]), 17);
+        assert_eq!(plane(&["G18", "G1 X1"]), 18);
+        assert_eq!(plane(&["g18", "G17 G19 G1 X1"]), 19);
+        assert_eq!(plane(&["G19", "G90 G17"]), 17);
     }
 
     #[test]
