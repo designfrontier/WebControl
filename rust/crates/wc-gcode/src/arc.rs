@@ -97,9 +97,8 @@ impl ArcProblem {
 
     pub fn advice(&self) -> &'static str {
         match self {
-            ArcProblem::StartUnknown => "Resume returns the sled to the file's position and tries the line again.",
-            ArcProblem::StartUncertain => {
-                "Arc start uncertain after a Stop — press Resume to return to a known position and continue."
+            ArcProblem::StartUnknown | ArcProblem::StartUncertain => {
+                "Resume returns the sled to the file's position and tries the line again."
             }
             _ => "Resume stops here again: stop the job, fix the file and load it again.",
         }
@@ -767,7 +766,7 @@ mod tests {
             assert!(!problem.title().is_empty() && problem.reason().starts_with("is "), "{problem:?}");
         });
         assert!(ArcProblem::StartUnknown.advice().starts_with("Resume returns"));
-        assert!(ArcProblem::StartUncertain.advice().starts_with("Arc start uncertain after a Stop"));
+        assert_eq!(ArcProblem::StartUncertain.advice(), ArcProblem::StartUnknown.advice());
         assert!(ArcProblem::Plane.advice().starts_with("Resume stops here again"));
         assert_eq!(Interpreter::default(), Interpreter::new());
     }

@@ -125,12 +125,34 @@ fn a_job_pauses_before_a_near_half_circle_from_a_reported_start_and_resume_conve
     effects.extend(rig.advance(100));
     assert_eq!(rig.run_to_quiet(), ["G20"]);
     effects.extend(rig.take_effects());
-    assert!(alerts(&effects).iter().any(|alert| alert.contains("Arc start uncertain after a Stop")), "{effects:?}");
+    let uncertain = "Line 2 is an arc the controller needs rewritten, and WebControl knows where the sled is only";
+    let alert = alerts(&effects).into_iter().find(|alert| alert.starts_with(uncertain));
+    assert!(
+        alert.is_some_and(
+            |alert| alert.ends_with("Resume returns the sled to the file's position and tries the line again.")
+        ),
+        "{effects:?}"
+    );
     assert_eq!((rig.machine.snapshot().upload_flag, rig.machine.snapshot().gcode_index), (2, 1));
     rig.act("resumeRun");
     let sent = rig.run_to_quiet();
     assert!(sent.contains(&"G0 X0.0 Y0.0".to_string()), "{sent:?}");
     assert_eq!(sent[sent.len() - 2..], ["G2 X1 Y0 I0.5000 J0.0000", "G0 X0"]);
+}
+
+#[test]
+fn a_job_that_places_the_sled_first_converts_a_near_half_circle_through_a_pause_and_resume() {
+    let mut rig = inches();
+    job(&mut rig, &["G20", "G0 X0 Y0", "G1 X0.5", "G2 X1.5 Y0 R0.5", "G0 X0"]);
+    rig.clear_written();
+    rig.act("startRun");
+    rig.act("pauseRun");
+    let mut sent = rig.run_to_quiet();
+    rig.act("resumeRun");
+    sent.extend(rig.run_to_quiet());
+    let effects = rig.take_effects();
+    assert!(alerts(&effects).is_empty(), "{:?}", alerts(&effects));
+    assert_eq!(sent[sent.len() - 2..], ["G2 X1.5 Y0 I0.5000 J0.0000", "G0 X0"], "{sent:?}");
 }
 
 #[test]
