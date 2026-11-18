@@ -116,11 +116,15 @@ on_exit() {
   phase finished
 }
 
-# One field of flat JSON: a string's contents, or a bare true/false/number.
+# The first key named $2 at any depth: a string's contents, or a bare true/false/number. jq is not on every Pi.
 field() {
-  local re="\"$2\": *(\"([^\"]*)\"|([^,} ]*))"
-  [[ "$1" =~ $re ]] && printf '%s' "${BASH_REMATCH[2]}${BASH_REMATCH[3]}"
-  return 0
+  grep -oE '"([^"\\]|\\.)*"|[][{},:]|[^][{},:"[:space:]]+' <<< "$1" | awk -v key="\"$2\"" '
+    want == 2 {
+      if ($0 ~ /^"/) { $0 = substr($0, 2, length($0) - 2); gsub(/\\"/, "\""); gsub(/\\\\/, "\\") }
+      if ($0 != "{" && $0 != "[") printf "%s", $0
+      exit
+    }
+    { want = (want == 1 && $0 == ":") ? 2 : ($0 == key) }' || true
 }
 
 service_user() {

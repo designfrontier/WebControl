@@ -571,7 +571,7 @@ service_escapes_the_log() {
   printf '{"tag_name": "bad\\\\x\t1"}' > "$api/latest"
   touch "$work/as-root"
   ! update --service update > /dev/null 2>&1 &&
-    progress '.log[-1] == "The release'"'"'s tag \"bad\\\\x 1\" is not a version."'
+    progress '.log[-1] == "The release'"'"'s tag \"bad\\x 1\" is not a version."'
 }
 
 service_takes_webcontrol_rs_environment() {
@@ -852,6 +852,18 @@ rollback_leaves_a_running_python_alone() {
     grep -q "ROLLED BACK: the files of webcontrol-rs 1.0 are back" "$work/out"
 }
 
+# field <json> <key> with the updater's own function.
+field_of() { (eval "$(sed '$d' "$rust/webcontrol-update")" && field "$1" "$2"); }
+
+fields_are_read_as_json() {
+  [ "$(field_of '{"busy": "Not now: \"x.nc\" runs \\ here. Finish or stop it first."}' busy)" = \
+    'Not now: "x.nc" runs \ here. Finish or stop it first.' ] &&
+    [ "$(field_of '{"gcodeFile":"a\",\"version\":\"9","version":"1.1"}' version)" = 1.1 ] &&
+    [ "$(field_of '{"jobInProgress": true, "x": 1}' jobInProgress)" = true ] &&
+    [ "$(field_of '{"a": {"stage": "flashing"}}' stage)" = flashing ] &&
+    [ "$(field_of '{"probing":false}' probing)" = false ] && [ -z "$(field_of '' version)" ]
+}
+
 help_and_bad_flags() {
   update --help > "$work/out" && grep -q "Only PUBLISHED releases" "$work/out" && grep -q -- "--rollback" "$work/out" &&
     ! update --frobnicate > /dev/null 2>&1
@@ -909,6 +921,7 @@ check "an update while the older WebControl runs installs without restarting" up
 check "--service update while the older WebControl runs installs without restarting" \
   service_update_leaves_a_running_python_alone
 check "--rollback while the older WebControl runs restores without restarting" rollback_leaves_a_running_python_alone
+check "fields are read as JSON, escapes and all" fields_are_read_as_json
 
 if [ "$failures" != 0 ]; then
   echo "$failures failed"
