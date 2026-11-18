@@ -94,6 +94,20 @@ fn a_git_describe_build_comes_after_its_release_as_webcontrol_update_orders_it()
 }
 
 #[test]
+fn a_git_describe_build_of_a_pre_release_comes_after_that_pre_release_only() {
+    let v = |text: &str| Version::parse(text).unwrap_or_else(|| panic!("{text}"));
+    assert!(v("0.3.0-rc.1-3-gabc1234") < v("0.3.0-rc.2"));
+    assert!(v("0.3.0-rc.1-3-gabc1234") > v("0.3.0-rc.1"));
+    assert!(v("0.3.0-rc.1-dirty") < v("0.3.0"));
+    assert!(v("0.3.0-rc.1-dirty") > v("0.3.0-rc.1"));
+    assert!(v("0.3.0-rc.1-3-gabc1234-dirty") > v("0.3.0-rc.1-dirty"));
+    assert_eq!(
+        compare("0.3.0-rc.1-3-gabc1234", "abc1234", Some(&release("v0.3.0-rc.2", None))),
+        UpdateState::UpdateAvailable
+    );
+}
+
+#[test]
 fn the_installed_build_against_the_latest_release() {
     let latest = |tag: &str, commit: Option<&str>| Some(release(tag, commit));
     assert_eq!(compare("0.3.0", "b9ea4ee", latest("v0.4.0", Some(SHA)).as_ref()), UpdateState::UpdateAvailable);

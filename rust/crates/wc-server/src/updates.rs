@@ -115,20 +115,20 @@ enum Identifier {
     Text(String),
 }
 
-/// After the core version: a pre-release, the release itself, or a `git describe` build that many commits past it.
+/// A pre-release sorts before its release.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-enum Suffix {
+enum Pre {
     Pre(Vec<Identifier>),
     Release,
-    Past(u64),
 }
 
 /// A version ordered as `webcontrol-update` orders them: `MAJOR[.MINOR[.PATCH]]`, an optional `v`, build metadata
-/// ignored, and `1.2.0-3-gabc1234` (or `-dirty`) after `1.2.0`.
+/// ignored, and a `git describe` build (`-3-gabc1234`, `-dirty`) after the tag it describes.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Version {
     core: [u64; 3],
-    suffix: Suffix,
+    pre: Pre,
+    commits_past: Option<u64>,
 }
 
 fn number(text: &str) -> Option<u64> {
@@ -145,32 +145,40 @@ fn identifier(text: &str) -> Option<Identifier> {
     }
 }
 
-fn commits_past(suffix: &str) -> Option<u64> {
-    if suffix == "dirty" {
-        return Some(0);
-    }
-    let (count, hash) = suffix.strip_suffix("-dirty").unwrap_or(suffix).split_once("-g")?;
-    let hex = !hash.is_empty() && hash.chars().all(|c| matches!(c, '0'..='9' | 'a'..='f'));
-    hex.then(|| number(count)).flatten()
+/// Splits `rc.1-3-gabc1234-dirty` into `rc.1` and the commit count, 3.
+fn split_describe(suffix: &str) -> (&str, Option<u64>) {
+    let (suffix, dirty) = match suffix.strip_suffix("dirty") {
+        Some(rest) if rest.is_empty() || rest.ends_with('-') => (rest.strip_suffix('-').unwrap_or(rest), Some(0)),
+        _ => (suffix, None),
+    };
+    let described = suffix.rsplit_once("-g").and_then(|(head, hash)| {
+        let hex = !hash.is_empty() && hash.chars().all(|c| matches!(c, '0'..='9' | 'a'..='f'));
+        let (pre, count) = head.rsplit_once('-').unwrap_or(("", head));
+        Some((pre, number(count)?)).filter(|_| hex)
+    });
+    described.map_or((suffix, dirty), |(pre, count)| (pre, Some(count)))
 }
 
-fn suffix(text: Option<&str>) -> Option<Suffix> {
-    let Some(text) = text else { return Some(Suffix::Release) };
-    let pre: Vec<Identifier> = text.split('.').map(identifier).collect::<Option<_>>()?;
-    Some(commits_past(text).map_or(Suffix::Pre(pre), Suffix::Past))
+fn pre(text: Option<&str>) -> Option<Pre> {
+    let Some(text) = text else { return Some(Pre::Release) };
+    text.split('.').map(identifier).collect::<Option<_>>().map(Pre::Pre)
 }
 
 impl Version {
     pub fn parse(text: &str) -> Option<Version> {
         let text = text.strip_prefix('v').unwrap_or(text);
         let text = text.split_once('+').map_or(text, |(version, _)| version);
-        let (core, pre) = text.split_once('-').map_or((text, None), |(core, pre)| (core, Some(pre)));
+        let (core, suffix) = text.split_once('-').map_or((text, None), |(core, suffix)| (core, Some(suffix)));
         let mut core: Vec<u64> = core.split('.').map(number).collect::<Option<_>>()?;
         if core.len() > 3 {
             return None;
         }
         core.resize(3, 0);
-        Some(Version { core: core.try_into().ok()?, suffix: suffix(pre)? })
+        let (pre_release, commits_past) = suffix.map_or((None, None), |suffix| {
+            let (pre_release, commits_past) = split_describe(suffix);
+            (Some(pre_release).filter(|p| !p.is_empty() || commits_past.is_none()), commits_past)
+        });
+        Some(Version { core: core.try_into().ok()?, pre: pre(pre_release)?, commits_past })
     }
 }
 
