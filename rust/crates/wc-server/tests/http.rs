@@ -217,6 +217,8 @@ const ROUTED: &[(&str, &str)] = &[
     ("GET", "/api/machine/quick-configure"),
     ("GET", "/api/system/pid"),
     ("GET", "/api/system/updates"),
+    ("POST", "/api/system/updates/install"),
+    ("POST", "/api/system/updates/rollback"),
     ("GET", "/api/calibration/triangular"),
     ("GET", "/api/calibration/holey"),
     ("GET", "/{path}"),

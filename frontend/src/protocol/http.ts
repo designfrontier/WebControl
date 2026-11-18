@@ -376,6 +376,25 @@ export const httpEndpoints: HttpEndpoint[] = [
     "The installed version, the latest published release on GitHub and the update backup",
     updatesSchema,
   ),
+  ...(["install", "rollback"] as const).map((action) =>
+    api({
+      method: "POST",
+      path: `/api/system/updates/${action}`,
+      summary:
+        action === "install"
+          ? "Start webcontrol-update@update.service: the latest published release, checked, with rollback on failure"
+          : "Start webcontrol-update@rollback.service: put back the install the last update backed up",
+      body: json(z.object({}), "{}"),
+      responses: {
+        202: json(updatesSchema, "Started; progress follows in GET /api/system/updates"),
+        409: error(
+          "The units are not installed, an update is already running, the machine is busy, or " +
+            (action === "install" ? "there is no newer release" : "there is no backup"),
+        ),
+        500: error("sudo could not start the unit"),
+      },
+    }),
+  ),
   api({
     method: "GET",
     path: "/api/system/help",

@@ -129,6 +129,47 @@ export const updateStatusSchema = z
   );
 export type UpdateStatusKind = z.infer<typeof updateStatusSchema>;
 
+export const updateActionSchema = z.enum(["update", "rollback"]);
+export type UpdateAction = z.infer<typeof updateActionSchema>;
+
+export const updatePhaseSchema = z
+  .enum([
+    "starting",
+    "checking",
+    "downloading",
+    "verified",
+    "backingUp",
+    "installing",
+    "restarting",
+    "healthCheck",
+    "rollingBack",
+    "finished",
+  ])
+  .describe("starting: the server started the unit and the updater has not written yet; verified: checksum OK");
+export type UpdatePhase = z.infer<typeof updatePhaseSchema>;
+
+export const updateResultSchema = z
+  .enum(["updated", "upToDate", "rolledBack", "rollbackFailed", "failed", "interrupted"])
+  .describe(
+    "rolledBack after an update: it failed and the backup is running again; after a rollback: it worked. " +
+      "failed: refused or stopped with nothing changed; interrupted: the updater stopped without finishing.",
+  );
+export type UpdateResult = z.infer<typeof updateResultSchema>;
+
+/** The last update or rollback started from the page, as webcontrol-update@.service reports it. */
+export const updateProgressSchema = z.object({
+  action: updateActionSchema,
+  phase: updatePhaseSchema,
+  running: z.boolean(),
+  from: z.string().nullable().describe("The version installed when it started"),
+  to: z.string().nullable().describe("The release, or the backup's version for a rollback"),
+  startedAt: z.number().nullable().describe("Milliseconds since the epoch"),
+  finishedAt: z.number().nullable(),
+  result: updateResultSchema.nullable().describe("null while it runs"),
+  log: z.array(z.string()).describe("What the updater printed, oldest first"),
+});
+export type UpdateProgress = z.infer<typeof updateProgressSchema>;
+
 /** GET /api/system/updates: the installed build, the latest published release and webcontrol-update's backup. */
 export const updatesSchema = z.object({
   installed: z.object({ version: z.string(), commit: z.string() }),
@@ -150,6 +191,9 @@ export const updatesSchema = z.object({
     .object({ version: z.string(), date: z.string() })
     .nullable()
     .describe("The install webcontrol-update saved before the last update, which --rollback restores"),
+  canUpdate: z.boolean().describe("webcontrol-update@.service is installed, so this page can update and roll back"),
+  busy: z.string().nullable().describe("Why an update or rollback would be refused now: a job, probe, scan, ..."),
+  progress: updateProgressSchema.nullable(),
 });
 export type Updates = z.infer<typeof updatesSchema>;
 

@@ -1246,6 +1246,62 @@
       }
     },
     {
+      "method": "POST",
+      "path": "/api/system/updates/install",
+      "family": "api",
+      "summary": "Start webcontrol-update@update.service: the latest published release, checked, with rollback on failure",
+      "body": {
+        "contentType": "application/json",
+        "description": "{}",
+        "schema": "schemas/http/post-api-system-updates-install.request.json"
+      },
+      "responses": {
+        "202": {
+          "contentType": "application/json",
+          "description": "Started; progress follows in GET /api/system/updates",
+          "schema": "schemas/http/post-api-system-updates-install.202.json"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "The units are not installed, an update is already running, the machine is busy, or there is no newer release",
+          "schema": "schemas/http/post-api-system-updates-install.409.json"
+        },
+        "500": {
+          "contentType": "application/json",
+          "description": "sudo could not start the unit",
+          "schema": "schemas/http/post-api-system-updates-install.500.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/system/updates/rollback",
+      "family": "api",
+      "summary": "Start webcontrol-update@rollback.service: put back the install the last update backed up",
+      "body": {
+        "contentType": "application/json",
+        "description": "{}",
+        "schema": "schemas/http/post-api-system-updates-rollback.request.json"
+      },
+      "responses": {
+        "202": {
+          "contentType": "application/json",
+          "description": "Started; progress follows in GET /api/system/updates",
+          "schema": "schemas/http/post-api-system-updates-rollback.202.json"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "The units are not installed, an update is already running, the machine is busy, or there is no backup",
+          "schema": "schemas/http/post-api-system-updates-rollback.409.json"
+        },
+        "500": {
+          "contentType": "application/json",
+          "description": "sudo could not start the unit",
+          "schema": "schemas/http/post-api-system-updates-rollback.500.json"
+        }
+      }
+    },
+    {
       "method": "GET",
       "path": "/api/system/help",
       "family": "api",

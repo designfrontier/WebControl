@@ -1,6 +1,6 @@
 //! The `system` slice: version and capability info.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::machine::PidKind;
@@ -205,6 +205,56 @@ pub struct UpdateBackup {
     pub date: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum UpdateAction {
+    Update,
+    Rollback,
+}
+
+/// Where `webcontrol-update --service` is; `Starting` is the server's, until the updater writes its first status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum UpdatePhase {
+    Starting,
+    Checking,
+    Downloading,
+    Verified,
+    BackingUp,
+    Installing,
+    Restarting,
+    HealthCheck,
+    RollingBack,
+    Finished,
+}
+
+/// `Interrupted` is the server's: the status file is unfinished but its unit is no longer running.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum UpdateResult {
+    Updated,
+    UpToDate,
+    RolledBack,
+    RollbackFailed,
+    Failed,
+    Interrupted,
+}
+
+/// The last update or rollback started from the UI, from `/var/lib/webcontrol-rs/update.json`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateProgress {
+    pub action: UpdateAction,
+    pub phase: UpdatePhase,
+    pub running: bool,
+    pub from: Option<String>,
+    pub to: Option<String>,
+    pub started_at: Option<u64>,
+    pub finished_at: Option<u64>,
+    pub result: Option<UpdateResult>,
+    pub log: Vec<String>,
+}
+
 /// `GET /api/system/updates`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -216,4 +266,7 @@ pub struct Updates {
     pub error: Option<String>,
     pub checked_at: Option<u64>,
     pub backup: Option<UpdateBackup>,
+    pub can_update: bool,
+    pub busy: Option<String>,
+    pub progress: Option<UpdateProgress>,
 }
