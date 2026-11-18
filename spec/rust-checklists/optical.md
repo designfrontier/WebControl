@@ -34,7 +34,8 @@ Unplug any Pi Camera Module first, so `auto` cannot pick it.
       couple of seconds and refreshes about twice a second. It is gray: the overlay shows luma only.
 - [ ] Wave a hand in front of the lens: the overlay follows within about a second (the capture drops frames that
       were already waiting, so it never lags by more than one frame).
-- [ ] Reload the page: **Camera** still shows the camera is on (`queryCamera` answers `updateCamera on`).
+- [ ] Reload the page: **Camera** still shows the camera is on (the viewer's
+      `statusRequest "cameraStatus"` answers `updateCamera on`).
 - [ ] Turn the overlay off. Within about 2 s the webcam's LED (if it has one) goes out, and
       `fuser /dev/video0` prints nothing: the camera closes when nobody needs it.
 - [ ] Set **Camera Source** to `/dev/video0` explicitly and repeat the on/off. Same result.
@@ -89,7 +90,8 @@ Only with the camera mounted on the sled, looking down, and the router off with 
 - [ ] Fix the target flat on the sheet. In the Camera card, **Test image** shows one frame, and **Find centre** finds
       the square under the camera and fills in the optical centre. Save the settings.
 - [ ] **Start scan** with a small custom extent first (a few squares). The sled moves square to square; each square
-      shows on the heat map, and the progress bar advances. The log shows `G21`, `G90`, then `G0 X… Y…` per square
+      shows on the heat map, and the progress bar advances. The log shows `G21`, `G90`, `G0 Z<safe height>`, the camera
+      check's two 5 mm moves, then for each square `G1 X… Y… F<feed>` followed by `B10 L`, and `G90` at the end
       (`optical_scan_two_cells_mm`).
 - [ ] Press **Stop** mid-scan: the sled stops at once, nothing more is queued, and Start scan is enabled again
       (`optical_stop_mid_scan`).

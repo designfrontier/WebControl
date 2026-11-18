@@ -2,8 +2,8 @@
 
 Status: accepted 2026-11-15 with the owner decisions in §5; step 0 (§4) froze the interfaces on branch
 `optical/interfaces`. Supersedes the owner decision "Camera and optical calibration dropped"
-(`spec/RUST-PLAN.md:30-31`); M7 in `spec/RUST-PLAN.md:437` is the old one-line version. Where §1-§3 and §5 disagree,
-§5 and the step 0 interfaces (§4.1) win.
+(`spec/RUST-PLAN.md:30-31`); the M7 row in `spec/RUST-PLAN.md` is the old one-line version. Where §1-§3 and §5
+disagree, §5 and the step 0 interfaces (§4.1) win.
 
 Python citations are `file:line` at commit `220aa0e` (`git show 220aa0e:<file>`). The React screen is at `59895dd^`
 (`git show 59895dd^:frontend/src/features/calibration/OpticalCalibration.tsx`); `59895dd` deleted it. Rust
@@ -379,7 +379,7 @@ reference; in short:
    concatenated JPEGs to stdout, then truncated output, then exits. `v4l2.rs` stays a thin adapter over the pure
    `frame.rs` converters, which are unit-tested. Both adapters are covered only on hardware: `scripts/coverage.sh`
    excludes `camera/{v4l2,rpicam}.rs` from the 95% gate (decision 5), and they get a manual checklist
-   `spec/rust-checklists/optical.md` (written as `M7.md`) for testers.
+   `spec/rust-checklists/optical.md` (formerly `M7.md`) for testers.
 7. **UI.** Vitest from the restored `OpticalCalibration.test.tsx` and `opticalForm.test.ts`, plus progress, Accept and
    hidden-when-disabled tests. Playwright `frontend/e2e/optical.spec.ts` runs against `webcontrol-rs --simulate`
    with `opticalCalibrationEnabled` on and `cameraSource` `synthetic` in the throwaway home's `webcontrol.json`.

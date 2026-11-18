@@ -3,7 +3,7 @@
 What this must show on the real machine: holey calibration from your saved measurements gives the numbers
 `wc-calibration` gives for the same settings, and Accept writes exactly the `$` lines it prints; the holey test
 pattern air-cuts; and the computed sled position follows the sled. CI checks the maths against the golden fixtures
-recorded from the original WebControl (`fixtures/calibration/`, to five decimals) and the
+recorded from the original WebControl (`fixtures/calibration/`: the holey fit to 0.001, everything else to 1e-6) and the
 `holey_calibration_accept_writes_settings` transcript.
 
 Safety, for every step below (and the README's):
@@ -15,8 +15,8 @@ Safety, for every step below (and the README's):
 
 You need: the release installed, the controller on USB (holey 51.27 or 51.292) and connected, the log viewer open, a
 browser, the Mac with this repository at the release's tag, and the twelve measurements of your last holey
-calibration (from the calibration form, or the log). Triangular calibration needs stock firmware; on holey it is
-checked from the Mac only (section 5).
+calibration (your own notes, or v0.94's log; webcontrol-rs does not keep them).
+Triangular calibration needs stock firmware; on holey it is checked from the Mac only (section 5).
 
 ## 1. The expected numbers, from the Mac
 
@@ -40,7 +40,7 @@ checked from the Mac only (section 5).
 ## 3. Holey calibration: Accept
 
 - [ ] Press **Accept results**. The page says "Accepted", and the "Current" column now shows the calculated values.
-- [ ] The log shows the `$` lines section 1 printed, in its order (`Sent: $2=…`, `$3=…`, `$40=…`, `$41=…`; a value
+- [ ] The log shows the `$` lines section 1 printed, in its order (`Sent: $3=…`, `$2=…`, `$40=…`, `$41=…`; a value
       equal to the stored one within one part in a million has no line), each with its `ok`. On 51.292 each also has
       `Change in setting, rewriting EEPROM`.
 - [ ] Actions ▸ Sync settings: the `$$` reply lists `$2`, `$3`, `$40` and `$41` at the accepted values.
@@ -51,8 +51,8 @@ checked from the Mac only (section 5).
 
 - [ ] Raise Z about 20 mm above the sheet and press **Set Z Zero Here**, so the pattern's `Z-5` plunges stay 15 mm in
       the air.
-- [ ] Holey calibration ▸ **Cut test pattern**. The log shows, in order: `G21`, `G90`, `G40`, `G17`, `G0 Z5`, `M3`,
-      then for each of the six holes `G0 X… Y…`, `G1 Z-5 F500`, `G0 Z5` (top middle first, then counter-clockwise),
+- [ ] Holey calibration ▸ **Cut calibration pattern**. The log shows, in order: `G21`, `G90`, `G40`, `G17`, `G0 Z5`,
+      `M3`, then for each of the six holes `G0 X… Y…`, `G1 Z-5 F500`, `G0 Z5` (top middle first, then counter-clockwise),
       then `G0 X0 Y0`, `M5` (and `G20` if the machine is in inches). The controller answers `G17` with
       `Command G17 unsupported and ignored.` Z rises before every move and descends slowly at each hole; the sled ends
       in the centre.
