@@ -379,7 +379,7 @@ reference; in short:
    concatenated JPEGs to stdout, then truncated output, then exits. `v4l2.rs` stays a thin adapter over the pure
    `frame.rs` converters, which are unit-tested. Both adapters are covered only on hardware: `scripts/coverage.sh`
    excludes `camera/{v4l2,rpicam}.rs` from the 95% gate (decision 5), and they get a manual checklist
-   `spec/rust-checklists/M7.md` for testers.
+   `spec/rust-checklists/optical.md` (written as `M7.md`) for testers.
 7. **UI.** Vitest from the restored `OpticalCalibration.test.tsx` and `opticalForm.test.ts`, plus progress, Accept and
    hidden-when-disabled tests. Playwright `frontend/e2e/optical.spec.ts` runs against `webcontrol-rs --simulate`
    with `opticalCalibrationEnabled` on and `cameraSource` `synthetic` in the throwaway home's `webcontrol.json`.
@@ -428,7 +428,7 @@ pass clippy and fmt. Each deletes the stub checks of what it builds (`wc-optical
 |---|---|
 | **A. Vision core** | Ground-truth cases (§3.2) within 0.3 px (decision 6); CSV byte-exact against Track B's goldens; find-centre and shimmed calibration against Python reported, not gated; one 640x480 frame processed in < 150 ms on aarch64 in Docker (Pi 3B budget) |
 | **B. Synthetic target, goldens, printable target** | Renderer deterministic (hash-pinned PNGs); `golden.py` regenerates `python_golden.json` from a clean checkout with a documented command; fixture README explains the raw/shim split; `target::pdf` gives a PDF whose squares measure true size (checked by parsing its content stream) on letter and A4 |
-| **C. Cameras and live stream** | Frame fan-out with sequence and timestamp; `toggleCamera`/`queryCamera`/`cameraStatus` drive `cameraMessage` at about 2 fps at 256x192; the camera opens on demand from `cameraSource` and closes when idle; the aarch64 zigbuild passes in CI; `ldd` shows no new shared libraries; `spec/rust-checklists/M7.md` |
+| **C. Cameras and live stream** | Frame fan-out with sequence and timestamp; `toggleCamera`/`queryCamera`/`cameraStatus` drive `cameraMessage` at about 2 fps at 256x192; the camera opens on demand from `cameraSource` and closes when idle; the aarch64 zigbuild passes in CI; `ldd` shows no new shared libraries; `spec/rust-checklists/optical.md` |
 | **D. Scan sequencing and API** | §3.4 sim tests and §3.5 transcripts pass; `--test gates` and `--test latency` still pass (Stop reaches the port within 5 ms during a measurement); every route and action refused while the setting is off; Accept writes nothing before confirm; CSV and target routes serve A's and B's output |
 | **E. UI** | Screen and menu entry hidden unless `experimental` includes `optical` (refetch `GET /api/state` after a WebControl Settings save); "Experimental" banner saying what the result does on the connected firmware; live progress grid / heat map; Retry/Skip/Stop on a failed cell; Fit shown beside the current values; Accept dialog listing every setting it writes; CSV and target downloads; vitest 95%; e2e (§3.7) |
 | **F. Holey geometry fit** | `fit` recovers the injected geometry in §3.4 to 0.5 mm, plus the sheet pose; pinned by its own iteration-path fixture like `trf_path.json` (Python had no such fit); too few cells or no convergence gives a `CalibrationError` D maps to 409/422 |
@@ -445,7 +445,7 @@ existing ones; nothing existing is reworded.
 |---|---|
 | A | `rust/crates/wc-optical/src/{lib,frame,detect,measure,grid,codec,overlay}.rs`; `rust/crates/wc-optical/tests/{vision_stubs,detect,measure,grid,codec}.rs`; `rust/crates/wc-optical/benches/**` |
 | B | `rust/crates/wc-optical/src/{render,target}.rs`; `rust/crates/wc-optical/src/camera/{file,synthetic}.rs`; `rust/crates/wc-optical/tests/{target_stubs,render,target}.rs`; `rust/crates/wc-optical/tests/fixtures/**`; `tools/optical/**` |
-| C | `rust/crates/wc-optical/src/camera/{mod,v4l2,rpicam}.rs`; `rust/crates/wc-optical/tests/{camera_stubs,camera}.rs`; `rust/crates/wc-server/src/camera.rs`; `rust/crates/wc-server/tests/camera.rs`; in `rust/crates/wc-server/src/cli.rs` only `sled_position` and the `Cameras` construction in `serve`; in `rust/crates/wc-machine/src/actions.rs` only the `toggleCamera`/`queryCamera`/`statusRequest "cameraStatus"` arms; a new `rust/crates/wc-machine/src/camera.rs` and its additive `Effect`/`Event` variants in `machine.rs` and arms in `shell.rs`; `spec/rust-checklists/M7.md` |
+| C | `rust/crates/wc-optical/src/camera/{mod,v4l2,rpicam}.rs`; `rust/crates/wc-optical/tests/{camera_stubs,camera}.rs`; `rust/crates/wc-server/src/camera.rs`; `rust/crates/wc-server/tests/camera.rs`; in `rust/crates/wc-server/src/cli.rs` only `sled_position` and the `Cameras` construction in `serve`; in `rust/crates/wc-machine/src/actions.rs` only the `toggleCamera`/`queryCamera`/`statusRequest "cameraStatus"` arms; a new `rust/crates/wc-machine/src/camera.rs` and its additive `Effect`/`Event` variants in `machine.rs` and arms in `shell.rs`; `spec/rust-checklists/optical.md` |
 | D | `rust/crates/wc-machine/src/optical.rs`; `rust/crates/wc-machine/tests/optical.rs`; additive lines in `rust/crates/wc-machine/src/{machine,actions,gates,alarm,setup,work,edits,shell,lib}.rs` (not C's camera arms); `rust/crates/wc-server/src/optical.rs`; `rust/crates/wc-server/tests/optical.rs`; `contract/serial/transcripts/optical_*.json` |
 | E | `frontend/src/features/calibration/{OpticalCalibration,OpticalFields,Charts,chartData,opticalForm,opticalApi,opticalFixtures}.*` and their tests; the optical rules in `calibration.css`; the optical entries in `CalibrationPage.tsx`, `features/system/setupLinks.ts` and `app/modals.ts`; `frontend/e2e/optical.spec.ts` |
 | F | `rust/crates/wc-calibration/src/optical_fit.rs`; `rust/crates/wc-calibration/tests/optical_fit.rs`; `rust/crates/wc-calibration/tests/fixtures/optical_fit*` |
@@ -467,8 +467,8 @@ Rough size: A ~900, B ~600 (+ Python ~150), C ~600, D ~900, E ~700 (frontend), F
 **Risks**
 
 - **No hardware in the loop.** Detection, settling and lighting are only modelled. The first tester's run is the real
-  validation. Mitigation: the M7 checklist, the CSV export, and a diagnostic capture bundle (the 10 raw frames per
-  cell, optional) to send back.
+  validation. Mitigation: the optical checklist (`spec/rust-checklists/optical.md`), the CSV export, and a diagnostic
+  capture bundle (the 10 raw frames per cell, optional) to send back.
 - **Python parity is partly undesirable** (§1.9.1). Goldens use the OpenCV-3 shim, so "matches Python" means
   "matches what Python meant".
 - **imageproc vs OpenCV** differences (Canny norm, contour tracing, approxPolyDP tie-breaks) may exceed ±0.5 px on

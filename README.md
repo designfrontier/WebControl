@@ -87,8 +87,8 @@ install files.
   git push origin v0.2.0
   ```
 
-  Install the draft on the Pi, run the checklists in `spec/rust-checklists/` that the release touches, then publish
-  it. `rust/README.md` (Releases) has the details.
+  Install the draft on the Pi, run the checklists in `spec/rust-checklists/` that the release touches (its README
+  says which), then publish it. `rust/README.md` (Releases) has the details.
 
 **Pushing an update to the Pi.** With the machine idle:
 
