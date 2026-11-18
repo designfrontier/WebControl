@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use serde_json::Value;
 use wc_calibration::CalibrationError;
+use wc_calibration::MachineSettings;
 use wc_calibration::holey::HoleyResult;
 use wc_config::{Settings, python_float_str};
 use wc_optical::grid::{self, ErrorGrid};
@@ -200,8 +201,8 @@ pub(crate) struct Optical {
     state: Option<ScanState>,
     settings: Option<OpticalSettings>,
     grid: ErrorGrid,
-    /// The geometry the grid was measured under, which a fit must solve against.
-    scanned_under: Option<HoleyParameters>,
+    /// Every setting the fit's model reads, as the grid was measured under them.
+    scanned_under: Option<MachineSettings>,
     orientation: Option<Orientation>,
     fit: Option<GeometryFit>,
     next_id: u64,
@@ -320,13 +321,13 @@ impl Machine {
             return Response::error(400, &problem);
         }
         let restore_inches = self.units() == wc_protocol::main::Units::Inches;
-        let geometry = crate::calibration::holey_parameters(&self.settings);
+        let model = crate::calibration::machine_settings(&self.settings);
         let optical = &mut self.optical;
-        let same = optical.scanned_under.as_ref().is_some_and(|under| same_geometry(under, &geometry));
+        let same = optical.scanned_under.is_some() && optical.scanned_under == model;
         if cells.len() > 1 || optical.settings.is_none() || !same {
             optical.grid = ErrorGrid::new();
             optical.orientation = None;
-            optical.scanned_under = Some(geometry);
+            optical.scanned_under = model;
         }
         optical.fit = None;
         optical.settings = Some(settings);
@@ -660,7 +661,8 @@ impl Machine {
         if let Some(refusal) = self.optical.holds().then_some(RUNNING) {
             return Response::error(409, refusal);
         }
-        if self.optical.scanned_under.as_ref().is_some_and(|under| !same_geometry(under, &fit.current)) {
+        let model = crate::calibration::machine_settings(&self.settings);
+        if self.optical.scanned_under.as_ref().is_some_and(|under| Some(under) != model.as_ref()) {
             return Response::error(409, SCANNED_UNDER_OTHER_GEOMETRY);
         }
         let body = serde_json::to_value(&fit).unwrap_or(Value::Null);

@@ -80,7 +80,7 @@ pub(crate) struct Results {
     holey: Option<HoleyResult>,
 }
 
-fn machine_settings(settings: &Settings) -> Option<MachineSettings> {
+pub(crate) fn machine_settings(settings: &Settings) -> Option<MachineSettings> {
     MachineSettings::from_lookup(|section, key| settings.text(section, key)).ok()
 }
 
