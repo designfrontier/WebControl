@@ -390,3 +390,79 @@
 .system-card code {
   overflow-wrap: anywhere;
 }
+
+/* Updating from the page */
+.update-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.update-buttons button {
+  min-height: var(--tap);
+}
+
+.update-outcome {
+  margin: 0;
+  font-weight: 600;
+}
+
+.update-outcome[data-tone="ok"] {
+  color: var(--ok);
+}
+
+.update-outcome[data-tone="warn"] {
+  color: var(--warn);
+}
+
+.update-outcome[data-tone="danger"] {
+  color: var(--danger);
+}
+
+.update-steps-progress {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding-left: var(--space-6);
+}
+
+.update-steps-progress li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: var(--tap);
+}
+
+.update-steps-progress li[data-state="waiting"] {
+  color: var(--muted);
+}
+
+.update-steps-progress li[data-state="current"] {
+  font-weight: 600;
+}
+
+.update-steps-progress .step-state {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.update-log summary {
+  display: flex;
+  align-items: center;
+  min-height: var(--tap);
+  cursor: pointer;
+}
+
+.update-log pre {
+  max-height: 16rem;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.system-note:empty {
+  display: none;
+}

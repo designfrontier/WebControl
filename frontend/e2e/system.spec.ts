@@ -82,33 +82,79 @@ test("the Update screen says when GitHub can't be reached and how to update on t
   await expect(steps.getByText("ssh pi@localhost")).toBeVisible();
 });
 
-test("the Update screen shows a newer release with its notes, and no install button", async ({ page }) => {
-  await page.route("**/api/system/updates", (route) =>
-    route.fulfill({
-      json: {
-        installed: { version: "0.3.0", commit: "dc9bdca" },
-        repo: "designfrontier/WebControl",
-        latest: {
-          tag: "v0.4.0",
-          name: "webcontrol-rs 0.4.0",
-          publishedAt: "2026-11-20T10:00:00Z",
-          url: "https://github.com/designfrontier/WebControl/releases/tag/v0.4.0",
-          notes: "## Faster previews\n\n<script>window.injected = true</script>",
-          commit: null,
-        },
-        status: "updateAvailable",
-        error: null,
-        checkedAt: Date.now(),
-        backup: { version: "0.2.0", date: "2026-11-16T18:00:00Z" },
-      },
-    }),
-  );
+const release = {
+  installed: { version: "0.3.0", commit: "dc9bdca" },
+  repo: "designfrontier/WebControl",
+  latest: {
+    tag: "v0.4.0",
+    name: "webcontrol-rs 0.4.0",
+    publishedAt: "2026-11-20T10:00:00Z",
+    url: "https://github.com/designfrontier/WebControl/releases/tag/v0.4.0",
+    notes: "## Faster previews\n\n<script>window.injected = true</script>",
+    commit: null,
+  },
+  status: "updateAvailable",
+  error: null,
+  checkedAt: Date.now(),
+  backup: { version: "0.2.0", date: "2026-11-16T18:00:00Z" },
+  canUpdate: true,
+  busy: null,
+  progress: null,
+};
+
+const run = (phase: string, over: object = {}) => ({
+  action: "update",
+  phase,
+  running: true,
+  from: "0.3.0",
+  to: "0.4.0",
+  startedAt: Date.now(),
+  finishedAt: null,
+  result: null,
+  log: ["Updating webcontrol-rs 0.3.0 to 0.4.0 from designfrontier/WebControl."],
+  ...over,
+});
+
+test("the Update screen shows a newer release with its notes, and updates through a restart", async ({ page }) => {
+  // The server's answers as an update goes: started, installing, gone while it restarts, then done.
+  const answers: (object | null)[] = [run("installing"), null, null, run("healthCheck")];
+  const done = run("finished", { running: false, result: "updated", finishedAt: Date.now() });
+  let started = false;
+  await page.route("**/api/system/updates", (route) => {
+    if (!started) return route.fulfill({ json: release });
+    const next = answers.length > 0 ? answers.shift() : done;
+    return next ? route.fulfill({ json: { ...release, progress: next } }) : route.abort("connectionrefused");
+  });
+  await page.route("**/api/system/updates/install", (route) => {
+    started = true;
+    return route.fulfill({ status: 202, json: { ...release, progress: run("starting", { log: [] }) } });
+  });
   await page.goto("/updates");
   const updates = page.getByRole("dialog", { name: "Update" });
   await expect(updates.getByRole("heading", { name: "Update available: v0.4.0" })).toBeVisible();
   await expect(updates.getByRole("heading", { name: "Faster previews" })).toBeVisible();
   await expect(updates.getByText(/^0\.2\.0 from /)).toBeVisible();
   await expect(updates.getByRole("link", { name: "View on GitHub" })).toHaveAttribute("target", "_blank");
-  await expect(updates.getByRole("button", { name: /install/i })).toHaveCount(0);
+
+  const button = updates.getByRole("button", { name: "Update to v0.4.0" });
+  expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await button.click();
+  const confirm = page.getByRole("dialog", { name: "Update to v0.4.0?" });
+  await expect(confirm.getByRole("heading", { name: "Faster previews" })).toBeVisible();
+  await confirm.getByRole("button", { name: "Update now" }).click();
+
+  const progress = updates.getByRole("region", { name: "Update progress" });
+  await expect(progress.getByRole("heading", { name: "Updating to v0.4.0" })).toBeVisible();
+  await expect(progress.getByText("WebControl is restarting; reconnecting…")).toBeVisible();
+  const last = updates.getByRole("region", { name: "Last update" });
+  await expect(last.getByText("Updated from 0.3.0 to 0.4.0.")).toBeVisible({ timeout: 20_000 });
+  await expect(last.getByRole("button", { name: "Reload the page" })).toBeVisible();
   expect(await page.evaluate(() => "injected" in window)).toBe(false);
+});
+
+test("this server has no updater units, so the Update screen offers no buttons", async ({ page }) => {
+  await page.goto("/updates");
+  const updates = page.getByRole("dialog", { name: "Update" });
+  await expect(updates.getByRole("heading", { name: "How to update" })).toBeVisible();
+  await expect(updates.getByRole("button", { name: /Update to|Roll back/ })).toHaveCount(0);
 });
