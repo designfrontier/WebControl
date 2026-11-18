@@ -6,8 +6,11 @@ mod rig;
 use rig::sim::SimRig;
 use rig::{Rig, alerts, pushed, settings, written};
 use serde_json::json;
+use wc_machine::calibration::{Kind, calculate};
+use wc_machine::optical;
 use wc_machine::{Effect, Event, Request};
 use wc_protocol::main::LinkStatus;
+use wc_protocol::optical::{Cell, OpticalSettings};
 use wc_sim::{Build, Sim};
 
 /// What a 51.27 controller holding webcontrol.json's defaults prints for `$$`, with `changes` applied.
@@ -196,6 +199,39 @@ fn a_board_that_does_not_reset_is_reported_and_moves_wait_for_a_banner() {
     rig.boot_reporting("51.27", &report(&[]));
     rig.act_with("move", json!("up"), json!("1"));
     assert!(rig.run_to_quiet().contains(&"G91".to_string()));
+}
+
+#[test]
+fn calibration_accept_and_an_optical_scan_wait_for_a_missed_restart() {
+    let optical_on =
+        [(optical::ENABLED_SECTION, optical::ENABLED_KEY, json!(1)), ("Maslow Settings", "zAxis", json!(1))];
+    let mut rig = Rig::with(settings(&optical_on));
+    rig.boot_reporting("51.27", &report(&[(38, "1")]));
+    rig.open();
+    rig.advance(3100);
+    rig.answer_with("51.27", &report(&[]));
+    let body = json!({"cut12": 1930, "cut34": 1930, "cut5": 300, "bitDiameter": 6.35});
+    let calculated = calculate(Kind::Triangular, &rig.machine.snapshot().settings, &body);
+    rig.send(Event::Edit { id: 1, request: Request::Calibrated(calculated) });
+    let accept = respond(&mut rig, Request::AcceptCalibration(Kind::Triangular));
+    assert_eq!(accept.status, 409);
+    assert!(accept.body["error"].as_str().unwrap().contains("did not restart"), "{}", accept.body);
+    let settings = OpticalSettings { settle_time: 0.2, ..optical::settings(&rig.machine.snapshot().settings) };
+    let scan = respond(&mut rig, Request::OpticalScan { settings, cells: vec![Cell { i: 0, j: 0 }] });
+    assert_eq!(scan.status, 409);
+    assert!(scan.body["error"].as_str().unwrap().contains("did not restart"), "{}", scan.body);
+    assert!(rig.run_to_quiet().is_empty());
+}
+
+fn respond(rig: &mut Rig, request: Request) -> wc_machine::Response {
+    let effects = rig.send(Event::Edit { id: 2, request });
+    effects
+        .into_iter()
+        .find_map(|effect| match effect {
+            Effect::Respond { id: 2, response } => Some(response),
+            _ => None,
+        })
+        .expect("answered")
 }
 
 #[test]

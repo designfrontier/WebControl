@@ -268,7 +268,7 @@ impl Machine {
             _ if self.probing => Some(crate::actions::PROBING),
             _ if self.alarm_held() => Some(crate::alarm::HELD),
             _ if self.upgrade.holds_link() => Some("Wait for the firmware upgrade to finish."),
-            _ => None,
+            _ => self.restart_refusal(),
         }
     }
 

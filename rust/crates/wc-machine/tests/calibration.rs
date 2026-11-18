@@ -234,6 +234,18 @@ fn triangular_accept_rises_to_the_configured_safe_height() {
     assert_eq!(rig.run_to_quiet()[3..], ["G21", "G90", "G40", "G0 Z12.5", "G0 X0 Y0"]);
 }
 
+#[test]
+fn accept_waits_out_a_tool_change_outside_a_job() {
+    let mut rig = Rig::connected();
+    calculate_on(&mut rig, Kind::Triangular, triangular_body());
+    rig.rx("Tool Change: Please insert tool 2");
+    rig.clear_written();
+    let refused = accept_on(&mut rig, Kind::Triangular);
+    assert_eq!(refused.status, 409);
+    assert_eq!(rig.run_to_quiet(), Vec::<String>::new());
+    assert_eq!(text(&rig, "Maslow Settings", "motorOffsetY"), "463");
+}
+
 /// Without a safe height the bit could drag to the centre, so nothing is saved and the result is kept.
 #[test]
 fn triangular_accept_refuses_without_a_safe_height() {
