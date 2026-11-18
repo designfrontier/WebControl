@@ -197,7 +197,7 @@
                     "failed",
                     "interrupted"
                   ],
-                  "description": "rolledBack after an update: it failed and the backup is running again; after a rollback: it worked. failed: refused or stopped with nothing changed; interrupted: the updater stopped without finishing."
+                  "description": "rolledBack after an update: it failed and the backup is running again; after a rollback: it worked. failed: refused, or stopped without restarting WebControl; interrupted: the updater stopped without finishing."
                 },
                 {
                   "type": "null"

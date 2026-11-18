@@ -152,7 +152,7 @@ export const updateResultSchema = z
   .enum(["updated", "upToDate", "rolledBack", "rollbackFailed", "failed", "interrupted"])
   .describe(
     "rolledBack after an update: it failed and the backup is running again; after a rollback: it worked. " +
-      "failed: refused or stopped with nothing changed; interrupted: the updater stopped without finishing.",
+      "failed: refused, or stopped without restarting WebControl; interrupted: the updater stopped without finishing.",
   );
 export type UpdateResult = z.infer<typeof updateResultSchema>;
 

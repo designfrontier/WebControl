@@ -73,7 +73,10 @@ export const outcome = ({ action, result, from, to }: UpdateProgress): { text: s
   if (result === "interrupted")
     return { text: "The updater stopped before it finished. See the log below.", tone: "danger" };
   return {
-    text: `The ${action === "update" ? "update" : "rollback"} did not run. Nothing was changed.`,
+    text:
+      action === "update"
+        ? "The update did not go ahead; the log below says why."
+        : "The rollback did not run. Nothing was changed.",
     tone: "danger",
   };
 };

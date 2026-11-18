@@ -26,7 +26,7 @@ describe("updateProgress", () => {
     expect(done({ result: "updated", from: null, to: null }).text).toBe("Updated from ? to ?.");
     expect(done({ result: "rollbackFailed" }).tone).toBe("danger");
     expect(done({ result: "interrupted" }).text).toMatch(/stopped before it finished/);
-    expect(done({ result: "failed" }).text).toBe("The update did not run. Nothing was changed.");
+    expect(done({ result: "failed" }).text).toBe("The update did not go ahead; the log below says why.");
     expect(done({ action: "rollback", result: "failed" }).text).toBe("The rollback did not run. Nothing was changed.");
   });
 
