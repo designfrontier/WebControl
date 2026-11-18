@@ -68,8 +68,8 @@ finds them.
 - [ ] Let the job finish. The logs show the last `PACING SEGMENT ... ended_by=job_end`, a `PACING JOB` line for the
       whole job, and `PACING JOB END file_line_end=<last line> ... ended_by=job_end`.
 - [ ] The job's `lines` is the number of file lines streamed (about 3,006, without resends), and its `duration_s` is
-      within a few seconds of the time the job took, less the pause. Note `lines_per_min` for each segment: v0.94 50 ms ______,
-      Min 25 ms ______, Min 0 ms ______.
+      within a few seconds of the time the job took, less the pause. Note `lines_per_min` for each segment:
+      v0.94 50 ms ______, Min 25 ms ______, Min 0 ms ______.
 - [ ] Play again and press **Stop** after a few seconds: the segment and job lines end with `ended_by=stop`.
 
 ## 4. The stats dialog
