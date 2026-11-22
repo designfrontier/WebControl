@@ -54,6 +54,7 @@ pub(crate) async fn state(State(state): State<AppState>) -> Json<StartupState> {
         gcode_file: snapshot.gcode_name.clone(),
         pacing: (*snapshot.pacing).clone(),
         theme: forms::theme(settings),
+        park: wc_machine::park::position(settings),
     })
 }
 

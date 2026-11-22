@@ -109,6 +109,13 @@ describe("validation", () => {
     expect(validateValue(whole, "50,5")).toBe("Enter a whole number");
   });
 
+  it("lets the park position be blank, for none", () => {
+    const park = setting({ key: "parkX", numeric: true });
+    expect(validateValue(park, " ")).toBeUndefined();
+    expect(validateValue(park, "-300.5")).toBeUndefined();
+    expect(validateValue(park, "wide")).toBe("Enter a number");
+  });
+
   it("accepts any text or bool otherwise", () => {
     expect(validateValue(setting({ key: "macro1" }), "")).toBeUndefined();
     expect(validateValue(setting({ key: "zAxis", type: "bool" }), true)).toBeUndefined();

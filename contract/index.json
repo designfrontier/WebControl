@@ -77,6 +77,10 @@
                 "schema": "schemas/messages/pacingStats.json",
                 "dataFormat": "json"
               },
+              "parkPosition": {
+                "schema": "schemas/messages/parkPosition.json",
+                "dataFormat": "json"
+              },
               "showFPSpinner": {
                 "schema": "schemas/messages/showFPSpinner.json",
                 "dataFormat": "int"
@@ -542,6 +546,18 @@
       "allowedDuring": "noJob",
       "via": "action",
       "schema": "schemas/actions/resetHomeToCenter.json"
+    },
+    "park": {
+      "summary": "Raise Z to the safe height and rapid to the park position (Rust only)",
+      "allowedDuring": "idle",
+      "via": "action",
+      "schema": "schemas/actions/park.json"
+    },
+    "definePark": {
+      "summary": "Make the sled's current position the park position (Rust only)",
+      "allowedDuring": "noJob",
+      "via": "action",
+      "schema": "schemas/actions/definePark.json"
     }
   },
   "http": [

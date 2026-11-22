@@ -46,6 +46,24 @@ describe("ActionsPanel", () => {
     expect(notice()).toHaveTextContent("Sent “Sync settings”.");
   });
 
+  it("parks only once a park position is set, and sets one at the sled", async () => {
+    const { user, socket } = renderActions();
+    const setup = group("Calibration and setup");
+    expect(setup.getByRole("button", { name: "Park" })).toBeDisabled();
+    expect(setup.getByRole("button", { name: "Park" })).toHaveAccessibleDescription(/No park position yet/);
+    await user.click(setup.getByRole("button", { name: "Set park here" }));
+    expect(socket.actions()).toEqual([["definePark", "", ""]]);
+    expect(notice()).toHaveTextContent("Sent “Set park here”.");
+
+    socket.serverMessage("parkPosition", { position: { x: -300, y: 200.5 } });
+    expect(await setup.findByText("Parks at X -300, Y 200.5 mm (machine coordinates).")).toBeVisible();
+    await user.click(setup.getByRole("button", { name: "Park" }));
+    expect(socket.actions()).toEqual([
+      ["definePark", "", ""],
+      ["park", "", ""],
+    ]);
+  });
+
   it("asks before destructive actions and sends the wipe extent on confirm", async () => {
     const { user, socket } = renderActions();
     await user.click(screen.getByRole("button", { name: "Wipe controller EEPROM" }));

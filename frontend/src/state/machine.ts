@@ -1,4 +1,4 @@
-import type { MessageData, StartupState, ThemePreference, Units } from "../protocol";
+import type { MessageData, ParkPosition, StartupState, ThemePreference, Units } from "../protocol";
 import type { ConnectionStatus } from "../socket/client";
 
 export interface Point {
@@ -43,6 +43,8 @@ export interface MachineState {
   controllerMessages: string[];
   /** The uiTheme setting, or null until the server names one. */
   theme: ThemePreference | null;
+  /** The park position in mm, machine coordinates; null while none is set. */
+  park: ParkPosition | null;
 }
 
 /** Server commands the store folds into MachineState. */
@@ -61,6 +63,7 @@ export const STORE_COMMANDS = [
   "alarm",
   "clearAlarm",
   "theme",
+  "parkPosition",
 ] as const;
 export type StoreCommand = (typeof STORE_COMMANDS)[number];
 
@@ -86,6 +89,8 @@ export const pushedFields = (event: MachineMessage): (keyof MachineState)[] => {
     case "gcodeFile":
     case "theme":
       return [event.command];
+    case "parkPosition":
+      return ["park"];
     case "connectionStatus":
       return ["controller"];
     case "homePositionMessage":
@@ -132,6 +137,7 @@ export const initialMachineState: MachineState = {
   alarm: null,
   controllerMessages: [],
   theme: null,
+  park: null,
 };
 
 const reportedVersion = (version: number) => (version > 0 ? version : null);
@@ -233,6 +239,8 @@ const applyMessage = (state: MachineState, event: MachineMessage): MachineState 
       return state.alarm === null ? state : { ...state, alarm: null };
     case "theme":
       return { ...state, theme: event.data.theme };
+    case "parkPosition":
+      return { ...state, park: event.data.position };
   }
 };
 
@@ -262,6 +270,7 @@ export const machineReducer = (state: MachineState, event: MachineEvent): Machin
         commit,
         gcodeFile,
         theme,
+        park,
       } = event.state;
       const kept = Object.fromEntries([...(event.keep ?? [])].map((field) => [field, state[field]]));
       return {
@@ -279,6 +288,7 @@ export const machineReducer = (state: MachineState, event: MachineEvent): Machin
         macros,
         gcodeFile,
         theme: theme ?? state.theme,
+        park: park ?? null,
         controller:
           connectionStatus && state.controller.status === "unknown" ? controllerOf(connectionStatus) : state.controller,
         ...kept,

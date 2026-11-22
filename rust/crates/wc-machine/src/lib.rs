@@ -19,6 +19,7 @@ mod lost;
 mod machine;
 pub mod optical;
 pub mod pacing;
+pub mod park;
 mod pid;
 pub mod queue;
 mod setup;

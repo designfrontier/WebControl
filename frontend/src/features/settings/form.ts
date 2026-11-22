@@ -49,8 +49,11 @@ export const selectOptions = (setting: Setting, current: string) => {
 export const optionLabel = (option: string, setting: Setting) =>
   option !== "" ? option : setting.key === "COMport" ? "Not set" : "Unassigned";
 
+/** Blank park settings mean no park position. */
+const BLANK_ALLOWED = ["parkX", "parkY"];
+
 export const validateValue = (setting: Setting, value: FieldValue): string | undefined =>
-  typeof value === "boolean"
+  typeof value === "boolean" || (BLANK_ALLOWED.includes(setting.key) && value.trim() === "")
     ? undefined
     : setting.type === "int" && !WHOLE_NUMBER.test(value)
       ? "Enter a whole number"

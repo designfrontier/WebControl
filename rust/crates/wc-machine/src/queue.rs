@@ -165,11 +165,12 @@ impl Machine {
         }
     }
 
-    /// The last line went out; the file is done once the controller has finished it.
-    pub(crate) fn queue_ran_out(&mut self) {
+    /// The last line went out; the file is done once the controller has finished it. False for a file not queued.
+    pub(crate) fn queue_ran_out(&mut self) -> bool {
         if self.head_loaded() && !self.queue_busy() {
             self.queue.step = Step::Finishing;
         }
+        self.head_loaded()
     }
 
     /// A tool change was confirmed with Resume.
@@ -188,6 +189,7 @@ impl Machine {
 
     /// The queue starts nothing more until Continue or Play on its first file.
     pub(crate) fn queue_stop(&mut self, why: &str, effects: &mut Vec<Effect>) {
+        self.park_spoiled();
         if let Some(id) = self.head_id().filter(|_| self.job.flow.in_job()) {
             let line = self.controller.accounting.oldest_index().unwrap_or(self.index);
             self.queue.stopped_at = Some((id, line));
@@ -210,7 +212,7 @@ impl Machine {
     }
 
     /// Everything written has finished, and nothing holds the controller.
-    fn controller_idle(&self) -> bool {
+    pub(crate) fn controller_idle(&self) -> bool {
         let controller = &self.controller;
         matches!(self.link, Link::Connected { .. })
             && controller.accounting.is_empty()
@@ -250,6 +252,7 @@ impl Machine {
         }
         if self.queue.entries.is_empty() {
             self.queue.mode = Mode::Idle;
+            self.park_when_finished(crate::park::Trigger::Queue);
             return announce("QUEUE FINISHED".into(), effects);
         }
         self.queue_load(effects);

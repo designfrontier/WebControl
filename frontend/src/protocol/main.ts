@@ -68,6 +68,10 @@ export const pacingUpdateSchema = z.object({
 });
 export type PacingUpdate = z.infer<typeof pacingUpdateSchema>;
 
+/** The park position: mm from the bed's centre in machine coordinates, so Set Home never moves it. */
+export const parkPositionSchema = z.object({ x: z.number(), y: z.number() });
+export type ParkPosition = z.infer<typeof parkPositionSchema>;
+
 /** Server -> client commands for the front page and the shared machine state. */
 export const mainMessages = {
   hostAddress: z.object({ hostAddress: z.string() }),
@@ -130,6 +134,8 @@ export const mainMessages = {
   /** Broadcast when the loaded gcode file changes: its path in the gcode library, or null once none is loaded. */
   gcodeFile: z.object({ file: z.string().nullable() }),
   pacingStats: pacingStatsSchema,
+  /** Broadcast when the park position changes; null while none is set. Rust only. */
+  parkPosition: z.object({ position: parkPositionSchema.nullable() }),
 } satisfies MessageSchemas;
 
 /** processAction commands the front page issues. */
@@ -148,6 +154,8 @@ export const mainActions = [
   "defineZ0",
   "touchZ",
   "returnToCenter",
+  "park",
+  "definePark",
   "macro1",
   "macro2",
   "moveGcodeZ",
@@ -199,6 +207,8 @@ export const startupStateSchema = z.object({
   pacing: pacingStatsSchema.optional(),
   /** The uiTheme setting. Rust only. */
   theme: themeSchema.optional(),
+  /** The park position, or null while none is set. Rust only. */
+  park: parkPositionSchema.nullable().optional(),
 });
 export type StartupState = z.infer<typeof startupStateSchema>;
 

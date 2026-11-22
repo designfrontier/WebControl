@@ -331,6 +331,44 @@ fn a_lost_link_or_a_controller_reset_stops_the_queue() {
     stopped_by(&mut shop, "restarted");
 }
 
+const PARK: [&str; 4] = ["G21", "G90", "G00 Z5.0", "G00 X100.0 Y-50.0"];
+
+fn parking(files: &[(&'static str, &'static str)]) -> Shop {
+    let park = settings(&[("Maslow Settings", "parkX", json!("100")), ("Maslow Settings", "parkY", json!("-50"))]);
+    let mut shop = Shop::with(park, files);
+    shop.fit(1);
+    shop.open(files[0].0);
+    files.iter().for_each(|(name, _)| {
+        shop.add(name);
+    });
+    shop
+}
+
+#[test]
+fn the_queue_parks_after_its_last_file_and_never_between_files() {
+    let mut shop = parking(&[A, SAME]);
+    shop.act("startRun");
+    let sent = shop.run();
+    assert_eq!(sent[..6], ["G0 Z5", "G1 X1 F100", "G0 Z5", SAFE, "T1 M6", "G1 X2"], "no park between files");
+    assert_eq!(sent[6..], PARK);
+    let logged =
+        |label: &str| shop.effects.iter().filter(|e| matches!(e, Effect::Log(t) if t.starts_with(label))).count();
+    assert_eq!((logged("PARK START trigger=queue"), logged("PARK START trigger=file")), (1, 0));
+}
+
+#[test]
+fn a_queue_stopped_at_the_prompt_or_by_a_refused_line_never_parks() {
+    let mut shop = parking(&[A, OTHER]);
+    shop.act("startRun");
+    shop.run();
+    stop(&mut shop);
+    assert!(!shop.run().contains(&PARK[3].to_string()));
+
+    let mut shop = parking(&[("probe.nc", "G1 X1|G38.4 Z-1|G1 X2")]);
+    shop.act("startRun");
+    assert_eq!(shop.run(), ["G1 X1"]);
+}
+
 #[test]
 fn a_refused_line_stops_the_queue() {
     let mut shop = Shop::new(&[("probe.nc", "G1 X1|G38.4 Z-1|G1 X2"), SAME]);

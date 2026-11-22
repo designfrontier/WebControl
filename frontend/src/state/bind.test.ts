@@ -67,6 +67,7 @@ describe("bindMachineStore", () => {
     socket.serverConnect();
     socket.serverMessage("gcodeFile", { file: "jobs/new.nc" });
     socket.serverMessage("theme", { theme: "dark" });
+    socket.serverMessage("parkPosition", { position: { x: -300, y: 200.5 } });
     socket.serverMessage("requestedSetting", { setting: "units", value: "MM" });
     socket.serverMessage("requestedSetting", { setting: "pauseButtonSetting", value: "Resume" });
     socket.serverMessage("homePositionMessage", { xval: 5, yval: 6 });
@@ -80,6 +81,7 @@ describe("bindMachineStore", () => {
       startupState({
         gcodeFile: "jobs/old.nc",
         theme: "light",
+        park: null,
         units: "INCHES",
         unitsZ: "INCHES",
         pauseButtonSetting: "Pause",
@@ -94,6 +96,7 @@ describe("bindMachineStore", () => {
     expect(store.getState()).toMatchObject({
       gcodeFile: "jobs/new.nc",
       theme: "dark",
+      park: { x: -300, y: 200.5 },
       units: "MM",
       unitsZ: "INCHES",
       pauseButton: "Resume",

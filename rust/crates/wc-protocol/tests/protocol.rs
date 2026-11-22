@@ -36,6 +36,7 @@ fn startup_state() -> StartupState {
         gcode_file: None,
         pacing: pacing_stats(None),
         theme: Theme::System,
+        park: None,
     }
 }
 

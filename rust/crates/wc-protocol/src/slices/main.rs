@@ -302,6 +302,16 @@ impl Macro {
     }
 }
 
+/// Broadcast when the park position changes (Rust only).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct ParkPositionMessage {
+    pub position: Option<Point>,
+}
+
+impl Message for ParkPositionMessage {
+    const COMMAND: &'static str = "parkPosition";
+}
+
 /// Broadcast when the loaded gcode file changes; `None` once nothing is loaded.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct GcodeFile {
@@ -347,6 +357,8 @@ pub struct StartupState {
     pub pacing: PacingStats,
     /// The `uiTheme` setting (Rust only).
     pub theme: Theme,
+    /// The park position in mm, machine coordinates; `None` while none is set (Rust only).
+    pub park: Option<Point>,
 }
 
 /// One stretch of a job streamed at one line pacing (`spec/firmware.md` B3), or a whole job's totals.

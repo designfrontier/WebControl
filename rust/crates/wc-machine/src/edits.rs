@@ -95,6 +95,13 @@ impl Machine {
                 | Request::OpticalFitted(_)
                 | Request::OpticalAccept
         );
+        let moves = matches!(
+            request,
+            Request::PidTest(_) | Request::AcceptCalibration(_) | Request::OpticalScan { .. } | Request::OpticalAccept
+        );
+        if moves {
+            self.park_cancelled();
+        }
         let theme = matches!(request, Request::Theme(_));
         if let Some(refused) = self.optical_edit_refused().filter(|_| !optical && !theme) {
             return refused;

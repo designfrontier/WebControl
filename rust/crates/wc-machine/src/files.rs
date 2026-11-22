@@ -458,6 +458,7 @@ impl Machine {
     }
 
     fn send_gcode(&mut self, text: String, effects: &mut Vec<Effect>) -> Reply {
+        self.park_cancelled();
         if self.probing || self.alarm_held() {
             effects.push(alert(if self.probing { PROBING } else { crate::alarm::HELD }));
             return Reply::Failed;

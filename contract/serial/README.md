@@ -225,6 +225,7 @@ the backend had been quiet for `quiet` seconds, one line per settle.
 | `holey_calibration_accept_writes_settings` | Calculate sends nothing; Accept writes `$3`, `$2`, `$40`, `$41` |
 | `queue_same_tool_starts_at_once_new_tool_waits` | Tool 1 changed by hand, three queued files: Continue raises Z and runs the first (tool 1); a file with the same tool starts as soon as Z has risen; one with another tool gets `G00 Z…`, `M5`, `T2 M6` and the firmware's prompt first |
 | `queue_override_skips_bit_changes` | A queued file with its bit-change override on starts with no `M5`/`T2 M6` though it names tool 2; its own `T2 M6` is never sent and `T3 M6 G0 X60` goes out as `G0 X60` (Rust-intended deviation 16) |
+| `park_after_a_file_finishes` | With a park position set, a file shifted by home runs to its end; once its last line is answered, units, `G90`, Z to the safe height and a rapid to the park position, unshifted (Rust-intended deviation 17) |
 | `real_*` | the owner's real jobs, with the controller's recorded replies ("Real jobs" below) |
 
 ## Adding or changing a transcript
@@ -660,3 +661,14 @@ Where the Rust backend writes something different from Python by owner decision.
     skipped change is logged (`QUEUE BIT CHANGE SKIPPED file_line=<n> tool=<t>`). The firmware keeps the tool it had;
     the queue follows the tools the file names, so the next file is compared with the file's last tool. Play of the
     same file outside the queue pauses as before. Transcript: `queue_override_skips_bit_changes`.
+17. **The sled parks after a job** (owner decision, 2026-11-22). Python had no park position. With `parkX` and `parkY`
+    set (Maslow Settings, mm, machine coordinates), once a file run from Play, or the queue's last file, has had its
+    last line answered, Rust writes the units WebControl is in (`G21 ` or `G20 `), `G90 `, raises Z as Home does (to
+    max(safe height, the bit's Z), never lower) and rapids to the park position converted to those units
+    (`G00 X-300.0 Y200.5 `). The controller keeps no work offset, since WebControl adds home to each file line
+    itself, so the park move is not shifted and Set Home never moves it. Z stays up. Nothing parks between queued
+    files, or after a run that met Stop, an alarm, a lost link, a controller reset, a refused or twice-lost line, a
+    failed probe or an `error:`, even when resumed to its end; a command sent before the last line is answered
+    cancels it. The Park action sends the same lines when idle. A park the gates refuse (safe height 0 or less, off
+    the bed, an alarm, a missed restart) writes nothing, logs `PARK SKIPPED` and alerts. Transcript:
+    `park_after_a_file_finishes`.

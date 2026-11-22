@@ -232,6 +232,7 @@ impl Machine {
         if self.gcode.is_empty() {
             return Some("No GCode file loaded.".into());
         }
+        self.park_run_started();
         self.job.z_target = self.position.z;
         self.sled.file_modes_reset();
         let mut flow = Flow::Streaming;
@@ -483,7 +484,9 @@ impl Machine {
         if self.index + 1 < self.gcode.len() {
             self.index += 1;
         } else {
-            self.queue_ran_out();
+            if !self.queue_ran_out() {
+                self.park_when_finished(crate::park::Trigger::File);
+            }
             self.end_job();
         }
     }

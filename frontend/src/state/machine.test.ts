@@ -58,6 +58,15 @@ describe("machineReducer socket and startup", () => {
   });
 });
 
+describe("machineReducer park position", () => {
+  it("takes the park position from /api/state, follows parkPosition pushes and has none from an older server", () => {
+    const loaded = apply([{ type: "startup", state: startupState({ park: { x: 10, y: -20 } }) }]);
+    expect(loaded.park).toEqual({ x: 10, y: -20 });
+    expect(apply([message("parkPosition", { position: null })], loaded).park).toBeNull();
+    expect(apply([{ type: "startup", state: startupState() }], loaded).park).toBeNull();
+  });
+});
+
 describe("machineReducer link state from /api/state", () => {
   const link = { status: "connected", port: "/dev/ttyACM0", fakeServoStatus: true } as const;
 

@@ -150,7 +150,8 @@ async fn api_state_reports_the_settings_and_the_rust_backend() {
         "Computed Settings": [{"key": "units", "value": "MM"}, {"key": "distToMove", "value": "2.5"},
             {"key": "unitsZ", "value": "MM"}, {"key": "distToMoveZ", "value": 1}],
         "Advanced Settings": [{"key": "homeX", "value": "12.5"}, {"key": "homeY", "value": "-3"}],
-        "Maslow Settings": [{"key": "macro1_title", "value": "Spindle on"}, {"key": "macro2_title", "value": ""}],
+        "Maslow Settings": [{"key": "macro1_title", "value": "Spindle on"}, {"key": "macro2_title", "value": ""},
+            {"key": "parkX", "value": "-250"}, {"key": "parkY", "value": "100.5"}],
         "WebControl Settings": [{"key": "uiTheme", "value": "dark"}]
     });
     let reply = request_with(settings(Some(file)).1, "GET", "/api/state").await;
@@ -167,7 +168,7 @@ async fn api_state_reports_the_settings_and_the_rust_backend() {
             "backend": "rust", "version": wc_server::VERSION,
             "commit": wc_server::COMMIT, "experimental": [], "gcodeFile": null,
             "pacing": {"mode": "v0.94", "gapMs": 50, "job": null, "segment": null, "history": []},
-            "theme": "dark"})
+            "theme": "dark", "park": {"x": -250.0, "y": 100.5}})
     );
 }
 
@@ -177,6 +178,7 @@ async fn api_state_on_a_fresh_home_uses_the_defaults() {
     reply.checked("GET", "/api/state");
     assert_eq!(reply.json()["units"], "INCHES");
     assert_eq!(reply.json()["macros"][1]["title"], "Macro 2");
+    assert!(reply.json()["park"].is_null(), "no park position by default");
 }
 
 #[tokio::test]

@@ -1070,6 +1070,24 @@
             "key": "legacyOption",
             "section": "Maslow Settings",
             "value": "kept"
+        },
+        {
+            "default": "",
+            "desc": "Where the sled parks after a file, or the last file of a queue, finishes normally, and when Park is pressed: X in mm from the centre of the bed, in machine coordinates, so setting home does not move it. Blank: no park position. Set Park Here fills both.\ndefault setting: ",
+            "key": "parkX",
+            "section": "Maslow Settings",
+            "title": "Park Position X in MM",
+            "type": "string",
+            "value": ""
+        },
+        {
+            "default": "",
+            "desc": "The park position's Y in mm from the centre of the bed, in machine coordinates. Blank: no park position.\ndefault setting: ",
+            "key": "parkY",
+            "section": "Maslow Settings",
+            "title": "Park Position Y in MM",
+            "type": "string",
+            "value": ""
         }
     ],
     "Optical Calibration Settings": [
