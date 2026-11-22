@@ -2,5 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "post-api-queue-continue.request",
   "type": "object",
-  "properties": {}
+  "properties": {
+    "from": {
+      "type": "string",
+      "enum": [
+        "start",
+        "stopped"
+      ]
+    }
+  }
 }

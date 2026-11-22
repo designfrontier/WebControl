@@ -58,8 +58,8 @@ export const RunPanel = ({ available, lineIndex }: Props) => {
         </div>
         <PacingControl />
       </div>
-      <QueueSummary />
       <div className="run-dock">
+        <QueueSummary />
         <LoadedFile className="run-file" />
         <div className="run-buttons">
           <button type="button" className="go" disabled={!available.play} onClick={() => client.sendAction("startRun")}>

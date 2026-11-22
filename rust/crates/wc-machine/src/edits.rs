@@ -111,7 +111,7 @@ impl Machine {
             Request::OpticalAccept => self.optical_accept(),
             Request::Pacing(body) => self.update_pacing(&body, now, effects),
             Request::Theme(body) => self.update_theme(&body, effects),
-            Request::Queue(edit) => self.queue_edit(edit, effects),
+            Request::Queue(edit) => self.queue_edit(edit, now, effects),
         }
     }
 

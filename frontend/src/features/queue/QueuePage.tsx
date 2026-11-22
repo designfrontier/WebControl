@@ -8,11 +8,13 @@ import { FormError } from "../files/ui";
 import { baseName, betweenText, continueLabel, nextText, queueApi, refusal, statusText, useJobQueue } from "./queue";
 import "./queue.css";
 
+type Run = (write: () => Promise<JobQueue>, fallback: string) => () => Promise<void>;
+
 /** Runs one queue write at a time and shows the server's refusal. */
 const useQueueWrite = (apply: (task: () => Promise<JobQueue>) => Promise<void>) => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const run = (write: () => Promise<JobQueue>, fallback: string) => async () => {
+  const run: Run = (write, fallback) => async () => {
     setBusy(true);
     setError(null);
     try {
@@ -28,11 +30,47 @@ const useQueueWrite = (apply: (task: () => Promise<JobQueue>) => Promise<void>) 
 
 const folderOf = (file: string) => file.slice(0, Math.max(file.lastIndexOf("/"), 0));
 
+interface ContinueProps {
+  queue: JobQueue;
+  busy: boolean;
+  run: Run;
+  disabled?: boolean;
+  className: string;
+}
+
+/** Continue, or after a Stop part way through the first file, the choice of where it starts again. */
+const ContinueButtons = ({ queue, busy, run, disabled = false, className }: ContinueProps) => {
+  const api = queueApi(useFetch());
+  const off = busy || disabled || queue.items.length === 0 || queue.step !== "none";
+  if (queue.stoppedAt === null) {
+    return (
+      <button type="button" className={className} disabled={off} onClick={run(api.resume, "Could not continue.")}>
+        {continueLabel(queue)}
+      </button>
+    );
+  }
+  const line = queue.stoppedAt + 1;
+  return (
+    <>
+      <button
+        type="button"
+        className={className}
+        disabled={off}
+        onClick={run(() => api.resume("stopped"), "Could not continue.")}
+      >
+        From line {line} (where it stopped)
+      </button>
+      <button type="button" disabled={off} onClick={run(() => api.resume("start"), "Could not continue.")}>
+        From the start (line 1)
+      </button>
+    </>
+  );
+};
+
 /** The control screen's line on the queue: where it stands, what comes next, and Continue once it stopped. */
 export const QueueSummary = () => {
   const [queue, update] = useJobQueue();
   const navigate = useNavigate();
-  const api = queueApi(useFetch());
   const { busy, error, run } = useQueueWrite(update);
   if (!queue || (queue.items.length === 0 && queue.state !== "stopped")) return null;
   const next = nextText(queue);
@@ -42,9 +80,7 @@ export const QueueSummary = () => {
       {next && <p className="queue-next">{next}</p>}
       <div className="queue-summary-actions">
         {queue.state === "stopped" && queue.items.length > 0 && (
-          <button type="button" className="go" disabled={busy} onClick={run(api.resume, "Could not continue.")}>
-            Continue queue
-          </button>
+          <ContinueButtons queue={queue} busy={busy} run={run} className="go" />
         )}
         <button type="button" onClick={() => navigate("/queue")}>
           Queue ({queue.items.length})
@@ -85,8 +121,23 @@ export const QueuePage = () => {
                 <div className="queue-item-text">
                   <span className="queue-file">{baseName(item.file)}</span>
                   {folder && <span className="muted"> in {folder}</span>}
-                  {badge && <span className="queue-badge">{badge}</span>}
+                  <span className="queue-badges">
+                    {badge && <span className="queue-badge">{badge}</span>}
+                    {item.skipBitChanges && <span className="queue-badge queue-override">bit changes skipped</span>}
+                  </span>
                   <span className="queue-between">{fixed ? "Loaded for the job" : betweenText(item)}</span>
+                  <label className="queue-skip">
+                    <input
+                      type="checkbox"
+                      checked={item.skipBitChanges}
+                      disabled={busy || fixed}
+                      onChange={(event) => {
+                        const skip = event.target.checked;
+                        void run(() => api.skip(item.id, skip), "Could not change the override.")();
+                      }}
+                    />{" "}
+                    Don't stop for bit changes in {baseName(item.file)}
+                  </label>
                 </div>
                 <div className="queue-item-actions">
                   <button
@@ -121,19 +172,12 @@ export const QueuePage = () => {
       )}
       <FormError message={error} />
       <p className="muted">
-        Each file starts when the one before it ends: Z rises to the safe height first, and a file that needs another
-        tool, or names none, waits at the tool-change prompt for Resume. {continueLabel(queue)} does the same for the
-        first file, from its first line.
+        Each file starts when the one before it ends, once Z has risen to the safe height. It waits at the tool-change
+        prompt first only when the files show another bit, unless its override is on. {continueLabel(queue)} does the
+        same for the first file.
       </p>
       <div className="actions">
-        <button
-          type="button"
-          className="primary"
-          disabled={busy || locked || queue.items.length === 0 || queue.step !== "none"}
-          onClick={run(api.resume, "Could not start the queue.")}
-        >
-          {continueLabel(queue)}
-        </button>
+        <ContinueButtons queue={queue} busy={busy} run={run} disabled={locked} className="primary" />
         <button
           type="button"
           disabled={busy || loaded === null}

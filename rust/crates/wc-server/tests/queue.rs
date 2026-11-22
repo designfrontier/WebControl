@@ -50,10 +50,21 @@ async fn files_are_added_moved_removed_cleared_and_saved() {
     assert_eq!(server.post_json("/api/queue/remove", json!({"id": 999})).await.status, StatusCode::NOT_FOUND);
     let removed = server.post_json("/api/queue/remove", json!({"id": second})).await.json();
     assert_eq!(files(&removed), ["a.nc"]);
-    assert_eq!(files(&server.get("/api/queue").await.json()), ["a.nc"]);
+    let first = removed["items"][0]["id"].clone();
+    let overridden = server.post_json("/api/queue/override", json!({"id": first, "skipBitChanges": true})).await;
+    assert_eq!(overridden.json()["items"][0]["skipBitChanges"], true);
+    let gone = server.post_json("/api/queue/override", json!({"id": 999, "skipBitChanges": true})).await;
+    assert_eq!(gone.status, StatusCode::NOT_FOUND);
+    let skipping = server.post_json("/api/queue/add", json!({"file": "a.nc", "skipBitChanges": true})).await.json();
+    assert_eq!(skipping["items"][1]["between"], "sameTool", "the first file names tool 1 too");
+    assert_eq!(files(&server.get("/api/queue").await.json()), ["a.nc", "a.nc"]);
     server.settle().await;
     let saved = server.dir().join("queue.json");
-    until("the list saved", || std::fs::read_to_string(&saved).is_ok_and(|text| text.contains("a.nc"))).await;
+    let wanted = r#"{"file":"a.nc","skipBitChanges":true}"#;
+    until("the list saved", || {
+        std::fs::read_to_string(&saved).is_ok_and(|text| text.replace([' ', '\n'], "").contains(wanted))
+    })
+    .await;
 
     let cleared = server.post_json("/api/queue/clear", json!({})).await.json();
     assert_eq!((cleared["items"].clone(), cleared["state"].clone()), (json!([]), json!("idle")));
@@ -66,11 +77,14 @@ async fn malformed_bodies_and_a_continue_without_a_controller_are_refused() {
     assert_eq!(bad.status, StatusCode::BAD_REQUEST);
     let extra = server.call("POST", "/api/queue/clear", Some("application/json"), b"{\"all\": 1}".to_vec()).await;
     assert_eq!(extra.status, StatusCode::BAD_REQUEST);
+    let wrong =
+        server.call("POST", "/api/queue/continue", Some("application/json"), b"{\"from\": \"x\"}".to_vec()).await;
+    assert_eq!(wrong.status, StatusCode::BAD_REQUEST);
     let empty = server.post_json("/api/queue/continue", json!({})).await;
     assert_eq!((empty.status, empty.json()["error"].clone()), (StatusCode::CONFLICT, json!("The queue is empty.")));
     server.write("gcode/a.nc", "G1 X1\n");
     server.post_json("/api/queue/add", json!({"file": "a.nc"})).await;
-    let offline = server.post_json("/api/queue/continue", json!({})).await;
+    let offline = server.post_json("/api/queue/continue", json!({"from": "stopped"})).await;
     assert_eq!(offline.json()["error"], "The controller is not connected.");
 }
 
@@ -80,11 +94,12 @@ async fn a_saved_queue_is_restored_with_each_files_tools() {
     let dir = home.path().join(".WebControl");
     std::fs::create_dir_all(dir.join("gcode")).unwrap();
     std::fs::write(dir.join("gcode/a.nc"), "T3 M6\nG1 X1\n").unwrap();
-    std::fs::write(dir.join("queue.json"), r#"["a.nc", "gone.nc"]"#).unwrap();
+    let saved = r#"[{"file": "a.nc", "skipBitChanges": true}, {"file": "gone.nc"}]"#;
+    std::fs::write(dir.join("queue.json"), saved).unwrap();
     let items = wc_server::queue::restore(&dir).await;
     assert_eq!(
-        items.iter().map(|item| (item.file.as_str(), item.tools.first)).collect::<Vec<_>>(),
-        [("a.nc", Some(3)), ("gone.nc", None)]
+        items.iter().map(|item| (item.file.as_str(), item.tools.first, item.skip_bit_changes)).collect::<Vec<_>>(),
+        [("a.nc", Some(3), true), ("gone.nc", None, false)]
     );
     assert!(wc_server::queue::restore(home.path()).await.is_empty());
 }

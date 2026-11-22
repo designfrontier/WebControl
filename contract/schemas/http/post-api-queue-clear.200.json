@@ -33,15 +33,21 @@
             "enum": [
               "sameTool",
               "toolChange",
-              "noTool"
+              "toolChangeSkipped",
+              "noTool",
+              "unknownTool"
             ]
+          },
+          "skipBitChanges": {
+            "type": "boolean"
           }
         },
         "required": [
           "id",
           "file",
           "tool",
-          "between"
+          "between",
+          "skipBitChanges"
         ]
       }
     },
@@ -71,6 +77,18 @@
         "raising",
         "toolChange"
       ]
+    },
+    "stoppedAt": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "required": [
@@ -78,6 +96,7 @@
     "state",
     "reason",
     "headLocked",
-    "step"
+    "step",
+    "stoppedAt"
   ]
 }

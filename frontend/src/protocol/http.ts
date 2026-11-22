@@ -43,7 +43,15 @@ import {
 } from "./files";
 import { machineSetupSchema, quickConfigureSchema } from "./machine";
 import { mainScreenStateSchema, pacingStatsSchema, pacingUpdateSchema, startupStateSchema } from "./main";
-import { jobQueueSchema, queueAddSchema, queueEmptySchema, queueMoveSchema, queueRemoveSchema } from "./queue";
+import {
+  jobQueueSchema,
+  queueAddSchema,
+  queueContinueSchema,
+  queueEmptySchema,
+  queueMoveSchema,
+  queueOverrideSchema,
+  queueRemoveSchema,
+} from "./queue";
 import {
   settingsRejectionSchema,
   settingsSectionIds,
@@ -263,11 +271,18 @@ const queueWrites = [
   queueWrite("/api/queue/add", "Add a library file to the end", queueAddSchema, "Full", "Not in the gcode library"),
   queueWrite("/api/queue/move", "Move a queued file to another place", queueMoveSchema, IN_USE, "No such queued file"),
   queueWrite("/api/queue/remove", "Remove a queued file", queueRemoveSchema, IN_USE, "No such queued file"),
+  queueWrite(
+    "/api/queue/override",
+    "Turn a queued file's bit-change override on or off",
+    queueOverrideSchema,
+    IN_USE,
+    "No such queued file",
+  ),
   queueWrite("/api/queue/clear", "Remove every queued file but one in use", queueEmptySchema, "Never refused"),
   queueWrite(
     "/api/queue/continue",
-    "Start the first file from its first line: Z rises and the tool is checked, as between files",
-    queueEmptySchema,
+    "Start the first file from line 1 (Z rises and the tool is checked, as between files) or where Stop left it",
+    queueContinueSchema,
     "Empty, disconnected, or a job, an alarm or a load holds the machine",
   ),
 ];

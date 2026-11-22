@@ -14,7 +14,7 @@ use wc_gcode::firmware_gcode::{FileTools, file_tools};
 use wc_machine::Request;
 use wc_machine::files::{Origin, Problem, Request as Ask};
 use wc_machine::queue::{Edit, Item, Outbound};
-use wc_protocol::queue::{JobQueue, QueueAdd, QueueMove, QueueRemove};
+use wc_protocol::queue::{JobQueue, QueueAdd, QueueContinue, QueueMove, QueueOverride, QueueRemove};
 
 use crate::AppState;
 use crate::api::answer;
@@ -38,18 +38,18 @@ async fn scan(root: PathBuf, file: String) -> Option<Item> {
         let bytes = std::fs::read(&path).ok()?;
         let parts = path.strip_prefix(&root).ok()?.iter().map(|part| part.to_string_lossy()).collect::<Vec<_>>();
         let text = wc_gcode::load::universal_newlines(&String::from_utf8_lossy(&bytes));
-        Some(Item { file: parts.join("/"), tools: file_tools(text.lines()) })
+        Some(Item { file: parts.join("/"), tools: file_tools(text.lines()), skip_bit_changes: false })
     });
     read.await.ok().flatten()
 }
 
 pub(crate) async fn add(State(state): State<AppState>, bytes: Bytes) -> Response {
-    let QueueAdd { file } = match body(&bytes) {
+    let QueueAdd { file, skip_bit_changes } = match body(&bytes) {
         Ok(add) => add,
         Err(refusal) => return refusal,
     };
     match scan(state.paths.gcode_dir(), file).await {
-        Some(item) => answer(&state, Request::Queue(Edit::Add(item))).await,
+        Some(item) => answer(&state, Request::Queue(Edit::Add(Item { skip_bit_changes, ..item }))).await,
         None => (StatusCode::NOT_FOUND, Json(json!({ "error": "No such file in the gcode library." }))).into_response(),
     }
 }
@@ -57,6 +57,15 @@ pub(crate) async fn add(State(state): State<AppState>, bytes: Bytes) -> Response
 pub(crate) async fn move_item(State(state): State<AppState>, bytes: Bytes) -> Response {
     match body::<QueueMove>(&bytes) {
         Ok(QueueMove { id, to }) => answer(&state, Request::Queue(Edit::Move { id, to })).await,
+        Err(refusal) => refusal,
+    }
+}
+
+pub(crate) async fn override_item(State(state): State<AppState>, bytes: Bytes) -> Response {
+    match body::<QueueOverride>(&bytes) {
+        Ok(QueueOverride { id, skip_bit_changes }) => {
+            answer(&state, Request::Queue(Edit::Override { id, skip: skip_bit_changes })).await
+        }
         Err(refusal) => refusal,
     }
 }
@@ -81,19 +90,31 @@ pub(crate) async fn clear(State(state): State<AppState>, bytes: Bytes) -> Respon
 }
 
 pub(crate) async fn resume(State(state): State<AppState>, bytes: Bytes) -> Response {
-    plain(&state, &bytes, Edit::Continue).await
+    match body::<QueueContinue>(&bytes) {
+        Ok(QueueContinue { from }) => answer(&state, Request::Queue(Edit::Continue(from))).await,
+        Err(refusal) => refusal,
+    }
+}
+
+/// One saved file and its override.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Saved {
+    file: String,
+    #[serde(default)]
+    skip_bit_changes: bool,
 }
 
 /// The list saved before a restart, each file read again for its tools; one that is gone keeps no tools.
 pub async fn restore(dir: &Path) -> Vec<Item> {
     let saved = tokio::fs::read(dir.join(FILE)).await.ok();
-    let files: Vec<String> = saved.and_then(|bytes| serde_json::from_slice(&bytes).ok()).unwrap_or_default();
+    let files: Vec<Saved> = saved.and_then(|bytes| serde_json::from_slice(&bytes).ok()).unwrap_or_default();
     let root = dir.join("gcode");
-    let items = files.into_iter().map(|file| {
+    let items = files.into_iter().map(|Saved { file, skip_bit_changes }| {
         let root = root.clone();
         async move {
             let tools = scan(root, file.clone()).await.map_or(FileTools::default(), |item| item.tools);
-            Item { file, tools }
+            Item { file, tools, skip_bit_changes }
         }
     });
     futures_util::future::join_all(items).await
@@ -121,8 +142,10 @@ async fn load(state: &AppState, file: String) {
     tracing::info!(file, ?reply, "queued file loaded");
 }
 
-async fn save(dir: &Path, files: &[String]) {
-    let text = serde_json::to_vec_pretty(files).unwrap_or_default();
+async fn save(dir: &Path, files: &[(String, bool)]) {
+    let saved: Vec<Saved> =
+        files.iter().map(|(file, skip)| Saved { file: file.clone(), skip_bit_changes: *skip }).collect();
+    let text = serde_json::to_vec_pretty(&saved).unwrap_or_default();
     if let Err(error) = tokio::fs::write(dir.join(FILE), text).await {
         tracing::warn!(%error, "could not save the job queue");
     }

@@ -210,7 +210,7 @@ impl Machine {
         let version = self.firmware_version;
         let options = Options {
             z_target,
-            change_tool,
+            change_tool: change_tool && !self.skips_bit_changes(),
             current_tool: self.job.tool,
             safe_height_mm: safe_height,
             current_z_mm: None,
@@ -290,6 +290,9 @@ impl Machine {
             state => state,
         };
         self.job.manual_z = None;
+        if tool_change {
+            self.queue_tool_fitted();
+        }
         self.release_firmware(now, effects);
         if manual {
             self.job.flow = if self.job.flow.in_job() { Flow::Streaming } else { Flow::Idle };
@@ -456,7 +459,7 @@ impl Machine {
         let Some(raw) = self.gcode.get(self.index) else {
             return self.end_job();
         };
-        let line = sanitise(raw);
+        let line = self.queue_skip_bit_change(sanitise(raw), effects);
         let (to_send, settled) = self.after_restart(tool_change_line(&line, self.job.next_tool, self.job.tool).line);
         let shifted = match self.as_written(&to_send) {
             Ok(shifted) => shifted,

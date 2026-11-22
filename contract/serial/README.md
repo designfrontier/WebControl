@@ -223,7 +223,8 @@ the backend had been quiet for `quiet` seconds, one line per settle.
 | `z_limits_refused_on_51_27` | Z-limit actions alert and send nothing below 51.292 |
 | `z_limits_on_51_292` | `$63`/`$64` in mm, clear, `B20`, with 51.292's replies to each |
 | `holey_calibration_accept_writes_settings` | Calculate sends nothing; Accept writes `$3`, `$2`, `$40`, `$41` |
-| `queue_same_tool_starts_at_once_new_tool_waits` | Three queued files: Continue raises Z, `M5`, `T1 M6` (the tool in the spindle is unknown) and waits for Resume; a file with the same tool starts as soon as Z has risen; one with another tool gets `G00 Z…`, `M5`, `T2 M6` and the firmware's prompt first |
+| `queue_same_tool_starts_at_once_new_tool_waits` | Tool 1 changed by hand, three queued files: Continue raises Z and runs the first (tool 1); a file with the same tool starts as soon as Z has risen; one with another tool gets `G00 Z…`, `M5`, `T2 M6` and the firmware's prompt first |
+| `queue_override_skips_bit_changes` | A queued file with its bit-change override on starts with no `M5`/`T2 M6` though it names tool 2; its own `T2 M6` is never sent and `T3 M6 G0 X60` goes out as `G0 X60` (Rust-intended deviation 16) |
 | `real_*` | the owner's real jobs, with the controller's recorded replies ("Real jobs" below) |
 
 ## Adding or changing a transcript
@@ -651,3 +652,11 @@ Where the Rust backend writes something different from Python by owner decision.
     of its own needs none, and lines with neither (comments, `F`, `M`, `S`) pass untouched until one comes. No
     transcript restarts mid-arc (`wc-machine` tests `play_mid_file_inside_a_run_of_modal_arcs_writes_the_files_g2`,
     `resume_inside_a_run_of_modal_arcs_writes_the_files_g3`).
+16. **A queued file's override skips its bit changes** (owner decision, 2026-11-22). Python had no job queue. In a
+    queue run of a file added with "Don't stop for bit changes", every line that would pause for a tool change (an
+    M6 whose tool differs from the one the firmware holds) goes out without its T and M6 words, keeping the rest of
+    the line, and a line left with nothing is not sent; the firmware pauses on M6 by itself (`spec/firmware.md` §7),
+    so leaving the words in would still stop it. No `M5` or `T<n> M6` goes out between files for it either. Each
+    skipped change is logged (`QUEUE BIT CHANGE SKIPPED file_line=<n> tool=<t>`). The firmware keeps the tool it had;
+    the queue follows the tools the file names, so the next file is compared with the file's last tool. Play of the
+    same file outside the queue pauses as before. Transcript: `queue_override_skips_bit_changes`.

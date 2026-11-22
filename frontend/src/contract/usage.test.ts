@@ -127,11 +127,12 @@ const recordUiRequests = async () => {
     () => system.restoreBackup(fetch, file),
     () => viewer.getViewerSnapshot(fetch),
     () => queue.getQueue(fetch),
-    () => queue.addToQueue(fetch, "./part.nc"),
+    () => queue.addToQueue(fetch, "./part.nc", true),
     () => queue.moveInQueue(fetch, 2, 0),
     () => queue.removeFromQueue(fetch, 2),
+    () => queue.overrideInQueue(fetch, 2, true),
     () => queue.clearQueue(fetch),
-    () => queue.continueQueue(fetch),
+    () => queue.continueQueue(fetch, "stopped"),
   ];
   await Promise.all(requests.map((request) => request().catch(() => undefined)));
   const links = [
@@ -159,7 +160,7 @@ describe("the HTTP contract", () => {
   it("covers every request the UI makes, and each request body fits its schema", async () => {
     const calls = await recordUiRequests();
     expect(literalApiPaths()).toContainEqual({ method: "GET", url: "/api/main" });
-    expect(calls.filter(({ body }) => body !== undefined)).toHaveLength(36);
+    expect(calls.filter(({ body }) => body !== undefined)).toHaveLength(37);
     const unlisted = [...calls, ...literalApiPaths()].filter(({ method, url }) => !endpointFor(method, url));
     expect(unlisted).toEqual([]);
 

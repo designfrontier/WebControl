@@ -42,6 +42,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/queue/add", post(queue::add))
         .route("/api/queue/move", post(queue::move_item))
         .route("/api/queue/remove", post(queue::remove))
+        .route("/api/queue/override", post(queue::override_item))
         .route("/api/queue/clear", post(queue::clear))
         .route("/api/queue/continue", post(queue::resume))
         .route("/api/viewer", get(api::viewer))

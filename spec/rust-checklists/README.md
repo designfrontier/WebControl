@@ -36,7 +36,7 @@ numbers, or the transcripts CI replays.
 | The job lock, refusals, probes in a file, a lost USB link | [`jobs.md`](jobs.md) 4 | Yes |
 | Buffered mode, GPIO buttons and LEDs | [`jobs.md`](jobs.md) 5, 6 | Yes |
 | The first real cut | [`jobs.md`](jobs.md) 7 | Yes: router on |
-| Job queue: files back to back, tool checks between them, stops, restarts | [`queue.md`](queue.md) | Yes: an air cut |
+| Job queue: files back to back, bit checks and the override, stops, Continue, restarts | [`queue.md`](queue.md) | Yes: an air cut |
 | Lost-line recovery | [`pacing.md`](pacing.md) 1 | Yes: an air cut |
 | Line pacing: presets, custom, mid-job changes, run-panel stats, `PACING` log lines | [`pacing.md`](pacing.md) 2-4 | Yes: an air cut |
 | Holey and triangular calibration, the test pattern, computed sled position | [`calibration.md`](calibration.md) | Yes: the pattern, in the air |

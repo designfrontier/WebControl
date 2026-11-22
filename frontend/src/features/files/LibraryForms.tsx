@@ -19,6 +19,8 @@ interface OpenProps {
   submitOptions?: SubmitOptions;
   /** Adds the chosen file to the job queue instead of opening it; allowed while a job runs. */
   enqueue?: (file: LibraryFile) => Promise<void>;
+  /** Shown beside Add to queue, such as the file's bit-change override. */
+  enqueueOptions?: ReactNode;
 }
 
 /** Choose a file from a library (gcode or boards) and open it. */
@@ -30,6 +32,7 @@ export const OpenFromLibrary = ({
   busyNote,
   submitOptions,
   enqueue,
+  enqueueOptions,
 }: OpenProps) => {
   const [directory, setDirectory] = useState(() => initialDirectory(library));
   const [selected, setSelected] = useState(() => initialFile(library, initialDirectory(library)));
@@ -68,6 +71,7 @@ export const OpenFromLibrary = ({
       <FormError message={error ?? adding.error} />
       {queued && <p role="status">{queued}</p>}
       {lockedReason && <p className="muted">{lockedReason}</p>}
+      {enqueue && enqueueOptions}
       {busy && busyNote}
       <div className="actions">
         <button type="submit" className="primary" disabled={busy || lockedReason !== undefined}>

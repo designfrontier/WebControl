@@ -134,9 +134,10 @@ impl SerialBackend for MachineBackend {
             ("POST", "/api/system/pid-test") => Request::PidTest(body),
             ("POST", "/api/queue/add") => {
                 let file = body["file"].as_str().unwrap_or_default().to_string();
-                Request::Queue(Edit::Add(Item { tools: file_tools(read(&file).lines()), file }))
+                let skip_bit_changes = body["skipBitChanges"].as_bool().unwrap_or_default();
+                Request::Queue(Edit::Add(Item { tools: file_tools(read(&file).lines()), file, skip_bit_changes }))
             }
-            ("POST", "/api/queue/continue") => Request::Queue(Edit::Continue),
+            ("POST", "/api/queue/continue") => Request::Queue(Edit::Continue(Default::default())),
             ("POST", _) if path.starts_with("/api/calibration/") => match &path["/api/calibration/".len()..] {
                 "triangular" => Request::Calibrated(calculate(Kind::Triangular, &self.settings(), &body)),
                 "holey" => Request::Calibrated(calculate(Kind::Holey, &self.settings(), &body)),

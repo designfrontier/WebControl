@@ -3,23 +3,26 @@ import { ApiError } from "../../api/http";
 import type { Fetch } from "../../api/http";
 import { useFetch, useMachine, useServerMessage } from "../../app/context";
 import type { JobQueue, QueueItem } from "../../protocol";
-import { addToQueue, clearQueue, continueQueue, getQueue, moveInQueue, removeFromQueue } from "./api";
+import { addToQueue, clearQueue, continueQueue, getQueue, moveInQueue, overrideInQueue, removeFromQueue } from "./api";
 
 /** The file name without its folder. */
 export const baseName = (file: string) => file.slice(file.lastIndexOf("/") + 1);
 
-/** What happens before `item` starts, as the queue panel says it. */
-export const betweenText = ({ between, tool }: QueueItem) =>
-  between === "sameTool"
-    ? "same tool, starts immediately"
-    : between === "toolChange"
-      ? `Tool ${tool}, will pause for a tool change`
-      : "names no tool, will pause to check the bit";
+const BETWEEN_TEXT: Record<QueueItem["between"], (tool: number | null) => string> = {
+  sameTool: () => "same tool — starts immediately",
+  noTool: () => "no tool named — starts immediately",
+  unknownTool: (tool) => `Tool ${tool}, bit in the spindle unknown — starts immediately`,
+  toolChange: (tool) => `Tool ${tool} — will pause for a tool change`,
+  toolChangeSkipped: (tool) => `Tool ${tool} — bit change skipped (override)`,
+};
 
-/** "next: shelf.nc — same tool, starts immediately", or null when nothing follows. */
+/** What happens before `item` starts, as the queue panel says it. */
+export const betweenText = ({ between, tool }: QueueItem) => BETWEEN_TEXT[between](tool);
+
+/** "Next: shelf.nc · same tool — starts immediately", or null when nothing follows. */
 export const nextText = (queue: JobQueue) => {
   const next = queue.headLocked ? queue.items[1] : queue.items[0];
-  return next ? `${queue.headLocked ? "Next" : "First"}: ${baseName(next.file)} — ${betweenText(next)}` : null;
+  return next ? `${queue.headLocked ? "Next" : "First"}: ${baseName(next.file)} · ${betweenText(next)}` : null;
 };
 
 const STEP_TEXT = {
@@ -41,11 +44,12 @@ export const statusText = (queue: JobQueue) => {
 export const continueLabel = (queue: JobQueue) => (queue.state === "stopped" ? "Continue queue" : "Start queue");
 
 export const queueApi = (fetchImpl: Fetch) => ({
-  add: (file: string) => addToQueue(fetchImpl, file),
+  add: (file: string, skipBitChanges = false) => addToQueue(fetchImpl, file, skipBitChanges),
+  skip: (id: number, skipBitChanges: boolean) => overrideInQueue(fetchImpl, id, skipBitChanges),
   move: (id: number, to: number) => moveInQueue(fetchImpl, id, to),
   remove: (id: number) => removeFromQueue(fetchImpl, id),
   clear: () => clearQueue(fetchImpl),
-  resume: () => continueQueue(fetchImpl),
+  resume: (from: "start" | "stopped" = "start") => continueQueue(fetchImpl, from),
 });
 
 /** The server's reason, or a generic one. */

@@ -5,6 +5,7 @@ export const queueItem = (over: Partial<QueueItem> = {}): QueueItem => ({
   file: "jobs/leg.nc",
   tool: 1,
   between: "sameTool",
+  skipBitChanges: false,
   ...over,
 });
 
@@ -14,5 +15,6 @@ export const jobQueue = (over: Partial<JobQueue> = {}): JobQueue => ({
   reason: null,
   headLocked: false,
   step: "none",
+  stoppedAt: null,
   ...over,
 });

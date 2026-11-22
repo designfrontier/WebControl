@@ -96,3 +96,33 @@
 .queue-summary-actions button {
   min-height: var(--tap);
 }
+
+.queue-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.queue-badges:empty {
+  display: none;
+}
+
+.queue-override {
+  background: var(--caution);
+  color: var(--caution-ink);
+}
+
+.queue-skip {
+  font-size: 0.9rem;
+}
+
+/* Phones: the summary rides in the pinned run dock, so the page leaves room for it below. */
+@media (max-width: 700px), (max-height: 500px) {
+  .control-screen:has(.run-dock .queue-summary) {
+    padding-bottom: calc(3 * var(--tap) + 6rem + 5 * var(--space-2));
+  }
+
+  .run-dock .queue-next {
+    display: none;
+  }
+}

@@ -6,6 +6,9 @@
     "file": {
       "type": "string",
       "description": "\"<directory>/<file name>\"; directory \".\" is the library root."
+    },
+    "skipBitChanges": {
+      "type": "boolean"
     }
   },
   "required": [

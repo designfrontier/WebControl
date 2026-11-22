@@ -10,15 +10,19 @@ use crate::Message;
 pub enum Between {
     SameTool,
     ToolChange,
+    ToolChangeSkipped,
     NoTool,
+    UnknownTool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct QueueItem {
     pub id: u64,
     pub file: String,
     pub tool: Option<i64>,
     pub between: Between,
+    pub skip_bit_changes: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
@@ -50,6 +54,7 @@ pub struct JobQueue {
     pub reason: Option<String>,
     pub head_locked: bool,
     pub step: QueueStep,
+    pub stopped_at: Option<usize>,
 }
 
 impl Message for JobQueue {
@@ -57,9 +62,18 @@ impl Message for JobQueue {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct QueueAdd {
     pub file: String,
+    #[serde(default)]
+    pub skip_bit_changes: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct QueueOverride {
+    pub id: u64,
+    pub skip_bit_changes: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -73,4 +87,20 @@ pub struct QueueMove {
 #[serde(deny_unknown_fields)]
 pub struct QueueRemove {
     pub id: u64,
+}
+
+/// Where Continue starts the first file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ContinueFrom {
+    #[default]
+    Start,
+    Stopped,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct QueueContinue {
+    #[serde(default)]
+    pub from: ContinueFrom,
 }

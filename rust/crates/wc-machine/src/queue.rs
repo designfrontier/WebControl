@@ -1,13 +1,13 @@
-//! The job queue (owner decision, 2026-11-22: "start at once; pause at tool changes"). When the queue's first file
-//! has run and the controller has finished it, Z rises to the safe height and the next file starts; one that needs
-//! another tool, or names none, first waits at the tool-change prompt for Resume.
+//! The job queue (owner decisions, 2026-11-22): when the queue's first file has run and the controller has finished
+//! it, Z rises to the safe height and the next file starts. It waits at the tool-change prompt first only when the
+//! files show another bit: the next file names a tool, the bit in the spindle is known, and they differ.
 
 use std::sync::Arc;
 use std::time::Duration;
 
-use wc_gcode::firmware_gcode::{FileTools, file_tools};
+use wc_gcode::firmware_gcode::{FileTools, file_tools, tool_change_line, without_tool_change};
 use wc_protocol::main::{ActivateModal, PauseButton};
-use wc_protocol::queue::{Between, JobQueue, QueueItem, QueueState, QueueStep};
+use wc_protocol::queue::{Between, ContinueFrom, JobQueue, QueueItem, QueueState, QueueStep};
 
 use crate::clearance::Raise;
 use crate::edits::Response;
@@ -22,6 +22,7 @@ const IN_USE: &str = "The first file is loaded for the job or between files, so 
 const EMPTY: &str = "The queue is empty.";
 const BUSY: &str = "A job, a tool change or the queue holds the machine. Wait for it to end, or press Stop.";
 const NOT_CONNECTED: &str = "The controller is not connected.";
+const NOT_STOPPED: &str = "Stop did not interrupt the first file part way, so continue it from the start.";
 pub(crate) const STARTING: &str = "The queue is starting its next file. Wait for it, or press Stop.";
 
 /// A file to queue, its tools read by the server.
@@ -29,6 +30,8 @@ pub(crate) const STARTING: &str = "The queue is starting its next file. Wait for
 pub struct Item {
     pub file: String,
     pub tools: FileTools,
+    /// Queue runs of the file pause for no bit change, between files or in it.
+    pub skip_bit_changes: bool,
 }
 
 /// A queue write from `/api/queue/*`.
@@ -37,15 +40,17 @@ pub enum Edit {
     Add(Item),
     Move { id: u64, to: usize },
     Remove { id: u64 },
+    Override { id: u64, skip: bool },
     Clear,
-    Continue,
+    Continue(ContinueFrom),
 }
 
 /// What the queue asks of the server: a file loaded the way `/openGCode` loads it, or the list saved.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Outbound {
     Load(String),
-    Save(Vec<String>),
+    /// Each file and its override.
+    Save(Vec<(String, bool)>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -58,8 +63,6 @@ struct Entry {
 enum Change {
     None,
     Tool(i64),
-    /// The file names no tool, so whatever is in the spindle must be checked.
-    Check,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -88,9 +91,13 @@ pub(crate) struct State {
     next_id: u64,
     mode: Mode,
     step: Step,
+    /// The bit the files and completed tool changes say is in the spindle; Stop at a prompt changes nothing.
+    spindle: Option<i64>,
+    /// The first file's entry and the line Stop interrupted it at.
+    stopped_at: Option<(u64, usize)>,
     /// As last pushed.
     pub shown: Arc<JobQueue>,
-    saved: Vec<String>,
+    saved: Vec<(String, bool)>,
 }
 
 impl State {
@@ -99,8 +106,8 @@ impl State {
         self.entries.push(Entry { id: self.next_id, item });
     }
 
-    fn names(&self) -> Vec<String> {
-        self.entries.iter().map(|entry| entry.item.file.clone()).collect()
+    fn names(&self) -> Vec<(String, bool)> {
+        self.entries.iter().map(|entry| (entry.item.file.clone(), entry.item.skip_bit_changes)).collect()
     }
 }
 
@@ -135,6 +142,22 @@ impl Machine {
         self.queue_busy() || (self.gcode_locked() && self.head_loaded())
     }
 
+    /// A queue run of a file whose override skips its bit changes.
+    pub(crate) fn skips_bit_changes(&self) -> bool {
+        let skips = self.queue.entries.first().is_some_and(|entry| entry.item.skip_bit_changes);
+        skips && self.queue.mode == Mode::Running && self.head_loaded()
+    }
+
+    /// A file line that would pause for a bit change goes out without its T and M6 under the override.
+    pub(crate) fn queue_skip_bit_change(&mut self, line: String, effects: &mut Vec<Effect>) -> String {
+        let change = tool_change_line(&line, self.job.next_tool, self.job.tool);
+        if !change.pauses || !self.skips_bit_changes() {
+            return line;
+        }
+        announce(format!("QUEUE BIT CHANGE SKIPPED file_line={} tool={}", self.index + 1, change.next_tool), effects);
+        without_tool_change(&line)
+    }
+
     /// Play on the queue's first file runs the queue.
     pub(crate) fn queue_played(&mut self) {
         if self.head_loaded() {
@@ -149,8 +172,26 @@ impl Machine {
         }
     }
 
+    /// A tool change was confirmed with Resume.
+    pub(crate) fn queue_tool_fitted(&mut self) {
+        self.queue.spindle = Some(self.job.tool).filter(|&tool| tool > 0).or(self.queue.spindle);
+    }
+
+    fn head_id(&self) -> Option<u64> {
+        self.queue.entries.first().map(|entry| entry.id).filter(|_| self.head_loaded())
+    }
+
+    /// Where Stop left the first file part way, while it is still loaded.
+    fn stopped_at(&self) -> Option<usize> {
+        self.queue.stopped_at.filter(|&(id, _)| Some(id) == self.head_id()).map(|(_, line)| line)
+    }
+
     /// The queue starts nothing more until Continue or Play on its first file.
     pub(crate) fn queue_stop(&mut self, why: &str, effects: &mut Vec<Effect>) {
+        if let Some(id) = self.head_id().filter(|_| self.job.flow.in_job()) {
+            let line = self.controller.accounting.oldest_index().unwrap_or(self.index);
+            self.queue.stopped_at = Some((id, line));
+        }
         if self.queue.mode != Mode::Running && !self.queue_busy() {
             return;
         }
@@ -191,9 +232,7 @@ impl Machine {
                 self.queue.step = Step::ToolChange { prompted: true };
             }
             // The firmware already had the tool, so it did not pause; the bit still gets checked.
-            Step::ToolChange { prompted: false } if self.controller_idle() => {
-                self.queue_prompt(Some(self.job.tool), effects)
-            }
+            Step::ToolChange { prompted: false } if self.controller_idle() => self.queue_prompt(effects),
             Step::ToolChange { prompted: true } if self.job.manual_z.is_none() => {
                 self.queue_raise_then(Change::None, effects)
             }
@@ -203,6 +242,7 @@ impl Machine {
 
     fn queue_advance(&mut self, effects: &mut Vec<Effect>) {
         let done = self.queue.entries.remove(0);
+        self.queue.spindle = done.item.tools.last.or(self.queue.spindle);
         announce(format!("QUEUE DONE file={}", done.item.file), effects);
         self.queue.step = Step::None;
         if self.queue.mode != Mode::Running {
@@ -225,10 +265,14 @@ impl Machine {
     /// The first file is loaded: raise, then start it or wait for the tool.
     pub(crate) fn queue_prepare(&mut self, effects: &mut Vec<Effect>) {
         let first = file_tools(self.gcode.iter().map(String::as_str)).first;
-        let change = match first {
-            Some(tool) if tool == self.job.tool => Change::None,
-            Some(tool) => Change::Tool(tool),
-            None => Change::Check,
+        let skip = self.queue.entries.first().is_some_and(|entry| entry.item.skip_bit_changes);
+        let change = match (first, self.queue.spindle) {
+            (Some(tool), Some(spindle)) if tool != spindle && !skip => Change::Tool(tool),
+            (Some(tool), Some(spindle)) if tool != spindle => {
+                announce(format!("QUEUE BIT CHANGE SKIPPED between_files tool={tool}"), effects);
+                Change::None
+            }
+            _ => Change::None,
         };
         self.index = 0;
         self.queue_raise_then(change, effects);
@@ -267,19 +311,11 @@ impl Machine {
                 self.queue([format!("T{tool} M6")]);
                 self.queue.step = Step::ToolChange { prompted: false };
             }
-            Change::Check => {
-                announce(format!("QUEUE TOOL CHECK file={file}"), effects);
-                self.queue_prompt(None, effects);
-            }
         }
     }
 
-    fn queue_prompt(&mut self, tool: Option<i64>, effects: &mut Vec<Effect>) {
-        let file = self.queue.entries.first().map(|entry| entry.item.file.clone()).unwrap_or_default();
-        let text = match tool {
-            Some(tool) => format!("Please insert tool {tool}"),
-            None => format!("{file} names no tool. Check the bit is the one it needs, then press Resume."),
-        };
+    fn queue_prompt(&mut self, effects: &mut Vec<Effect>) {
+        let text = format!("Please insert tool {}", self.job.tool);
         self.job.manual_z = Some(true);
         self.job.paused_units = Some(self.units());
         effects.push(broadcast(&ActivateModal::notification(&text, true)));
@@ -287,7 +323,7 @@ impl Machine {
         self.queue.step = Step::ToolChange { prompted: true };
     }
 
-    pub(crate) fn queue_edit(&mut self, edit: Edit, effects: &mut Vec<Effect>) -> Response {
+    pub(crate) fn queue_edit(&mut self, edit: Edit, now: Duration, effects: &mut Vec<Effect>) -> Response {
         let locked = self.head_locked();
         let find = |id: u64| self.queue.entries.iter().position(|entry| entry.id == id).ok_or((404, NO_ITEM.into()));
         let done: Result<(), (u16, String)> = match edit {
@@ -312,11 +348,18 @@ impl Machine {
                     Ok(())
                 }
             }),
+            Edit::Override { id, skip } => find(id).and_then(|at| match locked && at == 0 {
+                true => Err((409, IN_USE.into())),
+                false => {
+                    self.queue.entries[at].item.skip_bit_changes = skip;
+                    Ok(())
+                }
+            }),
             Edit::Clear => {
                 self.queue.entries.truncate(usize::from(locked));
                 Ok(())
             }
-            Edit::Continue => self.queue_continue(effects),
+            Edit::Continue(from) => self.queue_continue(from, now, effects),
         };
         if self.queue.entries.is_empty() && !self.queue_busy() {
             self.queue.mode = Mode::Idle;
@@ -327,7 +370,12 @@ impl Machine {
         }
     }
 
-    fn queue_continue(&mut self, effects: &mut Vec<Effect>) -> Result<(), (u16, String)> {
+    fn queue_continue(
+        &mut self,
+        from: ContinueFrom,
+        now: Duration,
+        effects: &mut Vec<Effect>,
+    ) -> Result<(), (u16, String)> {
         let refusal = match () {
             _ if self.queue.entries.is_empty() => Some(EMPTY.to_string()),
             _ if !matches!(self.link, Link::Connected { .. }) => Some(NOT_CONNECTED.into()),
@@ -339,6 +387,10 @@ impl Machine {
         if let Some(refusal) = refusal {
             return Err((409, refusal));
         }
+        if from == ContinueFrom::Stopped {
+            return self.queue_continue_where_stopped(now, effects);
+        }
+        self.queue.stopped_at = None;
         self.queue.mode = Mode::Running;
         match self.head_loaded() {
             true => self.queue_prepare(effects),
@@ -347,15 +399,30 @@ impl Machine {
         Ok(())
     }
 
+    /// Play mid-file at the line Stop left, so the restart rebuilds the units, Z and the tool.
+    fn queue_continue_where_stopped(&mut self, now: Duration, effects: &mut Vec<Effect>) -> Result<(), (u16, String)> {
+        let line = self.stopped_at().ok_or((409, NOT_STOPPED.to_string()))?;
+        self.index = line;
+        if let Some(refused) = self.start_run(now, effects) {
+            return Err((409, refused));
+        }
+        self.queue.stopped_at = None;
+        announce(format!("QUEUE CONTINUE file_line={}", line + 1), effects);
+        Ok(())
+    }
+
     fn queue_view(&self) -> JobQueue {
-        let items = self.queue.entries.iter().scan(self.job.tool, |spindle, Entry { id, item }| {
-            let between = match item.tools.first {
-                None => Between::NoTool,
-                Some(tool) if tool == *spindle => Between::SameTool,
-                Some(_) => Between::ToolChange,
+        let items = self.queue.entries.iter().scan(self.queue.spindle, |spindle, Entry { id, item }| {
+            let between = match (item.tools.first, *spindle) {
+                (None, _) => Between::NoTool,
+                (Some(tool), Some(held)) if tool == held => Between::SameTool,
+                (Some(_), Some(_)) if item.skip_bit_changes => Between::ToolChangeSkipped,
+                (Some(_), Some(_)) => Between::ToolChange,
+                (Some(_), None) => Between::UnknownTool,
             };
-            *spindle = item.tools.after(*spindle);
-            Some(QueueItem { id: *id, file: item.file.clone(), tool: item.tools.first, between })
+            *spindle = item.tools.last.or(*spindle);
+            let skip_bit_changes = item.skip_bit_changes;
+            Some(QueueItem { id: *id, file: item.file.clone(), tool: item.tools.first, between, skip_bit_changes })
         });
         let (state, reason) = match &self.queue.mode {
             Mode::Idle => (QueueState::Idle, None),
@@ -369,7 +436,8 @@ impl Machine {
             Step::Raising(_) => QueueStep::Raising,
             Step::ToolChange { .. } => QueueStep::ToolChange,
         };
-        JobQueue { items: items.collect(), state, reason, head_locked: self.head_locked(), step }
+        let head_locked = self.head_locked();
+        JobQueue { items: items.collect(), state, reason, head_locked, step, stopped_at: self.stopped_at() }
     }
 
     /// After each event: every client hears a change, and a changed list is saved.

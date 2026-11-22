@@ -5,17 +5,21 @@ import { baseName, betweenText, continueLabel, nextText, refusal, statusText } f
 
 describe("queue text", () => {
   it("says what happens before each file", () => {
-    expect(betweenText(item())).toBe("same tool, starts immediately");
-    expect(betweenText(item({ between: "toolChange", tool: 2 }))).toBe("Tool 2, will pause for a tool change");
-    expect(betweenText(item({ between: "noTool", tool: null }))).toBe("names no tool, will pause to check the bit");
+    expect(betweenText(item())).toBe("same tool — starts immediately");
+    expect(betweenText(item({ between: "toolChange", tool: 2 }))).toBe("Tool 2 — will pause for a tool change");
+    expect(betweenText(item({ between: "noTool", tool: null }))).toBe("no tool named — starts immediately");
+    expect(betweenText(item({ between: "unknownTool", tool: 2 }))).toBe(
+      "Tool 2, bit in the spindle unknown — starts immediately",
+    );
+    expect(betweenText(item({ between: "toolChangeSkipped", tool: 2 }))).toBe("Tool 2 — bit change skipped (override)");
     expect(baseName("jobs/leg.nc")).toBe("leg.nc");
     expect(baseName("leg.nc")).toBe("leg.nc");
   });
 
   it("names the next file after the running one, or the first when none runs", () => {
     const items = [item(), item({ id: 2, file: "shelf.nc" })];
-    expect(nextText(jobQueue({ items, headLocked: true }))).toBe("Next: shelf.nc — same tool, starts immediately");
-    expect(nextText(jobQueue({ items }))).toBe("First: leg.nc — same tool, starts immediately");
+    expect(nextText(jobQueue({ items, headLocked: true }))).toBe("Next: shelf.nc · same tool — starts immediately");
+    expect(nextText(jobQueue({ items }))).toBe("First: leg.nc · same tool — starts immediately");
     expect(nextText(jobQueue({ items: [item()], headLocked: true }))).toBeNull();
   });
 

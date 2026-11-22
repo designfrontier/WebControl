@@ -11,6 +11,7 @@ static TOOL_WORD: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)T[\s\x1c-\x1f]*([0-9]+(?:\.[0-9]*)?)").expect("pattern"));
 static FIRMWARE_NUMBER: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)").expect("pattern"));
+static M6_WORD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)M0*6([^0-9.]|$)").expect("pattern"));
 static ONLY_TOOL_WORD: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)^[\s\x1c-\x1f]*(N[0-9]+[\s\x1c-\x1f]*)?T[\s\x1c-\x1f]*[0-9]+(\.[0-9]*)?[\s\x1c-\x1f]*$")
         .expect("pattern")
@@ -124,31 +125,29 @@ pub fn tool_change_line(line: &str, next_tool: i64, current_tool: i64) -> ToolCh
     }
 }
 
+/// The line without its T words and M6, so the firmware neither selects a tool nor waits for one; empty when nothing
+/// else is left.
+pub fn without_tool_change(line: &str) -> String {
+    let trailing = &line[line.trim_end_matches(' ').len()..];
+    let stripped = M6_WORD.replace_all(&TOOL_WORD.replace_all(line, ""), "$1").into_owned();
+    let rest = py::split(&stripped).collect::<Vec<_>>().join(" ");
+    if rest.is_empty() { rest } else { format!("{rest}{trailing}") }
+}
+
 /// The tools a file uses, as the job queue compares them between files.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct FileTools {
     /// The first tool its T words name; tool 0 names none.
     pub first: Option<i64>,
-    /// The tool its last M6 changes to.
+    /// The last tool its T words name.
     pub last: Option<i64>,
 }
 
-impl FileTools {
-    /// The tool in the spindle once the file has run, from the one before it; the queue changes to `first` itself.
-    pub fn after(self, before: i64) -> i64 {
-        self.last.or(self.first).unwrap_or(before)
-    }
-}
-
 pub fn file_tools<'a>(lines: impl IntoIterator<Item = &'a str>) -> FileTools {
-    let (tools, _) = lines.into_iter().fold((FileTools::default(), None), |(tools, pending), line| {
-        let line = crate::sanitise::sanitise(line);
-        let named = tool_named_by(&line);
-        let pending = named.or(pending);
-        let last = if changes_tool(&line) { pending.or(tools.last) } else { tools.last };
-        (FileTools { first: tools.first.or(named.filter(|&tool| tool > 0)), last }, pending)
-    });
-    tools
+    lines.into_iter().fold(FileTools::default(), |tools, line| {
+        let named = tool_named_by(&crate::sanitise::sanitise(line)).filter(|&tool| tool > 0);
+        FileTools { first: tools.first.or(named), last: named.or(tools.last) }
+    })
 }
 
 #[cfg(test)]
@@ -156,15 +155,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_files_tools_are_its_first_t_word_and_its_last_m6() {
+    fn a_tool_change_is_left_out_and_the_rest_of_the_line_kept() {
+        assert_eq!(without_tool_change("T2 M6  "), "");
+        assert_eq!(without_tool_change("T3 M06 G0 X60  "), "G0 X60  ");
+        assert_eq!(without_tool_change("m6"), "");
+        assert_eq!(without_tool_change("G1 X1 M60 "), "G1 X1 M60 ");
+        assert_eq!(without_tool_change("M6 T2 G1 X2"), "G1 X2");
+    }
+
+    #[test]
+    fn a_files_tools_are_its_first_and_last_t_words() {
         let tools = |lines: &[&str]| file_tools(lines.iter().copied());
         assert_eq!(tools(&["(T9 in a comment)", "G0 X1", "T2 M6", "G1 X2", "T3", "M6", "T4"]).first, Some(2));
-        assert_eq!(tools(&["T2 M6", "T3", "M6", "T4"]).last, Some(3));
+        assert_eq!(tools(&["T2 M6", "T3", "M6", "T4 (T9)"]).last, Some(4));
         assert_eq!(tools(&["G0 X1", "M5"]), FileTools::default());
-        assert_eq!(tools(&["T0 M6", "T1"]), FileTools { first: Some(1), last: Some(0) });
-        assert_eq!(tools(&["T2", "G1 X1"]).after(5), 2);
-        assert_eq!(tools(&["G1 X1"]).after(5), 5);
-        assert_eq!(tools(&["T2 M6", "T3 M6"]).after(5), 3);
+        assert_eq!(tools(&["T1 M6", "T0"]), FileTools { first: Some(1), last: Some(1) });
     }
 
     #[test]
