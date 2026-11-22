@@ -44,6 +44,9 @@ G00 Z5.0
 G00 X-300.0 Y200.5
 ```
 
+The sled travels in a straight line from wherever the job ended, as Home does: keep clamps, screws and anything
+else taller than the safe height out of that path, or pick a park position whose path avoids them.
+
 Z stays at the safe height. A file that switched the controller to inches (`G20`) parks in inches, converted from
 the stored millimetres. The log and the controller messages show `PARK START trigger=file|queue|button x_mm=... y_mm=...
 units=... x=... y=...`, and `PARK SET` when Set Park Here stores a position.

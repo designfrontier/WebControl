@@ -24,7 +24,8 @@ WebControl, also during a job. The buttons keep the same size and place on a pho
 
 A button is disabled when it could not run now: Park, Set Home Here and Set Park Here while a job runs or is paused or
 a tool change waits; Park also while no park position is set; a macro while a job runs, or when it has no gcode.
-Hover over a disabled button to see why.
+Hover over a disabled button to see why. While Park is in a slot and no park position is set, a line under the
+jog pad says so, also on a touch screen.
 
 ## Macros
 
