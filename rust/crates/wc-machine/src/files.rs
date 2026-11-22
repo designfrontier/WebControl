@@ -13,6 +13,7 @@ use wc_gcode::{GcodeError, load, py};
 use wc_protocol::boards::BoardDataUpdate;
 use wc_protocol::files::UpdateDirectories;
 use wc_protocol::main::{ActivateModal, ControllerMessage, GcodeFile, Units};
+use wc_protocol::tools::FileTool;
 use wc_protocol::{Envelope, Push};
 
 use crate::machine::{Effect, Machine, alert, broadcast};
@@ -52,6 +53,7 @@ pub struct Gcode {
     pub too_large: Option<String>,
     /// The console note for a file with G90.1 or G91.1, which WebControl converts.
     pub arc_centres: Option<String>,
+    pub tools: Vec<FileTool>,
 }
 
 /// `Advanced Settings.truncate` is on when it equals 1; `digits` is the text Python splices into its pattern.
@@ -84,6 +86,7 @@ impl Gcode {
             truncate,
             too_large: drawn.too_large,
             arc_centres: arc_centre_note(&lines),
+            tools: wc_gcode::tools::file_tools(raw),
             lines,
         })
     }
@@ -98,6 +101,7 @@ impl Gcode {
             truncate: None,
             too_large: None,
             arc_centres: None,
+            tools: Vec::new(),
         }
     }
 }
@@ -281,6 +285,7 @@ impl Machine {
         self.gcode = Arc::new(gcode.lines);
         self.z_moves = gcode.z_moves;
         self.preview = Arc::new(gcode.preview);
+        self.file_tools = Arc::new(gcode.tools);
         self.truncate = gcode.truncate;
         if let Some(tolerance) = gcode.tolerance {
             self.set_setting("Computed Settings", "tolerance", Value::from(tolerance));

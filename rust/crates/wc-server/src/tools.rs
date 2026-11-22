@@ -1,5 +1,5 @@
-//! `/api/tools`, the tool library. Edits are allowed during a job: they only change how tool-change prompts are
-//! labelled, never what the controller does.
+//! `/api/tools`, the tool library, and `/api/files/gcode/tools`, the tools the loaded file names. Library edits are
+//! allowed during a job: they only change how tool-change prompts are labelled, never what the controller does.
 
 use axum::Json;
 use axum::body::Bytes;
@@ -8,7 +8,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use serde_json::{Value, json};
 use wc_config::tools::{self, Refusal};
-use wc_protocol::tools::ToolLibrary;
+use wc_protocol::tools::{FileTools, ToolLibrary};
 use wc_protocol::{Envelope, Push};
 
 use crate::AppState;
@@ -99,4 +99,8 @@ pub(crate) async fn remove(State(state): State<AppState>, Path(text): Path<Strin
         Ok(n) => change(&state, StatusCode::OK, Box::new(move |library| tools::remove(library, n))).await,
         Err(response) => response,
     }
+}
+
+pub(crate) async fn in_file(State(state): State<AppState>) -> Json<FileTools> {
+    Json(FileTools { tools: state.machine.snapshot().file_tools.to_vec() })
 }

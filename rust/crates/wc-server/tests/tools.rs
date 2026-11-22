@@ -1,4 +1,4 @@
-//! The tool library routes over HTTP, every body checked against the contract.
+//! The tool library routes and the loaded file's tools over HTTP, every body checked against the contract.
 
 mod support;
 
@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use axum::http::StatusCode;
 use serde_json::{Value, json};
-use support::{Server, machine_with};
+use support::{Part, Server, machine_with};
 use wc_config::Settings;
 use wc_machine::Event;
 use wc_protocol::{Action, Push};
@@ -110,4 +110,22 @@ async fn a_library_that_cannot_be_read_or_written_is_a_server_error() {
     let write = server.post_json("/api/tools", endmill(1)).await;
     assert_eq!(write.status, StatusCode::INTERNAL_SERVER_ERROR);
     assert!(write.json()["error"].as_str().unwrap().starts_with("The tool library could not be saved"));
+}
+
+#[tokio::test]
+async fn the_loaded_files_tools_come_from_its_comments() {
+    let server = Server::new();
+    assert_eq!(server.get("/api/files/gcode/tools").await.json(), json!({"tools": []}));
+    let fusion =
+        "(1001)\r\n(T6  D=6.35 CR=0 - ZMIN=-36.56 - FLAT END MILL)\r\nG90 G94\r\nG21\r\nT6 M6\r\nG0 X1\r\nM0 ;T10\r\n";
+    server.write("gcode/part.nc", fusion);
+    server.post_form("/openGCode", &[Part::Field("selectedGCode", "./part.nc")]).await;
+    let tools = server.get("/api/files/gcode/tools").await.json();
+    assert_eq!(
+        tools,
+        json!({"tools": [
+            {"number": 6, "description": "6.35 mm (1/4\") flat end mill", "diameter": 6.35, "units": "mm", "flutes": null},
+            {"number": 10, "description": null, "diameter": null, "units": null, "flutes": null},
+        ]})
+    );
 }

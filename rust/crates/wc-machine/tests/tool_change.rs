@@ -285,12 +285,14 @@ fn a_tool_change_line_never_overfills_the_controller_buffer() {
 }
 
 #[test]
-fn the_tool_change_prompt_names_the_tool() {
+fn the_tool_change_prompt_names_the_tool_and_the_file_says_what_it_is() {
     let mut rig = Rig::connected();
-    stream(&mut rig, &["G21", "T2 M6", "G1 X2"]);
+    stream(&mut rig, &["(T2 D=3.175 CR=0 - ZMIN=-1 - flat end mill)", "G21", "T2 M6", "G1 X2"]);
     let prompt = pushed(&rig.rx("Tool Change: Please insert tool 2"), "activateModal");
     assert_eq!(prompt[0]["message"], "Please insert tool 2");
     assert_eq!((prompt[0]["tool"].clone(), prompt[0]["resume"].clone()), (json!(2), json!("resume")));
+    let tools = rig.machine.snapshot().file_tools;
+    assert_eq!(tools[0].description.as_deref(), Some("3.175 mm (1/8\") flat end mill"));
 }
 
 #[test]

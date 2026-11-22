@@ -2,7 +2,7 @@
 
 use serde_json::json;
 use wc_protocol::main::ActivateModal;
-use wc_protocol::tools::{Tool, ToolLibrary, ToolUnits};
+use wc_protocol::tools::{FileTool, FileTools, Tool, ToolLibrary, ToolUnits};
 use wc_protocol::{Envelope, Message};
 use wc_testkit::contract::Contract;
 
@@ -37,6 +37,24 @@ fn a_stored_tool_without_notes_reads_as_empty_notes() {
     )
     .unwrap();
     assert_eq!((tool.units, tool.notes), (Some(ToolUnits::In), String::new()));
+}
+
+#[test]
+fn the_files_tools_fit_their_schema() {
+    let tools = FileTools {
+        tools: vec![
+            FileTool {
+                number: 6,
+                description: Some("flat end mill".into()),
+                diameter: Some(6.35),
+                units: Some(ToolUnits::Mm),
+                flutes: None,
+            },
+            FileTool { number: 10, description: None, diameter: None, units: None, flutes: None },
+        ],
+    };
+    let value = serde_json::to_value(tools).unwrap();
+    Contract::shared().check("schemas/http/get-api-files-gcode-tools.200.json", &value).unwrap();
 }
 
 #[test]
