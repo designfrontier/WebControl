@@ -131,6 +131,18 @@ goes on. The 409s keep the default reason phrase. Their contract entries say "Ru
 them). The UI disables these controls while
 `selectGcodeLocked` holds and shows the server's message if one is refused anyway.
 
+## Tool library (Rust backend only)
+
+The user's tool library lives in `~/.WebControl/tools.json` (`{"tools": [...]}`, written atomically with a `.bak`).
+`GET /api/tools` lists it by number; `POST /api/tools`, `PUT /api/tools/{number}` (which may renumber) and
+`DELETE /api/tools/{number}` answer the whole library and broadcast it as `toolLibrary`. A description that is blank
+after trimming, a number outside 1–99999, or a diameter without units is a 400 naming the field; a number already
+taken is a 409; a missing tool is a 404. Unlike the settings, the library is **not** under the job lock: it only
+labels prompts and never reaches the controller, and adding a tool while a tool change waits is the point.
+
+A tool-change `activateModal` notification carries `tool`, the number the firmware asked for (else the one the file
+was changing to); the UI shows the library's description of it.
+
 ## Regenerating and checking
 
 ```sh
