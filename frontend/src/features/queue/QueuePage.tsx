@@ -9,14 +9,14 @@ import { baseName, betweenText, continueLabel, nextText, queueApi, refusal, stat
 import "./queue.css";
 
 /** Runs one queue write at a time and shows the server's refusal. */
-const useQueueWrite = (update: (queue: JobQueue) => void) => {
+const useQueueWrite = (apply: (task: () => Promise<JobQueue>) => Promise<void>) => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const run = (write: () => Promise<JobQueue>, fallback: string) => async () => {
     setBusy(true);
     setError(null);
     try {
-      update(await write());
+      await apply(write);
     } catch (failure) {
       setError(refusal(failure, fallback));
     } finally {

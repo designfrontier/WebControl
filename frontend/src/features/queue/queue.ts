@@ -60,11 +60,16 @@ export const useJobQueue = () => {
   const socket = useMachine((s) => s.socket);
   const [queue, setQueue] = useState<JobQueue | null>(null);
   const updates = useRef(0);
-  const update = (next: JobQueue) => {
+  useServerMessage("jobQueue", (next) => {
     updates.current += 1;
     setQueue(next);
+  });
+  /** Runs a write; its answer is dropped when a push since it was sent is newer. */
+  const write = async (task: () => Promise<JobQueue>) => {
+    const issued = updates.current;
+    const next = await task();
+    if (updates.current === issued) setQueue(next);
   };
-  useServerMessage("jobQueue", update);
   useEffect(() => {
     if (socket !== "connected") return;
     let live = true;
@@ -81,5 +86,5 @@ export const useJobQueue = () => {
       live = false;
     };
   }, [socket, fetch]);
-  return [queue, update] as const;
+  return [queue, write] as const;
 };

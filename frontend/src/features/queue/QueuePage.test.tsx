@@ -2,7 +2,7 @@ import { act, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { JobQueue } from "../../protocol";
 import { fakeFetch, jsonResponse, startupState } from "../../test/fakeFetch";
-import { gcodeLibrary } from "../../test/filesBoards";
+import { deferred, gcodeLibrary } from "../../test/filesBoards";
 import { jobQueue, queueItem } from "../../test/queueFixtures";
 import { renderApp, renderWithProviders } from "../../test/render";
 import { QueueSummary } from "./QueuePage";
@@ -83,6 +83,17 @@ describe("Job queue screen", () => {
     act(() => socket.serverMessage("jobQueue", { ...idle, state: "stopped", reason: "Stop was pressed." }));
     expect(screen.getByText("Queue stopped: Stop was pressed.", { selector: ".queue-status" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Continue queue" })).toBeEnabled();
+  });
+
+  it("keeps a push that came before its own write's answer", async () => {
+    const answer = deferred();
+    const idle = jobQueue({ items: [queueItem()] });
+    const fetch = fakeFetch({ ...routes(idle), "POST /api/queue/continue": answer.respond });
+    const { user, socket } = renderApp("/queue", { fetch });
+    await user.click(await screen.findByRole("button", { name: "Start queue" }));
+    act(() => socket.serverMessage("jobQueue", { ...idle, state: "running", step: "raising", headLocked: true }));
+    await act(async () => answer.settle.resolve(jsonResponse({ ...idle, state: "running", step: "loading" })));
+    expect(screen.getByText("Raising Z before leg.nc…", { selector: ".queue-status" })).toBeInTheDocument();
   });
 
   it("is in the G-Code menu", async () => {
