@@ -41,8 +41,8 @@ export const ControlButtonsSection = () => {
           </label>
         ))}
         <p id="control-buttons-note" className="muted">
-          The four buttons beside the jog arrows on every device. Choosing one another slot holds swaps the two. Macros
-          take their titles from Settings ▸ Maslow.
+          The four buttons beside the jog arrows on every device. Picking a button another slot already holds swaps the
+          two. Macros take their titles from Settings ▸ Maslow.
         </p>
       </fieldset>
       {failed && (

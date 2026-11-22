@@ -105,10 +105,14 @@ button.side-button:not(:disabled),
   gap: var(--space-1);
 }
 
+.jog-grid .side-button,
 .jog-distance .side-button {
-  font-size: 0.85rem;
   line-height: 1.1;
   white-space: normal;
+}
+
+.jog-distance .side-button {
+  font-size: 0.85rem;
 }
 
 .distance-field {
