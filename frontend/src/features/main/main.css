@@ -105,7 +105,7 @@ button.side-button:not(:disabled),
   gap: var(--space-1);
 }
 
-.jog-distance .set-home {
+.jog-distance .side-button {
   font-size: 0.85rem;
   line-height: 1.1;
   white-space: normal;

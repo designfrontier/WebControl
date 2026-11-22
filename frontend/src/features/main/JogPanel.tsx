@@ -1,37 +1,62 @@
 import { Link } from "react-router";
 import { useClient, useMachine } from "../../app/context";
+import { slotAction } from "./controlButtons";
 import type { ControlAvailability } from "./controls";
 import { DistanceField } from "./DistanceField";
 import { useDistanceControl } from "./hooks";
-import { macroEntry } from "./macros";
 
 const JOG_DECIMALS = 3;
 
 type Direction = "upLeft" | "up" | "upRight" | "left" | "right" | "downLeft" | "down" | "downRight";
-type Macro = "macro1" | "macro2";
-type Cell = { direction: Direction; label: string; arrow: string } | "home" | Macro | "zAxis";
+type Cell = { direction: Direction; label: string; arrow: string } | "home" | { slot: number };
 
-/** The classic layout: the jog pad with Macro 1, Macro 2 and Z-Axis down its right-hand side. */
+/** The classic layout: the jog pad with three button slots down its right-hand side; the fourth is by the distance. */
 const GRID: Cell[] = [
   { direction: "upLeft", label: "Up left", arrow: "↖" },
   { direction: "up", label: "Up", arrow: "↑" },
   { direction: "upRight", label: "Up right", arrow: "↗" },
-  "macro1",
+  { slot: 0 },
   { direction: "left", label: "Left", arrow: "←" },
   "home",
   { direction: "right", label: "Right", arrow: "→" },
-  "macro2",
+  { slot: 1 },
   { direction: "downLeft", label: "Down left", arrow: "↙" },
   { direction: "down", label: "Down", arrow: "↓" },
   { direction: "downRight", label: "Down right", arrow: "↘" },
-  "zAxis",
+  { slot: 2 },
 ];
+const DISTANCE_SLOT = 3;
+
+/** One configurable slot (Settings ▸ Display ▸ Control buttons). */
+const ControlSlot = ({ slot, available }: { slot: number; available: ControlAvailability }) => {
+  const client = useClient();
+  const button = useMachine((s) => s.controlButtons[slot]);
+  const park = useMachine((s) => s.park);
+  const macros = useMachine((s) => s.macros);
+  if (button === "zAxis")
+    return (
+      <Link className="button-link side-button" to="/zaxis">
+        Z-Axis
+      </Link>
+    );
+  const action = slotAction(button, { available, park, macros });
+  return (
+    <button
+      type="button"
+      className="side-button"
+      disabled={action.disabled}
+      title={action.title}
+      onClick={() => client.sendAction(action.command)}
+    >
+      {action.label}
+    </button>
+  );
+};
 
 export const JogPanel = ({ available }: { available: ControlAvailability }) => {
   const client = useClient();
   const units = useMachine((s) => s.units);
   const distToMove = useMachine((s) => s.distToMove);
-  const macros = useMachine((s) => s.macros);
   const field = useDistanceControl({
     source: distToMove,
     decimals: JOG_DECIMALS,
@@ -41,7 +66,6 @@ export const JogPanel = ({ available }: { available: ControlAvailability }) => {
   });
 
   const jog = (direction: Direction) => field.run((distance) => client.sendAction("move", direction, distance));
-  const macroTitle = (command: Macro) => macroEntry(macros, command).title;
 
   const cell = (entry: Cell) => {
     if (entry === "home")
@@ -57,24 +81,7 @@ export const JogPanel = ({ available }: { available: ControlAvailability }) => {
           <span aria-hidden="true">⌂ </span>Home
         </button>
       );
-    if (entry === "zAxis")
-      return (
-        <Link key="zAxis" className="button-link side-button" to="/zaxis">
-          Z-Axis
-        </Link>
-      );
-    if (entry === "macro1" || entry === "macro2")
-      return (
-        <button
-          key={entry}
-          type="button"
-          className="side-button"
-          disabled={!available.manual}
-          onClick={() => client.sendAction(entry)}
-        >
-          {macroTitle(entry)}
-        </button>
-      );
+    if ("slot" in entry) return <ControlSlot key={`slot-${entry.slot}`} slot={entry.slot} available={available} />;
     return (
       <button key={entry.direction} type="button" disabled={!available.manual} onClick={() => jog(entry.direction)}>
         <span aria-hidden="true">{entry.arrow}</span>
@@ -100,15 +107,7 @@ export const JogPanel = ({ available }: { available: ControlAvailability }) => {
           inputRef={field.input}
           invalid={field.invalid}
         />
-        <button
-          type="button"
-          className="side-button set-home"
-          disabled={!available.defineHome}
-          onClick={() => client.sendAction("defineHome")}
-          title="Make the sled's current position the home position"
-        >
-          Set Home Here
-        </button>
+        <ControlSlot slot={DISTANCE_SLOT} available={available} />
       </div>
     </section>
   );

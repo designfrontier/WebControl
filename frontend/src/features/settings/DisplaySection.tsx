@@ -3,6 +3,7 @@ import { useFetch, useMachineStore } from "../../app/context";
 import { useTheme } from "../../app/themePreference";
 import type { ThemePreference } from "../../protocol";
 import { saveTheme } from "./api";
+import { ControlButtonsSection } from "./ControlButtonsSection";
 
 const THEMES: { value: ThemePreference; label: string }[] = [
   { value: "light", label: "Light" },
@@ -54,6 +55,7 @@ export const DisplaySection = () => {
           Could not save the theme. Try again.
         </p>
       )}
+      <ControlButtonsSection />
     </div>
   );
 };

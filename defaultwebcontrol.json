@@ -1151,6 +1151,15 @@
             "title": "Display theme",
             "type": "options",
             "value": "system"
+        },
+        {
+            "default": "park,zAxis,setHome,setPark",
+            "desc": "What the control screen's four button slots hold, top to bottom down the jog pad's right side, then beside the distance: park, zAxis, setHome, setPark or macro1 to macro4, each at most once. Changed in Settings > Display.\ndefault setting: park,zAxis,setHome,setPark",
+            "key": "controlButtons",
+            "section": "WebControl Settings",
+            "title": "Control buttons",
+            "type": "string",
+            "value": "park,zAxis,setHome,setPark"
         }
     ],
     "Camera Settings": [

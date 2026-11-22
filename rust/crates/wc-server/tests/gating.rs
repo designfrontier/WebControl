@@ -102,6 +102,23 @@ async fn the_display_theme_changes_during_a_job_and_is_saved() {
 }
 
 #[tokio::test]
+async fn the_control_buttons_change_during_a_job_and_are_saved() {
+    let server = Server::with(streaming());
+    let buttons = json!({"buttons": ["macro3", "park", "setPark", "zAxis"]});
+    let reply = server.send_json("PUT", "/api/display/controls", buttons.clone()).await;
+    assert_eq!((reply.status, reply.json()), (StatusCode::OK, buttons.clone()));
+    assert_eq!(server.get("/api/state").await.json()["controlButtons"], buttons["buttons"]);
+    let twice =
+        server.send_json("PUT", "/api/display/controls", json!({"buttons": ["park", "park", "zAxis", "setHome"]}));
+    assert_eq!(twice.await.status, StatusCode::BAD_REQUEST);
+    server.settle().await;
+    let saved = server.saved_settings();
+    let webcontrol = saved["WebControl Settings"].as_array().unwrap();
+    let stored = webcontrol.iter().find(|option| option["key"] == "controlButtons").unwrap();
+    assert_eq!(stored["value"], "macro3,park,setPark,zAxis");
+}
+
+#[tokio::test]
 async fn the_line_pacing_changes_during_a_job_and_takes_effect_at_once() {
     let server = Server::with(streaming());
     let body = json!({"values": {"linePacingMode": "minimum gap", "linePacingGapMs": 25}});

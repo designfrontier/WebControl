@@ -85,6 +85,10 @@
                 "schema": "schemas/messages/macros.json",
                 "dataFormat": "json"
               },
+              "controlButtons": {
+                "schema": "schemas/messages/controlButtons.json",
+                "dataFormat": "json"
+              },
               "showFPSpinner": {
                 "schema": "schemas/messages/showFPSpinner.json",
                 "dataFormat": "int"
@@ -865,6 +869,28 @@
           "contentType": "application/json",
           "description": "Not a theme, or other fields beside it",
           "schema": "schemas/http/put-api-display-theme.400.json"
+        }
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/display/controls",
+      "family": "api",
+      "summary": "Choose what the control screen's four button slots hold, for every client, also during a job (Rust only)",
+      "body": {
+        "contentType": "application/json",
+        "schema": "schemas/http/put-api-display-controls.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "description": "The stored slots, also broadcast as a controlButtons message",
+          "schema": "schemas/http/put-api-display-controls.200.json"
+        },
+        "400": {
+          "contentType": "application/json",
+          "description": "Not four known buttons, a button twice, or other fields beside them",
+          "schema": "schemas/http/put-api-display-controls.400.json"
         }
       }
     },

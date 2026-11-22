@@ -472,6 +472,24 @@
           "type": "null"
         }
       ]
+    },
+    "controlButtons": {
+      "minItems": 4,
+      "maxItems": 4,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "park",
+          "zAxis",
+          "setHome",
+          "setPark",
+          "macro1",
+          "macro2",
+          "macro3",
+          "macro4"
+        ]
+      }
     }
   },
   "required": [

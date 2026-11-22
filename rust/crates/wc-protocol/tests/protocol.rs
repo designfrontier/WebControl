@@ -37,6 +37,7 @@ fn startup_state() -> StartupState {
         pacing: pacing_stats(None),
         theme: Theme::System,
         park: None,
+        control_buttons: vec!["park".into(), "zAxis".into(), "setHome".into(), "setPark".into()],
     }
 }
 

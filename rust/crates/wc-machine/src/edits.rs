@@ -49,6 +49,8 @@ pub enum Request {
     Pacing(Value),
     /// `PUT /api/display/theme`: the display theme, which neither a job nor a scan locks.
     Theme(Value),
+    /// `PUT /api/display/controls`: the control button slots, which neither a job nor a scan locks.
+    ControlButtons(Value),
     /// `/api/queue/*`, which a job does not lock.
     Queue(crate::queue::Edit),
 }
@@ -102,7 +104,7 @@ impl Machine {
         if moves {
             self.park_cancelled();
         }
-        let theme = matches!(request, Request::Theme(_));
+        let theme = matches!(request, Request::Theme(_) | Request::ControlButtons(_));
         if let Some(refused) = self.optical_edit_refused().filter(|_| !optical && !theme) {
             return refused;
         }
@@ -118,6 +120,7 @@ impl Machine {
             Request::OpticalAccept => self.optical_accept(),
             Request::Pacing(body) => self.update_pacing(&body, now, effects),
             Request::Theme(body) => self.update_theme(&body, effects),
+            Request::ControlButtons(body) => self.update_buttons(&body),
             Request::Queue(edit) => self.queue_edit(edit, now, effects),
         }
     }

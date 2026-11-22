@@ -74,6 +74,19 @@ describe("machineReducer macros", () => {
   });
 });
 
+describe("machineReducer control buttons", () => {
+  it("starts with the default slots, takes them from /api/state and follows controlButtons pushes", () => {
+    expect(initialMachineState.controlButtons).toEqual(["park", "zAxis", "setHome", "setPark"]);
+    const loaded = apply([
+      { type: "startup", state: startupState({ controlButtons: ["macro1", "park", "zAxis", "setPark"] }) },
+    ]);
+    expect(loaded.controlButtons).toEqual(["macro1", "park", "zAxis", "setPark"]);
+    expect(apply([{ type: "startup", state: startupState() }], loaded).controlButtons).toEqual(loaded.controlButtons);
+    const pushed = apply([message("controlButtons", { buttons: ["zAxis", "park", "setHome", "macro4"] })], loaded);
+    expect(pushed.controlButtons).toEqual(["zAxis", "park", "setHome", "macro4"]);
+  });
+});
+
 describe("machineReducer link state from /api/state", () => {
   const link = { status: "connected", port: "/dev/ttyACM0", fakeServoStatus: true } as const;
 

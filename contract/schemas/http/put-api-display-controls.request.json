@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "put-api-display-controls.request",
+  "type": "object",
+  "properties": {
+    "buttons": {
+      "minItems": 4,
+      "maxItems": 4,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "park",
+          "zAxis",
+          "setHome",
+          "setPark",
+          "macro1",
+          "macro2",
+          "macro3",
+          "macro4"
+        ]
+      }
+    }
+  },
+  "required": [
+    "buttons"
+  ],
+  "additionalProperties": false
+}

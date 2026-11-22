@@ -81,6 +81,14 @@ export const macroSchema = z.object({
   empty: z.boolean().default(false),
 });
 
+/** What a control-screen button slot holds: an action, the Z-Axis dialog, or a macro. */
+export const controlButtonSchema = z.enum(["park", "zAxis", "setHome", "setPark", ...macroCommandSchema.options]);
+export type ControlButton = z.infer<typeof controlButtonSchema>;
+/** The four slots, top to bottom down the jog pad's right side, then beside the distance; never one twice. */
+export const controlButtonsSchema = z.array(controlButtonSchema).length(4);
+/** PUT /api/display/controls body and answer; applies at once, also during a job. */
+export const controlButtonsUpdateSchema = z.strictObject({ buttons: controlButtonsSchema });
+
 /** Server -> client commands for the front page and the shared machine state. */
 export const mainMessages = {
   hostAddress: z.object({ hostAddress: z.string() }),
@@ -147,6 +155,8 @@ export const mainMessages = {
   parkPosition: z.object({ position: parkPositionSchema.nullable() }),
   /** Broadcast when a macro's title or gcode changes. Rust only. */
   macros: z.object({ macros: z.array(macroSchema) }),
+  /** Broadcast when the control button slots change. Rust only. */
+  controlButtons: z.object({ buttons: controlButtonsSchema }),
 } satisfies MessageSchemas;
 
 /** processAction commands the front page issues. */
@@ -222,6 +232,8 @@ export const startupStateSchema = z.object({
   theme: themeSchema.optional(),
   /** The park position, or null while none is set. Rust only. */
   park: parkPositionSchema.nullable().optional(),
+  /** The control button slots. Rust only. */
+  controlButtons: controlButtonsSchema.optional(),
 });
 export type StartupState = z.infer<typeof startupStateSchema>;
 
