@@ -255,6 +255,7 @@ impl Machine {
         }
         self.job.flow = flow;
         self.leds.light(Led::Play);
+        self.queue_played();
         None
     }
 
@@ -316,6 +317,7 @@ impl Machine {
 
     /// Stop: `!` at once, the queue dropped, and every pause and the job forgotten.
     pub(crate) fn stopped(&mut self, now: Duration, effects: &mut Vec<Effect>) {
+        self.queue_stop("Stop was pressed.", effects);
         self.stats.stopping();
         self.probing = false;
         self.measure = None;
@@ -377,6 +379,7 @@ impl Machine {
 
     /// `_refuseStreamLine`: the job pauses before a line the controller cannot safely take.
     fn refuse_line(&mut self, alert: (String, String), effects: &mut Vec<Effect>) {
+        self.queue_stop(&format!("Line {} was not sent: {}.", self.index + 1, alert.0), effects);
         effects.push(broadcast(&ActivateModal::titled_alert(&alert.0, &alert.1)));
         self.pause_run(effects);
     }
@@ -476,6 +479,7 @@ impl Machine {
         if self.index + 1 < self.gcode.len() {
             self.index += 1;
         } else {
+            self.queue_ran_out();
             self.end_job();
         }
     }

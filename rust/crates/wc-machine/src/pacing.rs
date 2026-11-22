@@ -287,7 +287,7 @@ impl Stats {
 }
 
 /// Every place a message goes so a log alone tells the segments apart.
-fn announce(text: String, effects: &mut Vec<Effect>) {
+pub(crate) fn announce(text: String, effects: &mut Vec<Effect>) {
     tracing::info!("{text}");
     effects.push(Effect::Log(text.clone()));
     effects.push(broadcast(&ControllerMessage(text)));

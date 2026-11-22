@@ -17,6 +17,7 @@ pub mod help;
 pub mod host;
 pub mod installer;
 mod optical;
+pub mod queue;
 mod routes;
 pub mod serial;
 pub mod updates;

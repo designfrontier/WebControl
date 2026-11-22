@@ -114,7 +114,9 @@ pub async fn serve(options: Options, shutdown: impl Future<Output = ()> + Send +
     let exit = Arc::new(Notify::new());
     let host = SystemHost::new(&paths.dir(), exit.clone());
     let host = if saving { host.saving_to(paths.clone()) } else { host };
-    let machine = Machine::new(&format!("{}:{}", local_ip(), bound.port()), settings).with_library(paths.gcode_dir());
+    let machine = Machine::new(&format!("{}:{}", local_ip(), bound.port()), settings)
+        .with_library(paths.gcode_dir())
+        .with_queue(crate::queue::restore(&paths.dir()).await);
     type Started = (Machine, Box<dyn PortOpener>, SystemHost, Option<Arc<Mutex<Sim>>>);
     let (machine, opener, host, sim): Started = match options.simulate {
         true => {
@@ -135,6 +137,7 @@ pub async fn serve(options: Options, shutdown: impl Future<Output = ()> + Send +
     let streaming = cameras.stream_to(machine.clone());
     let state = AppState::new(machine, PingConfig::default(), paths).with_cameras(cameras);
     let state = state.with_updates(crate::updates::Updates::from_env());
+    let queue = crate::queue::serve(&state);
     let closing = state.clone();
     let stopped = async move {
         tokio::select! {
@@ -146,6 +149,7 @@ pub async fn serve(options: Options, shutdown: impl Future<Output = ()> + Send +
     axum::serve(listener, router(state)).with_graceful_shutdown(stopped).await?;
     host.attach_gpio(None);
     drop(streaming);
+    queue.abort();
     // The machine task ends with the last handle, once its final settings save is on disk.
     let _ = tokio::time::timeout(SAVE_ON_EXIT, task).await;
     Ok(())

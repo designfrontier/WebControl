@@ -161,6 +161,7 @@ impl Machine {
     /// Nothing queued after the raise runs; a job waits to be started or resumed again.
     fn refuse_raise(&mut self, raise: &Raise, effects: &mut Vec<Effect>) {
         tracing::warn!("no status report told the bit's height; the move was refused");
+        self.queue_stop("The bit's height was unknown, so Z could not rise.", effects);
         self.drop_user_commands();
         effects.push(broadcast(&ActivateModal::titled_alert(HEIGHT_UNKNOWN_TITLE, HEIGHT_UNKNOWN)));
         let Raise::Restart(restart) = raise else { return };

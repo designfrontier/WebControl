@@ -124,9 +124,48 @@ pub fn tool_change_line(line: &str, next_tool: i64, current_tool: i64) -> ToolCh
     }
 }
 
+/// The tools a file uses, as the job queue compares them between files.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct FileTools {
+    /// The first tool its T words name; tool 0 names none.
+    pub first: Option<i64>,
+    /// The tool its last M6 changes to.
+    pub last: Option<i64>,
+}
+
+impl FileTools {
+    /// The tool in the spindle once the file has run, from the one before it; the queue changes to `first` itself.
+    pub fn after(self, before: i64) -> i64 {
+        self.last.or(self.first).unwrap_or(before)
+    }
+}
+
+pub fn file_tools<'a>(lines: impl IntoIterator<Item = &'a str>) -> FileTools {
+    let (tools, _) = lines.into_iter().fold((FileTools::default(), None), |(tools, pending), line| {
+        let line = crate::sanitise::sanitise(line);
+        let named = tool_named_by(&line);
+        let pending = named.or(pending);
+        let last = if changes_tool(&line) { pending.or(tools.last) } else { tools.last };
+        (FileTools { first: tools.first.or(named.filter(|&tool| tool > 0)), last }, pending)
+    });
+    tools
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_files_tools_are_its_first_t_word_and_its_last_m6() {
+        let tools = |lines: &[&str]| file_tools(lines.iter().copied());
+        assert_eq!(tools(&["(T9 in a comment)", "G0 X1", "T2 M6", "G1 X2", "T3", "M6", "T4"]).first, Some(2));
+        assert_eq!(tools(&["T2 M6", "T3", "M6", "T4"]).last, Some(3));
+        assert_eq!(tools(&["G0 X1", "M5"]), FileTools::default());
+        assert_eq!(tools(&["T0 M6", "T1"]), FileTools { first: Some(1), last: Some(0) });
+        assert_eq!(tools(&["T2", "G1 X1"]).after(5), 2);
+        assert_eq!(tools(&["G1 X1"]).after(5), 5);
+        assert_eq!(tools(&["T2 M6", "T3 M6"]).after(5), 3);
+    }
 
     #[test]
     fn every_g38_but_g38_2_is_a_probe_the_firmware_ignores() {

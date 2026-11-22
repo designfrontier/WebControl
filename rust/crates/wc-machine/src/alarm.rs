@@ -49,7 +49,7 @@ pub(crate) fn survives_alarm(queued: &Queued) -> bool {
     match queued {
         Queued::Line { boot: true, .. } | Queued::SettingsSync | Queued::Mark(_) => true,
         Queued::Line { text, .. } => moves_nothing(text),
-        Queued::Delay(_) | Queued::Raise(_) => false,
+        Queued::Delay(_) | Queued::Raise(_) | Queued::Advance => false,
     }
 }
 
@@ -82,6 +82,7 @@ impl Machine {
     /// Drops every queued command that would move the machine and holds the rest until the alarm is cleared.
     pub(crate) fn latch_alarm(&mut self, message: String, job_resumes: bool, effects: &mut Vec<Effect>) {
         tracing::warn!(message, "alarm: holding every command that moves the machine until Stop");
+        self.queue_stop(&format!("The controller raised an alarm: {message}"), effects);
         self.controller.queue.retain(survives_alarm);
         self.controller.hold_until = None;
         self.controller.raise_deadline = None;

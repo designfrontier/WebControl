@@ -223,6 +223,7 @@ the backend had been quiet for `quiet` seconds, one line per settle.
 | `z_limits_refused_on_51_27` | Z-limit actions alert and send nothing below 51.292 |
 | `z_limits_on_51_292` | `$63`/`$64` in mm, clear, `B20`, with 51.292's replies to each |
 | `holey_calibration_accept_writes_settings` | Calculate sends nothing; Accept writes `$3`, `$2`, `$40`, `$41` |
+| `queue_same_tool_starts_at_once_new_tool_waits` | Three queued files: Continue raises Z, `M5`, `T1 M6` (the tool in the spindle is unknown) and waits for Resume; a file with the same tool starts as soon as Z has risen; one with another tool gets `G00 Z…`, `M5`, `T2 M6` and the firmware's prompt first |
 | `real_*` | the owner's real jobs, with the controller's recorded replies ("Real jobs" below) |
 
 ## Adding or changing a transcript
@@ -288,6 +289,9 @@ The runner needs these seams in the backend:
    the WebSocket transport would send (decoded `data`).
 
 `expect.state` may also name `probing`, which only the probe transcripts use.
+
+The job queue's `http` events take library paths relative to this directory (`gcode/x.nc`), and the runner answers
+each load the queue asks for (`Effect::Queue`) at once, as the server's `/openGCode` path would.
 
 The Rust runner replays the sans-IO machine (`Machine::handle_inline`, which also runs the CPU work the shell would
 run off the machine task), so it pins the bytes and their order, not how the shell writes them. The shell writes from

@@ -102,6 +102,9 @@ impl Machine {
         if let Some(refusal) = self.alarm_refusal(command) {
             return effects.push(alert(refusal));
         }
+        if command == "startRun" && self.queue_refuses_play() {
+            return effects.push(alert(crate::queue::STARTING));
+        }
         if command == "startRun" && self.loads > 0 {
             return effects.push(alert(GCODE_LOADING));
         }

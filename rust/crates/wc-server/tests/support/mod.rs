@@ -114,7 +114,9 @@ impl Server {
         let host = Arc::new(SystemHost::new(&paths.dir(), Arc::new(Notify::new())).saving_to(paths.clone()));
         let machine = machine.with_library(paths.gcode_dir());
         let (machine, _task) = spawn(machine, Box::new(NoPort), host.clone());
-        let app = router(AppState::new(machine.clone(), PingConfig::default(), paths));
+        let state = AppState::new(machine.clone(), PingConfig::default(), paths);
+        wc_server::queue::serve(&state);
+        let app = router(state);
         Server { app, home, machine, host }
     }
 

@@ -166,6 +166,7 @@ impl Machine {
 
     /// The job waits at the line, as after a lost link; Resume returns to the file there and sends it.
     fn hold_at_lost_line(&mut self, index: usize, effects: &mut Vec<Effect>) {
+        self.queue_stop("A line did not reach the controller.", effects);
         self.index = index;
         // An M6 the firmware never received changed no tool.
         if let Some(tool) = self.job.tool_before_change.take() {
@@ -184,6 +185,7 @@ impl Machine {
 
     /// A command lost twice is dropped with what was queued after it; the firmware gets WebControl's units and G90.
     fn drop_lost_command(&mut self, sent: &Sent, effects: &mut Vec<Effect>) {
+        self.queue_stop("A command did not reach the controller.", effects);
         let mut message = format!(
             "The controller did not receive {}, even when it was sent again, so it and the commands queued after it \
              were dropped.",

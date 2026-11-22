@@ -127,7 +127,7 @@ async fn read(path: PathBuf) -> std::io::Result<String> {
 
 /// A load the machine has heard begin (wart 14: Play waits, the spinners start). Dropped unfinished, it ends as
 /// unreadable, so no load that stopped part way holds Play.
-struct Loading {
+pub(crate) struct Loading {
     machine: MachineHandle,
     finished: bool,
 }
@@ -158,7 +158,7 @@ impl Drop for Loading {
 }
 
 /// Runs `load` on a task of its own, so a client that disconnects mid-load cannot cancel it.
-async fn detached<L, F>(state: &AppState, load: L) -> Reply
+pub(crate) async fn detached<L, F>(state: &AppState, load: L) -> Reply
 where
     L: FnOnce(Loading) -> F + Send + 'static,
     F: Future<Output = Reply> + Send,
@@ -177,7 +177,7 @@ where
 }
 
 /// `loadUpdateFile` from disk: the file read and parsed off the machine task, then handed over.
-async fn load_file(loading: Loading, file: PathBuf, text: Option<String>, origin: Origin) -> Reply {
+pub(crate) async fn load_file(loading: Loading, file: PathBuf, text: Option<String>, origin: Origin) -> Reply {
     let text = match text {
         Some(text) => Ok(text),
         None => read(file.clone()).await,

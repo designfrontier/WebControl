@@ -211,6 +211,7 @@ const ROUTED: &[(&str, &str)] = &[
     ("GET", "/api/main"),
     ("GET", "/api/viewer"),
     ("GET", "/api/run/pacing"),
+    ("GET", "/api/queue"),
     ("GET", "/api/settings/{sectionId}"),
     ("GET", "/api/system/info"),
     ("GET", "/api/machine/setup"),
