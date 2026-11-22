@@ -245,10 +245,10 @@ describe("MainPage jogging", () => {
     await user.click(jog.getByRole("button", { name: "Macro 2" }));
     expect(socket.actions()).toEqual([["macro2", "", ""]]);
 
-    expect(jog.queryByText("Set a park position to use Park.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Set a park position to use Park.")).not.toBeInTheDocument();
     socket.serverMessage("controlButtons", { buttons: ["setPark", "park", "setHome", "zAxis"] });
     expect(await jog.findByRole("button", { name: "Set Park Here" })).toBeInTheDocument();
-    expect(jog.getByText("Set a park position to use Park.")).toBeVisible();
+    expect(screen.getByText("Set a park position to use Park.")).toBeVisible();
     expect(jog.queryByRole("button", { name: "Spindle on" })).not.toBeInTheDocument();
     expect(document.querySelector(".jog-distance > .side-button")).toHaveTextContent("Z-Axis");
   });

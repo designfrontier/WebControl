@@ -54,6 +54,19 @@
   grid-auto-rows: minmax(var(--control), 1fr);
 }
 
+.controls-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0 var(--space-2);
+}
+
+.park-hint {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
 .control-screen h2 {
   margin: 0;
   font-size: 1.1rem;
@@ -112,11 +125,6 @@ button.side-button:not(:disabled),
 }
 
 .jog-distance .side-button {
-  font-size: 0.85rem;
-}
-
-.jog-note {
-  margin: 0;
   font-size: 0.85rem;
 }
 

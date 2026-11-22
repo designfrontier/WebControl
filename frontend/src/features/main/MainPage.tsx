@@ -4,7 +4,7 @@ import { Viewer } from "../viewer";
 import { ControllerConsole } from "./ControllerConsole";
 import { controlsFor } from "./controls";
 import { useMainScreenState } from "./hooks";
-import { JogPanel } from "./JogPanel";
+import { JogPanel, ParkHint } from "./JogPanel";
 import { Readouts } from "./Readouts";
 import { RunPanel } from "./RunPanel";
 import "./main.css";
@@ -23,7 +23,10 @@ export const MainPage = () => {
       <Viewer currentLine={line} />
       <div className="control-panel">
         <section className="control-jog" aria-labelledby="controls-title">
-          <h2 id="controls-title">Controls</h2>
+          <div className="controls-heading">
+            <h2 id="controls-title">Controls</h2>
+            <ParkHint />
+          </div>
           <JogPanel available={available} />
         </section>
         <RunPanel available={available} lineIndex={lineIndex ?? 0} />
