@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "delete-api-tools-number.params",
+  "type": "object",
+  "properties": {
+    "number": {
+      "type": "string",
+      "pattern": "^\\d+$",
+      "description": "The tool's number"
+    }
+  },
+  "required": [
+    "number"
+  ]
+}

@@ -6,6 +6,7 @@ import { machineActions, machineEvents, machineMessages } from "./machine";
 import { mainActions, mainEvents, mainMessages } from "./main";
 import { settingsActions, settingsEvents, settingsMessages } from "./settings";
 import { systemActions, systemEvents, systemMessages } from "./system";
+import { toolsMessages } from "./tools";
 import { viewerActions, viewerEvents, viewerMessages } from "./viewer";
 
 export * from "./actionArgs";
@@ -18,6 +19,7 @@ export * from "./machine";
 export * from "./main";
 export * from "./settings";
 export * from "./system";
+export * from "./tools";
 export * from "./viewer";
 
 /** Every server -> client `message` command, keyed by command name. */
@@ -30,6 +32,7 @@ export const serverMessages = {
   ...machineMessages,
   ...calibrationMessages,
   ...systemMessages,
+  ...toolsMessages,
 };
 export type ServerMessages = typeof serverMessages;
 export type ServerCommand = keyof ServerMessages;
