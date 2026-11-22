@@ -28,8 +28,9 @@ never moves the park position.
 
 It never parks when a job ends any other way: Stop, an alarm, a lost USB connection, a controller restart, a line
 WebControl refused to send, an `error:` from the controller, or a failed probe. Once one of those happens during a
-run, that run does not park even if you resume it to the end. Sending the machine anything else (a jog, a macro,
-typed gcode) after the last line went out, but before the controller finished it, also cancels the park.
+run, that run does not park even if you resume it to the end. Pressing Pause, or sending the machine anything else (a
+jog, a macro, typed gcode), after the last line went out but before the controller finished it also cancels the
+park. A queue that Pause or any other stop halted does not park when its file ends.
 
 ## What it sends
 

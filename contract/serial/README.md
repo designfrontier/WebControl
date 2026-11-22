@@ -668,7 +668,7 @@ Where the Rust backend writes something different from Python by owner decision.
     (`G00 X-300.0 Y200.5 `). The controller keeps no work offset, since WebControl adds home to each file line
     itself, so the park move is not shifted and Set Home never moves it. Z stays up. Nothing parks between queued
     files, or after a run that met Stop, an alarm, a lost link, a controller reset, a refused or twice-lost line, a
-    failed probe or an `error:`, even when resumed to its end; a command sent before the last line is answered
-    cancels it. The Park action sends the same lines when idle. A park the gates refuse (safe height 0 or less, off
+    failed probe or an `error:`, even when resumed to its end, or for a queue Pause stopped; Pause, or a command
+    sent before the last line is answered, cancels it. The Park action sends the same lines when idle. A park the gates refuse (safe height 0 or less, off
     the bed, an alarm, a missed restart) writes nothing, logs `PARK SKIPPED` and alerts. Transcript:
     `park_after_a_file_finishes`.

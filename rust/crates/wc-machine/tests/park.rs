@@ -116,6 +116,14 @@ fn stop_after_the_last_line_went_out_cancels_the_park() {
 }
 
 #[test]
+fn pause_after_the_last_line_went_out_cancels_the_park() {
+    let mut rig = parked();
+    all_but_the_last_acked(&mut rig, "G21\nG1 X10 F100\n");
+    rig.act("pauseRun");
+    assert_eq!(rig.run_to_quiet()[2..], [] as [&str; 0], "the last line is answered, and nothing follows");
+}
+
+#[test]
 fn a_file_stopped_or_held_by_an_alarm_never_parks() {
     let mut rig = parked();
     play(&mut rig, "G21\nG1 X10 F100\nG1 X20\n");

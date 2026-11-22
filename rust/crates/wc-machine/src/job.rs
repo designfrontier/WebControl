@@ -263,6 +263,7 @@ impl Machine {
 
     pub(crate) fn pause_run(&mut self, effects: &mut Vec<Effect>) -> Option<String> {
         if self.job.flow != Flow::Streaming {
+            self.park_cancelled();
             self.queue_paused(effects);
         }
         if self.job.flow == Flow::Streaming {

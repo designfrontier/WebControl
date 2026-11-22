@@ -370,6 +370,23 @@ fn a_queue_stopped_at_the_prompt_or_by_a_refused_line_never_parks() {
 }
 
 #[test]
+fn pause_once_the_queues_last_line_is_out_stops_the_queue_and_never_parks() {
+    let mut shop = parking(&[A]);
+    shop.act("startRun");
+    ["G0 Z5", "G1 X1 F100", "G0 Z5"].iter().for_each(|line| {
+        assert_eq!(shop.outbox.pop_front().as_deref(), Some(*line));
+        shop.answer(line);
+        while shop.outbox.is_empty() && shop.queue()["step"] != "finishing" {
+            let effects = shop.rig.advance(10);
+            shop.take(effects);
+        }
+    });
+    shop.act("pauseRun");
+    assert_eq!(shop.run(), Vec::<String>::new(), "no park");
+    assert_eq!(shop.queue()["state"], "stopped");
+}
+
+#[test]
 fn a_refused_line_stops_the_queue() {
     let mut shop = Shop::new(&[("probe.nc", "G1 X1|G38.4 Z-1|G1 X2"), SAME]);
     shop.fit(1);
