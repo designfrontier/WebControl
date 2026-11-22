@@ -1073,6 +1073,42 @@
         },
         {
             "default": "",
+            "desc": "User defined gcode bound to the Macro 3 button\ndefault setting: ",
+            "key": "macro3",
+            "section": "Maslow Settings",
+            "title": "Macro 3",
+            "type": "string",
+            "value": ""
+        },
+        {
+            "default": "Macro 3",
+            "desc": "User defined title for the Macro 3 button\ndefault setting: Macro 3",
+            "key": "macro3_title",
+            "section": "Maslow Settings",
+            "title": "Macro 3 Title",
+            "type": "string",
+            "value": "Macro 3"
+        },
+        {
+            "default": "",
+            "desc": "User defined gcode bound to the Macro 4 button\ndefault setting: ",
+            "key": "macro4",
+            "section": "Maslow Settings",
+            "title": "Macro 4",
+            "type": "string",
+            "value": ""
+        },
+        {
+            "default": "Macro 4",
+            "desc": "User defined title for the Macro 4 button\ndefault setting: Macro 4",
+            "key": "macro4_title",
+            "section": "Maslow Settings",
+            "title": "Macro 4 Title",
+            "type": "string",
+            "value": "Macro 4"
+        },
+        {
+            "default": "",
             "desc": "Where the sled parks after a file, or the last file of a queue, finishes normally, and when Park is pressed: X in mm from the centre of the bed, in machine coordinates, so setting home does not move it. Blank: no park position. Set Park Here fills both.\ndefault setting: ",
             "key": "parkX",
             "section": "Maslow Settings",

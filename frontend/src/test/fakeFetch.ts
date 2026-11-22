@@ -30,8 +30,10 @@ export const startupState = (over: Partial<StartupState> = {}): StartupState => 
   firmwareBuild: null,
   gcodeFile: null,
   macros: [
-    { command: "macro1", title: "Macro 1" },
-    { command: "macro2", title: "Macro 2" },
+    { command: "macro1", title: "Macro 1", empty: false },
+    { command: "macro2", title: "Macro 2", empty: false },
+    { command: "macro3", title: "Macro 3", empty: true },
+    { command: "macro4", title: "Macro 4", empty: true },
   ],
   experimental: [],
   ...over,

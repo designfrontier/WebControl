@@ -150,7 +150,8 @@ async fn api_state_reports_the_settings_and_the_rust_backend() {
         "Computed Settings": [{"key": "units", "value": "MM"}, {"key": "distToMove", "value": "2.5"},
             {"key": "unitsZ", "value": "MM"}, {"key": "distToMoveZ", "value": 1}],
         "Advanced Settings": [{"key": "homeX", "value": "12.5"}, {"key": "homeY", "value": "-3"}],
-        "Maslow Settings": [{"key": "macro1_title", "value": "Spindle on"}, {"key": "macro2_title", "value": ""},
+        "Maslow Settings": [{"key": "macro1_title", "value": "Spindle on"}, {"key": "macro1", "value": "M3"},
+            {"key": "macro2_title", "value": ""},
             {"key": "parkX", "value": "-250"}, {"key": "parkY", "value": "100.5"}],
         "WebControl Settings": [{"key": "uiTheme", "value": "dark"}]
     });
@@ -164,7 +165,9 @@ async fn api_state_reports_the_settings_and_the_rust_backend() {
             "connectionStatus": {"status": "disconnected", "port": "none", "fakeServoStatus": false},
             "controllerFirmwareVersion": 0.0,
             "controllerBoard": null, "firmwareBuild": null,
-            "macros": [{"command": "macro1", "title": "Spindle on"}, {"command": "macro2", "title": ""}],
+            "macros": [{"command": "macro1", "title": "Spindle on", "empty": false},
+                {"command": "macro2", "title": "", "empty": true}, {"command": "macro3", "title": "Macro 3", "empty": true},
+                {"command": "macro4", "title": "Macro 4", "empty": true}],
             "backend": "rust", "version": wc_server::VERSION,
             "commit": wc_server::COMMIT, "experimental": [], "gcodeFile": null,
             "pacing": {"mode": "v0.94", "gapMs": 50, "job": null, "segment": null, "history": []},

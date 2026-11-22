@@ -40,7 +40,7 @@ const SAFE_WHILE_PROBING: [&str; 13] = [
     "boardClearBoard",
 ];
 /// Commands that reach the controller, so they need it connected.
-const MACHINE_COMMANDS: [&str; 19] = [
+const MACHINE_COMMANDS: [&str; 21] = [
     "move",
     "moveTo",
     "moveZ",
@@ -52,6 +52,8 @@ const MACHINE_COMMANDS: [&str; 19] = [
     "returnToCenter",
     "macro1",
     "macro2",
+    "macro3",
+    "macro4",
     "setMaxZ",
     "setMinZ",
     "clearZ",
@@ -62,7 +64,7 @@ const MACHINE_COMMANDS: [&str; 19] = [
     "definePark",
 ];
 /// Python's `MACHINE_COMMANDS`: the manual commands a firmware pause refuses or a jog's `~` releases.
-const MANUAL_COMMANDS: usize = 15;
+const MANUAL_COMMANDS: usize = 17;
 
 fn is_blank(value: &Value) -> bool {
     value.as_str() == Some("")
@@ -151,7 +153,7 @@ impl Machine {
                 self.queue(["$$".to_string()]);
                 None
             }
-            "macro1" | "macro2" => self.run_macro(command),
+            _ if crate::controls::MACROS.contains(&command) => self.run_macro(command),
             "park" => self.park_action(effects),
             "definePark" => self.define_park(effects),
             "setMaxZ" => self.set_z_limit(63),

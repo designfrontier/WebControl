@@ -8,6 +8,7 @@ pub mod calibration;
 mod camera;
 mod clearance;
 pub mod commands;
+pub mod controls;
 mod edits;
 pub mod files;
 pub mod forms;

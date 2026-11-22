@@ -410,6 +410,7 @@ pub struct Machine {
     pub(crate) stats: crate::pacing::Stats,
     pub(crate) queue: crate::queue::State,
     pub(crate) park: crate::park::Park,
+    pub(crate) controls: crate::controls::Shown,
 }
 
 pub(crate) fn broadcast<M: Message>(message: &M) -> Effect {
@@ -427,6 +428,7 @@ impl Machine {
         let kinematics = crate::ui::computed_model(&settings);
         let stats = crate::pacing::Stats::new(crate::pacing::Pacing::read(&settings));
         let park = crate::park::Park::new(&settings);
+        let controls = crate::controls::Shown::new(&settings);
         let settings = Arc::new(settings);
         Machine {
             host_address: host_address.into(),
@@ -476,6 +478,7 @@ impl Machine {
             stats,
             queue: crate::queue::State::default(),
             park,
+            controls,
         }
     }
 
@@ -561,6 +564,7 @@ impl Machine {
         self.optical_refresh();
         self.queue_publish(&mut effects);
         self.publish_park(&mut effects);
+        self.publish_controls(&mut effects);
         self.status_if_changed(&mut effects);
         let changed = !Arc::ptr_eq(&self.settings, &self.saved) && *self.settings != *self.saved;
         if std::mem::take(&mut self.settings_dirty) || changed {

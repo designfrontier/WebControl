@@ -67,6 +67,13 @@ describe("machineReducer park position", () => {
   });
 });
 
+describe("machineReducer macros", () => {
+  it("replaces the macros a macros push lists", () => {
+    const macros = [{ command: "macro3" as const, title: "Vacuum", empty: false }];
+    expect(apply([message("macros", { macros })]).macros).toEqual(macros);
+  });
+});
+
 describe("machineReducer link state from /api/state", () => {
   const link = { status: "connected", port: "/dev/ttyACM0", fakeServoStatus: true } as const;
 

@@ -35,7 +35,7 @@ pub const ALWAYS: [&str; 10] = [
     "shutdown",
     "TurnOffRPI",
 ];
-pub const IDLE_OR_PAUSED: [&str; 19] = [
+pub const IDLE_OR_PAUSED: [&str; 21] = [
     "move",
     "moveTo",
     "moveZ",
@@ -54,6 +54,8 @@ pub const IDLE_OR_PAUSED: [&str; 19] = [
     "moveGcodeIndex",
     "macro1",
     "macro2",
+    "macro3",
+    "macro4",
     "clearLogs",
 ];
 pub const NO_JOB: [&str; 6] =

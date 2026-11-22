@@ -169,6 +169,9 @@ impl Machine {
 
     /// After each event: every client hears a new park position.
     pub(crate) fn publish_park(&mut self, effects: &mut Vec<Effect>) {
+        if std::sync::Arc::ptr_eq(&self.settings, &self.saved) {
+            return;
+        }
         let position = position(&self.settings);
         if position != self.park.shown {
             self.park.shown = position;

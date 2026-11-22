@@ -87,6 +87,8 @@ export const actionSpecs = {
   moveGcodeIndex: notRunning("Step the gcode index", { arg: integer.describe("Lines to step, signed") }),
   macro1: notRunning("Run macro 1"),
   macro2: notRunning("Run macro 2"),
+  macro3: notRunning("Run macro 3 (Rust only)"),
+  macro4: notRunning("Run macro 4 (Rust only)"),
   clearLogs: notRunning("Delete old log files"),
   clearGCode: noJob("Unload the gcode"),
   startRun: spec(

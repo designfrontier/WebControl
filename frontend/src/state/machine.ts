@@ -64,6 +64,7 @@ export const STORE_COMMANDS = [
   "clearAlarm",
   "theme",
   "parkPosition",
+  "macros",
 ] as const;
 export type StoreCommand = (typeof STORE_COMMANDS)[number];
 
@@ -88,6 +89,7 @@ export const pushedFields = (event: MachineMessage): (keyof MachineState)[] => {
     case "hostAddress":
     case "gcodeFile":
     case "theme":
+    case "macros":
       return [event.command];
     case "parkPosition":
       return ["park"];
@@ -241,6 +243,8 @@ const applyMessage = (state: MachineState, event: MachineMessage): MachineState 
       return { ...state, theme: event.data.theme };
     case "parkPosition":
       return { ...state, park: event.data.position };
+    case "macros":
+      return { ...state, macros: event.data.macros };
   }
 };
 

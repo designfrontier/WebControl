@@ -81,6 +81,10 @@
                 "schema": "schemas/messages/parkPosition.json",
                 "dataFormat": "json"
               },
+              "macros": {
+                "schema": "schemas/messages/macros.json",
+                "dataFormat": "json"
+              },
               "showFPSpinner": {
                 "schema": "schemas/messages/showFPSpinner.json",
                 "dataFormat": "int"
@@ -354,6 +358,18 @@
       "allowedDuring": "idleOrPaused",
       "via": "action",
       "schema": "schemas/actions/macro2.json"
+    },
+    "macro3": {
+      "summary": "Run macro 3 (Rust only)",
+      "allowedDuring": "idleOrPaused",
+      "via": "action",
+      "schema": "schemas/actions/macro3.json"
+    },
+    "macro4": {
+      "summary": "Run macro 4 (Rust only)",
+      "allowedDuring": "idleOrPaused",
+      "via": "action",
+      "schema": "schemas/actions/macro4.json"
     },
     "clearLogs": {
       "summary": "Delete old log files",

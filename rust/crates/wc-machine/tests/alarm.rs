@@ -212,7 +212,7 @@ fn a_return_to_center_waiting_for_the_bits_height_is_dropped() {
     assert!(reports_for(&mut rig, 4000).iter().all(|line| !line.contains("X0.0")));
 }
 
-const MOVES: [&str; 25] = [
+const MOVES: [&str; 28] = [
     "move",
     "moveTo",
     "moveZ",
@@ -223,6 +223,9 @@ const MOVES: [&str; 25] = [
     "touchZ",
     "macro1",
     "macro2",
+    "macro3",
+    "macro4",
+    "park",
     "setMaxZ",
     "setMinZ",
     "clearZ",

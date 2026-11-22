@@ -9,6 +9,7 @@ import type { ActionItem } from "./actionsCatalog";
 import { downloadUrl } from "./api";
 import { FakeServoDialog } from "./FakeServoDialog";
 import { FirmwareUpgradeDialog } from "./FirmwareUpgradeDialog";
+import { MacroEntries } from "./MacroEntries";
 import { ParkEntries } from "./ParkEntries";
 import { RestoreDialog } from "./RestoreDialog";
 import { useExperimental } from "../calibration/opticalApi";
@@ -135,6 +136,10 @@ export const ActionsPanel = ({ info }: { info: SystemInfo | null }) => {
             )}
           </section>
         ))}
+        <MacroEntries
+          allowed={isAllowed("paused", runState, gcodeLocked)}
+          onSent={(label) => setNotice(`Sent “${label}”.`)}
+        />
       </div>
 
       {open?.kind === "confirm" && open.item.confirm && (

@@ -1,14 +1,14 @@
 import { Link } from "react-router";
 import { useClient, useMachine } from "../../app/context";
-import type { StartupState } from "../../protocol";
 import type { ControlAvailability } from "./controls";
 import { DistanceField } from "./DistanceField";
 import { useDistanceControl } from "./hooks";
+import { macroEntry } from "./macros";
 
 const JOG_DECIMALS = 3;
 
 type Direction = "upLeft" | "up" | "upRight" | "left" | "right" | "downLeft" | "down" | "downRight";
-type Macro = StartupState["macros"][number]["command"];
+type Macro = "macro1" | "macro2";
 type Cell = { direction: Direction; label: string; arrow: string } | "home" | Macro | "zAxis";
 
 /** The classic layout: the jog pad with Macro 1, Macro 2 and Z-Axis down its right-hand side. */
@@ -27,8 +27,6 @@ const GRID: Cell[] = [
   "zAxis",
 ];
 
-const DEFAULT_MACRO_TITLES: Record<Macro, string> = { macro1: "Macro 1", macro2: "Macro 2" };
-
 export const JogPanel = ({ available }: { available: ControlAvailability }) => {
   const client = useClient();
   const units = useMachine((s) => s.units);
@@ -43,8 +41,7 @@ export const JogPanel = ({ available }: { available: ControlAvailability }) => {
   });
 
   const jog = (direction: Direction) => field.run((distance) => client.sendAction("move", direction, distance));
-  const macroTitle = (command: Macro) =>
-    macros.find((macro) => macro.command === command)?.title.trim() || DEFAULT_MACRO_TITLES[command];
+  const macroTitle = (command: Macro) => macroEntry(macros, command).title;
 
   const cell = (entry: Cell) => {
     if (entry === "home")

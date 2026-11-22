@@ -294,12 +294,24 @@ pub struct Point {
 pub struct Macro {
     pub command: String,
     pub title: String,
+    /// Its gcode is blank, so the menus disable it (Rust only).
+    pub empty: bool,
 }
 
 impl Macro {
-    pub fn new(number: u8, title: &str) -> Macro {
-        Macro { command: format!("macro{number}"), title: title.into() }
+    pub fn new(number: u8, title: &str, empty: bool) -> Macro {
+        Macro { command: format!("macro{number}"), title: title.into(), empty }
     }
+}
+
+/// Broadcast when a macro's title or gcode changes (Rust only).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct MacrosMessage {
+    pub macros: Vec<Macro>,
+}
+
+impl Message for MacrosMessage {
+    const COMMAND: &'static str = "macros";
 }
 
 /// Broadcast when the park position changes (Rust only).

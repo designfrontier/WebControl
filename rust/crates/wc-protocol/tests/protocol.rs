@@ -28,7 +28,7 @@ fn startup_state() -> StartupState {
         controller_firmware_version: 0.0,
         controller_board: None,
         firmware_build: None,
-        macros: vec![Macro::new(1, "Spindle on"), Macro::new(2, "")],
+        macros: vec![Macro::new(1, "Spindle on", false), Macro::new(2, "", true)],
         backend: Backend::Rust,
         version: "1.2.3".into(),
         commit: "abc1234".into(),
@@ -145,7 +145,7 @@ fn the_startup_state_fits_get_api_state() {
     assert_eq!(body["experimental"], json!(["optical"]));
     assert_eq!(body["unitsZ"], "INCHES");
     assert_eq!(body["controllerBoard"], Value::Null);
-    assert_eq!(body["macros"][0], json!({"command": "macro1", "title": "Spindle on"}));
+    assert_eq!(body["macros"][0], json!({"command": "macro1", "title": "Spindle on", "empty": false}));
 }
 
 #[test]

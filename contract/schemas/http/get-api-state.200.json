@@ -109,11 +109,17 @@
             "type": "string",
             "enum": [
               "macro1",
-              "macro2"
+              "macro2",
+              "macro3",
+              "macro4"
             ]
           },
           "title": {
             "type": "string"
+          },
+          "empty": {
+            "default": false,
+            "type": "boolean"
           }
         },
         "required": [
