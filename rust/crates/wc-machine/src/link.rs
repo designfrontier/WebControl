@@ -280,7 +280,7 @@ impl Machine {
             Reply::Measured(mm) if self.upgrade.collects_chains() => self.upgrade_measured(mm),
             Reply::Measured(mm) => self.measured(mm, now, effects),
             Reply::FakeServo(on) => self.fake_servo = on,
-            Reply::MaslowPaused => self.firmware_paused(effects),
+            Reply::MaslowPaused => self.firmware_paused(now, effects),
             Reply::ToolChange { tool } => self.tool_change_prompt(line, tool, effects),
             Reply::Message(text) => self.controller_notice(&text, effects),
             Reply::Alarm(text) => {

@@ -201,6 +201,7 @@ impl Machine {
     /// The queue starts nothing more until Continue or Play on its first file.
     pub(crate) fn queue_stop(&mut self, why: &str, effects: &mut Vec<Effect>) {
         self.park_cancelled();
+        self.park_tool_change_ended();
         let oldest = self.controller.accounting.oldest_index();
         let part_way = self.job.flow.in_job() || (self.queue.step == Step::Finishing && oldest.is_some());
         if let Some(id) = self.head_id().filter(|_| part_way) {
@@ -256,14 +257,14 @@ impl Machine {
     }
 
     /// Before each pump: the next step, once what the queue waits for has happened.
-    pub(crate) fn queue_tick(&mut self, effects: &mut Vec<Effect>) {
+    pub(crate) fn queue_tick(&mut self, now: Duration, effects: &mut Vec<Effect>) {
         match self.queue.step {
             Step::Finishing if self.controller_idle() => self.queue_advance(effects),
             Step::ToolChange { prompted: false } if self.job.manual_z.is_some() => {
                 self.queue.step = Step::ToolChange { prompted: true };
             }
             // The firmware already had the tool, so it did not pause; the bit still gets checked.
-            Step::ToolChange { prompted: false } if self.controller_idle() => self.queue_prompt(effects),
+            Step::ToolChange { prompted: false } if self.controller_idle() => self.queue_prompt(now, effects),
             Step::ToolChange { prompted: true } if self.job.manual_z.is_none() => {
                 self.queue_raise_then(Change::None, effects)
             }
@@ -319,6 +320,7 @@ impl Machine {
             return self.queue_stop(&why, effects);
         };
         self.queue_raise(Raise::Manual { units: self.units(), safe_height_mm });
+        self.queue_return_from_park(safe_height_mm);
         if change != Change::None {
             self.queue(["M5".to_string()]);
         }
@@ -348,13 +350,15 @@ impl Machine {
         }
     }
 
-    fn queue_prompt(&mut self, effects: &mut Vec<Effect>) {
+    fn queue_prompt(&mut self, now: Duration, effects: &mut Vec<Effect>) {
         let text = format!("Please insert tool {}", self.job.tool);
         self.job.manual_z = Some(true);
         self.job.paused_units = Some(self.units());
         effects.push(broadcast(&ActivateModal::tool_change(&text, u32::try_from(self.job.tool).ok())));
         effects.push(pause_button(PauseButton::Resume));
         self.queue.step = Step::ToolChange { prompted: true };
+        self.park_tool_change_asked();
+        self.park_for_tool_change(now, effects);
     }
 
     pub(crate) fn queue_edit(&mut self, edit: Edit, now: Duration, effects: &mut Vec<Effect>) -> Response {

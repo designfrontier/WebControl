@@ -68,6 +68,11 @@ impl Sled {
         self.reported_mm = (x.is_finite() && y.is_finite()).then_some((xy, REPORT_HALF_STEP * mm_per_unit));
     }
 
+    /// Where the sled is in mm, commanded or else reported, if known.
+    pub fn xy_mm(&self) -> Option<[f64; 2]> {
+        self.placed().xy_mm()
+    }
+
     /// The last status report's X and Y in mm, read while nothing that moves was unacknowledged.
     pub fn reported_mm(&self) -> Option<[f64; 2]> {
         self.reported_mm.map(|(xy, _)| xy)

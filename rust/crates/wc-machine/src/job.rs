@@ -144,10 +144,13 @@ impl Machine {
         }
     }
 
-    pub(crate) fn firmware_paused(&mut self, effects: &mut Vec<Effect>) {
+    pub(crate) fn firmware_paused(&mut self, now: Duration, effects: &mut Vec<Effect>) {
         self.hold_streaming();
         self.job.firmware_paused = true;
         effects.push(pause_button(PauseButton::Resume));
+        if self.job.manual_z == Some(true) {
+            self.park_for_tool_change(now, effects);
+        }
     }
 
     /// `Tool Change: Please insert tool N`: the firmware's word on the tool wins, as a Stop can flush an M6.
@@ -160,6 +163,7 @@ impl Machine {
             self.job.tool = i64::from(tool);
             self.job.next_tool = i64::from(tool);
         }
+        self.park_tool_change_asked();
         let asked = tool.or(u32::try_from(self.job.next_tool).ok().filter(|&tool| tool > 0));
         effects.push(broadcast(&ActivateModal::tool_change(line.get(13..).unwrap_or_default(), asked)));
     }
@@ -191,6 +195,11 @@ impl Machine {
         self.job.firmware_paused = false;
         self.job.holds_job_lines = false;
         self.realtime("~", now, effects);
+    }
+
+    /// Resume could build the restart that returns the job to its line.
+    pub(crate) fn can_return_to_line(&self) -> bool {
+        self.restart_state().is_ok()
     }
 
     /// The file's state before the index, which a restart returns to.
@@ -298,6 +307,10 @@ impl Machine {
         self.job.manual_z = None;
         if tool_change {
             self.queue_tool_fitted();
+            // A job's restart returns to its line; the queue goes back to where the sled was as the next file starts.
+            if self.job.flow.in_job() {
+                self.park_tool_change_ended();
+            }
         }
         self.release_firmware(now, effects);
         if manual {

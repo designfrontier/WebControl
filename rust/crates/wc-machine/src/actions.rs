@@ -148,7 +148,7 @@ impl Machine {
                 self.queue(["G10 Z0 ".to_string()]);
                 None
             }
-            "touchZ" => self.touch_z(),
+            "touchZ" => self.touch_z_from_park().or_else(|| self.touch_z()),
             "reportSettings" => {
                 self.queue(["$$".to_string()]);
                 None

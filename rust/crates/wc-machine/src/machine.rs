@@ -556,7 +556,7 @@ impl Machine {
         }
         self.optical_tick(now, &mut effects);
         self.pacing_observe(now, &mut effects);
-        self.queue_tick(&mut effects);
+        self.queue_tick(now, &mut effects);
         self.park_tick(&mut effects);
         self.pump(now, &mut effects);
         self.pacing_observe(now, &mut effects);

@@ -289,3 +289,91 @@ fn a_park_position_saved_in_the_settings_is_checked_and_pushed() {
     let effects = save(&mut rig, json!({"parkX": " "}));
     assert_eq!(pushed(&effects, "parkPosition"), [json!({"position": null})]);
 }
+
+fn parks_for_tool_changes(changes: &[(&str, &str, Value)]) -> Rig {
+    let on = [("Maslow Settings", "parkForToolChange", json!(1))];
+    let mut rig = parked_with(&[&on[..], changes].concat());
+    rig.rx("<Idle,MPos:0.00,0.00,0.00,WPos:0.000,0.000,0.000>");
+    rig.clear_written();
+    rig
+}
+
+const TOOL_CHANGE_FILE: &str = "G21\nG90\nG0 Z5\nG0 X10 Y10\nG1 Z-3 F100\nG1 X20 F600\nG0 Z3\nT2 M6\nG0 X40 Y40\n";
+
+/// Streams `TOOL_CHANGE_FILE` to its M6 and has the firmware prompt for tool 2.
+fn at_the_tool_change(rig: &mut Rig) -> Vec<String> {
+    play(rig, TOOL_CHANGE_FILE);
+    let mut sent = rig.run_to_quiet();
+    rig.rx("Tool Change: Please insert tool 2");
+    rig.rx("Maslow Paused");
+    sent.extend(rig.run_to_quiet());
+    sent
+}
+
+#[test]
+fn a_tool_change_parks_and_resume_returns_to_the_work_at_safe_height() {
+    let mut rig = parks_for_tool_changes(&[("Advanced Settings", "homeX", json!("100"))]);
+    let sent = at_the_tool_change(&mut rig);
+    let parked = ["~", "G21", "G90", "G00 Z5.0", "G00 X-300.0 Y200.5"];
+    assert_eq!(sent[sent.len() - 5..], parked, "{sent:?}");
+    assert!(logged(&rig.take_effects(), "PARK START")[0].starts_with("PARK START trigger=tool_change"));
+    let snapshot = rig.machine.snapshot();
+    assert_eq!((snapshot.upload_flag, snapshot.manual_z_axis_adjust), (0, true), "the job waits at the prompt");
+
+    rig.act("resumeRun");
+    let sent = rig.run_to_quiet();
+    let back = ["~", "G21", "G90", "G0 Z5.0", "G0 X120.0 Y10.0", "G0 F600.0", "G90", "G0 X140 Y40"];
+    assert_eq!(sent[..8], back, "back over the work, shifted by home, at safe height before the file goes on");
+    assert_eq!(sent[8..], PARKED_MM, "and the file's end parks");
+}
+
+#[test]
+fn a_tool_change_on_an_inch_machine_parks_in_inches() {
+    let mut rig = parks_for_tool_changes(&[("Computed Settings", "units", json!("INCHES"))]);
+    play(&mut rig, "G20\nG0 Z0.2\nG0 X1 Y1\nT2 M6\nG0 X2\n");
+    rig.run_to_quiet();
+    rig.rx("Tool Change: Please insert tool 2");
+    rig.rx("Maslow Paused");
+    assert_eq!(rig.run_to_quiet(), ["~", "G20", "G90", "G00 Z0.200", "G00 X-11.811 Y7.8937"]);
+}
+
+#[test]
+fn with_the_setting_off_a_tool_change_waits_where_it_is() {
+    let mut rig = parked();
+    rig.rx("<Idle,MPos:0.00,0.00,0.00,WPos:0.000,0.000,0.000>");
+    let sent = at_the_tool_change(&mut rig);
+    assert_eq!(sent.last().map(String::as_str), Some("T2 M6"), "{sent:?}");
+}
+
+#[test]
+fn a_tool_change_under_an_alarm_or_without_a_park_position_shows_the_prompt_and_says_why() {
+    let mut rig = parks_for_tool_changes(&[("Maslow Settings", "parkX", json!(""))]);
+    play(&mut rig, TOOL_CHANGE_FILE);
+    rig.run_to_quiet();
+    rig.rx("Tool Change: Please insert tool 2");
+    let effects = rig.rx("Maslow Paused");
+    assert_eq!(alerts(&effects), [format!("The sled did not park for the tool change. {}", wc_machine::park::NOT_SET)]);
+    assert_eq!(logged(&effects, "PARK SKIPPED").len(), 1);
+    assert!(rig.run_to_quiet().is_empty(), "the firmware stays paused, nothing moves");
+
+    let mut rig = parks_for_tool_changes(&[]);
+    play(&mut rig, TOOL_CHANGE_FILE);
+    rig.run_to_quiet();
+    rig.rx("ALARM: The sled is not keeping up with its expected position and has halted.");
+    rig.rx("Tool Change: Please insert tool 2");
+    let effects = rig.rx("Maslow Paused");
+    assert!(alerts(&effects).iter().any(|alert| alert.starts_with("The sled did not park")), "{:?}", alerts(&effects));
+    assert!(!rig.run_to_quiet().iter().any(|line| line.contains("X-300")));
+}
+
+#[test]
+fn stop_at_a_parked_tool_change_leaves_z_up() {
+    let mut rig = parks_for_tool_changes(&[]);
+    at_the_tool_change(&mut rig);
+    rig.act("stopRun");
+    rig.advance(300);
+    rig.rx("<Idle,MPos:-300.00,200.50,5.00,WPos:0.000,0.000,0.000>");
+    let sent = rig.run_to_quiet();
+    assert!(sent.iter().all(|line| !line.starts_with("G00 Z") && !line.starts_with("G0 Z")), "{sent:?}");
+    assert!(!rig.machine.snapshot().job_in_progress);
+}

@@ -1124,6 +1124,15 @@
             "title": "Park Position Y in MM",
             "type": "string",
             "value": ""
+        },
+        {
+            "default": 0,
+            "desc": "At every tool change (a file's M6, or a bit change between queued files), raise Z and move the sled to the park position for the bit swap. Resume returns to the work at the safe height before the job goes on. Needs a park position.\ndefault setting: 0",
+            "key": "parkForToolChange",
+            "section": "Maslow Settings",
+            "title": "Park for Tool Changes",
+            "type": "bool",
+            "value": 0
         }
     ],
     "Optical Calibration Settings": [
