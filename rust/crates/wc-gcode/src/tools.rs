@@ -21,7 +21,13 @@ static ESTLCAM: LazyLock<Regex> = LazyLock::new(|| pattern(r"(?i)^change\s+tool\
 static TOOLS_USED: LazyLock<Regex> = LazyLock::new(|| pattern(r"(?i)^tools\s+used"));
 static LISTED: LazyLock<Regex> = LazyLock::new(|| pattern(r"^(\d+)\s*=\s*(.*\S)$"));
 static NUMBERED: LazyLock<Regex> =
-    LazyLock::new(|| pattern(r"(?i)^(?:T\s*|tool\s*(?:#|no\.?|number)?\s*)(\d+)\b\s*(?:[:=-]\s*|\s+)(.*\S)$"));
+    LazyLock::new(|| pattern(r"(?i)^(?:T\s*|tool\s*(?:#|no\.?|number)?\s*)(\d+)\b\s*([:=-]\s*|\s+)(.*\S)$"));
+/// What a bare `T1 ...` note must mention to be a tool, not prose such as `(Tool 2 change after pocketing)`.
+static TOOL_WORDS: LazyLock<Regex> = LazyLock::new(|| {
+    pattern(
+        r#"(?i)\b(?:end\s*mills?|mills?|bits?|v-?bits?|ball|nose|flutes?|fluted|upcut|downcut|compression|drill|engrav\w*|chamfer|cutter|router|straight|spiral|carbide|vee|deg)\b|\d\s*mm\b|["°]|\d\s*/\s*\d"#,
+    )
+});
 static BARE: LazyLock<Regex> = LazyLock::new(|| pattern(r"(?i)^T\s*(\d+)$"));
 static ONLY_WORDS: LazyLock<Regex> = LazyLock::new(|| pattern(r"(?i)^([A-Z]\s*[-+]?[0-9.]+\s*)+$"));
 static UNITS: LazyLock<Regex> = LazyLock::new(|| pattern(r"(?i)G\s*0*2([01])(?:[^0-9.]|$)"));
@@ -152,10 +158,18 @@ fn carbide(comment: &str, units: Option<ToolUnits>) -> Option<(String, Option<f6
 }
 
 fn numbered(comment: &str, listing: bool) -> Option<FileTool> {
-    let found = NUMBERED.captures(comment).or_else(|| listing.then(|| LISTED.captures(comment)).flatten())?;
-    let text = found[2].trim();
-    let real = text.chars().any(char::is_alphabetic) && !ONLY_WORDS.is_match(text) && !changes_tool(comment);
-    let number = number(&found[1]).filter(|_| real)?;
+    let (number_text, text, labelled) = match NUMBERED.captures(comment) {
+        Some(found) => (found.get(1)?.as_str(), found.get(3)?.as_str().trim(), !found[2].trim().is_empty()),
+        None => {
+            let found = listing.then(|| LISTED.captures(comment)).flatten()?;
+            (found.get(1)?.as_str(), found.get(2)?.as_str().trim(), true)
+        }
+    };
+    let real = text.chars().any(char::is_alphabetic)
+        && !ONLY_WORDS.is_match(text)
+        && !changes_tool(comment)
+        && (labelled || TOOL_WORDS.is_match(text));
+    let number = number(number_text).filter(|_| real)?;
     Some(described(number, text.to_string()))
 }
 
@@ -297,6 +311,13 @@ mod tests {
             [tool(1, "1/4\" 2 flute endmill"), tool(2, "single flute upcut"), tool(5, "60 deg vee"), (3, None)]
         );
         assert_eq!((tools[0].flutes, tools[1].flutes), (Some(2), Some(1)));
+    }
+
+    #[test]
+    fn skips_prose_that_only_mentions_a_tool_number() {
+        let raw = "(Tool 2 change after pocketing)\n(T1 then the outline)\n(Use T3 for roughing)\n(ST4 cut)\n\
+                   (T5 is the roughing bit)\n(T6: roughing)\n";
+        assert_eq!(summary(raw), [tool(5, "is the roughing bit"), tool(6, "roughing")]);
     }
 
     #[test]
