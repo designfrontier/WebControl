@@ -51,6 +51,7 @@ export const TopBar = () => {
     { label: "Clear GCode", onSelect: () => setConfirm("clearGCode"), disabledReason: locked },
     { label: "View/Edit", onSelect: open("/files/edit") },
     { label: "Send Custom GCode", onSelect: open("/files/send") },
+    { label: "Job Queue", onSelect: open("/queue") },
   ];
   const settings: MenuItem[] = [
     { label: "Maslow", onSelect: open("/settings") },

@@ -4,6 +4,7 @@ import { getGcodeLibrary, openGcode } from "./api";
 import { GCODE_LOAD, useResource } from "./hooks";
 import { OpenFromLibrary } from "./LibraryForms";
 import { selectGcodeLocked } from "../../state/machine";
+import { queueApi } from "../queue/queue";
 import { GCODE_LOCKED_NOTE, GcodeLoadingOverlay, Loaded, SubPage } from "./ui";
 
 export const OpenGcode = () => {
@@ -27,6 +28,9 @@ export const OpenGcode = () => {
               await openGcode(fetchImpl, file);
               client.emit("checkForGCodeUpdate", { data: "Please" });
               if (!signal.aborted) close();
+            }}
+            enqueue={async ({ directory, name }) => {
+              await queueApi(fetchImpl).add(`${directory}/${name}`);
             }}
           />
         )}
