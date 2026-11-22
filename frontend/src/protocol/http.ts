@@ -43,6 +43,7 @@ import {
 } from "./files";
 import { machineSetupSchema, quickConfigureSchema } from "./machine";
 import { mainScreenStateSchema, pacingStatsSchema, pacingUpdateSchema, startupStateSchema } from "./main";
+import { jobQueueSchema, queueAddSchema, queueEmptySchema, queueMoveSchema, queueRemoveSchema } from "./queue";
 import {
   settingsRejectionSchema,
   settingsSectionIds,
@@ -239,6 +240,38 @@ const opticalEndpoints: HttpEndpoint[] = [
   ),
 ];
 
+const queueWrite = (path: string, summary: string, body: z.ZodType, refused: string, missing?: string) =>
+  api({
+    method: "POST",
+    path,
+    summary,
+    body: json(body),
+    responses: Object.fromEntries(
+      [
+        [200, json(jobQueueSchema, "The queue after the change, also broadcast as jobQueue")],
+        [400, error("A malformed body")],
+        [404, missing ? error(missing) : undefined],
+        [409, error(refused)],
+      ].filter(([, body]) => body),
+    ),
+  });
+
+const IN_USE = "The first file is loaded for a job or between files";
+
+/** The job queue's writes; each answers the whole queue (Rust only). */
+const queueWrites = [
+  queueWrite("/api/queue/add", "Add a library file to the end", queueAddSchema, "Full", "Not in the gcode library"),
+  queueWrite("/api/queue/move", "Move a queued file to another place", queueMoveSchema, IN_USE, "No such queued file"),
+  queueWrite("/api/queue/remove", "Remove a queued file", queueRemoveSchema, IN_USE, "No such queued file"),
+  queueWrite("/api/queue/clear", "Remove every queued file but one in use", queueEmptySchema, "Never refused"),
+  queueWrite(
+    "/api/queue/continue",
+    "Start the first file from its first line: Z rises and the tool is checked, as between files",
+    queueEmptySchema,
+    "Empty, disconnected, or a job, an alarm or a load holds the machine",
+  ),
+];
+
 /** Every HTTP route the new UI calls, with what it sends and every answer the backend gives. */
 export const httpEndpoints: HttpEndpoint[] = [
   get("/api/state", "What a client needs on (re)connect", startupStateSchema),
@@ -256,6 +289,8 @@ export const httpEndpoints: HttpEndpoint[] = [
       409: error("An optical scan is running"),
     },
   }),
+  get("/api/queue", "The job queue (Rust only)", jobQueueSchema),
+  ...queueWrites,
   api({
     method: "PUT",
     path: "/api/display/theme",

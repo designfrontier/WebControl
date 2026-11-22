@@ -6,6 +6,7 @@ import * as optical from "../features/calibration/opticalApi";
 import { opticalSettings } from "../features/calibration/opticalFixtures";
 import * as files from "../features/files/api";
 import * as machine from "../features/machine/api";
+import * as queue from "../features/queue/api";
 import { quickConfigureValues } from "../features/machine/fixtures";
 import * as settings from "../features/settings/api";
 import * as system from "../features/system/api";
@@ -125,6 +126,12 @@ const recordUiRequests = async () => {
     () => system.getHelpPage(fetch, "Actions/actions.md"),
     () => system.restoreBackup(fetch, file),
     () => viewer.getViewerSnapshot(fetch),
+    () => queue.getQueue(fetch),
+    () => queue.addToQueue(fetch, "./part.nc"),
+    () => queue.moveInQueue(fetch, 2, 0),
+    () => queue.removeFromQueue(fetch, 2),
+    () => queue.clearQueue(fetch),
+    () => queue.continueQueue(fetch),
   ];
   await Promise.all(requests.map((request) => request().catch(() => undefined)));
   const links = [
@@ -152,7 +159,7 @@ describe("the HTTP contract", () => {
   it("covers every request the UI makes, and each request body fits its schema", async () => {
     const calls = await recordUiRequests();
     expect(literalApiPaths()).toContainEqual({ method: "GET", url: "/api/main" });
-    expect(calls.filter(({ body }) => body !== undefined)).toHaveLength(31);
+    expect(calls.filter(({ body }) => body !== undefined)).toHaveLength(36);
     const unlisted = [...calls, ...literalApiPaths()].filter(({ method, url }) => !endpointFor(method, url));
     expect(unlisted).toEqual([]);
 

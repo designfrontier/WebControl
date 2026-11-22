@@ -175,6 +175,27 @@ fn the_pacing_stats_are_in_the_startup_state_and_their_own_push() {
 }
 
 #[test]
+fn the_job_queue_is_its_own_push_and_its_writes_read_their_bodies() {
+    use wc_protocol::queue::{Between, JobQueue, QueueAdd, QueueItem, QueueState, QueueStep};
+    let item = QueueItem { id: 3, file: "jobs/leg.nc".into(), tool: Some(2), between: Between::ToolChange };
+    let queue = JobQueue {
+        items: vec![item],
+        state: QueueState::Stopped,
+        reason: Some("Stop was pressed.".into()),
+        head_locked: false,
+        step: QueueStep::None,
+    };
+    let envelope = serde_json::to_value(Envelope::json(&queue)).unwrap();
+    contract().validate_envelope(&envelope).unwrap();
+    let body = serde_json::to_value(&queue).unwrap();
+    contract().validate_response("GET", "/api/queue", 200, &ResponseBody::Json(body.clone())).unwrap();
+    assert_eq!((body["items"][0]["between"].clone(), body["headLocked"].clone()), (json!("toolChange"), json!(false)));
+    let add: QueueAdd = serde_json::from_value(json!({"file": "./a.nc"})).unwrap();
+    assert_eq!(add.file, "./a.nc");
+    assert!(serde_json::from_value::<QueueAdd>(json!({"file": "a.nc", "x": 1})).is_err());
+}
+
+#[test]
 fn pause_and_resume_labels_and_units_spell_like_python() {
     let state = StartupState { pause_button_setting: PauseButton::Resume, ..startup_state() };
     assert_eq!(serde_json::to_value(state).unwrap()["pauseButtonSetting"], "Resume");

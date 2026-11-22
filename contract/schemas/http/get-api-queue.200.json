@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get-api-queue.200",
+  "type": "object",
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "file": {
+            "type": "string"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "between": {
+            "type": "string",
+            "enum": [
+              "sameTool",
+              "toolChange",
+              "noTool"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "file",
+          "tool",
+          "between"
+        ]
+      }
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "idle",
+        "running",
+        "stopped"
+      ]
+    },
+    "reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "headLocked": {
+      "type": "boolean"
+    },
+    "step": {
+      "type": "string",
+      "enum": [
+        "none",
+        "finishing",
+        "loading",
+        "raising",
+        "toolChange"
+      ]
+    }
+  },
+  "required": [
+    "items",
+    "state",
+    "reason",
+    "headLocked",
+    "step"
+  ]
+}
