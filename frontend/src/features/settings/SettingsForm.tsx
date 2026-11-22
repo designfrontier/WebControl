@@ -6,7 +6,7 @@ import { errorBodySchema, settingsRejectionSchema } from "../../protocol";
 import { selectGcodeLocked } from "../../state/machine";
 import type { SettingsSection } from "../../protocol";
 import { saveSettingsSection } from "./api";
-import { changedValues, initialValues, isLocked, toSend, validate } from "./form";
+import { changedValues, initialValues, isLocked, toSend, unavailableReason, validate } from "./form";
 import type { FieldValue, FormErrors } from "./form";
 import { SettingField } from "./SettingField";
 
@@ -99,6 +99,7 @@ export const SettingsForm = ({ section, onSaved }: Props) => {
             value={values[setting.key]}
             error={errors[setting.key]}
             locked={isLocked(setting, section.enableCustom)}
+            unavailable={unavailableReason(setting, values)}
             ports={ports}
             onChange={change}
             onRefreshPorts={() => client.sendAction("updatePorts")}

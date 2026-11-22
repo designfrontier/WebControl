@@ -8,21 +8,34 @@ interface Props {
   value: FieldValue;
   error?: string;
   locked: boolean;
+  /** Why the setting cannot be changed now, beyond the firmware lock. */
+  unavailable?: string;
   ports: string[];
   onChange: (key: string, value: FieldValue) => void;
   onRefreshPorts: () => void;
 }
 
 /** One setting rendered from its schema: checkbox, select, serial-port picker or text input. */
-export const SettingField = ({ setting, value, error, locked, ports, onChange, onRefreshPorts }: Props) => {
+export const SettingField = ({
+  setting,
+  value,
+  error,
+  locked,
+  unavailable,
+  ports,
+  onChange,
+  onRefreshPorts,
+}: Props) => {
   const id = useId();
   const control = controlFor(setting);
   const text = String(value);
-  const describedBy = [`${id}-desc`, locked && `${id}-locked`, error && `${id}-error`].filter(Boolean).join(" ");
+  const describedBy = [`${id}-desc`, (locked || unavailable) && `${id}-locked`, error && `${id}-error`]
+    .filter(Boolean)
+    .join(" ");
   const shared = {
     id,
     name: setting.key,
-    disabled: locked,
+    disabled: locked || unavailable !== undefined,
     "aria-describedby": describedBy,
     "aria-invalid": error ? true : undefined,
   };
@@ -37,9 +50,9 @@ export const SettingField = ({ setting, value, error, locked, ports, onChange, o
         <p id={`${id}-desc`} className="setting-desc muted">
           {displayDesc(setting.desc)}
         </p>
-        {locked && (
+        {(locked || unavailable) && (
           <p id={`${id}-locked`} className="setting-note">
-            Needs custom firmware (version 100 or later).
+            {locked ? "Needs custom firmware (version 100 or later)." : unavailable}
           </p>
         )}
       </div>

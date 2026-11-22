@@ -52,6 +52,14 @@ export const optionLabel = (option: string, setting: Setting) =>
 /** Blank park settings mean no park position. */
 const BLANK_ALLOWED = ["parkX", "parkY"];
 
+const blank = (value: FieldValue | undefined) => typeof value !== "string" || value.trim() === "";
+
+/** Why a setting cannot be turned on with the form as it stands; one already on can still be turned off. */
+export const unavailableReason = (setting: Setting, values: FormValues): string | undefined =>
+  setting.key === "parkForToolChange" && values[setting.key] !== true && (blank(values.parkX) || blank(values.parkY))
+    ? "Set Park Position X and Y first."
+    : undefined;
+
 export const validateValue = (setting: Setting, value: FieldValue): string | undefined =>
   typeof value === "boolean" || (BLANK_ALLOWED.includes(setting.key) && value.trim() === "")
     ? undefined
