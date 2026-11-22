@@ -94,12 +94,18 @@ async fn a_saved_queue_is_restored_with_each_files_tools() {
     let dir = home.path().join(".WebControl");
     std::fs::create_dir_all(dir.join("gcode")).unwrap();
     std::fs::write(dir.join("gcode/a.nc"), "T3 M6\nG1 X1\n").unwrap();
-    let saved = r#"[{"file": "a.nc", "skipBitChanges": true}, {"file": "gone.nc"}]"#;
+    let saved = r#"[{"file": "a.nc", "skipBitChanges": true}, {"file": "gone.nc"}, {"file": "./a.nc"}, {"file": "../webcontrol.json"}]"#;
     std::fs::write(dir.join("queue.json"), saved).unwrap();
     let items = wc_server::queue::restore(&dir).await;
     assert_eq!(
         items.iter().map(|item| (item.file.as_str(), item.tools.first, item.skip_bit_changes)).collect::<Vec<_>>(),
-        [("a.nc", Some(3), true), ("gone.nc", None, false)]
+        [
+            ("a.nc", Some(3), true),
+            ("gone.nc", None, false),
+            ("a.nc", Some(3), false),
+            ("../webcontrol.json", None, false)
+        ],
+        "named as the loaded file is, so the queue knows it when it runs"
     );
     assert!(wc_server::queue::restore(home.path()).await.is_empty());
 }
