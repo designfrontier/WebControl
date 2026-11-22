@@ -22,6 +22,7 @@ const IN_USE: &str = "The first file is loaded for the job or between files, so 
 const EMPTY: &str = "The queue is empty.";
 const BUSY: &str = "A job, a tool change or the queue holds the machine. Wait for it to end, or press Stop.";
 const NOT_CONNECTED: &str = "The controller is not connected.";
+const PAUSED: &str = "Pause was pressed between files.";
 const NOT_STOPPED: &str = "Stop did not interrupt the first file part way, so continue it from the start.";
 pub(crate) const STARTING: &str = "The queue is starting its next file. Wait for it, or press Stop.";
 
@@ -114,7 +115,7 @@ impl State {
 impl Machine {
     /// The queue as saved before a restart; it waits for Play or Continue, never starting on its own.
     pub fn with_queue(mut self, items: Vec<Item>) -> Machine {
-        items.into_iter().for_each(|item| self.queue.push(item));
+        items.into_iter().take(MAX_ITEMS).for_each(|item| self.queue.push(item));
         self.queue.saved = self.queue.names();
         self.queue.shown = Arc::new(self.queue_view());
         self
@@ -162,7 +163,17 @@ impl Machine {
     pub(crate) fn queue_played(&mut self) {
         if self.head_loaded() {
             self.queue.mode = Mode::Running;
+            self.queue_rescan();
         }
+    }
+
+    /// The first file's tools as loaded, which may differ from the file scanned when it was queued.
+    fn queue_rescan(&mut self) -> FileTools {
+        let tools = file_tools(self.gcode.iter().map(String::as_str));
+        if let Some(entry) = self.queue.entries.first_mut() {
+            entry.item.tools = tools;
+        }
+        tools
     }
 
     /// The last line went out; the file is done once the controller has finished it.
@@ -188,9 +199,10 @@ impl Machine {
 
     /// The queue starts nothing more until Continue or Play on its first file.
     pub(crate) fn queue_stop(&mut self, why: &str, effects: &mut Vec<Effect>) {
-        if let Some(id) = self.head_id().filter(|_| self.job.flow.in_job()) {
-            let line = self.controller.accounting.oldest_index().unwrap_or(self.index);
-            self.queue.stopped_at = Some((id, line));
+        let oldest = self.controller.accounting.oldest_index();
+        let part_way = self.job.flow.in_job() || (self.queue.step == Step::Finishing && oldest.is_some());
+        if let Some(id) = self.head_id().filter(|_| part_way) {
+            self.queue.stopped_at = Some((id, oldest.unwrap_or(self.index)));
         }
         if self.queue.mode != Mode::Running && !self.queue_busy() {
             return;
@@ -198,6 +210,23 @@ impl Machine {
         self.queue.mode = Mode::Stopped(why.into());
         self.queue.step = Step::None;
         announce(format!("QUEUE STOP reason={why}"), effects);
+    }
+
+    /// Pause once the file's last line is out: it finishes, and the next file waits for Continue.
+    pub(crate) fn queue_paused(&mut self, effects: &mut Vec<Effect>) {
+        match self.queue.step {
+            Step::Finishing if self.queue.mode == Mode::Running => {
+                self.queue.mode = Mode::Stopped(PAUSED.into());
+                announce(format!("QUEUE STOP reason={PAUSED}"), effects);
+            }
+            Step::Loading | Step::Raising(_) => self.queue_stop(PAUSED, effects),
+            _ => {}
+        }
+    }
+
+    /// Another file, or another text of it, is loaded, so no line Stop left applies.
+    pub(crate) fn queue_file_replaced(&mut self) {
+        self.queue.stopped_at = None;
     }
 
     pub(crate) fn queue_load_failed(&mut self, effects: &mut Vec<Effect>) {
@@ -242,7 +271,9 @@ impl Machine {
 
     fn queue_advance(&mut self, effects: &mut Vec<Effect>) {
         let done = self.queue.entries.remove(0);
-        self.queue.spindle = done.item.tools.last.or(self.queue.spindle);
+        // The file as it ran, which may differ from the one scanned when it was queued.
+        let ran = file_tools(self.gcode.iter().map(String::as_str));
+        self.queue.spindle = ran.last.or(self.queue.spindle);
         announce(format!("QUEUE DONE file={}", done.item.file), effects);
         self.queue.step = Step::None;
         if self.queue.mode != Mode::Running {
@@ -264,7 +295,7 @@ impl Machine {
 
     /// The first file is loaded: raise, then start it or wait for the tool.
     pub(crate) fn queue_prepare(&mut self, effects: &mut Vec<Effect>) {
-        let first = file_tools(self.gcode.iter().map(String::as_str)).first;
+        let first = self.queue_rescan().first;
         let skip = self.queue.entries.first().is_some_and(|entry| entry.item.skip_bit_changes);
         let change = match (first, self.queue.spindle) {
             (Some(tool), Some(spindle)) if tool != spindle && !skip => Change::Tool(tool),
@@ -403,7 +434,10 @@ impl Machine {
     fn queue_continue_where_stopped(&mut self, now: Duration, effects: &mut Vec<Effect>) -> Result<(), (u16, String)> {
         let line = self.stopped_at().ok_or((409, NOT_STOPPED.to_string()))?;
         self.index = line;
+        // Running before the restart is built, so a file's override leaves its tool change out.
+        let before = std::mem::replace(&mut self.queue.mode, Mode::Running);
         if let Some(refused) = self.start_run(now, effects) {
+            self.queue.mode = before;
             return Err((409, refused));
         }
         self.queue.stopped_at = None;

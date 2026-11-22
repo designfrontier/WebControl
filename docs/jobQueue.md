@@ -42,7 +42,8 @@ The queue line above the Play button shows what runs, what comes next and what h
 example "Next: shelf.nc · same tool — starts immediately" or "Next: sign.nc · Tool 2 (6 mm flat end mill) — will
 pause for a bit change". A tool's description comes from Settings ▸ Tools.
 
-**Pause** and **Resume** work as for any job, and the queue goes on when the file ends.
+**Pause** and **Resume** work as for any job, and the queue goes on when the file ends. Pause once the file's last
+line has been sent stops the queue instead (below).
 
 ## Skipping bit changes in a file
 
@@ -62,6 +63,8 @@ The queue does not start the next file after any of these. The files still in th
 line says why it stopped:
 
 - you pressed **Stop**;
+- you pressed **Pause** (or the Pause button on the Pi) after the file's last line was sent, while the next file
+  loads, or while Z rises before it: the file that was cutting finishes, and the next one waits;
 - the controller raised an alarm;
 - the USB connection to the controller was lost, or the controller restarted;
 - a line of the file could not be sent, or did not reach the controller;

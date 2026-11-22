@@ -261,6 +261,9 @@ impl Machine {
     }
 
     pub(crate) fn pause_run(&mut self, effects: &mut Vec<Effect>) -> Option<String> {
+        if self.job.flow != Flow::Streaming {
+            self.queue_paused(effects);
+        }
         if self.job.flow == Flow::Streaming {
             self.job.flow = Flow::Paused;
             effects.push(pause_button(PauseButton::Resume));

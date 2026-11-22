@@ -626,3 +626,115 @@ fn the_override_is_set_per_file_but_not_on_the_running_one_and_play_outside_the_
     assert_eq!(shop.run(), ["T2 M6"]);
     assert!(shop.rig.machine.snapshot().manual_z_axis_adjust, "the file's own M6 pauses outside the queue");
 }
+
+/// `a.nc` with every line answered, the queue waiting on the next tick to see the controller idle.
+fn finishing() -> Shop {
+    let mut shop = playing(SAME);
+    ["G0 Z5", "G1 X1 F100", "G0 Z5"].iter().for_each(|line| {
+        assert_eq!(shop.outbox.pop_front().as_deref(), Some(*line));
+        shop.answer(line);
+        while shop.outbox.is_empty() && shop.queue()["step"] != "finishing" {
+            let effects = shop.rig.advance(10);
+            shop.take(effects);
+        }
+    });
+    assert_eq!(shop.queue()["step"], "finishing", "{:?} {}", shop.outbox, shop.queue());
+    shop
+}
+
+#[test]
+fn pause_once_the_last_line_is_out_lets_the_file_end_but_starts_no_other() {
+    let mut shop = finishing();
+    shop.act("pauseRun");
+    assert_eq!(shop.run(), Vec::<String>::new());
+    assert_eq!(shop.files(), ["same.nc"], "the finished file leaves the queue");
+    stopped_by(&mut shop, "Pause");
+
+    let mut shop = playing(SAME);
+    shop.hold = true;
+    shop.run();
+    shop.act("pauseRun");
+    shop.hold = false;
+    let file = shop.held.remove(0);
+    let request = Ask::LoadGcode { gcode: shop.gcode(&file), file: Some(path(&file)), origin: Origin::Queue };
+    shop.event(Event::Request { id: 8, request });
+    stopped_by(&mut shop, "Pause");
+    assert!(!shop.rig.machine.snapshot().job_in_progress);
+}
+
+#[test]
+fn pause_while_z_rises_between_files_starts_no_file() {
+    let mut shop = playing(SAME);
+    ["G0 Z5", "G1 X1 F100", "G0 Z5"].iter().for_each(|line| {
+        assert_eq!(shop.outbox.pop_front().as_deref(), Some(*line));
+        shop.answer(line);
+        let effects = shop.rig.advance(100);
+        shop.take(effects);
+    });
+    assert_eq!(shop.outbox.front().map(String::as_str), Some(SAFE));
+    shop.act("pauseRun");
+    assert_eq!(shop.run(), [SAFE]);
+    stopped_by(&mut shop, "Pause");
+    assert!(!shop.rig.machine.snapshot().job_in_progress);
+}
+
+#[test]
+fn stop_while_the_last_lines_drain_offers_the_line_it_stopped_at() {
+    let buffered = settings(&[("Maslow Settings", "bufferOn", json!(1))]);
+    let mut shop = Shop::with(buffered, &[A, SAME]);
+    shop.fit(1);
+    shop.open("a.nc");
+    shop.add("a.nc");
+    shop.add("same.nc");
+    shop.act("startRun");
+    let effects = shop.rig.advance(500);
+    shop.take(effects);
+    assert_eq!(shop.outbox.drain(..).skip(1).collect::<Vec<_>>(), ["G1 X1 F100", "G0 Z5"]);
+    shop.rx("ok");
+    assert_eq!(shop.queue()["step"], "finishing");
+    stop(&mut shop);
+    assert_eq!((shop.queue()["stoppedAt"].clone(), shop.files()), (json!(1), vec!["a.nc".into(), "same.nc".into()]));
+    shop.open("same.nc");
+    assert_eq!(shop.queue()["stoppedAt"], Value::Null, "another file is loaded");
+}
+
+/// `two.nc` changes to tool 2 in the file, though it named tool 1 when it was queued.
+#[test]
+fn the_bit_after_a_file_is_the_last_tool_of_the_file_as_it_ran() {
+    let mut shop = Shop::new(&[("two.nc", "G1 X1|T2 M6|G1 X5"), SAME]);
+    shop.fit(1);
+    shop.open("two.nc");
+    let stale = wc_gcode::firmware_gcode::FileTools { first: Some(1), last: Some(1) };
+    assert_eq!(shop.edit(Edit::Add(Item { file: "two.nc".into(), tools: stale, skip_bit_changes: false })).status, 200);
+    shop.add("same.nc");
+    shop.act("startRun");
+    assert_eq!(shop.run(), ["G1 X1", "T2 M6"]);
+    assert_eq!(shop.queue()["items"][0]["tool"], 2, "the loaded file's tools are shown");
+    shop.act("resumeRun");
+    let sent = shop.run();
+    assert_eq!(sent[sent.len() - 3..], [SAFE, "M5", "T1 M6"], "{sent:?}");
+    assert!(shop.rig.machine.snapshot().manual_z_axis_adjust);
+}
+
+#[test]
+fn continue_where_stop_left_a_file_with_the_override_restores_no_tool_change() {
+    let mut shop = Shop::new(&[("skip.nc", "T2 M6|G1 X5|G1 X6|G1 X7")]);
+    shop.fit(1);
+    shop.add_with("skip.nc", true);
+    assert_eq!(shop.edit(FROM_START).status, 200);
+    let mut sent = Vec::new();
+    while sent.last().map(String::as_str) != Some("G1 X5") {
+        let line = shop.outbox.pop_front().expect("a line");
+        shop.answer(&line);
+        sent.push(line);
+        let effects = shop.rig.advance(100);
+        shop.take(effects);
+    }
+    shop.outbox.clear();
+    stop(&mut shop);
+    assert_eq!(shop.queue()["stoppedAt"], 2);
+    assert_eq!(shop.edit(FROM_STOP).status, 200);
+    let sent = shop.run();
+    assert!(!sent.iter().any(|line| line.contains("M6")), "{sent:?}");
+    assert!(sent.ends_with(&["G1 X6".into(), "G1 X7".into()]), "{sent:?}");
+}
