@@ -14,7 +14,7 @@ simulator; this checks them on the Pi.
 ## 2. At a tool change
 
 - [ ] Run the air-cut file (`jobs.md`) with tool 2 in the library as `60° v-bit`: at `T2 M6` the prompt reads
-      `Tool 2 — 60° v-bit` above Resume. Delete tool 2 and run it again: the prompt reads
-      `Tool 2 (not in your tool library)`.
+      `Insert Tool 2 — 60° v-bit` above Resume, with no separate "Please insert tool 2". Delete tool 2 and run it
+      again: the prompt reads `Insert Tool 2 (not in your tool library)`.
 - [ ] While the tool change waits, add tool 2 in Settings ▸ Tools: it saves (the library is not locked by a job), the
       prompt follows, and Resume still continues the job.

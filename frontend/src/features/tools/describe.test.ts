@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { draftOf, toolInput } from "./draft";
-import { toolDetails, toolHeadline, toolStatus } from "./describe";
+import { onlyAsksFor, toolDetails, toolHeadline, toolStatus } from "./describe";
 import { libraryTool } from "./fixtures";
 
 describe("toolStatus", () => {
@@ -9,6 +9,20 @@ describe("toolStatus", () => {
   it("names a library tool by its description, and any other by number", () => {
     expect(toolHeadline(toolStatus(1, library))).toBe('Tool 1 — 1/4" 2 flute endmill');
     expect(toolHeadline(toolStatus(3, library))).toBe("Tool 3 (not in your tool library)");
+  });
+});
+
+describe("onlyAsksFor", () => {
+  it("matches the firmware's bare insert-tool line for this tool", () => {
+    expect(onlyAsksFor("Please insert tool 11", 11)).toBe(true);
+    expect(onlyAsksFor(" please insert tool 11. ", 11)).toBe(true);
+    expect(onlyAsksFor("Please insert a tool", 4)).toBe(true);
+  });
+
+  it("leaves any other text, or another tool's number, alone", () => {
+    expect(onlyAsksFor("Please insert tool 1", 11)).toBe(false);
+    expect(onlyAsksFor("Please insert tool 11 and zero Z", 11)).toBe(false);
+    expect(onlyAsksFor("Insert tool 11", 11)).toBe(false);
   });
 });
 

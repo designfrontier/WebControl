@@ -13,6 +13,14 @@ export const toolHeadline = (status: ToolStatus) =>
     ? `Tool ${status.number} (not in your tool library)`
     : `Tool ${status.number} — ${status.description}`;
 
+const BARE_INSERT = /^please insert (?:a tool|tool\s*(\d+))\s*[.!]?$/i;
+
+/** Whether the firmware's prompt only asks for tool `tool`, which the tool's own line can then say instead. */
+export const onlyAsksFor = (message: string, tool: number) => {
+  const found = BARE_INSERT.exec(message.trim());
+  return found !== null && (found[1] === undefined || Number(found[1]) === tool);
+};
+
 const trimmedNumber = (value: number) => String(Number(value.toFixed(4)));
 
 /** "6.35 mm · 2 flutes", or "" when neither is known. */

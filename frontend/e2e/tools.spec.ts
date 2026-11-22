@@ -85,9 +85,9 @@ test("the tool-change prompt names the bit from the library", async ({ page, req
   await page.getByRole("region", { name: "Run" }).getByRole("button", { name: "Play" }).click();
 
   const prompt = page.getByRole("dialog", { name: "Notification" });
-  await expect(prompt).toContainText("Please insert tool 11", { timeout: 15_000 });
-  await expect(prompt).toContainText('Tool 11 — 1/4" 2 flute endmill');
+  await expect(prompt).toContainText('Insert Tool 11 — 1/4" 2 flute endmill', { timeout: 15_000 });
+  await expect(prompt).not.toContainText("Please insert tool");
   await shoot(page, "tool-change-prompt", prompt);
   await prompt.getByRole("button", { name: "Resume" }).click();
-  await expect(prompt).toContainText("Tool 16 (not in your tool library)", { timeout: 15_000 });
+  await expect(prompt).toContainText("Insert Tool 16 (not in your tool library)", { timeout: 15_000 });
 });

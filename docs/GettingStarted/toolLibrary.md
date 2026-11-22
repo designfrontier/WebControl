@@ -7,7 +7,8 @@ parent: Getting Started
 # Tool Library
 
 When a file changes tools (`T1 M6`), the controller pauses and asks for the tool by number. The tool library tells you
-which bit that number is, so the prompt reads "Tool 1 — 1/4" 2 flute endmill" rather than just "Please insert tool 1".
+which bit that number is, so the prompt reads "Insert Tool 1 — 1/4" 2 flute endmill" rather than just "Please insert tool
+1".
 
 ## Settings ▸ Tools
 
@@ -23,5 +24,5 @@ never what is sent to the controller.
 
 ## At a tool change
 
-The prompt shows the library's description of the tool the controller asks for, or "Tool 3 (not in your tool
-library)" when the library has no tool 3. A tool you add while the prompt is open shows at once.
+The prompt shows the library's description of the tool the controller asks for, or "Insert Tool 3 (not in your tool
+library)" when the library has no tool 3. Any other text from the controller stays above that line. A tool you add while the prompt is open shows at once.
