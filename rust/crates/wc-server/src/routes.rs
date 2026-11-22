@@ -8,7 +8,7 @@ use axum::routing::{get, post, put};
 use serde_json::json;
 
 use crate::forms::UPLOAD_LIMIT;
-use crate::{AppState, api, archive, assets, boards, files, guard, help, optical, updates, ws};
+use crate::{AppState, api, archive, assets, boards, files, guard, help, optical, tools, updates, ws};
 
 /// The UI's old `/next` addresses: the same path and query at the root.
 async fn from_next(uri: Uri) -> Response {
@@ -55,6 +55,8 @@ pub fn router(state: AppState) -> Router {
         .route("/api/files/gcode/loaded", get(files::loaded_gcode))
         .route("/api/files/gcode/text", get(files::text))
         .route("/api/files/gcode/custom", get(files::custom))
+        .route("/api/tools", get(tools::library).post(tools::add))
+        .route("/api/tools/{number}", put(tools::replace).delete(tools::remove))
         .route("/api/boards/files", get(boards::library))
         .route("/api/boards/directories", post(boards::new_directory))
         .route("/api/boards/current", get(boards::current_board))

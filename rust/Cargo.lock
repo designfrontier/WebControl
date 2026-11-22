@@ -2557,6 +2557,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "unicode-normalization",
+ "wc-protocol",
 ]
 
 [[package]]

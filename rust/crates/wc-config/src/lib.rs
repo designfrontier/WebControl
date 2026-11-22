@@ -8,6 +8,7 @@ pub mod library;
 mod python;
 mod settings;
 mod store;
+pub mod tools;
 
 pub use edit::{Stored, python_eq, python_float};
 pub use json::python_json;

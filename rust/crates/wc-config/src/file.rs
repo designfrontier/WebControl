@@ -26,6 +26,28 @@ fn keep_backup(path: &Path, backup: &Path) -> io::Result<()> {
     fs::hard_link(path, backup).or_else(|_| fs::copy(path, backup).map(drop))
 }
 
+/// Atomically: a temp file flushed to disk, the old file kept as `.bak`, then the rename over it.
+pub(crate) fn write_atomically(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    let tmp = with_suffix(path, ".tmp");
+    let written = (|| {
+        let mut file = fs::File::create(&tmp)?;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        if path.exists() {
+            keep_backup(path, &with_suffix(path, ".bak"))?;
+        }
+        fs::rename(&tmp, path)
+    })();
+    if tmp.exists() {
+        let _ = fs::remove_file(&tmp);
+    }
+    written
+}
+
+pub(crate) fn set_aside_corrupt(path: &Path) -> io::Result<()> {
+    fs::rename(path, with_suffix(path, ".corrupt"))
+}
+
 impl Paths {
     pub fn settings_backup(&self) -> PathBuf {
         with_suffix(&self.settings_file(), ".bak")
@@ -43,23 +65,8 @@ impl Settings {
         python_json(&Value::Object(self.sections.clone()))
     }
 
-    /// Atomically: a temp file flushed to disk, the old file kept as `.bak`, then the rename over it.
     pub fn save(&self, paths: &Paths) -> io::Result<()> {
-        let path = paths.settings_file();
-        let tmp = with_suffix(&path, ".tmp");
-        let written = (|| {
-            let mut file = fs::File::create(&tmp)?;
-            file.write_all(self.to_python_json().as_bytes())?;
-            file.sync_all()?;
-            if path.exists() {
-                keep_backup(&path, &paths.settings_backup())?;
-            }
-            fs::rename(&tmp, &path)
-        })();
-        if tmp.exists() {
-            let _ = fs::remove_file(&tmp);
-        }
-        written
+        write_atomically(&paths.settings_file(), self.to_python_json().as_bytes())
     }
 
     /// `Config.__init__` then `main.py`'s `computeSettings`: the directories, the defaults on a first run, the
