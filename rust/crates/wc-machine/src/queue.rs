@@ -125,6 +125,11 @@ impl Machine {
         self.queue.step != Step::None
     }
 
+    /// Between files, at the bit change the next file needs.
+    pub(crate) fn queue_changing_tool(&self) -> bool {
+        matches!(self.queue.step, Step::ToolChange { .. })
+    }
+
     pub(crate) fn queue_loading(&self) -> bool {
         self.queue.step == Step::Loading
     }
@@ -319,8 +324,9 @@ impl Machine {
             effects.push(alert(&why));
             return self.queue_stop(&why, effects);
         };
-        self.queue_raise(Raise::Manual { units: self.units(), safe_height_mm });
-        self.queue_return_from_park(safe_height_mm);
+        if !self.queue_return_from_park(safe_height_mm) {
+            self.queue_raise(Raise::Manual { units: self.units(), safe_height_mm });
+        }
         if change != Change::None {
             self.queue(["M5".to_string()]);
         }

@@ -90,9 +90,10 @@ impl Machine {
         self.park.return_to = None;
     }
 
-    /// The firmware asked for a tool; with Park for Tool Changes on, it parks once the firmware has paused.
+    /// A job or the queue asked for a tool; with Park for Tool Changes on, it parks once the firmware has paused.
     pub(crate) fn park_tool_change_asked(&mut self) {
-        self.park.tool_change_asked = self.settings.number(SECTION, TOOL_CHANGE_KEY) != 0.0;
+        let waits = self.job.flow.in_job() || self.queue_changing_tool();
+        self.park.tool_change_asked = waits && self.settings.number(SECTION, TOOL_CHANGE_KEY) != 0.0;
     }
 
     /// The tool change prompt is up and the firmware paused (or never pauses, for a tool it already has).
@@ -129,9 +130,11 @@ impl Machine {
     }
 
     /// Before the next queued file starts: back to where the sled was when it parked for the tool change.
-    pub(crate) fn queue_return_from_park(&mut self, safe_height_mm: f64) {
-        let Some(xy) = self.park.return_to.take() else { return };
+    /// True when it queued the return, which raises Z first.
+    pub(crate) fn queue_return_from_park(&mut self, safe_height_mm: f64) -> bool {
+        let Some(xy) = self.park.return_to.take() else { return false };
         self.queue_raised_travel(safe_height_mm, xy);
+        true
     }
 
     /// Touch Z while parked between queued files goes back to the work first, and probes only when pressed again.

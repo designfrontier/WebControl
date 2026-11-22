@@ -308,7 +308,7 @@ impl Machine {
         if tool_change {
             self.queue_tool_fitted();
             // A job's restart returns to its line; the queue goes back to where the sled was as the next file starts.
-            if self.job.flow.in_job() {
+            if !self.queue_changing_tool() {
                 self.park_tool_change_ended();
             }
         }
