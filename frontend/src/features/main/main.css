@@ -115,6 +115,11 @@ button.side-button:not(:disabled),
   font-size: 0.85rem;
 }
 
+.jog-note {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
 .distance-field {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;

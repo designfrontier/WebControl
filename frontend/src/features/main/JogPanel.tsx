@@ -26,6 +26,8 @@ const GRID: Cell[] = [
   { slot: 2 },
 ];
 const DISTANCE_SLOT = 3;
+/** Touch screens never show the disabled Park button's tooltip. */
+const PARK_UNSET = "Set a park position to use Park.";
 
 /** One configurable slot (Settings ▸ Display ▸ Control buttons). */
 const ControlSlot = ({ slot, available }: { slot: number; available: ControlAvailability }) => {
@@ -57,6 +59,7 @@ export const JogPanel = ({ available }: { available: ControlAvailability }) => {
   const client = useClient();
   const units = useMachine((s) => s.units);
   const distToMove = useMachine((s) => s.distToMove);
+  const parkUnset = useMachine((s) => s.park === null && s.controlButtons.includes("park"));
   const field = useDistanceControl({
     source: distToMove,
     decimals: JOG_DECIMALS,
@@ -109,6 +112,7 @@ export const JogPanel = ({ available }: { available: ControlAvailability }) => {
         />
         <ControlSlot slot={DISTANCE_SLOT} available={available} />
       </div>
+      {parkUnset && <p className="jog-note muted">{PARK_UNSET}</p>}
     </section>
   );
 };

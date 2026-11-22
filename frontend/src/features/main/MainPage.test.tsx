@@ -207,8 +207,10 @@ describe("MainPage jogging", () => {
     await user.click(button("Set Park Here"));
     expect(button("Park")).toBeDisabled();
     expect(button("Park")).toHaveAccessibleDescription(/No park position yet/);
+    expect(screen.getByText("Set a park position to use Park.")).toBeVisible();
     socket.serverMessage("parkPosition", { position: { x: -300, y: 200.5 } });
     await waitFor(() => expect(button("Park")).toBeEnabled());
+    expect(screen.queryByText("Set a park position to use Park.")).not.toBeInTheDocument();
     expect(button("Park")).toHaveAccessibleDescription("Parks at X -300, Y 200.5 mm (machine coordinates).");
     await user.click(button("Park"));
     expect(socket.actions()).toEqual([
@@ -243,8 +245,10 @@ describe("MainPage jogging", () => {
     await user.click(jog.getByRole("button", { name: "Macro 2" }));
     expect(socket.actions()).toEqual([["macro2", "", ""]]);
 
+    expect(jog.queryByText("Set a park position to use Park.")).not.toBeInTheDocument();
     socket.serverMessage("controlButtons", { buttons: ["setPark", "park", "setHome", "zAxis"] });
     expect(await jog.findByRole("button", { name: "Set Park Here" })).toBeInTheDocument();
+    expect(jog.getByText("Set a park position to use Park.")).toBeVisible();
     expect(jog.queryByRole("button", { name: "Spindle on" })).not.toBeInTheDocument();
     expect(document.querySelector(".jog-distance > .side-button")).toHaveTextContent("Z-Axis");
   });
