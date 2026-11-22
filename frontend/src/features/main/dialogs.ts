@@ -15,6 +15,8 @@ export interface ServerDialog {
   progress: "none" | "bar" | "spinner";
   /** How many identical copies arrived while this one was open. */
   count: number;
+  /** The tool a tool-change notification asks for. */
+  tool?: number;
 }
 
 export interface DialogState {
@@ -45,6 +47,7 @@ const toDialog = (modal: ModalMessage, id: number): ServerDialog | null => {
     clear: kind === "alert" && modal.resume === "clear",
     progress: kind === "notification" ? progressOf(modal.progress) : "none",
     count: 1,
+    ...(kind === "notification" && modal.tool !== undefined ? { tool: modal.tool } : {}),
   };
 };
 

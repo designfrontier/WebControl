@@ -1,6 +1,7 @@
 import { useReducer } from "react";
 import { useClient, useServerMessage } from "../../app/context";
 import { Dialog } from "../../app/Dialog";
+import { ToolChangeInfo } from "../tools";
 import { dialogReducer, initialDialogState } from "./dialogs";
 
 /**
@@ -58,6 +59,7 @@ export const ServerDialogs = () => {
         {current.message}
         {current.count > 1 && <span className="muted"> (×{current.count})</span>}
       </p>
+      {current.tool !== undefined && <ToolChangeInfo tool={current.tool} />}
       {current.progress === "spinner" && <p className="spinner" role="status" aria-label="Working" />}
       {current.progress === "bar" && <progress aria-label="Progress" />}
     </Dialog>

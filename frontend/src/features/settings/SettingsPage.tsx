@@ -1,6 +1,7 @@
 import { NavLink, Route, Routes } from "react-router";
 import type { SettingsSectionId } from "../../protocol";
 import { DisplaySection } from "./DisplaySection";
+import { ToolsSection } from "../tools";
 import { settingsTabs } from "./sections";
 import { SettingsForm } from "./SettingsForm";
 import { useSettingsSection } from "./useSettingsSection";
@@ -53,6 +54,11 @@ export const SettingsPage = () => (
             Display
           </NavLink>
         </li>
+        <li>
+          <NavLink to="/settings/tools" end replace>
+            Tools
+          </NavLink>
+        </li>
       </ul>
     </nav>
     <Routes>
@@ -64,6 +70,7 @@ export const SettingsPage = () => (
         ),
       )}
       <Route path="display" element={<DisplaySection />} />
+      <Route path="tools" element={<ToolsSection />} />
       <Route path="*" element={<p>There is no settings section at this address.</p>} />
     </Routes>
   </div>
