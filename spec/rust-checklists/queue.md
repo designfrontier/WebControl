@@ -23,7 +23,7 @@ after `jobs.md` sections 1 to 3 pass.
 
 - [ ] G-Code ▸ Open: add `queue-a.nc`, `queue-b.nc` and `queue-c.nc` with **Add to queue**, then `queue-d.nc` with
       **Don't stop for bit changes in this file** ticked. G-Code ▸ Job Queue lists them in that order; `queue-c.nc`
-      reads "Tool 2 — will pause for a tool change" and `queue-d.nc` shows "bit changes skipped" and "Tool 3 — bit
+      reads "Tool 2 — will pause for a bit change" and `queue-d.nc` shows "bit changes skipped" and "Tool 3 — bit
       change skipped (override)".
 - [ ] Open WebControl in a second browser (a phone): it shows the same queue, and the queue line sits above Play
       with nothing covering it. Reload the page: the queue is still there.

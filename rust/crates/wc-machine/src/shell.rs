@@ -145,6 +145,11 @@ impl MachineHandle {
         let _ = self.commands.send(Command::Request(request, oneshot::channel().0));
     }
 
+    /// A push about state the machine does not hold, such as the tool library.
+    pub fn broadcast(&self, push: Push) {
+        let _ = self.pushes.send(push);
+    }
+
     pub fn subscribe(&self) -> broadcast::Receiver<Push> {
         self.pushes.subscribe()
     }

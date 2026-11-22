@@ -14,6 +14,8 @@ const modalSchema = z.looseObject({
   progress: z.union([z.string(), z.boolean()]).optional(),
   isStatic: z.boolean().optional(),
   client: z.string().optional(),
+  /** The tool a tool-change notification asks for. Rust only. */
+  tool: z.number().int().optional(),
 });
 
 export const PACING_MODES = ["v0.94", "minimum gap"] as const;

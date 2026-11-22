@@ -20,6 +20,7 @@ mod optical;
 pub mod queue;
 mod routes;
 pub mod serial;
+mod tools;
 pub mod updates;
 mod ws;
 
@@ -81,6 +82,8 @@ pub struct AppState {
     updates: updates::Updates,
     /// Gcode loads run one at a time, in the order they were asked for.
     loads: Arc<tokio::sync::Mutex<()>>,
+    /// Tool library edits run one at a time.
+    tools: Arc<std::sync::Mutex<()>>,
 }
 
 impl AppState {
@@ -89,8 +92,8 @@ impl AppState {
         let closing = Arc::new(watch::channel(false).0);
         let cameras = camera::Cameras::default();
         let updates = updates::Updates::off();
-        let loads = Arc::default();
-        AppState { machine, paths, ping, platform: Platform::current(), closing, cameras, updates, loads }
+        let (loads, tools) = (Arc::default(), Arc::default());
+        AppState { machine, paths, ping, platform: Platform::current(), closing, cameras, updates, loads, tools }
     }
 
     pub fn with_updates(self, updates: updates::Updates) -> AppState {

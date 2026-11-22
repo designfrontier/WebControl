@@ -160,7 +160,8 @@ impl Machine {
             self.job.tool = i64::from(tool);
             self.job.next_tool = i64::from(tool);
         }
-        effects.push(broadcast(&ActivateModal::notification(line.get(13..).unwrap_or_default(), true)));
+        let asked = tool.or(u32::try_from(self.job.next_tool).ok().filter(|&tool| tool > 0));
+        effects.push(broadcast(&ActivateModal::tool_change(line.get(13..).unwrap_or_default(), asked)));
     }
 
     /// `$16=0`'s prompt to adjust Z by hand, which Resume confirms.

@@ -318,7 +318,7 @@ impl Machine {
         let text = format!("Please insert tool {}", self.job.tool);
         self.job.manual_z = Some(true);
         self.job.paused_units = Some(self.units());
-        effects.push(broadcast(&ActivateModal::notification(&text, true)));
+        effects.push(broadcast(&ActivateModal::tool_change(&text, u32::try_from(self.job.tool).ok())));
         effects.push(pause_button(PauseButton::Resume));
         self.queue.step = Step::ToolChange { prompted: true };
     }

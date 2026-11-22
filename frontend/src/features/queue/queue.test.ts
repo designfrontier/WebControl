@@ -6,7 +6,13 @@ import { baseName, betweenText, continueLabel, nextText, refusal, statusText } f
 describe("queue text", () => {
   it("says what happens before each file", () => {
     expect(betweenText(item())).toBe("same tool — starts immediately");
-    expect(betweenText(item({ between: "toolChange", tool: 2 }))).toBe("Tool 2 — will pause for a tool change");
+    expect(betweenText(item({ between: "toolChange", tool: 2 }))).toBe("Tool 2 — will pause for a bit change");
+    const library = [
+      { number: 2, description: "6 mm flat end mill", diameter: 6, units: "mm" as const, flutes: 2, notes: "" },
+    ];
+    expect(betweenText(item({ between: "toolChange", tool: 2 }), library)).toBe(
+      "Tool 2 (6 mm flat end mill) — will pause for a bit change",
+    );
     expect(betweenText(item({ between: "noTool", tool: null }))).toBe("no tool named — starts immediately");
     expect(betweenText(item({ between: "unknownTool", tool: 2 }))).toBe(
       "Tool 2, bit in the spindle unknown — starts immediately",

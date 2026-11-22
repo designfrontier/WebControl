@@ -132,6 +132,10 @@
               "jobQueue": {
                 "schema": "schemas/messages/jobQueue.json",
                 "dataFormat": "json"
+              },
+              "toolLibrary": {
+                "schema": "schemas/messages/toolLibrary.json",
+                "dataFormat": "json"
               }
             }
           }
@@ -1378,6 +1382,129 @@
           "contentType": "application/json",
           "description": "Optical calibration is turned off in Settings > WebControl Settings",
           "schema": "schemas/http/get-api-calibration-optical-target-pdf.409.json"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/tools",
+      "family": "api",
+      "summary": "The tool library, sorted by number",
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/get-api-tools.200.json"
+        },
+        "500": {
+          "contentType": "application/json",
+          "description": "tools.json could not be read",
+          "schema": "schemas/http/get-api-tools.500.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/tools",
+      "family": "api",
+      "summary": "Add a tool; also broadcasts toolLibrary",
+      "body": {
+        "contentType": "application/json",
+        "schema": "schemas/http/post-api-tools.request.json"
+      },
+      "responses": {
+        "201": {
+          "contentType": "application/json",
+          "description": "The library after the change",
+          "schema": "schemas/http/post-api-tools.201.json"
+        },
+        "400": {
+          "contentType": "application/json",
+          "description": "Not a valid tool: the message names the field",
+          "schema": "schemas/http/post-api-tools.400.json"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "The library already has a tool with that number",
+          "schema": "schemas/http/post-api-tools.409.json"
+        },
+        "500": {
+          "contentType": "application/json",
+          "description": "tools.json could not be written",
+          "schema": "schemas/http/post-api-tools.500.json"
+        }
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/tools/{number}",
+      "family": "api",
+      "summary": "Replace a tool, possibly renumbering it; also broadcasts toolLibrary",
+      "params": "schemas/http/put-api-tools-number.params.json",
+      "body": {
+        "contentType": "application/json",
+        "schema": "schemas/http/put-api-tools-number.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "description": "The library after the change",
+          "schema": "schemas/http/put-api-tools-number.200.json"
+        },
+        "400": {
+          "contentType": "application/json",
+          "description": "Not a valid tool: the message names the field",
+          "schema": "schemas/http/put-api-tools-number.400.json"
+        },
+        "404": {
+          "contentType": "application/json",
+          "description": "No tool with that number in the library",
+          "schema": "schemas/http/put-api-tools-number.404.json"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "Another tool already has the new number",
+          "schema": "schemas/http/put-api-tools-number.409.json"
+        },
+        "500": {
+          "contentType": "application/json",
+          "description": "tools.json could not be written",
+          "schema": "schemas/http/put-api-tools-number.500.json"
+        }
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/tools/{number}",
+      "family": "api",
+      "summary": "Remove a tool; also broadcasts toolLibrary",
+      "params": "schemas/http/delete-api-tools-number.params.json",
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "description": "The library after the change",
+          "schema": "schemas/http/delete-api-tools-number.200.json"
+        },
+        "404": {
+          "contentType": "application/json",
+          "description": "No tool with that number in the library",
+          "schema": "schemas/http/delete-api-tools-number.404.json"
+        },
+        "500": {
+          "contentType": "application/json",
+          "description": "tools.json could not be written",
+          "schema": "schemas/http/delete-api-tools-number.500.json"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/files/gcode/tools",
+      "family": "api",
+      "summary": "The tools the loaded gcode uses or describes in its comments",
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/get-api-files-gcode-tools.200.json"
         }
       }
     },

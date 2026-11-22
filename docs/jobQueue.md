@@ -39,8 +39,8 @@ When a file ends, and the controller has finished its last line, WebControl:
      far says which bit is in. A tool change inside the file still pauses as in any job.
 
 The queue line above the Play button shows what runs, what comes next and what happens between the files, for
-example "Next: shelf.nc · same tool — starts immediately" or "Next: sign.nc · Tool 2 — will pause for a tool
-change".
+example "Next: shelf.nc · same tool — starts immediately" or "Next: sign.nc · Tool 2 (6 mm flat end mill) — will
+pause for a bit change". A tool's description comes from Settings ▸ Tools.
 
 **Pause** and **Resume** work as for any job, and the queue goes on when the file ends.
 

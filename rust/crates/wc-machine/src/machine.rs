@@ -213,6 +213,7 @@ pub struct Snapshot {
     /// The file routes refuse to replace the gcode while this holds (their 409).
     pub gcode_locked: bool,
     pub preview: Shared<Preview>,
+    pub file_tools: Shared<Vec<wc_protocol::tools::FileTool>>,
     pub board: Shared<Board>,
     /// The sled's X and Y from the last status report.
     pub sled: (f64, f64),
@@ -380,6 +381,8 @@ pub struct Machine {
     pub(crate) library: Option<PathBuf>,
     pub(crate) z_moves: Vec<usize>,
     pub(crate) preview: Arc<Preview>,
+    /// The tools the loaded file names.
+    pub(crate) file_tools: Arc<Vec<wc_protocol::tools::FileTool>>,
     /// The loaded file's truncate setting, which the home shift keeps to.
     pub(crate) truncate: Option<u32>,
     pub(crate) custom_gcode: Option<String>,
@@ -428,6 +431,7 @@ impl Machine {
             fixed_port: None,
             workpiece,
             preview: Arc::new(Preview::none(units)),
+            file_tools: Arc::default(),
             saved: settings.clone(),
             settings,
             link: Link::Disconnected { retry_at: Duration::ZERO },
@@ -491,6 +495,7 @@ impl Machine {
     /// Loads lines as `/openGCode` would, without the preview; transcripts and tests use it directly.
     pub fn load_gcode(&mut self, text: &str) {
         self.gcode = Arc::new(wc_gcode::load::filter(text, None).unwrap_or_default());
+        self.file_tools = Arc::new(wc_gcode::tools::file_tools(text));
         self.index = 0;
     }
 
@@ -624,6 +629,7 @@ impl Machine {
             custom_gcode: self.custom_gcode.clone(),
             gcode_locked: self.gcode_locked(),
             preview: Shared(self.preview.clone()),
+            file_tools: Shared(self.file_tools.clone()),
             board: Shared(self.workpiece.clone()),
             sled: (self.position.x, self.position.y),
             ports: self.ports.clone(),

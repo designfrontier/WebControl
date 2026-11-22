@@ -51,6 +51,9 @@ pub struct ActivateModal {
     pub progress: String,
     pub modal_size: String,
     pub modal_type: String,
+    /// The tool a tool-change notification asks for.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool: Option<u32>,
 }
 
 impl ActivateModal {
@@ -67,6 +70,7 @@ impl ActivateModal {
             progress: "false".into(),
             modal_size: "small".into(),
             modal_type: "alert".into(),
+            tool: None,
         }
     }
 
@@ -78,6 +82,11 @@ impl ActivateModal {
             modal_type: "notification".into(),
             ..ActivateModal::alert(message)
         }
+    }
+
+    /// The firmware's tool-change prompt, naming the tool it waits for.
+    pub fn tool_change(message: &str, tool: Option<u32>) -> ActivateModal {
+        ActivateModal { tool, ..ActivateModal::notification(message, true) }
     }
 }
 

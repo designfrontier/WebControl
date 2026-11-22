@@ -53,7 +53,7 @@ const shoot = async (page: Page, name: string, seen?: Locator) => {
 };
 
 const prompt = (page: Page, tool: number) =>
-  page.locator("dialog[open][data-kind]").filter({ hasText: `Please insert tool ${tool}` });
+  page.locator("dialog[open][data-kind]").filter({ hasText: new RegExp(`insert tool ${tool}\\b`, "i") });
 
 const resumeAtPrompt = async (page: Page, tool: number) => {
   await expect(prompt(page, tool)).toBeVisible({ timeout: 20_000 });
@@ -93,7 +93,7 @@ test("queued files run back to back, pausing only for a bit the files show to di
   await chooseMenu(page, "G-Code", "Job Queue");
   const list = page.getByRole("list", { name: "Queued files" });
   await expect(list.getByRole("listitem")).toHaveCount(4);
-  await expect(list.getByRole("listitem").nth(2)).toContainText("Tool 2 — will pause for a tool change");
+  await expect(list.getByRole("listitem").nth(2)).toContainText("Tool 2 — will pause for a bit change");
   await expect(list.getByRole("listitem").nth(3)).toContainText("bit change skipped (override)");
   await shoot(page, "idle");
 

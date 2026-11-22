@@ -14,6 +14,7 @@ pub mod py;
 pub mod restart;
 pub mod sanitise;
 pub mod shift;
+pub mod tools;
 mod words;
 
 use std::fmt;

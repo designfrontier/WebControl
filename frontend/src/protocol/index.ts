@@ -7,6 +7,7 @@ import { mainActions, mainEvents, mainMessages } from "./main";
 import { queueActions, queueEvents, queueMessages } from "./queue";
 import { settingsActions, settingsEvents, settingsMessages } from "./settings";
 import { systemActions, systemEvents, systemMessages } from "./system";
+import { toolsMessages } from "./tools";
 import { viewerActions, viewerEvents, viewerMessages } from "./viewer";
 
 export * from "./actionArgs";
@@ -20,6 +21,7 @@ export * from "./main";
 export * from "./queue";
 export * from "./settings";
 export * from "./system";
+export * from "./tools";
 export * from "./viewer";
 
 /** Every server -> client `message` command, keyed by command name. */
@@ -33,6 +35,7 @@ export const serverMessages = {
   ...calibrationMessages,
   ...systemMessages,
   ...queueMessages,
+  ...toolsMessages,
 };
 export type ServerMessages = typeof serverMessages;
 export type ServerCommand = keyof ServerMessages;

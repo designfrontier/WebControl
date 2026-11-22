@@ -31,6 +31,9 @@ const posts = (answer: (body: unknown) => Response = () => jsonResponse(three)) 
 
 const routes = (queue: JobQueue, write = posts()) => ({
   "/api/queue": queue,
+  "/api/tools": {
+    tools: [{ number: 2, description: "6 mm flat end mill", diameter: 6, units: "mm", flutes: 2, notes: "" }],
+  },
   "POST /api/queue/add": write.respond,
   "POST /api/queue/move": write.respond,
   "POST /api/queue/remove": write.respond,
@@ -47,7 +50,7 @@ describe("Job queue screen", () => {
     expect(rows.map((row) => row.textContent)).toEqual([
       expect.stringContaining("leg.nc in jobsNowLoaded for the job"),
       expect.stringContaining("shelf.ncNextsame tool — starts immediately"),
-      expect.stringContaining("sign.nc in jobsTool 2 — will pause for a tool change"),
+      expect.stringContaining("sign.nc in jobsTool 2 (6 mm flat end mill) — will pause for a bit change"),
       expect.stringContaining("bowl.ncbit changes skippedTool 3 — bit change skipped (override)"),
     ]);
     expect(screen.getByRole("checkbox", { name: "Don't stop for bit changes in leg.nc" })).toBeDisabled();

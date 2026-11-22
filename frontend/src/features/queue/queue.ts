@@ -2,28 +2,45 @@ import { useEffect, useRef, useState } from "react";
 import { ApiError } from "../../api/http";
 import type { Fetch } from "../../api/http";
 import { useFetch, useMachine, useServerMessage } from "../../app/context";
-import type { JobQueue, QueueItem } from "../../protocol";
+import type { JobQueue, QueueItem, Tool } from "../../protocol";
+import { useToolLibrary } from "../tools/hooks";
 import { addToQueue, clearQueue, continueQueue, getQueue, moveInQueue, overrideInQueue, removeFromQueue } from "./api";
 
 /** The file name without its folder. */
 export const baseName = (file: string) => file.slice(file.lastIndexOf("/") + 1);
 
-const BETWEEN_TEXT: Record<QueueItem["between"], (tool: number | null) => string> = {
+/** "Tool 2 (6 mm flat end mill)" with the tool library's description, else "Tool 2". */
+export const toolName = (tool: number | null, library: readonly Tool[] = []) => {
+  const known = library.find((entry) => entry.number === tool);
+  return known ? `Tool ${tool} (${known.description})` : `Tool ${tool}`;
+};
+
+const BETWEEN_TEXT: Record<QueueItem["between"], (tool: string) => string> = {
   sameTool: () => "same tool — starts immediately",
   noTool: () => "no tool named — starts immediately",
-  unknownTool: (tool) => `Tool ${tool}, bit in the spindle unknown — starts immediately`,
-  toolChange: (tool) => `Tool ${tool} — will pause for a tool change`,
-  toolChangeSkipped: (tool) => `Tool ${tool} — bit change skipped (override)`,
+  unknownTool: (tool) => `${tool}, bit in the spindle unknown — starts immediately`,
+  toolChange: (tool) => `${tool} — will pause for a bit change`,
+  toolChangeSkipped: (tool) => `${tool} — bit change skipped (override)`,
 };
 
 /** What happens before `item` starts, as the queue panel says it. */
-export const betweenText = ({ between, tool }: QueueItem) => BETWEEN_TEXT[between](tool);
+export const betweenText = ({ between, tool }: QueueItem, library: readonly Tool[] = []) =>
+  BETWEEN_TEXT[between](toolName(tool, library));
 
 /** "Next: shelf.nc · same tool — starts immediately", or null when nothing follows. */
-export const nextText = (queue: JobQueue) => {
+export const nextText = (queue: JobQueue, library: readonly Tool[] = []) => {
   const next = queue.headLocked ? queue.items[1] : queue.items[0];
-  return next ? `${queue.headLocked ? "Next" : "First"}: ${baseName(next.file)} · ${betweenText(next)}` : null;
+  const label = queue.headLocked ? "Next" : "First";
+  return next ? `${label}: ${baseName(next.file)} · ${betweenText(next, library)}` : null;
 };
+
+/** The library's tools once loaded, else none, so names fall back to the bare number. */
+export const useToolNames = () => {
+  const { load } = useToolLibrary();
+  return load.status === "ready" ? load.tools : NO_TOOLS;
+};
+
+const NO_TOOLS: Tool[] = [];
 
 const STEP_TEXT = {
   finishing: (file: string) => `Finishing ${file}…`,

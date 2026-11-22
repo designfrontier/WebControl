@@ -5,7 +5,17 @@ import { useFetch, useMachine } from "../../app/context";
 import type { JobQueue } from "../../protocol";
 import { selectGcodeLocked } from "../../state/machine";
 import { FormError } from "../files/ui";
-import { baseName, betweenText, continueLabel, nextText, queueApi, refusal, statusText, useJobQueue } from "./queue";
+import {
+  baseName,
+  betweenText,
+  continueLabel,
+  nextText,
+  queueApi,
+  refusal,
+  statusText,
+  useJobQueue,
+  useToolNames,
+} from "./queue";
 import "./queue.css";
 
 type Run = (write: () => Promise<JobQueue>, fallback: string) => () => Promise<void>;
@@ -72,8 +82,9 @@ export const QueueSummary = () => {
   const [queue, update] = useJobQueue();
   const navigate = useNavigate();
   const { busy, error, run } = useQueueWrite(update);
+  const tools = useToolNames();
   if (!queue || (queue.items.length === 0 && queue.state !== "stopped")) return null;
-  const next = nextText(queue);
+  const next = nextText(queue, tools);
   return (
     <section className="queue-summary" aria-label="Job queue" data-state={queue.state}>
       <p role="status">{statusText(queue)}</p>
@@ -98,6 +109,7 @@ export const QueuePage = () => {
   const loaded = useMachine((s) => s.gcodeFile);
   const locked = useMachine(selectGcodeLocked);
   const { busy, error, run } = useQueueWrite(update);
+  const tools = useToolNames();
   if (!queue) return <p className="muted">Loading the queue…</p>;
   const last = queue.items.length - 1;
   const label = (at: number) =>
@@ -125,7 +137,7 @@ export const QueuePage = () => {
                     {badge && <span className="queue-badge">{badge}</span>}
                     {item.skipBitChanges && <span className="queue-badge queue-override">bit changes skipped</span>}
                   </span>
-                  <span className="queue-between">{fixed ? "Loaded for the job" : betweenText(item)}</span>
+                  <span className="queue-between">{fixed ? "Loaded for the job" : betweenText(item, tools)}</span>
                   <label className="queue-skip">
                     <input
                       type="checkbox"
