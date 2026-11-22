@@ -309,6 +309,7 @@ impl Machine {
         }
         let (index, name) = (self.index, self.gcode_name());
         self.install(gcode);
+        self.queue_file_replaced();
         self.index = match origin {
             Origin::Edit => index.min(self.gcode.len().saturating_sub(1)),
             Origin::Open | Origin::Reload | Origin::Queue => 0,

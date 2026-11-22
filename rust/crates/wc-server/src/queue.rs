@@ -9,6 +9,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use serde::de::DeserializeOwned;
 use serde_json::json;
+use tokio::sync::broadcast::error::RecvError;
 use wc_config::library::resolve_inside;
 use wc_gcode::firmware_gcode::{FileTools, file_tools};
 use wc_machine::Request;
@@ -105,7 +106,8 @@ struct Saved {
     skip_bit_changes: bool,
 }
 
-/// The list saved before a restart, each file read again for its tools; one that is gone keeps no tools.
+/// The list saved before a restart, each file read again for its tools and named as a load names it; one that is
+/// gone keeps no tools.
 pub async fn restore(dir: &Path) -> Vec<Item> {
     let saved = tokio::fs::read(dir.join(FILE)).await.ok();
     let files: Vec<Saved> = saved.and_then(|bytes| serde_json::from_slice(&bytes).ok()).unwrap_or_default();
@@ -113,8 +115,10 @@ pub async fn restore(dir: &Path) -> Vec<Item> {
     let items = files.into_iter().map(|Saved { file, skip_bit_changes }| {
         let root = root.clone();
         async move {
-            let tools = scan(root, file.clone()).await.map_or(FileTools::default(), |item| item.tools);
-            Item { file, tools, skip_bit_changes }
+            match scan(root, file.clone()).await {
+                Some(item) => Item { skip_bit_changes, ..item },
+                None => Item { file, tools: FileTools::default(), skip_bit_changes },
+            }
         }
     });
     futures_util::future::join_all(items).await
@@ -124,10 +128,12 @@ pub async fn restore(dir: &Path) -> Vec<Item> {
 pub fn serve(state: &AppState) -> tokio::task::JoinHandle<()> {
     let (state, mut requests) = (state.clone(), state.machine.queue_requests());
     tokio::spawn(async move {
-        while let Ok(request) = requests.recv().await {
-            match request {
-                Outbound::Load(file) => load(&state, file).await,
-                Outbound::Save(files) => save(&state.paths.dir(), &files).await,
+        loop {
+            match requests.recv().await {
+                Ok(Outbound::Load(file)) => load(&state, file).await,
+                Ok(Outbound::Save(files)) => save(&state.paths.dir(), &files).await,
+                Err(RecvError::Lagged(missed)) => tracing::warn!(missed, "the job queue missed requests"),
+                Err(RecvError::Closed) => break,
             }
         }
     })
@@ -146,7 +152,12 @@ async fn save(dir: &Path, files: &[(String, bool)]) {
     let saved: Vec<Saved> =
         files.iter().map(|(file, skip)| Saved { file: file.clone(), skip_bit_changes: *skip }).collect();
     let text = serde_json::to_vec_pretty(&saved).unwrap_or_default();
-    if let Err(error) = tokio::fs::write(dir.join(FILE), text).await {
+    let partial = dir.join(format!(".{FILE}.part"));
+    let written = async {
+        tokio::fs::write(&partial, text).await?;
+        tokio::fs::rename(&partial, dir.join(FILE)).await
+    };
+    if let Err(error) = written.await {
         tracing::warn!(%error, "could not save the job queue");
     }
 }

@@ -52,6 +52,8 @@ Re-add the files for each check.
       queued. **From line N** returns to that line at the safe height and goes on with the rest of the queue.
 - [ ] At the tool-2 prompt press **Stop**: the queue stops with `queue-c.nc` still queued and offers only
       **Continue queue**, which asks for tool 2 again.
+- [ ] Press the Pi's Pause button while `queue-a.nc`'s last moves run: it finishes and leaves the queue, then the
+      queue stops ("Pause was pressed between files.") with no `G00 Z<safe>` for `queue-b.nc`.
 - [ ] Unplug the controller's USB during `queue-a.nc`: the job pauses with Connection Lost, the queue stops ("The
       controller's connection was lost."), and when `queue-a.nc` is resumed to its end nothing else starts.
 - [ ] Press the controller's reset button (or power-cycle it) during `queue-a.nc`: the queue stops ("The controller
