@@ -17,18 +17,42 @@ interface OpenProps {
   /** Shown while the open request is in flight. */
   busyNote?: ReactNode;
   submitOptions?: SubmitOptions;
+  /** Adds the chosen file to the job queue instead of opening it; allowed while a job runs. */
+  enqueue?: (file: LibraryFile) => Promise<void>;
+  /** Shown beside Add to queue, such as the file's bit-change override. */
+  enqueueOptions?: ReactNode;
 }
 
 /** Choose a file from a library (gcode or boards) and open it. */
-export const OpenFromLibrary = ({ library, legend, open, lockedReason, busyNote, submitOptions }: OpenProps) => {
+export const OpenFromLibrary = ({
+  library,
+  legend,
+  open,
+  lockedReason,
+  busyNote,
+  submitOptions,
+  enqueue,
+  enqueueOptions,
+}: OpenProps) => {
   const [directory, setDirectory] = useState(() => initialDirectory(library));
   const [selected, setSelected] = useState(() => initialFile(library, initialDirectory(library)));
+  const [queued, setQueued] = useState<string | null>(null);
   const { busy, error, setError, run } = useSubmit(submitOptions);
+  const adding = useSubmit();
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (!selected) return setError("Choose a file to open.");
     return run((signal) => open({ directory, name: selected }, signal), `Could not open ${selected}.`);
+  };
+
+  const addToQueue = (add: (file: LibraryFile) => Promise<void>) => {
+    setQueued(null);
+    if (!selected) return adding.setError("Choose a file to add.");
+    return adding.run(async () => {
+      await add({ directory, name: selected });
+      setQueued(`Added ${selected} to the queue.`);
+    }, `Could not add ${selected} to the queue.`);
   };
 
   return (
@@ -44,13 +68,20 @@ export const OpenFromLibrary = ({ library, legend, open, lockedReason, busyNote,
         onSelect={setSelected}
         legend={legend}
       />
-      <FormError message={error} />
+      <FormError message={error ?? adding.error} />
+      {queued && <p role="status">{queued}</p>}
       {lockedReason && <p className="muted">{lockedReason}</p>}
+      {enqueue && enqueueOptions}
       {busy && busyNote}
       <div className="actions">
         <button type="submit" className="primary" disabled={busy || lockedReason !== undefined}>
           {busy ? "Opening…" : "Open"}
         </button>
+        {enqueue && (
+          <button type="button" disabled={busy || adding.busy} onClick={() => addToQueue(enqueue)}>
+            {adding.busy ? "Adding…" : "Add to queue"}
+          </button>
+        )}
         <CloseButton>Cancel</CloseButton>
       </div>
     </form>

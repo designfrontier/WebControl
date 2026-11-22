@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "post-api-queue-override.request",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "skipBitChanges": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "id",
+    "skipBitChanges"
+  ]
+}

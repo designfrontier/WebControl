@@ -20,6 +20,7 @@ mod machine;
 pub mod optical;
 pub mod pacing;
 mod pid;
+pub mod queue;
 mod setup;
 mod shell;
 mod sync;

@@ -140,7 +140,7 @@ fn json_body(body: &Bytes) -> Value {
     serde_json::from_slice(body).unwrap_or(Value::Null)
 }
 
-async fn answer(state: &AppState, request: Request) -> Response {
+pub(crate) async fn answer(state: &AppState, request: Request) -> Response {
     match state.machine.edit(request).await {
         Some(Answer { status, body }) => {
             (StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR), Json(body)).into_response()

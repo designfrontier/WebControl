@@ -65,6 +65,7 @@ impl Machine {
             return;
         }
         tracing::warn!(why, "controller link lost");
+        self.queue_stop("The controller's connection was lost.", effects);
         if self.job.flow.in_job() {
             effects.push(broadcast(&ActivateModal::titled_alert("Connection Lost", CONNECTION_LOST)));
             self.pause_for_lost_link(effects);
@@ -129,6 +130,7 @@ impl Machine {
 
     fn boot(&mut self, now: Duration, effects: &mut Vec<Effect>) {
         tracing::info!("controller boot");
+        self.queue_stop("The controller restarted.", effects);
         if matches!(self.job.flow, Flow::Streaming | Flow::Draining) {
             effects.push(alert(RESTARTED));
             self.end_job();
@@ -248,10 +250,12 @@ impl Machine {
             }
             (true, true, None) => {}
             (true, false, _) => {
+                self.queue_stop("Touch Z finished without zeroing Z.", effects);
                 effects.push(broadcast(&ActivateModal::titled_alert(PROBE_TITLE, NOT_ZEROED)));
                 self.pause_run(effects);
             }
             (false, _, index) => {
+                self.queue_stop("Touch Z failed.", effects);
                 effects.push(broadcast(&ActivateModal::titled_alert(PROBE_TITLE, TOUCH_Z_FAILED)));
                 if let Some(index) = index.filter(|_| self.job.flow.in_job()) {
                     self.index = index;
@@ -482,6 +486,10 @@ impl Machine {
                 }
                 // While it waits, nothing after it may go.
                 Queued::Raise(raise) => self.expand_raise(raise, now, effects),
+                Queued::Advance => {
+                    self.queue_go(now, effects);
+                    false
+                }
             };
             if written {
                 return;

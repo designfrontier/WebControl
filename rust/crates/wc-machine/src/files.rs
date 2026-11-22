@@ -115,6 +115,8 @@ pub enum Origin {
     Edit,
     /// `/editGCode` with no text reads the file again from disk.
     Reload,
+    /// The job queue's next file, which it asked for itself.
+    Queue,
 }
 
 /// A file route's trouble the machine reports, as Python's alerts did.
@@ -203,7 +205,7 @@ fn split_lines(text: &str) -> impl Iterator<Item = &str> {
 
 impl Machine {
     pub(crate) fn gcode_locked(&self) -> bool {
-        self.job.flow.in_job() || self.job.manual_z.is_some()
+        self.job.flow.in_job() || self.job.manual_z.is_some() || self.queue_busy()
     }
 
     pub(crate) fn push_gcode(&self, effects: &mut Vec<Effect>) {
@@ -294,7 +296,9 @@ impl Machine {
 
     fn load(&mut self, gcode: Gcode, file: Option<PathBuf>, origin: Origin, effects: &mut Vec<Effect>) -> Reply {
         self.loads = self.loads.saturating_sub(1);
-        if self.gcode_locked() {
+        let queued = origin == Origin::Queue;
+        let refused = if queued { !self.queue_loading() } else { self.gcode_locked() };
+        if refused {
             return Reply::Refused(GCODE_LOCKED.into());
         }
         if let Some(text) = &gcode.too_large {
@@ -305,9 +309,10 @@ impl Machine {
         }
         let (index, name) = (self.index, self.gcode_name());
         self.install(gcode);
+        self.queue_file_replaced();
         self.index = match origin {
             Origin::Edit => index.min(self.gcode.len().saturating_sub(1)),
-            Origin::Open | Origin::Reload => 0,
+            Origin::Open | Origin::Reload | Origin::Queue => 0,
         };
         if origin != Origin::Edit {
             self.gcode_file = file;
@@ -317,6 +322,9 @@ impl Machine {
             self.push_gcode(effects);
         }
         self.push_gcode_name_if_changed(name, effects);
+        if queued {
+            self.queue_prepare(effects);
+        }
         Reply::Done
     }
 
@@ -511,6 +519,7 @@ impl Machine {
                     // A failed load resends the current preview, so every client's spinner ends.
                     self.loads = self.loads.saturating_sub(1);
                     self.push_gcode(effects);
+                    self.queue_load_failed(effects);
                 }
                 self.problem(problem, effects);
                 Reply::Done

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useClient, useMachine, useServerMessage } from "../../app/context";
 import { StopButton } from "../../app/StopButton";
 import { LoadedFile } from "../files/LoadedFile";
+import { QueueSummary } from "../queue";
 import type { ControlAvailability } from "./controls";
 import { useDraft } from "./hooks";
 import { PacingControl } from "./PacingControl";
@@ -58,6 +59,7 @@ export const RunPanel = ({ available, lineIndex }: Props) => {
         <PacingControl />
       </div>
       <div className="run-dock">
+        <QueueSummary />
         <LoadedFile className="run-file" />
         <div className="run-buttons">
           <button type="button" className="go" disabled={!available.play} onClick={() => client.sendAction("startRun")}>

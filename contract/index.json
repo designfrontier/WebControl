@@ -129,6 +129,10 @@
                 "schema": "schemas/messages/pyinstallUpdate.json",
                 "dataFormat": "json"
               },
+              "jobQueue": {
+                "schema": "schemas/messages/jobQueue.json",
+                "dataFormat": "json"
+              },
               "toolLibrary": {
                 "schema": "schemas/messages/toolLibrary.json",
                 "dataFormat": "json"
@@ -613,6 +617,200 @@
           "contentType": "application/json",
           "description": "An optical scan is running",
           "schema": "schemas/http/put-api-run-pacing.409.json"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/queue",
+      "family": "api",
+      "summary": "The job queue (Rust only)",
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/get-api-queue.200.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/queue/add",
+      "family": "api",
+      "summary": "Add a library file to the end",
+      "body": {
+        "contentType": "application/json",
+        "schema": "schemas/http/post-api-queue-add.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "description": "The queue after the change, also broadcast as jobQueue",
+          "schema": "schemas/http/post-api-queue-add.200.json"
+        },
+        "400": {
+          "contentType": "application/json",
+          "description": "A malformed body",
+          "schema": "schemas/http/post-api-queue-add.400.json"
+        },
+        "404": {
+          "contentType": "application/json",
+          "description": "Not in the gcode library",
+          "schema": "schemas/http/post-api-queue-add.404.json"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "Full",
+          "schema": "schemas/http/post-api-queue-add.409.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/queue/move",
+      "family": "api",
+      "summary": "Move a queued file to another place",
+      "body": {
+        "contentType": "application/json",
+        "schema": "schemas/http/post-api-queue-move.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "description": "The queue after the change, also broadcast as jobQueue",
+          "schema": "schemas/http/post-api-queue-move.200.json"
+        },
+        "400": {
+          "contentType": "application/json",
+          "description": "A malformed body",
+          "schema": "schemas/http/post-api-queue-move.400.json"
+        },
+        "404": {
+          "contentType": "application/json",
+          "description": "No such queued file",
+          "schema": "schemas/http/post-api-queue-move.404.json"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "The first file is loaded for a job or between files",
+          "schema": "schemas/http/post-api-queue-move.409.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/queue/remove",
+      "family": "api",
+      "summary": "Remove a queued file",
+      "body": {
+        "contentType": "application/json",
+        "schema": "schemas/http/post-api-queue-remove.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "description": "The queue after the change, also broadcast as jobQueue",
+          "schema": "schemas/http/post-api-queue-remove.200.json"
+        },
+        "400": {
+          "contentType": "application/json",
+          "description": "A malformed body",
+          "schema": "schemas/http/post-api-queue-remove.400.json"
+        },
+        "404": {
+          "contentType": "application/json",
+          "description": "No such queued file",
+          "schema": "schemas/http/post-api-queue-remove.404.json"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "The first file is loaded for a job or between files",
+          "schema": "schemas/http/post-api-queue-remove.409.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/queue/override",
+      "family": "api",
+      "summary": "Turn a queued file's bit-change override on or off",
+      "body": {
+        "contentType": "application/json",
+        "schema": "schemas/http/post-api-queue-override.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "description": "The queue after the change, also broadcast as jobQueue",
+          "schema": "schemas/http/post-api-queue-override.200.json"
+        },
+        "400": {
+          "contentType": "application/json",
+          "description": "A malformed body",
+          "schema": "schemas/http/post-api-queue-override.400.json"
+        },
+        "404": {
+          "contentType": "application/json",
+          "description": "No such queued file",
+          "schema": "schemas/http/post-api-queue-override.404.json"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "The first file is loaded for a job or between files",
+          "schema": "schemas/http/post-api-queue-override.409.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/queue/clear",
+      "family": "api",
+      "summary": "Remove every queued file but one in use",
+      "body": {
+        "contentType": "application/json",
+        "schema": "schemas/http/post-api-queue-clear.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "description": "The queue after the change, also broadcast as jobQueue",
+          "schema": "schemas/http/post-api-queue-clear.200.json"
+        },
+        "400": {
+          "contentType": "application/json",
+          "description": "A malformed body",
+          "schema": "schemas/http/post-api-queue-clear.400.json"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "Never refused",
+          "schema": "schemas/http/post-api-queue-clear.409.json"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/queue/continue",
+      "family": "api",
+      "summary": "Start the first file from line 1 (Z rises and the tool is checked, as between files) or where Stop left it",
+      "body": {
+        "contentType": "application/json",
+        "schema": "schemas/http/post-api-queue-continue.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "description": "The queue after the change, also broadcast as jobQueue",
+          "schema": "schemas/http/post-api-queue-continue.200.json"
+        },
+        "400": {
+          "contentType": "application/json",
+          "description": "A malformed body",
+          "schema": "schemas/http/post-api-queue-continue.400.json"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "Empty, disconnected, or a job, an alarm or a load holds the machine",
+          "schema": "schemas/http/post-api-queue-continue.409.json"
         }
       }
     },

@@ -130,6 +130,8 @@ pub enum Effect {
     Compute(Work),
     /// Capture or vision work for the optical scan, answered by `Event::Seen`.
     Vision(crate::optical::Vision),
+    /// A queued file to load, or the queue to save.
+    Queue(crate::queue::Outbound),
 }
 
 /// An `Arc` whose equality is identity, so comparing snapshots never walks the settings.
@@ -177,6 +179,8 @@ pub(crate) enum Queued {
     Mark(Mark),
     /// Expanded once every line before it is answered, so the bit's height is known.
     Raise(crate::clearance::Raise),
+    /// The job queue acts here once every line before it is answered.
+    Advance,
 }
 
 /// What readers see; every field is derived from the machine's state, never stored separately.
@@ -221,6 +225,7 @@ pub struct Snapshot {
     pub optical: Shared<crate::optical::View>,
     /// The line pacing and its statistics as last pushed.
     pub pacing: Shared<wc_protocol::main::PacingStats>,
+    pub queue: Shared<wc_protocol::queue::JobQueue>,
 }
 
 impl Snapshot {
@@ -403,6 +408,7 @@ pub struct Machine {
     pub(crate) camera_on: bool,
     pub(crate) optical: crate::optical::Optical,
     pub(crate) stats: crate::pacing::Stats,
+    pub(crate) queue: crate::queue::State,
 }
 
 pub(crate) fn broadcast<M: Message>(message: &M) -> Effect {
@@ -466,6 +472,7 @@ impl Machine {
             camera_on: false,
             optical: crate::optical::Optical::default(),
             stats,
+            queue: crate::queue::State::default(),
         }
     }
 
@@ -543,10 +550,12 @@ impl Machine {
         }
         self.optical_tick(now, &mut effects);
         self.pacing_observe(now, &mut effects);
+        self.queue_tick(&mut effects);
         self.pump(now, &mut effects);
         self.pacing_observe(now, &mut effects);
         self.push_pacing(now, &mut effects);
         self.optical_refresh();
+        self.queue_publish(&mut effects);
         self.status_if_changed(&mut effects);
         let changed = !Arc::ptr_eq(&self.settings, &self.saved) && *self.settings != *self.saved;
         if std::mem::take(&mut self.settings_dirty) || changed {
@@ -629,6 +638,7 @@ impl Machine {
             camera: self.camera_wanted(),
             optical: Shared(self.optical.view()),
             pacing: Shared(self.stats.shown.clone()),
+            queue: Shared(self.queue.shown.clone()),
         }
     }
 }

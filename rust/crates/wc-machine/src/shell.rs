@@ -118,6 +118,7 @@ pub struct MachineHandle {
     pushes: broadcast::Sender<Push>,
     snapshot: watch::Receiver<Snapshot>,
     vision: broadcast::Sender<crate::optical::Vision>,
+    queue: broadcast::Sender<crate::queue::Outbound>,
 }
 
 impl MachineHandle {
@@ -156,6 +157,11 @@ impl MachineHandle {
     /// What the optical scan asks of the camera; whoever serves it answers with `Event::Seen`.
     pub fn vision(&self) -> broadcast::Receiver<crate::optical::Vision> {
         self.vision.subscribe()
+    }
+
+    /// The job queue's loads and saves; whoever serves them answers loads as `/openGCode` does.
+    pub fn queue_requests(&self) -> broadcast::Receiver<crate::queue::Outbound> {
+        self.queue.subscribe()
     }
 
     pub fn snapshot(&self) -> Snapshot {
@@ -217,6 +223,7 @@ struct Task<C: Core> {
     next_request: u64,
     directories: mpsc::UnboundedSender<String>,
     vision: broadcast::Sender<crate::optical::Vision>,
+    queue: broadcast::Sender<crate::queue::Outbound>,
 }
 
 /// Makes each directory in turn off the machine task, so a stalled card never holds up a Stop.
@@ -433,6 +440,7 @@ impl<C: Core> Task<C> {
             Effect::Leds(leds) => self.host.leds(leds),
             Effect::Compute(work) => off_task(&self.jobs, move || work.run()),
             Effect::Vision(request) => drop(self.vision.send(request)),
+            Effect::Queue(request) => drop(self.queue.send(request)),
         }
     }
 
@@ -469,7 +477,15 @@ pub fn spawn<C: Core>(core: C, opener: Box<dyn PortOpener>, host: Arc<dyn Host>)
     let (persist_tx, persist_rx) = watch::channel(None);
     let writer = tokio::spawn(persist(persist_rx, host.clone()));
     let (vision, _) = broadcast::channel(PUSH_BACKLOG);
-    let handle = MachineHandle { commands, realtime, pushes: pushes.clone(), snapshot, vision: vision.clone() };
+    let (queue, _) = broadcast::channel(PUSH_BACKLOG);
+    let handle = MachineHandle {
+        commands,
+        realtime,
+        pushes: pushes.clone(),
+        snapshot,
+        vision: vision.clone(),
+        queue: queue.clone(),
+    };
     let mut task = Task {
         core,
         opener: Arc::new(Mutex::new(opener)),
@@ -488,6 +504,7 @@ pub fn spawn<C: Core>(core: C, opener: Box<dyn PortOpener>, host: Arc<dyn Host>)
         next_request: 0,
         directories,
         vision,
+        queue,
     };
     let join = tokio::spawn(async move {
         let mut clock = tokio::time::interval(TICK);

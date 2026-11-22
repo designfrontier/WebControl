@@ -8,7 +8,7 @@ use axum::routing::{get, post, put};
 use serde_json::json;
 
 use crate::forms::UPLOAD_LIMIT;
-use crate::{AppState, api, archive, assets, boards, files, guard, help, optical, tools, updates, ws};
+use crate::{AppState, api, archive, assets, boards, files, guard, help, optical, queue, tools, updates, ws};
 
 /// The UI's old `/next` addresses: the same path and query at the root.
 async fn from_next(uri: Uri) -> Response {
@@ -38,6 +38,13 @@ pub fn router(state: AppState) -> Router {
         .route("/api/main", get(api::main_screen))
         .route("/api/run/pacing", get(api::pacing).put(api::update_pacing))
         .route("/api/display/theme", put(api::update_theme))
+        .route("/api/queue", get(queue::view))
+        .route("/api/queue/add", post(queue::add))
+        .route("/api/queue/move", post(queue::move_item))
+        .route("/api/queue/remove", post(queue::remove))
+        .route("/api/queue/override", post(queue::override_item))
+        .route("/api/queue/clear", post(queue::clear))
+        .route("/api/queue/continue", post(queue::resume))
         .route("/api/viewer", get(api::viewer))
         .route("/api/settings/{section}", get(api::settings_section).put(api::update_settings))
         .route("/api/machine/setup", get(api::machine_setup))

@@ -12,6 +12,7 @@ import {
   ZLimitsPage,
 } from "../features/machine";
 import { ZAxisModal } from "../features/main";
+import { QueuePage } from "../features/queue";
 import { SettingsPage } from "../features/settings";
 import { AboutModal, ActionsModal, HelpPanel, PidTuning, UpdatesModal } from "../features/system";
 
@@ -33,6 +34,7 @@ export const modalRoutes: ModalRoute[] = [
   { path: "files/edit", title: "View/Edit G-Code", Component: EditGcode, size: "large" },
   { path: "files/send", title: "Send Custom G-Code", Component: SendGcode, size: "large" },
   { path: "files/import/:kind", title: importTitle, Component: ImportFile },
+  { path: "queue", title: "Job Queue", Component: QueuePage, size: "medium" },
   { path: "actions", title: "Actions", Component: ActionsModal, size: "large" },
   { path: "settings/*", title: "Settings", Component: SettingsPage, size: "large" },
   { path: "boards/open", title: "Open Board", Component: OpenBoard, size: "medium" },

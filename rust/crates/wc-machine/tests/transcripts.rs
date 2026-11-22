@@ -5,15 +5,17 @@ use std::time::Duration;
 
 use serde_json::{Map, Value};
 use wc_config::{Settings, python_str};
+use wc_gcode::firmware_gcode::file_tools;
 use wc_machine::calibration::{Kind, calculate};
-use wc_machine::files::{Reply, Request as FileRequest};
+use wc_machine::files::{Gcode, Origin, Reply, Request as FileRequest};
 use wc_machine::optical::{Seen, Vision};
+use wc_machine::queue::{Edit, Item, Outbound};
 use wc_machine::{Effect, Event, Machine, Request};
 use wc_protocol::optical::{Cell, Measurement, Orientation, PixelPoint, ScanRequest};
 use wc_protocol::{Action, Namespace};
 use wc_testkit::contract::Contract;
 use wc_testkit::runner::{SerialBackend, replay};
-use wc_testkit::transcript::{Transcript, UiAction};
+use wc_testkit::transcript::{Transcript, UiAction, serial_dir};
 
 struct MachineBackend {
     machine: Machine,
@@ -65,6 +67,13 @@ impl MachineBackend {
             // The shell opens the port at once; the controller's banner then comes as the transcript's rx.
             Effect::OpenPort(port) => self.apply(Event::PortOpened { port }),
             Effect::Vision(request) => self.apply(Event::Seen(camera(&request))),
+            // The server loads a queued file from the library, here the transcripts' own directory.
+            Effect::Queue(Outbound::Load(file)) => {
+                let gcode = Gcode::parse(&read(&file), &self.settings()).expect("a queued file parses");
+                let file = Some(serial_dir().join(file));
+                let request = FileRequest::LoadGcode { gcode: Box::new(gcode), file, origin: Origin::Queue };
+                self.apply(Event::Request { id: 2, request });
+            }
             Effect::Push(push) if push.ns == Namespace::MaslowCnc => {
                 Contract::shared().validate_frame(&push.frame().encode()).unwrap();
                 let data = push.data["data"].as_str().and_then(|t| serde_json::from_str(t).ok());
@@ -89,7 +98,7 @@ impl SerialBackend for MachineBackend {
         let (x, y) = setup.home.map_or((0.0, 0.0), |home| (home.x, home.y));
         settings.set_value("Advanced Settings", "homeX", home_text(x).into());
         settings.set_value("Advanced Settings", "homeY", home_text(y).into());
-        self.machine = Machine::new("127.0.0.1:5000", settings);
+        self.machine = Machine::new("127.0.0.1:5000", settings).with_library(serial_dir());
         if let Some(lines) = transcript.gcode_lines() {
             self.machine.load_gcode(&(lines.join("\n") + "\n"));
         }
@@ -123,6 +132,12 @@ impl SerialBackend for MachineBackend {
             }
             ("POST", "/api/machine/quick-configure") => Request::QuickConfigure(body),
             ("POST", "/api/system/pid-test") => Request::PidTest(body),
+            ("POST", "/api/queue/add") => {
+                let file = body["file"].as_str().unwrap_or_default().to_string();
+                let skip_bit_changes = body["skipBitChanges"].as_bool().unwrap_or_default();
+                Request::Queue(Edit::Add(Item { tools: file_tools(read(&file).lines()), file, skip_bit_changes }))
+            }
+            ("POST", "/api/queue/continue") => Request::Queue(Edit::Continue(Default::default())),
             ("POST", _) if path.starts_with("/api/calibration/") => match &path["/api/calibration/".len()..] {
                 "triangular" => Request::Calibrated(calculate(Kind::Triangular, &self.settings(), &body)),
                 "holey" => Request::Calibrated(calculate(Kind::Holey, &self.settings(), &body)),
@@ -166,6 +181,10 @@ impl SerialBackend for MachineBackend {
     fn setting(&self, section: &str, key: &str) -> Option<String> {
         self.machine.snapshot().settings.text(section, key)
     }
+}
+
+fn read(file: &str) -> String {
+    std::fs::read_to_string(serial_dir().join(file)).expect("a file under contract/serial")
 }
 
 /// The optical transcripts' target lies this far right of and above its nominal place, in mm.

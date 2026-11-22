@@ -49,6 +49,8 @@ pub enum Request {
     Pacing(Value),
     /// `PUT /api/display/theme`: the display theme, which neither a job nor a scan locks.
     Theme(Value),
+    /// `/api/queue/*`, which a job does not lock.
+    Queue(crate::queue::Edit),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -58,7 +60,7 @@ pub struct Response {
 }
 
 impl Response {
-    fn ok<T: serde::Serialize>(status: u16, body: &T) -> Response {
+    pub(crate) fn ok<T: serde::Serialize>(status: u16, body: &T) -> Response {
         Response { status, body: serde_json::to_value(body).expect("protocol types always serialise") }
     }
 
@@ -109,6 +111,7 @@ impl Machine {
             Request::OpticalAccept => self.optical_accept(),
             Request::Pacing(body) => self.update_pacing(&body, now, effects),
             Request::Theme(body) => self.update_theme(&body, effects),
+            Request::Queue(edit) => self.queue_edit(edit, now, effects),
         }
     }
 

@@ -1,0 +1,128 @@
+.queue-summary {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 0.9rem;
+}
+
+.queue-summary p,
+.queue-status {
+  margin: 0;
+}
+
+.queue-summary[data-state="stopped"] {
+  border-color: var(--warn);
+}
+
+.queue-summary[data-state="stopped"] [role="status"],
+.queue-status[data-state="stopped"] {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.queue-summary-actions,
+.queue-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.queue-next {
+  color: var(--muted);
+}
+
+.queue-page {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.queue-page p {
+  margin: 0;
+}
+
+.queue-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: 1.5rem;
+}
+
+.queue-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.queue-list li[data-current="true"] {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+.queue-item-text {
+  display: grid;
+  flex: 1 1 14rem;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.queue-file {
+  font-weight: 600;
+}
+
+.queue-badge {
+  justify-self: start;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.8rem;
+}
+
+.queue-between {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.queue-item-actions button,
+.queue-summary-actions button {
+  min-height: var(--tap);
+}
+
+.queue-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.queue-badges:empty {
+  display: none;
+}
+
+.queue-override {
+  background: var(--caution);
+  color: var(--caution-ink);
+}
+
+.queue-skip {
+  font-size: 0.9rem;
+}
+
+/* Phones: the summary rides in the pinned run dock, so the page leaves room for it below. */
+@media (max-width: 700px), (max-height: 500px) {
+  .control-screen:has(.run-dock .queue-summary) {
+    padding-bottom: calc(3 * var(--tap) + 6rem + 5 * var(--space-2));
+  }
+
+  .run-dock .queue-next {
+    display: none;
+  }
+}

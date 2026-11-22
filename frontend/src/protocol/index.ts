@@ -4,6 +4,7 @@ import { calibrationActions, calibrationEvents, calibrationMessages } from "./ca
 import { filesActions, filesEvents, filesMessages } from "./files";
 import { machineActions, machineEvents, machineMessages } from "./machine";
 import { mainActions, mainEvents, mainMessages } from "./main";
+import { queueActions, queueEvents, queueMessages } from "./queue";
 import { settingsActions, settingsEvents, settingsMessages } from "./settings";
 import { systemActions, systemEvents, systemMessages } from "./system";
 import { toolsMessages } from "./tools";
@@ -17,6 +18,7 @@ export * from "./files";
 export * from "./http";
 export * from "./machine";
 export * from "./main";
+export * from "./queue";
 export * from "./settings";
 export * from "./system";
 export * from "./tools";
@@ -32,6 +34,7 @@ export const serverMessages = {
   ...machineMessages,
   ...calibrationMessages,
   ...systemMessages,
+  ...queueMessages,
   ...toolsMessages,
 };
 export type ServerMessages = typeof serverMessages;
@@ -48,6 +51,7 @@ export const actionCommands = [
   ...machineActions,
   ...calibrationActions,
   ...systemActions,
+  ...queueActions,
 ] as const;
 export type ActionCommand = (typeof actionCommands)[number];
 
@@ -61,6 +65,7 @@ export const clientEvents = {
   ...machineEvents,
   ...calibrationEvents,
   ...systemEvents,
+  ...queueEvents,
 };
 export type ClientEvents = { [E in keyof typeof clientEvents]: z.input<(typeof clientEvents)[E]> };
 export type ClientEvent = keyof ClientEvents;

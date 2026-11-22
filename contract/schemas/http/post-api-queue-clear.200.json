@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "post-api-queue-clear.200",
+  "type": "object",
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "file": {
+            "type": "string"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "between": {
+            "type": "string",
+            "enum": [
+              "sameTool",
+              "toolChange",
+              "toolChangeSkipped",
+              "noTool",
+              "unknownTool"
+            ]
+          },
+          "skipBitChanges": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "file",
+          "tool",
+          "between",
+          "skipBitChanges"
+        ]
+      }
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "idle",
+        "running",
+        "stopped"
+      ]
+    },
+    "reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "headLocked": {
+      "type": "boolean"
+    },
+    "step": {
+      "type": "string",
+      "enum": [
+        "none",
+        "finishing",
+        "loading",
+        "raising",
+        "toolChange"
+      ]
+    },
+    "stoppedAt": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "items",
+    "state",
+    "reason",
+    "headLocked",
+    "step",
+    "stoppedAt"
+  ]
+}

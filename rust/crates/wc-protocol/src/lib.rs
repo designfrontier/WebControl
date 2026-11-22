@@ -15,6 +15,8 @@ pub mod machine;
 pub mod main;
 #[path = "slices/optical.rs"]
 pub mod optical;
+#[path = "slices/queue.rs"]
+pub mod queue;
 #[path = "slices/settings.rs"]
 pub mod settings;
 #[path = "slices/system.rs"]

@@ -211,7 +211,7 @@ impl Machine {
         let version = self.firmware_version;
         let options = Options {
             z_target,
-            change_tool,
+            change_tool: change_tool && !self.skips_bit_changes(),
             current_tool: self.job.tool,
             safe_height_mm: safe_height,
             current_z_mm: None,
@@ -256,10 +256,14 @@ impl Machine {
         }
         self.job.flow = flow;
         self.leds.light(Led::Play);
+        self.queue_played();
         None
     }
 
     pub(crate) fn pause_run(&mut self, effects: &mut Vec<Effect>) -> Option<String> {
+        if self.job.flow != Flow::Streaming {
+            self.queue_paused(effects);
+        }
         if self.job.flow == Flow::Streaming {
             self.job.flow = Flow::Paused;
             effects.push(pause_button(PauseButton::Resume));
@@ -290,6 +294,9 @@ impl Machine {
             state => state,
         };
         self.job.manual_z = None;
+        if tool_change {
+            self.queue_tool_fitted();
+        }
         self.release_firmware(now, effects);
         if manual {
             self.job.flow = if self.job.flow.in_job() { Flow::Streaming } else { Flow::Idle };
@@ -317,6 +324,7 @@ impl Machine {
 
     /// Stop: `!` at once, the queue dropped, and every pause and the job forgotten.
     pub(crate) fn stopped(&mut self, now: Duration, effects: &mut Vec<Effect>) {
+        self.queue_stop("Stop was pressed.", effects);
         self.stats.stopping();
         self.probing = false;
         self.measure = None;
@@ -378,6 +386,7 @@ impl Machine {
 
     /// `_refuseStreamLine`: the job pauses before a line the controller cannot safely take.
     fn refuse_line(&mut self, alert: (String, String), effects: &mut Vec<Effect>) {
+        self.queue_stop(&format!("Line {} was not sent: {}.", self.index + 1, alert.0), effects);
         effects.push(broadcast(&ActivateModal::titled_alert(&alert.0, &alert.1)));
         self.pause_run(effects);
     }
@@ -454,7 +463,7 @@ impl Machine {
         let Some(raw) = self.gcode.get(self.index) else {
             return self.end_job();
         };
-        let line = sanitise(raw);
+        let line = self.queue_skip_bit_change(sanitise(raw), effects);
         let (to_send, settled) = self.after_restart(tool_change_line(&line, self.job.next_tool, self.job.tool).line);
         let shifted = match self.as_written(&to_send) {
             Ok(shifted) => shifted,
@@ -477,6 +486,7 @@ impl Machine {
         if self.index + 1 < self.gcode.len() {
             self.index += 1;
         } else {
+            self.queue_ran_out();
             self.end_job();
         }
     }

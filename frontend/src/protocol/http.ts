@@ -44,6 +44,15 @@ import {
 import { machineSetupSchema, quickConfigureSchema } from "./machine";
 import { mainScreenStateSchema, pacingStatsSchema, pacingUpdateSchema, startupStateSchema } from "./main";
 import {
+  jobQueueSchema,
+  queueAddSchema,
+  queueContinueSchema,
+  queueEmptySchema,
+  queueMoveSchema,
+  queueOverrideSchema,
+  queueRemoveSchema,
+} from "./queue";
+import {
   settingsRejectionSchema,
   settingsSectionIds,
   settingsSectionSchema,
@@ -240,6 +249,45 @@ const opticalEndpoints: HttpEndpoint[] = [
   ),
 ];
 
+const queueWrite = (path: string, summary: string, body: z.ZodType, refused: string, missing?: string) =>
+  api({
+    method: "POST",
+    path,
+    summary,
+    body: json(body),
+    responses: Object.fromEntries(
+      [
+        [200, json(jobQueueSchema, "The queue after the change, also broadcast as jobQueue")],
+        [400, error("A malformed body")],
+        [404, missing ? error(missing) : undefined],
+        [409, error(refused)],
+      ].filter(([, body]) => body),
+    ),
+  });
+
+const IN_USE = "The first file is loaded for a job or between files";
+
+/** The job queue's writes; each answers the whole queue (Rust only). */
+const queueWrites = [
+  queueWrite("/api/queue/add", "Add a library file to the end", queueAddSchema, "Full", "Not in the gcode library"),
+  queueWrite("/api/queue/move", "Move a queued file to another place", queueMoveSchema, IN_USE, "No such queued file"),
+  queueWrite("/api/queue/remove", "Remove a queued file", queueRemoveSchema, IN_USE, "No such queued file"),
+  queueWrite(
+    "/api/queue/override",
+    "Turn a queued file's bit-change override on or off",
+    queueOverrideSchema,
+    IN_USE,
+    "No such queued file",
+  ),
+  queueWrite("/api/queue/clear", "Remove every queued file but one in use", queueEmptySchema, "Never refused"),
+  queueWrite(
+    "/api/queue/continue",
+    "Start the first file from line 1 (Z rises and the tool is checked, as between files) or where Stop left it",
+    queueContinueSchema,
+    "Empty, disconnected, or a job, an alarm or a load holds the machine",
+  ),
+];
+
 const toolInvalid = error("Not a valid tool: the message names the field");
 const noSuchTool = error("No tool with that number in the library");
 const toolsUnsaved = error("tools.json could not be written");
@@ -309,6 +357,8 @@ export const httpEndpoints: HttpEndpoint[] = [
       409: error("An optical scan is running"),
     },
   }),
+  get("/api/queue", "The job queue (Rust only)", jobQueueSchema),
+  ...queueWrites,
   api({
     method: "PUT",
     path: "/api/display/theme",

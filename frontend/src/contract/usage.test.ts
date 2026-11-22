@@ -6,6 +6,7 @@ import * as optical from "../features/calibration/opticalApi";
 import { opticalSettings } from "../features/calibration/opticalFixtures";
 import * as files from "../features/files/api";
 import * as machine from "../features/machine/api";
+import * as queue from "../features/queue/api";
 import { quickConfigureValues } from "../features/machine/fixtures";
 import * as settings from "../features/settings/api";
 import * as system from "../features/system/api";
@@ -126,6 +127,13 @@ const recordUiRequests = async () => {
     () => system.getHelpPage(fetch, "Actions/actions.md"),
     () => system.restoreBackup(fetch, file),
     () => viewer.getViewerSnapshot(fetch),
+    () => queue.getQueue(fetch),
+    () => queue.addToQueue(fetch, "./part.nc", true),
+    () => queue.moveInQueue(fetch, 2, 0),
+    () => queue.removeFromQueue(fetch, 2),
+    () => queue.overrideInQueue(fetch, 2, true),
+    () => queue.clearQueue(fetch),
+    () => queue.continueQueue(fetch, "stopped"),
     () => tools.getToolLibrary(fetch),
     () => tools.getFileTools(fetch),
     () => tools.addTool(fetch, { number: 1, description: '1/4" endmill', diameter: 6.35, units: "mm", flutes: 2 }),
@@ -158,7 +166,7 @@ describe("the HTTP contract", () => {
   it("covers every request the UI makes, and each request body fits its schema", async () => {
     const calls = await recordUiRequests();
     expect(literalApiPaths()).toContainEqual({ method: "GET", url: "/api/main" });
-    expect(calls.filter(({ body }) => body !== undefined)).toHaveLength(33);
+    expect(calls.filter(({ body }) => body !== undefined)).toHaveLength(39);
     const unlisted = [...calls, ...literalApiPaths()].filter(({ method, url }) => !endpointFor(method, url));
     expect(unlisted).toEqual([]);
 
