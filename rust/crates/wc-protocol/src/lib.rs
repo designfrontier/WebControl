@@ -19,6 +19,8 @@ pub mod optical;
 pub mod settings;
 #[path = "slices/system.rs"]
 pub mod system;
+#[path = "slices/tools.rs"]
+pub mod tools;
 #[path = "slices/viewer.rs"]
 pub mod viewer;
 

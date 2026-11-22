@@ -59,6 +59,7 @@ import {
   systemInfoSchema,
   updatesSchema,
 } from "./system";
+import { toolInputSchema, toolLibrarySchema, toolNumberParamsSchema } from "./tools";
 import { viewerSnapshotSchema } from "./viewer";
 
 export type BodyType = "json" | "form" | "text" | "html" | "file";
@@ -70,7 +71,7 @@ export interface HttpBody {
 }
 
 export interface HttpEndpoint {
-  method: "GET" | "POST" | "PUT";
+  method: "GET" | "POST" | "PUT" | "DELETE";
   /** `{name}` marks a path parameter; Flask writes it `<name>`. */
   path: string;
   summary: string;
@@ -239,6 +240,57 @@ const opticalEndpoints: HttpEndpoint[] = [
   ),
 ];
 
+const toolInvalid = error("Not a valid tool: the message names the field");
+const noSuchTool = error("No tool with that number in the library");
+const toolsUnsaved = error("tools.json could not be written");
+
+/** The tool library (Rust only); allowed during a job, as it only labels tool-change prompts. */
+const toolEndpoints: HttpEndpoint[] = [
+  api({
+    method: "GET",
+    path: "/api/tools",
+    summary: "The tool library, sorted by number",
+    responses: { 200: json(toolLibrarySchema), 500: error("tools.json could not be read") },
+  }),
+  api({
+    method: "POST",
+    path: "/api/tools",
+    summary: "Add a tool; also broadcasts toolLibrary",
+    body: json(toolInputSchema),
+    responses: {
+      201: json(toolLibrarySchema, "The library after the change"),
+      400: toolInvalid,
+      409: error("The library already has a tool with that number"),
+      500: toolsUnsaved,
+    },
+  }),
+  api({
+    method: "PUT",
+    path: "/api/tools/{number}",
+    summary: "Replace a tool, possibly renumbering it; also broadcasts toolLibrary",
+    params: toolNumberParamsSchema,
+    body: json(toolInputSchema),
+    responses: {
+      200: json(toolLibrarySchema, "The library after the change"),
+      400: toolInvalid,
+      404: noSuchTool,
+      409: error("Another tool already has the new number"),
+      500: toolsUnsaved,
+    },
+  }),
+  api({
+    method: "DELETE",
+    path: "/api/tools/{number}",
+    summary: "Remove a tool; also broadcasts toolLibrary",
+    params: toolNumberParamsSchema,
+    responses: {
+      200: json(toolLibrarySchema, "The library after the change"),
+      404: noSuchTool,
+      500: toolsUnsaved,
+    },
+  }),
+];
+
 /** Every HTTP route the new UI calls, with what it sends and every answer the backend gives. */
 export const httpEndpoints: HttpEndpoint[] = [
   get("/api/state", "What a client needs on (re)connect", startupStateSchema),
@@ -358,6 +410,7 @@ export const httpEndpoints: HttpEndpoint[] = [
     responses: { 200: json(holeyParametersSchema), 409: error("Nothing calculated yet") },
   }),
   ...opticalEndpoints,
+  ...toolEndpoints,
   get("/api/system/info", "Version, platform, firmware and update status", systemInfoSchema),
   get("/api/system/pid", "Stored PID gains", pidSettingsSchema),
   api({

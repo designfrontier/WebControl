@@ -3,7 +3,7 @@
 
 mod rig;
 
-use rig::{Rig, alerts, written};
+use rig::{Rig, alerts, pushed, written};
 use serde_json::json;
 use wc_machine::Event;
 use wc_machine::files::Request;
@@ -282,4 +282,24 @@ fn a_tool_change_line_never_overfills_the_controller_buffer() {
     let sent: Vec<String> = written(&rig.advance(2000));
     assert!(sent.iter().map(|line| line.len() + 2).sum::<usize>() <= 126, "{sent:?}");
     assert!(sent.len() > 5, "buffered: lines go out without acks: {sent:?}");
+}
+
+#[test]
+fn the_tool_change_prompt_names_the_tool() {
+    let mut rig = Rig::connected();
+    stream(&mut rig, &["G21", "T2 M6", "G1 X2"]);
+    let prompt = pushed(&rig.rx("Tool Change: Please insert tool 2"), "activateModal");
+    assert_eq!(prompt[0]["message"], "Please insert tool 2");
+    assert_eq!((prompt[0]["tool"].clone(), prompt[0]["resume"].clone()), (json!(2), json!("resume")));
+}
+
+#[test]
+fn a_prompt_without_a_number_names_the_tool_the_file_changes_to() {
+    let mut rig = Rig::connected();
+    stream(&mut rig, &["G1 X1", "T4 M6", "G1 X2"]);
+    let prompt = pushed(&rig.rx("Tool Change: Please insert a tool"), "activateModal");
+    assert_eq!(prompt[0]["tool"], 4);
+    let mut fresh = Rig::connected();
+    let prompt = pushed(&fresh.rx("Tool Change: Please insert a tool"), "activateModal");
+    assert!(prompt[0].get("tool").is_none());
 }

@@ -1,6 +1,7 @@
 import { useReducer } from "react";
 import { useClient, useServerMessage } from "../../app/context";
 import { Dialog } from "../../app/Dialog";
+import { ToolChangeInfo } from "../tools";
 import { dialogReducer, initialDialogState } from "./dialogs";
 
 /**
@@ -24,6 +25,7 @@ export const ServerDialogs = () => {
   };
   const bodyId = `server-dialog-${current.id}-body`;
   const pending = dialogs.length - 1;
+  const repeats = current.count > 1 && <span className="muted"> (×{current.count})</span>;
 
   return (
     <Dialog
@@ -54,10 +56,16 @@ export const ServerDialogs = () => {
         </>
       }
     >
-      <p id={bodyId} className="server-dialog-message">
-        {current.message}
-        {current.count > 1 && <span className="muted"> (×{current.count})</span>}
-      </p>
+      {current.tool === undefined ? (
+        <p id={bodyId} className="server-dialog-message">
+          {current.message}
+          {repeats}
+        </p>
+      ) : (
+        <ToolChangeInfo tool={current.tool} message={current.message} messageId={bodyId}>
+          {repeats}
+        </ToolChangeInfo>
+      )}
       {current.progress === "spinner" && <p className="spinner" role="status" aria-label="Working" />}
       {current.progress === "bar" && <progress aria-label="Progress" />}
     </Dialog>
