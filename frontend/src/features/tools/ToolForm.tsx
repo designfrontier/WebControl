@@ -9,7 +9,7 @@ import type { Draft } from "./draft";
 import "./tools.css";
 
 interface Props {
-  /** The values to start from: a library entry or a blank tool. */
+  /** The values to start from: a library entry, a file's suggestion, or a blank tool. */
   initial: ToolInput;
   /** The number of the library entry this replaces; a new tool when absent. */
   replaces?: number;

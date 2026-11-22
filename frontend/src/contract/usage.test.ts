@@ -127,6 +127,7 @@ const recordUiRequests = async () => {
     () => system.restoreBackup(fetch, file),
     () => viewer.getViewerSnapshot(fetch),
     () => tools.getToolLibrary(fetch),
+    () => tools.getFileTools(fetch),
     () => tools.addTool(fetch, { number: 1, description: '1/4" endmill', diameter: 6.35, units: "mm", flutes: 2 }),
     () => tools.updateTool(fetch, 1, { number: 2, description: "v-bit", notes: "60 deg" }),
     () => tools.deleteTool(fetch, 2),

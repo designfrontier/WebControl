@@ -1,14 +1,51 @@
 import { describe, expect, it } from "vitest";
 import { draftOf, toolInput } from "./draft";
-import { onlyAsksFor, toolDetails, toolHeadline, toolStatus } from "./describe";
-import { libraryTool } from "./fixtures";
+import { onlyAsksFor, toolDetails, toolHeadline, toolNote, toolStatus } from "./describe";
+import { fileTool, libraryTool } from "./fixtures";
 
 describe("toolStatus", () => {
-  const library = [libraryTool(1, '1/4" 2 flute endmill')];
+  const library = [libraryTool(1, '1/4" 2 flute endmill', { diameter: 6.35, units: "mm", flutes: 2, notes: "upcut" })];
 
-  it("names a library tool by its description, and any other by number", () => {
-    expect(toolHeadline(toolStatus(1, library))).toBe('Tool 1 — 1/4" 2 flute endmill');
-    expect(toolHeadline(toolStatus(3, library))).toBe("Tool 3 (not in your tool library)");
+  it("names a library tool the file does not describe from the library", () => {
+    const status = toolStatus(1, library, [fileTool(1, null)]);
+    expect(toolHeadline(status)).toBe('Tool 1 — 1/4" 2 flute endmill');
+    expect(toolNote(status)).toBeNull();
+  });
+
+  it("names a tool neither knows as not in the library", () => {
+    const status = toolStatus(3, library, [fileTool(3, null)]);
+    expect(toolHeadline(status)).toBe("Tool 3 (not in your tool library)");
+    expect(toolNote(status)).toBeNull();
+  });
+
+  it("shows the file's description for a tool the library lacks, and suggests adding it", () => {
+    const status = toolStatus(6, library, [
+      fileTool(6, '6.35 mm (1/4") flat end mill', { diameter: 6.35, units: "mm" }),
+    ]);
+    expect(toolHeadline(status)).toBe('Tool 6 — 6.35 mm (1/4") flat end mill');
+    expect(toolNote(status)).toBe("From this file; not in your tool library.");
+    expect(status).toMatchObject({
+      kind: "fromFile",
+      suggestion: { number: 6, description: '6.35 mm (1/4") flat end mill', diameter: 6.35, units: "mm", flutes: null },
+    });
+  });
+
+  it("shows the file's description over a different library one, and suggests updating the entry", () => {
+    const status = toolStatus(1, library, [fileTool(1, "6 mm flat end mill", { diameter: 6, units: "mm" })]);
+    expect(toolHeadline(status)).toBe("Tool 1 — 6 mm flat end mill");
+    expect(toolNote(status)).toBe('From this file; your library says 1/4" 2 flute endmill.');
+    expect(status).toMatchObject({
+      kind: "differs",
+      suggestion: { number: 1, description: "6 mm flat end mill", diameter: 6, units: "mm", flutes: 2, notes: "upcut" },
+    });
+    const unsized = toolStatus(1, library, [fileTool(1, "endmill", { flutes: 3 })]);
+    expect(unsized).toMatchObject({ suggestion: { diameter: 6.35, units: "mm", flutes: 3 } });
+  });
+
+  it("treats case, spacing and a trailing full stop as the same description", () => {
+    const status = toolStatus(1, library, [fileTool(1, '1/4"  2 FLUTE endmill.')]);
+    expect(status.kind).toBe("library");
+    expect(toolHeadline(status)).toBe('Tool 1 — 1/4"  2 FLUTE endmill.');
   });
 });
 

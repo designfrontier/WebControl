@@ -9,7 +9,16 @@ const VIEWPORTS = {
   ipad: { width: 1180, height: 820 },
   phone: { width: 390, height: 844 },
 };
-const FILE = ["G21", "G90", "T11 M6", "G0 X10 Y10", "T16 M6", "G0 X20"];
+const FILE = [
+  "(T11 D=6 CR=0 - ZMIN=-1 - flat end mill)",
+  "(T16 D=3.175 CR=0 - ZMIN=-1 - flat end mill)",
+  "G21",
+  "G90",
+  "T11 M6",
+  "G0 X10 Y10",
+  "T16 M6",
+  "G0 X20",
+];
 
 test.use({ baseURL: simulatorURL, viewport: VIEWPORTS.desktop });
 test.describe.configure({ mode: "serial" });
@@ -73,7 +82,10 @@ test("Settings > Tools adds a tool and follows edits from elsewhere", async ({ p
   await shoot(page, "settings-tools", library);
 });
 
-test("the tool-change prompt names the bit from the library", async ({ page, request }) => {
+test("the tool-change prompt names the bit from the file, and the library takes the file's word", async ({
+  page,
+  request,
+}) => {
   await request.post("/api/files/gcode/directories", { data: { name: "tools" } });
   const file = { name: "two-tools.nc", mimeType: "text/plain", buffer: Buffer.from(`${FILE.join("\n")}\n`) };
   const upload = await request.post("/uploadGCode", { multipart: { selectedDirectory: "tools", "file[]": file } });
@@ -82,12 +94,39 @@ test("the tool-change prompt names the bit from the library", async ({ page, req
   await page.goto("/");
   await waitForServer(page);
   await closeServerDialogs(page);
-  await page.getByRole("region", { name: "Run" }).getByRole("button", { name: "Play" }).click();
+  const run = page.getByRole("region", { name: "Run" });
+  const viewer = page.getByRole("figure");
+  const summary = viewer.getByText("Tools: T11, T16");
+  await expect(summary).toBeVisible();
+  await summary.click();
+  await expect(viewer.getByText("From this file; not in your tool library.")).toBeVisible();
+  await shoot(page, "file-tools", viewer);
+  await summary.click();
+  await run.getByRole("button", { name: "Play" }).click();
 
   const prompt = page.getByRole("dialog", { name: "Notification" });
-  await expect(prompt).toContainText('Insert Tool 11 — 1/4" 2 flute endmill', { timeout: 15_000 });
+  await expect(prompt).toContainText("Insert Tool 11 — 6 mm flat end mill", { timeout: 15_000 });
   await expect(prompt).not.toContainText("Please insert tool");
+  await expect(prompt).toContainText('From this file; your library says 1/4" 2 flute endmill.');
   await shoot(page, "tool-change-prompt", prompt);
+
+  await prompt.getByRole("button", { name: "Update tool library" }).click();
+  await prompt.getByRole("form", { name: "Edit tool 11" }).getByRole("button", { name: "Update tool library" }).click();
+  await expect(prompt.getByText(/your library says/)).toHaveCount(0);
   await prompt.getByRole("button", { name: "Resume" }).click();
-  await expect(prompt).toContainText("Insert Tool 16 (not in your tool library)", { timeout: 15_000 });
+
+  await expect(prompt).toContainText('Insert Tool 16 — 3.175 mm (1/8") flat end mill', { timeout: 15_000 });
+  await prompt.getByRole("button", { name: "Add to tool library" }).click();
+  await shoot(page, "tool-change-add", prompt);
+  await prompt.getByRole("form", { name: "New tool" }).getByRole("button", { name: "Add to tool library" }).click();
+  await expect(prompt.getByText(/not in your tool library/)).toHaveCount(0);
+
+  const saved = (await (await request.get("/api/tools")).json()) as {
+    tools: { number: number; description: string }[];
+  };
+  expect(saved.tools.map(({ number, description }) => `${number} ${description}`)).toEqual([
+    "3 60° V-bit",
+    "11 6 mm flat end mill",
+    '16 3.175 mm (1/8") flat end mill',
+  ]);
 });

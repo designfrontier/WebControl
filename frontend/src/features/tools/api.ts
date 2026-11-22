@@ -1,9 +1,11 @@
 import { ApiError, getJson, requestJson, sendJson } from "../../api/http";
 import type { Fetch } from "../../api/http";
-import { errorBodySchema, toolLibrarySchema } from "../../protocol";
+import { errorBodySchema, fileToolsSchema, toolLibrarySchema } from "../../protocol";
 import type { ToolInput } from "../../protocol";
 
 export const getToolLibrary = (fetchImpl: Fetch) => getJson(fetchImpl, "/tools", toolLibrarySchema);
+
+export const getFileTools = (fetchImpl: Fetch) => getJson(fetchImpl, "/files/gcode/tools", fileToolsSchema);
 
 export const addTool = (fetchImpl: Fetch, tool: ToolInput) =>
   sendJson(fetchImpl, "POST", "/tools", tool, toolLibrarySchema);

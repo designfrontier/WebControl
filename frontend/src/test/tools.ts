@@ -1,4 +1,4 @@
-import type { Tool, ToolInput } from "../protocol";
+import type { FileTool, Tool, ToolInput } from "../protocol";
 import { fakeFetch, jsonResponse } from "./fakeFetch";
 
 interface Recorded {
@@ -17,7 +17,11 @@ const stored = (input: ToolInput): Tool => ({
 });
 
 /** A fetch backed by an in-memory tool library that refuses taken and missing numbers as the server does. */
-export const toolServer = (initial: Tool[], routes: Parameters<typeof fakeFetch>[0] = {}) => {
+export const toolServer = (
+  initial: Tool[],
+  fileTools: FileTool[] = [],
+  routes: Parameters<typeof fakeFetch>[0] = {},
+) => {
   let tools = [...initial];
   const recorded: Recorded[] = [];
   const answer = (next: Tool[], status = 200) => {
@@ -27,6 +31,7 @@ export const toolServer = (initial: Tool[], routes: Parameters<typeof fakeFetch>
   const taken = (number: number) => jsonResponse({ error: `Your tool library already has a tool ${number}.` }, 409);
   const base = fakeFetch({
     "/api/tools": () => jsonResponse({ tools }),
+    "/api/files/gcode/tools": () => jsonResponse({ tools: fileTools }),
     ...routes,
   });
   const fetch = async (input: string, init?: RequestInit) => {

@@ -50,7 +50,8 @@
   overflow-wrap: anywhere;
 }
 
-.tool-text p {
+.tool-text p,
+.tool-status p {
   margin: 0;
 }
 
@@ -118,6 +119,50 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+}
+
+.tool-status {
+  display: grid;
+  gap: var(--space-1);
+  justify-items: start;
+}
+
+.tool-status[data-kind="differs"] .tool-note {
+  color: var(--warn);
+}
+
+.tool-status > .tool-form {
+  justify-self: stretch;
+}
+
+/* The list opens upward over the viewer, so the caption row never grows. */
+.viewer-caption:has(> .file-tools) {
+  position: relative;
+}
+
+.file-tools summary {
+  color: var(--text);
+  cursor: pointer;
+}
+
+.file-tools ul {
+  position: absolute;
+  bottom: calc(100% + var(--space-1));
+  left: 0;
+  z-index: 20;
+  display: grid;
+  gap: var(--space-3);
+  width: min(26rem, 100%);
+  max-height: 60vh;
+  margin: 0;
+  padding: var(--space-3);
+  overflow: auto;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  box-shadow: var(--shadow);
+  font-size: 0.9rem;
 }
 
 /* Phones: one column, the actions under the description. */
