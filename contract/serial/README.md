@@ -226,6 +226,7 @@ the backend had been quiet for `quiet` seconds, one line per settle.
 | `queue_same_tool_starts_at_once_new_tool_waits` | Tool 1 changed by hand, three queued files: Continue raises Z and runs the first (tool 1); a file with the same tool starts as soon as Z has risen; one with another tool gets `G00 Z…`, `M5`, `T2 M6` and the firmware's prompt first |
 | `queue_override_skips_bit_changes` | A queued file with its bit-change override on starts with no `M5`/`T2 M6` though it names tool 2; its own `T2 M6` is never sent and `T3 M6 G0 X60` goes out as `G0 X60` (Rust-intended deviation 16) |
 | `park_after_a_file_finishes` | With a park position set, a file shifted by home runs to its end; once its last line is answered, units, `G90`, Z to the safe height and a rapid to the park position, unshifted (Rust-intended deviation 17) |
+| `park_at_a_tool_change_then_resume` | Park for Tool Changes on: at a file's `T2 M6` prompt, `~`, then units, `G90`, Z to the safe height and a rapid to the park position with the prompt still up; Resume returns to the file's XY at safe height and streams on, and the file's end parks again (Rust-intended deviation 17) |
 | `real_*` | the owner's real jobs, with the controller's recorded replies ("Real jobs" below) |
 
 ## Adding or changing a transcript
@@ -671,4 +672,9 @@ Where the Rust backend writes something different from Python by owner decision.
     refused or twice-lost line or a failed probe ends the job before its end, or for a queue Pause stopped; Pause, a
     command sent before the last line is answered, or an `error:` for it, cancels it. The Park action sends the same lines when idle. A park the gates refuse (safe height 0 or less, off
     the bed, an alarm, a missed restart) writes nothing, logs `PARK SKIPPED` and alerts. Transcript:
-    `park_after_a_file_finishes`.
+    `park_after_a_file_finishes`. With Park for Tool Changes on (`parkForToolChange`, off by default), a job's tool
+    change, once the firmware has paused for it, gets `~` (as a jog does) and the same park lines, the prompt still up;
+    Resume returns to the line at safe height as after a jog. The queue's bit change between files parks too; Resume,
+    or Touch Z, first raises Z and rapids back to where the sled was (Touch Z then needs pressing again to probe). An
+    alarm, a missed restart, no park position or a line Resume could not return to leaves the prompt where it is,
+    with an alert and `PARK SKIPPED trigger=tool_change`. Transcript: `park_at_a_tool_change_then_resume`.

@@ -52,6 +52,24 @@ Z stays at the safe height. A file that switched the controller to inches (`G20`
 the stored millimetres. The log and the controller messages show `PARK START trigger=file|queue|button x_mm=... y_mm=...
 units=... x=... y=...`, and `PARK SET` when Set Park Here stores a position.
 
+## Parking for tool changes
+
+Turn on **Settings ▸ Maslow ▸ Park for Tool Changes** to change bits at the park position. It needs a park position.
+
+- **A file's tool change** (`M6`): when the controller stops for the new bit, Z rises to the safe height and the sled
+  goes to the park position. The tool change prompt stays up. Change the bit and press **Resume**: Z stays up, the
+  sled goes back to where the file stopped, and the file goes on, lowering the new bit there as it does after any
+  tool change.
+- **A bit change between queued files**: the sled parks the same way. **Resume** raises Z and takes the sled back to
+  where the last file ended before the next file starts.
+- **Touch Z** at a parked bit change between queued files first takes the sled back over the work at the safe
+  height, without probing. Lower the bit close to the work and press **Touch Z** again. During a file's tool change,
+  set Z after Resume if the surface at the park position is not the same height as the work.
+
+If the sled cannot park (an alarm, a controller that did not restart, no park position, or a line WebControl could not
+return to), the prompt shows where the sled is, an alert says why, and the log shows `PARK SKIPPED
+trigger=tool_change`. A bit change the queue's override skips does not park. Stop at a parked prompt leaves Z up.
+
 ## When Park is refused
 
 Park, and the park after a job, are refused with a message when:

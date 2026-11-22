@@ -43,3 +43,14 @@ switched off at its own switch, the bit removed, Z zeroed 30 mm above the work, 
       after the second (`PARK START trigger=queue`).
 - [ ] Set Settings ▸ Maslow ▸ Z-Axis Safe Travel Height to 0 by editing `~/.WebControl/webcontrol.json` and restart:
       the file finishes, the sled does not move, and an alert and `PARK SKIPPED` name the safe height. Put it back.
+
+## 4. Park for tool changes
+
+- [ ] Turn on Settings ▸ Maslow ▸ Park for Tool Changes. Play `printf 'G21\nG90\nG0 Z5\nG0 X0 Y0\nG1 Z-2 F100\nG1 X30 F600\nG0 Z5\nT2 M6\nG0 X60 Y0\nG1 Z-2 F100\nG1 X90\nG0 Z5\n' > ~/park-tool.nc`.
+      At the tool change the sled rises and goes to the park position (`PARK START trigger=tool_change`); the prompt
+      stays up.
+- [ ] Press **Resume**: the sled goes back to X30 Y0 at the safe height, then the file goes on; at its end it parks.
+- [ ] Play it again and press **Stop** at the parked prompt: Z stays up, nothing else moves.
+- [ ] Queue `park-a.nc` and `park-tool.nc` with tool 1 fitted: between them the sled parks; **Touch Z** takes it
+      back over the work without probing; lower the bit, **Touch Z** again probes; **Resume** starts the next file.
+- [ ] Turn the setting off: a tool change waits where the sled is, as before.
