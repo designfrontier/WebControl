@@ -140,8 +140,11 @@ after trimming, a number outside 1–99999, or a diameter without units is a 400
 taken is a 409; a missing tool is a 404. Unlike the settings, the library is **not** under the job lock: it only
 labels prompts and never reaches the controller, and adding a tool while a tool change waits is the point.
 
-A tool-change `activateModal` notification carries `tool`, the number the firmware asked for (else the one the file
-was changing to); the UI shows the library's description of it.
+`GET /api/files/gcode/tools` lists the tools the loaded file changes to or describes in its CAM comments (Fusion 360,
+Carbide Create, Estlcam, Vectric, plain `(T1 ...)`), in the order the file first names them, with `description`
+`null` where it only gives the number. A tool-change `activateModal` notification carries `tool`, the number the
+firmware asked for (else the one the file was changing to); the UI shows the file's description of it, else the
+library's.
 
 ## Regenerating and checking
 

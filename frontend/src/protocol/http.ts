@@ -59,7 +59,7 @@ import {
   systemInfoSchema,
   updatesSchema,
 } from "./system";
-import { toolInputSchema, toolLibrarySchema, toolNumberParamsSchema } from "./tools";
+import { fileToolsSchema, toolInputSchema, toolLibrarySchema, toolNumberParamsSchema } from "./tools";
 import { viewerSnapshotSchema } from "./viewer";
 
 export type BodyType = "json" | "form" | "text" | "html" | "file";
@@ -289,6 +289,7 @@ const toolEndpoints: HttpEndpoint[] = [
       500: toolsUnsaved,
     },
   }),
+  get("/api/files/gcode/tools", "The tools the loaded gcode uses or describes in its comments", fileToolsSchema),
 ];
 
 /** Every HTTP route the new UI calls, with what it sends and every answer the backend gives. */

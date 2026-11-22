@@ -49,7 +49,8 @@ export const ToolsSection = () => {
     <div className="settings-section tools-section">
       <h3>Tools</h3>
       <p className="muted">
-        Tool-change prompts name each tool from here. Changes are allowed during a job.{" "}
+        Tool-change prompts and the loaded file&apos;s tool list name each tool from here. A file&apos;s own tool notes
+        can add to it. Changes are allowed during a job.{" "}
         <Link to="/help/GettingStarted/toolLibrary.md">How the tool library works</Link>
       </p>
       {editing.kind === "new" ? (
@@ -65,7 +66,7 @@ export const ToolsSection = () => {
         </p>
       )}
       {tools.length === 0 ? (
-        <p className="muted">Your tool library is empty. Add the bits your files call for.</p>
+        <p className="muted">Your tool library is empty. Add a tool, or load a file and add the tools it describes.</p>
       ) : (
         <ul className="tool-list" aria-label="Tool library">
           {tools.map((tool) => (

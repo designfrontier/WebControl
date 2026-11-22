@@ -4,6 +4,7 @@ import { useClient, useFetch, useMachine, useServerMessage } from "../../app/con
 import { useTheme } from "../../app/themePreference";
 import { selectGcodeLocked, selectProbing, selectRunState } from "../../state/machine";
 import { LoadedFile } from "../files/LoadedFile";
+import { FileTools } from "../tools";
 import { getViewerSnapshot } from "./api";
 import { CameraOverlay } from "./CameraOverlay";
 import { createViewerEngine } from "./engine";
@@ -293,6 +294,7 @@ export const Viewer = ({ currentLine = "" }: { currentLine?: string }) => {
           <>
             {gcodeFile === null ? null : <LoadedFile className="viewer-file" />}
             <span>{data.gcode ? `${cutSegments} cut and ${rapidSegments} rapid moves` : "No gcode loaded"}</span>
+            <FileTools />
           </>
         )}
         {data.error ? <span role="alert">{data.error}</span> : null}

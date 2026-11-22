@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get-api-files-gcode-tools.200",
+  "type": "object",
+  "properties": {
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99999,
+            "description": "The T number the gcode calls it by"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "diameter": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "units": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "mm",
+                  "in"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "flutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "number",
+          "description",
+          "diameter",
+          "units",
+          "flutes"
+        ]
+      }
+    }
+  },
+  "required": [
+    "tools"
+  ]
+}

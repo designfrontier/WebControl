@@ -55,6 +55,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/files/gcode/loaded", get(files::loaded_gcode))
         .route("/api/files/gcode/text", get(files::text))
         .route("/api/files/gcode/custom", get(files::custom))
+        .route("/api/files/gcode/tools", get(tools::in_file))
         .route("/api/tools", get(tools::library).post(tools::add))
         .route("/api/tools/{number}", put(tools::replace).delete(tools::remove))
         .route("/api/boards/files", get(boards::library))

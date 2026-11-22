@@ -1,4 +1,4 @@
-//! The `tools` slice: the user's tool library.
+//! The `tools` slice: the user's tool library and the tools a loaded file names in its CAM comments.
 
 use serde::{Deserialize, Serialize};
 
@@ -31,4 +31,20 @@ pub struct ToolLibrary {
 
 impl Message for ToolLibrary {
     const COMMAND: &'static str = "toolLibrary";
+}
+
+/// A tool the loaded file uses or describes.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct FileTool {
+    pub number: u32,
+    pub description: Option<String>,
+    pub diameter: Option<f64>,
+    pub units: Option<ToolUnits>,
+    pub flutes: Option<u32>,
+}
+
+/// `GET /api/files/gcode/tools`.
+#[derive(Debug, Clone, PartialEq, Default, Serialize)]
+pub struct FileTools {
+    pub tools: Vec<FileTool>,
 }

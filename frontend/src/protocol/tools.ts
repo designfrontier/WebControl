@@ -41,6 +41,21 @@ export type ToolLibrary = z.infer<typeof toolLibrarySchema>;
 
 export const toolNumberParamsSchema = z.object({ number: z.string().regex(/^\d+$/).describe("The tool's number") });
 
+/** A tool the loaded gcode uses or describes, read from its CAM comments. */
+export const fileToolSchema = z.object({
+  number: toolNumber,
+  /** What the file's comments say the tool is, or null when it only names the number. */
+  description: z.string().nullable(),
+  diameter: z.number().nullable(),
+  units: toolUnitsSchema.nullable(),
+  flutes: z.number().int().nullable(),
+});
+export type FileTool = z.infer<typeof fileToolSchema>;
+
+/** GET /api/files/gcode/tools: in the order the file first mentions them. */
+export const fileToolsSchema = z.object({ tools: z.array(fileToolSchema) });
+export type FileTools = z.infer<typeof fileToolsSchema>;
+
 export const toolsMessages = {
   /** Broadcast after every change to the tool library. */
   toolLibrary: toolLibrarySchema,

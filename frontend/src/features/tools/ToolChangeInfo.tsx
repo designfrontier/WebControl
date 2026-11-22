@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import { onlyAsksFor, toolHeadline, toolStatus } from "./describe";
-import { useToolLibrary } from "./hooks";
-import "./tools.css";
+import { onlyAsksFor, toolStatus } from "./describe";
+import { useFileTools, useToolLibrary } from "./hooks";
+import { ToolStatusView } from "./ToolStatusView";
 
 interface Props {
   tool: number;
@@ -11,24 +11,35 @@ interface Props {
   children?: ReactNode;
 }
 
-/** The tool-change prompt's text: which bit to insert, from the tool library. */
+/** The tool-change prompt's text: which bit to insert, from the loaded file and the tool library. */
 export const ToolChangeInfo = ({ tool, message, messageId, children }: Props) => {
-  const { load } = useToolLibrary();
+  const fileTools = useFileTools();
+  const { load, replace } = useToolLibrary();
   const folded = onlyAsksFor(message, tool);
-  const library = load.status === "ready" ? load.tools : [];
-  const headline = load.status === "loading" ? `Tool ${tool}` : toolHeadline(toolStatus(tool, library));
-  return (
-    <>
-      {!folded && (
-        <p id={messageId} className="server-dialog-message">
-          {message}
+  const firmware = !folded && (
+    <p id={messageId} className="server-dialog-message">
+      {message}
+      {children}
+    </p>
+  );
+  if (load.status === "loading")
+    return (
+      firmware || (
+        <p id={messageId} className="tool-headline">
+          Insert Tool {tool}
           {children}
         </p>
-      )}
-      <p className="tool-headline" id={folded ? messageId : undefined}>
-        {folded ? `Insert ${headline}` : headline}
-        {folded && children}
-      </p>
+      )
+    );
+  const library = load.status === "ready" ? load.tools : [];
+  return (
+    <>
+      {firmware}
+      <ToolStatusView
+        status={toolStatus(tool, library, fileTools)}
+        onSaved={replace}
+        {...(folded ? { lead: "Insert ", headlineId: messageId, children } : {})}
+      />
     </>
   );
 };
