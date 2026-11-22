@@ -58,7 +58,7 @@
     {"type": "rx", "line": "M6"},
     {"type": "rx", "line": "Tool Change: Please insert tool 2"},
     {"type": "rx", "line": "Maslow Paused"},
-    {"type": "expect", "state": {"uploadFlag": 0, "jobInProgress": true, "manualZAxisAdjust": true, "currentTool": 2}, "emitted": [{"command": "activateModal", "data": {"message": "Please insert tool 2", "resume": "resume"}}]},
+    {"type": "expect", "state": {"uploadFlag": 0, "jobInProgress": true, "manualZAxisAdjust": true, "currentTool": 2}, "emitted": [{"command": "activateModal", "data": {"message": "Please insert tool 2", "resume": "resume", "tool": 2}}]},
     {"type": "ui", "action": {"command": "resumeRun", "arg": "", "arg1": ""}},
     {"type": "tx", "bytes": "~\n", "realtime": true},
     {"type": "rx", "line": "ok"},
