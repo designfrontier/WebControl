@@ -305,8 +305,8 @@ impl Machine {
                 }
             }
             Reply::Error(_) | Reply::Other(_) => {
-                if matches!(reply, Reply::Error(_)) && (self.job.flow.in_job() || self.park_waits()) {
-                    self.park_spoiled();
+                if matches!(reply, Reply::Error(_)) {
+                    self.park_cancelled();
                 }
                 self.upgrade_report(line);
                 if !self.pid_line(line, now, effects) && !line.is_empty() {

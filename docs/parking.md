@@ -26,11 +26,12 @@ never moves the park position.
   starts.
 - **Park** is pressed (control screen or Actions ▸ Calibration and setup), when no job is running or paused.
 
-It never parks when a job ends any other way: Stop, an alarm, a lost USB connection, a controller restart, a line
-WebControl refused to send, an `error:` from the controller, or a failed probe. Once one of those happens during a
-run, that run does not park even if you resume it to the end. Pressing Pause, or sending the machine anything else (a
-jog, a macro, typed gcode), after the last line went out but before the controller finished it also cancels the
-park. A queue that Pause or any other stop halted does not park when its file ends.
+It parks whenever the file reaches its end, even after a pause, an alarm or a lost connection you resumed from. It
+never parks when the job does not reach its end: Stop, an alarm, a lost USB connection, a controller restart, a line
+WebControl refused to send, or a failed probe that ends the job there. Pressing Pause, or sending the machine anything
+else (a jog, a macro, typed gcode), after the last line went out but before the controller finished it, or an
+`error:` for that line, also cancels the park. A queue that Pause or any other stop halted does not park when its
+file ends.
 
 ## What it sends
 

@@ -200,7 +200,7 @@ impl Machine {
 
     /// The queue starts nothing more until Continue or Play on its first file.
     pub(crate) fn queue_stop(&mut self, why: &str, effects: &mut Vec<Effect>) {
-        self.park_spoiled();
+        self.park_cancelled();
         let oldest = self.controller.accounting.oldest_index();
         let part_way = self.job.flow.in_job() || (self.queue.step == Step::Finishing && oldest.is_some());
         if let Some(id) = self.head_id().filter(|_| part_way) {

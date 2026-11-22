@@ -161,7 +161,7 @@ fn a_lost_link_or_a_controller_reset_before_the_last_ack_never_parks() {
 }
 
 #[test]
-fn a_run_with_a_refused_line_or_a_controller_error_never_parks_even_when_resumed_to_the_end() {
+fn a_run_with_a_refused_line_or_a_controller_error_parks_once_it_reaches_the_end() {
     let mut rig = parked();
     play(&mut rig, "G21\nG1 X10 F100 (unclosed\nG1 X20\n");
     let sent = rig.run_to_quiet();
@@ -170,14 +170,19 @@ fn a_run_with_a_refused_line_or_a_controller_error_never_parks_even_when_resumed
     rig.act_with("moveGcodeIndex", json!(1), json!(""));
     rig.act("resumeRun");
     let sent = rig.run_to_quiet();
-    assert!(sent.contains(&"G1 X20".to_string()) && !sent.contains(&"G00 X-300.0 Y200.5".to_string()), "{sent:?}");
+    assert!(sent.ends_with(&PARKED_MM.map(String::from)), "{sent:?}");
 
     let mut rig = parked();
     play(&mut rig, "G21\nG1 X10 F100\nG1 X20\n");
     rig.advance(100);
     rig.rx("error: Bad number format");
     let sent = rig.run_to_quiet();
-    assert_eq!(sent, ["G21", "G1 X10 F100", "G1 X20"], "the job went on, but does not park");
+    assert_eq!(sent[3..], PARKED_MM, "the job went on to its end, so it parks: {sent:?}");
+
+    let mut rig = parked();
+    all_but_the_last_acked(&mut rig, "G21\nG1 X10 F100\n");
+    rig.rx("error: Bad number format");
+    assert_eq!(rig.run_to_quiet()[2..], [] as [&str; 0], "an error for the last line cancels the park");
 }
 
 #[test]

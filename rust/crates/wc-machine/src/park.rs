@@ -49,31 +49,19 @@ impl Trigger {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Park {
-    /// Since the run started something ended it abnormally or the controller refused a line, so it never parks.
-    spoiled: bool,
-    /// The run ended normally; it parks once the controller has finished every line.
+    /// The file's last line went out; it parks once the controller has finished every line.
     pending: Option<Trigger>,
     shown: Option<Point>,
 }
 
 impl Park {
     pub fn new(settings: &Settings) -> Park {
-        Park { spoiled: false, pending: None, shown: position(settings) }
+        Park { pending: None, shown: position(settings) }
     }
 }
 
 impl Machine {
-    pub(crate) fn park_run_started(&mut self) {
-        self.park.spoiled = false;
-        self.park.pending = None;
-    }
-
-    pub(crate) fn park_spoiled(&mut self) {
-        self.park.spoiled = true;
-        self.park.pending = None;
-    }
-
-    /// The user sent the machine something else before the park went out.
+    /// The user sent the machine something else, or something ended the job, before the park went out.
     pub(crate) fn park_cancelled(&mut self) {
         self.park.pending = None;
     }
@@ -83,7 +71,7 @@ impl Machine {
     }
 
     pub(crate) fn park_when_finished(&mut self, trigger: Trigger) {
-        if !self.park.spoiled && position(&self.settings).is_some() {
+        if position(&self.settings).is_some() {
             self.park.pending = Some(trigger);
         }
     }

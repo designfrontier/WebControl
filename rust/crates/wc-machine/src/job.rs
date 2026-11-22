@@ -232,7 +232,7 @@ impl Machine {
         if self.gcode.is_empty() {
             return Some("No GCode file loaded.".into());
         }
-        self.park_run_started();
+        self.park_cancelled();
         self.job.z_target = self.position.z;
         self.sled.file_modes_reset();
         let mut flow = Flow::Streaming;

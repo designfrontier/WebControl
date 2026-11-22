@@ -38,7 +38,7 @@ switched off at its own switch, the bit removed, Z zeroed 30 mm above the work, 
       `PARK START trigger=file`.
 - [ ] The same file in inches (`G20`, coordinates divided by 25.4) parks at the same place, written in inches.
 - [ ] Play it again and press **Stop** mid-file: the sled does not park.
-- [ ] Play it again and unplug the USB mid-file; replug, resume to the end: the sled does not park.
+- [ ] Play it again and unplug the USB mid-file; replug, resume to the end: the sled parks once the last line has run.
 - [ ] Queue `park-a.nc` twice (G-Code ▸ Job Queue) and start the queue: no park between the two files, one park
       after the second (`PARK START trigger=queue`).
 - [ ] Set Settings ▸ Maslow ▸ Z-Axis Safe Travel Height to 0 by editing `~/.WebControl/webcontrol.json` and restart:
