@@ -320,9 +320,10 @@ top of every file, so as written it would run every move after it relative.
     `T<n> M6`. After an ALARM or `Buffer overflow!`, Play resumes from the oldest unacknowledged line, returning at
     safe height (`alarm_mid_cut_rewinds_and_resumes`); Stop also clears it (owner decision, 2026-11-15).
 12. Z limits: hide below 51.292 and never send B17/B18/B19; on 51.292+ use `$63`/`$64` (mm, shifted by zeroing)
-    and B20 to read them. Since no firmware before 51.292 limits Z, WebControl keeps travel limits of its own on every
-    version (`zAxisUpperLimit`/`zAxisLowerLimit`, 2026-11-22): it refuses any line that would pass one and moves them
-    with each G10 or touch, as the firmware shifts `$63`/`$64` (`contract/serial/README.md`, deviation 18).
+    and B20 to read them. H292 `Axis::set` adds the exact change of zero to both on every `zAxis.set` (G10, a G38.2
+    touch, the manual Z adjust) and saves them to EEPROM; `Axis::write`/`endMove` clamp the Z setpoint to them on every
+    move, probes included, with no alarm or message. The defaults are ±100 mm. WebControl mirrors them to refuse a
+    line past one (`contract/serial/README.md`, deviation 18).
 13. Spindle on 51.29x: send `S` on its own line after M3. A resume or restart that restores `M3`/`M4` on 51.29x
     follows it with the file's last `S` (if it set one); 51.27 and stock get the bare `M3`, which does nothing with
     `$17=0`.
