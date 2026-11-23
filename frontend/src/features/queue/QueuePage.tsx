@@ -138,7 +138,7 @@ export const QueuePage = () => {
                     {item.skipBitChanges && <span className="queue-badge queue-override">bit changes skipped</span>}
                   </span>
                   <span className="queue-between">{fixed ? "Loaded for the job" : betweenText(item, tools)}</span>
-                  <label className="queue-skip">
+                  <label className="queue-skip field-inline">
                     <input
                       type="checkbox"
                       checked={item.skipBitChanges}
@@ -147,7 +147,7 @@ export const QueuePage = () => {
                         const skip = event.target.checked;
                         void run(() => api.skip(item.id, skip), "Could not change the override.")();
                       }}
-                    />{" "}
+                    />
                     Don't stop for bit changes in {baseName(item.file)}
                   </label>
                 </div>

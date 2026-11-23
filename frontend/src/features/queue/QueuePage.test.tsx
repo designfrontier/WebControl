@@ -55,6 +55,7 @@ describe("Job queue screen", () => {
     ]);
     expect(screen.getByRole("checkbox", { name: "Don't stop for bit changes in leg.nc" })).toBeDisabled();
     expect(screen.getByRole("checkbox", { name: "Don't stop for bit changes in bowl.nc" })).toBeChecked();
+    expect(screen.getByText("Don't stop for bit changes in bowl.nc")).toHaveClass("field-inline");
     expect(screen.getByText("Running leg.nc.", { selector: ".queue-status" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Remove jobs/leg.nc" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Move shelf.nc up" })).toBeDisabled();
@@ -174,7 +175,9 @@ describe("Add to queue from Open G-Code", () => {
     const { user } = renderApp("/files/open", { fetch });
     await user.click(await screen.findByRole("radio", { name: "arm.nc" }));
     await user.click(screen.getByRole("button", { name: "Add to queue" }));
-    await user.click(screen.getByRole("checkbox", { name: /Don't stop for bit changes in this file/ }));
+    const skip = screen.getByRole("checkbox", { name: /Don't stop for bit changes in this file/ });
+    expect(skip.closest("label")).toHaveClass("field-inline");
+    await user.click(skip);
     await user.click(screen.getByRole("button", { name: "Add to queue" }));
     expect(write.sent).toEqual([
       { file: "jobs/arm.nc", skipBitChanges: false },

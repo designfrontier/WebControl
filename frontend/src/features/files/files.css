@@ -82,7 +82,7 @@
   font-weight: 600;
 }
 
-.fb input:not([type="radio"]):not([type="file"]),
+.fb input:not([type="radio"]):not([type="checkbox"]):not([type="file"]),
 .fb select,
 .fb textarea {
   min-height: var(--tap);
