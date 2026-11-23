@@ -168,7 +168,7 @@ impl Machine {
             _ if job.firmware_paused || job.manual_z.is_some() || matches!(job.flow, Flow::Paused | Flow::Held) => {
                 Status::Paused
             }
-            _ if job.flow.in_job() => Status::Running,
+            _ if job.flow.in_job() || self.queue_busy() => Status::Running,
             _ => Status::Idle,
         }
     }
