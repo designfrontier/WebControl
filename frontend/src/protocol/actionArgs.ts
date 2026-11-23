@@ -78,6 +78,8 @@ export const actionSpecs = {
   home: notRunning("Move the sled to home"),
   defineZ0: notRunning("Define the current Z as zero"),
   touchZ: notRunning("Probe Z with the touch plate"),
+  zToZero: notRunning("Move the bit to Z0, once Z zero is defined (Rust only)"),
+  zToSafeHeight: notRunning("Raise the bit to the safe height (Rust only)"),
   moveToDefault: notRunning("Move to the default chain lengths"),
   returnToCenter: notRunning("Move the sled to the bed centre"),
   moveGcodeZ: notRunning("Step the gcode index to the next or previous Z move", {

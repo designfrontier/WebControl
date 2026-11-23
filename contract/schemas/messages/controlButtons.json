@@ -17,7 +17,9 @@
           "macro1",
           "macro2",
           "macro3",
-          "macro4"
+          "macro4",
+          "zToZero",
+          "zToSafeHeight"
         ]
       }
     }

@@ -155,7 +155,7 @@ fn a_jog_never_releases_job_lines_the_firmware_holds_behind_an_unexpected_pause(
     rig.rx("Maslow Paused");
     let effects = rig.act_with("move", json!("right"), json!("10"));
     assert!(written(&effects).is_empty());
-    assert!(alerts(&effects)[0].starts_with("The controller paused with lines of the job still in its buffer"));
+    assert!(alerts(&effects)[0].starts_with("The controller paused with other lines waiting behind the pause"));
     assert!(rig.run_to_quiet().iter().all(|line| line != "~"));
 }
 

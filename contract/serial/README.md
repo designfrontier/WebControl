@@ -200,6 +200,7 @@ the backend had been quiet for `quiet` seconds, one line per settle.
 | `tool_change_t_then_m6_on_separate_lines` | `T2` / `M6` → the lone `T2` is not sent; the M6 goes out as `T2 M6`; Resume sets no feed the file never set |
 | `tool_change_m6_before_t_is_rewritten` | `M6 T2` goes out as `T2 M6` |
 | `tool_change_jog_and_zero_z_then_resume` | a Z move releases the firmware once; `G10 Z0`; Resume |
+| `tool_change_raise_refused_while_the_m6_line_moves_on` | an M6 line with a move after the M6: Raise, Go to Safe Height and Go to Z0 send no `~` (it would run the move with the old bit), each with an alert |
 | `stop_mid_line_resets_the_index` | `!` with a line in flight; index reset; commands wait for a status report |
 | `stop_with_a_stale_ok_in_flight` | a late ok after `!` does not release the next command early |
 | `stop_ignores_a_status_report_read_too_soon` | a status report within 0.25 s of `!` does not end the resync |

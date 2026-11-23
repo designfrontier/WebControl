@@ -1,0 +1,55 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "tool_change_raise_refused_while_the_m6_line_moves_on",
+    "description": "A tool change whose line moves on after its M6. The firmware pauses inside that line, so a ~ would run its G0 X40 Y40 with the old bit before any Z move. Raise, Go to Safe Height and Go to Z0 send no ~ and nothing else, each with an alert; the prompt stays up.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "c6477de"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    },
+    "gcode": {
+      "lines": ["G21", "G0 Z5", "T2 M6 G0 X40 Y40", "G1 Z-3 F100"]
+    },
+    "bootBanner": ["PCB v1.1 Detected", "Grbl v1.00", "ready", "ok", "[Forward Calculating Position]", "position loaded at:", "247.79", "-5.88"]
+  },
+  "events": [
+    { "type": "ui", "action": { "command": "defineZ0", "arg": "", "arg1": "" } },
+    { "type": "tx", "bytes": "G10 Z0  \n" },
+    { "type": "rx", "line": "ok" },
+    { "type": "ui", "action": { "command": "startRun", "arg": "", "arg1": "" } },
+    { "type": "tx", "bytes": "G21  \n" },
+    { "type": "rx", "line": "ok" },
+    { "type": "tx", "bytes": "G0 Z5  \n" },
+    { "type": "rx", "line": "ok" },
+    { "type": "tx", "bytes": "T2 M6 G0 X40 Y40  \n" },
+    { "type": "rx", "line": "T2 " },
+    { "type": "rx", "line": "Tool change to tool 2" },
+    { "type": "rx", "line": "M6" },
+    { "type": "rx", "line": "Tool Change: Please insert tool 2" },
+    { "type": "rx", "line": "Maslow Paused", "comment": "The M6 line is unacknowledged: its G0 X40 Y40 runs after the ~." },
+    { "type": "ui", "action": { "command": "moveZ", "arg": "raise", "arg1": "10" } },
+    {
+      "type": "expect",
+      "alerts": [{ "message": "The controller paused with other lines waiting behind the pause" }]
+    },
+    { "type": "ui", "action": { "command": "zToSafeHeight", "arg": "", "arg1": "" } },
+    {
+      "type": "expect",
+      "alerts": [{ "message": "The controller paused with other lines waiting behind the pause" }]
+    },
+    { "type": "ui", "action": { "command": "zToZero", "arg": "", "arg1": "" } },
+    {
+      "type": "expect",
+      "state": { "manualZAxisAdjust": true, "jobInProgress": true, "uploadFlag": 0 },
+      "alerts": [{ "message": "The controller paused with other lines waiting behind the pause" }]
+    }
+  ]
+}

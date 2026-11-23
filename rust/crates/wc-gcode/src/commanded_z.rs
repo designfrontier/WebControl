@@ -101,6 +101,12 @@ impl CommandedZ {
     }
 }
 
+/// Whether `line` is a G10 with a Z word, which sets where Z zero is.
+pub fn defines_z(line: &str) -> bool {
+    let line = words::code(line);
+    words::numbers('G', &line).contains(&10.0) && matches!(words::value(&line, 'Z'), Ok(Some(_)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -194,6 +200,12 @@ mod tests {
         assert_eq!(z.change("G28 Z0 "), ZChange::MovesTo(None));
         assert_eq!(z.change("G0 Z. "), ZChange::MovesTo(None));
         assert_eq!(CommandedZ::new().change("G0 Z1 "), ZChange::MovesTo(None));
+    }
+
+    #[test]
+    fn only_a_g10_with_a_z_word_defines_z() {
+        assert!(defines_z("G10 Z0 ") && defines_z("g10 l20 z5"));
+        assert!(!defines_z("G0 Z0 ") && !defines_z("G10 X0 ") && !defines_z("G10 Z. "));
     }
 
     #[test]

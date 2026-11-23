@@ -169,7 +169,8 @@ a plunge the plunge's 12.8 mm/min stays the modal feed, so the file's next F-les
 ## 7. Pause, tool change, alarms
 
 - M0/M1: the firmware prints `Maslow Paused` and waits for `~`. WebControl stops streaming after the line and sends
-  `~` only on Resume, or before a jog when no job lines are buffered behind the pause.
+  `~` only on Resume, or before a jog or Z move when nothing but the paused line (M0, M1, M6, T and a line number)
+  waits in the controller or WebControl's queue, and only once the move has queued lines.
 - M6 with a new tool: spindle off, `Tool Change: Please insert tool N`, pause. `T2` and `M6` on separate lines keep
   streaming without a tool change and `M6 T2` stalls silently, so WebControl leads every M6 with the T the file
   selected, stops streaming after a tool-changing M6, and on Resume returns to the file's XY at safe height (Rust: or
