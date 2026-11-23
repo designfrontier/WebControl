@@ -9,7 +9,6 @@ const FOLLOWED: [f64; 13] = [0.0, 1.0, 2.0, 3.0, 10.0, 17.0, 20.0, 21.0, 40.0, 9
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ZChange {
     Unchanged,
-    /// A move, or a probe's furthest reach.
     MovesTo(Option<f64>),
     /// G10: the bit stays where it is and its Z becomes this.
     Renamed(Option<f64>),
@@ -55,7 +54,7 @@ impl CommandedZ {
             return ZChange::Unchanged;
         }
         let mut after = self.clone();
-        after.written(&code.replace("G38.2", "G1"));
+        after.written(&code);
         match words::numbers('G', &code).contains(&10.0) {
             true => ZChange::Renamed(after.z_mm),
             false => ZChange::MovesTo(after.z_mm),
@@ -189,7 +188,7 @@ mod tests {
         let z = after(&["G0 Z5 ", "G91 "]);
         assert_eq!(z.change("G0 X1 "), ZChange::Unchanged);
         assert_eq!(z.change("G0 Z-2 "), ZChange::MovesTo(Some(3.0)));
-        assert_eq!(z.change("G90 G38.2 Z-10 "), ZChange::MovesTo(Some(-10.0)));
+        assert_eq!(z.change("G90 G38.2 Z-10 "), ZChange::MovesTo(None), "the firmware stops a probe at a limit");
         assert_eq!(z.change("G20 G0 Z1 "), ZChange::MovesTo(Some(30.4)));
         assert_eq!(z.change("G10 Z2 "), ZChange::Renamed(Some(2.0)));
         assert_eq!(z.change("G28 Z0 "), ZChange::MovesTo(None));

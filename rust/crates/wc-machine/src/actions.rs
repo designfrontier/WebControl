@@ -288,8 +288,7 @@ impl Machine {
         else {
             return Some("Error with touching.".into());
         };
-        let target_mm = self.z_lower_limit_mm().map_or(-plunge, |lower| lower.max(-plunge));
-        self.queue([commands::touch_z(target_mm, self.units())]);
+        self.queue([commands::touch_z(plunge, self.units())]);
         self.probing = true;
         None
     }

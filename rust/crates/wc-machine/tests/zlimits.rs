@@ -136,10 +136,10 @@ fn saving_a_limit_takes_the_controllers_reply() {
 }
 
 #[test]
-fn touch_z_stops_at_the_lower_limit_and_reads_the_limits_after_its_touch() {
+fn touch_z_reads_the_limits_after_its_touch_and_the_firmware_stops_it_at_the_lower_one() {
     let mut rig = limited_with(&[("Advanced Settings", "maxTouchProbePlungeDistance", json!("25"))]);
     typed(&mut rig, "G0 Z4");
-    assert_eq!(written(&rig.act("touchZ")), ["G90 G38.2 Z-10"]);
+    assert_eq!(written(&rig.act("touchZ")), ["G90 G38.2 Z-25"]);
     rig.rx("z axis zeroed");
     let mut after = rig.rx("ok");
     after.extend(rig.advance(100));
@@ -147,10 +147,41 @@ fn touch_z_stops_at_the_lower_limit_and_reads_the_limits_after_its_touch() {
 }
 
 #[test]
-fn touch_z_within_the_limit_probes_its_full_plunge() {
-    let mut rig = limited_with(&[("Advanced Settings", "maxTouchProbePlungeDistance", json!("6"))]);
-    typed(&mut rig, "G0 Z4");
-    assert_eq!(written(&rig.act("touchZ")), ["G90 G38.2 Z-6"]);
+fn a_buffered_job_streams_nothing_after_a_change_of_zero_until_b20_answers() {
+    let mut rig = limited_with(&[("Maslow Settings", "bufferOn", json!(1))]);
+    rig.machine.load_gcode("G21\nG10 Z0\nG1 Z-8 F100\nG0 Z5\n");
+    let mut sent = rig.act("startRun");
+    sent.extend(rig.advance(500));
+    assert_eq!(written(&sent), ["G21", "G10 Z0"]);
+    let mut acked = rig.rx("ok");
+    acked.extend(rig.rx("ok"));
+    acked.extend(rig.advance(500));
+    assert_eq!(written(&acked), ["B20"]);
+    let mut answered = rig.rx("Z Axis Upper Limit: 15.00 Lower Limit: -5.00");
+    answered.extend(rig.advance(500));
+    assert!(written(&answered).is_empty(), "the job waits for B20's ok");
+    let mut after = rig.rx("ok");
+    after.extend(rig.advance(500));
+    assert!(written(&after).is_empty());
+    assert!(
+        raised_alerts(&mut rig)[0].starts_with("Line 3 would move Z to -8.00 mm, below the Z lower limit of -5.00")
+    );
+}
+
+#[test]
+fn a_limit_printed_to_two_decimals_refuses_no_move_the_firmware_allows() {
+    let mut rig = limited_with(&[
+        ("Computed Settings", "units", json!("INCHES")),
+        ("Computed Settings", "unitsZ", json!("INCHES")),
+    ]);
+    rig.rx("new zaxis lower limit=-10.41");
+    assert_eq!(typed(&mut rig, "G0 Z-0.41"), ["G0 Z-0.41"], "$64=-10.414 prints as -10.41");
+    assert!(typed(&mut rig, "G0 Z-0.42").is_empty());
+    rig.act("defineZ0");
+    rig.run_to_quiet();
+    rig.rx("Z Axis Upper Limit: 0.50 Lower Limit: -0.41");
+    assert_eq!(typed(&mut rig, "G0 Z-0.414"), ["G0 Z-0.414"], "B20 in inches is within 0.005 in");
+    assert!(typed(&mut rig, "G0 Z-0.416").is_empty());
 }
 
 #[test]
@@ -209,11 +240,10 @@ fn a_restart_past_a_limit_pauses_the_job_before_it_travels() {
 }
 
 #[test]
-fn a_probe_in_a_file_past_the_lower_limit_pauses_the_job() {
+fn a_probe_in_a_file_past_the_lower_limit_is_left_to_the_firmware() {
     let mut rig = limited();
     rig.machine.load_gcode("G21\nG0 Z5\nG38.2 Z-20 F100\n");
     rig.act("startRun");
-    assert_eq!(rig.run_to_quiet(), ["G21", "G0 Z5"]);
-    assert!(raised_alerts(&mut rig)[0].starts_with("Line 3 would move Z to -20.00 mm, below the Z lower limit"));
-    assert!(!rig.machine.snapshot().probing);
+    assert_eq!(rig.run_to_quiet(), ["G21", "G0 Z5", "G38.2 Z-20 F100"]);
+    assert!(raised_alerts(&mut rig).iter().all(|alert| !alert.contains("limit")));
 }

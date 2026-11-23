@@ -454,6 +454,7 @@ impl Machine {
         self.job.flow == Flow::Streaming
             && !self.alarm_held()
             && !self.probing
+            && !self.z_limits_awaited()
             && !self.gcode.is_empty()
             && self.controller.queue.is_empty()
             && self.may_write(now)
