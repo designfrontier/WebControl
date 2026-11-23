@@ -67,7 +67,8 @@
   padding: 0 var(--space-2);
 }
 
-.settings-choice input[type="radio"] {
+.settings-choice input[type="radio"],
+.settings-choice input[type="checkbox"] {
   width: 24px;
   height: 24px;
   margin: 0;

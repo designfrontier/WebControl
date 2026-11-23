@@ -55,6 +55,7 @@ describe("Job queue screen", () => {
     ]);
     expect(screen.getByRole("checkbox", { name: "Don't stop for bit changes in leg.nc" })).toBeDisabled();
     expect(screen.getByRole("checkbox", { name: "Don't stop for bit changes in bowl.nc" })).toBeChecked();
+    expect(screen.getByText("Don't stop for bit changes in bowl.nc")).toHaveClass("field-inline");
     expect(screen.getByText("Running leg.nc.", { selector: ".queue-status" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Remove jobs/leg.nc" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Move shelf.nc up" })).toBeDisabled();
@@ -169,28 +170,55 @@ describe("Queue summary on the control screen", () => {
 
 describe("Add to queue from Open G-Code", () => {
   it("adds the chosen file without opening it", async () => {
-    const write = posts();
+    const one = jobQueue({ items: [queueItem({ file: "jobs/arm.nc" })] });
+    const write = posts((body) => jsonResponse((body as { skipBitChanges: boolean }).skipBitChanges ? three : one));
     const fetch = fakeFetch({ "/api/files/gcode": gcodeLibrary(), ...routes(jobQueue(), write) });
     const { user } = renderApp("/files/open", { fetch });
     await user.click(await screen.findByRole("radio", { name: "arm.nc" }));
+    expect(
+      screen.getByText(
+        "Open loads the file now, ready for Play. Add to queue saves it for later: the queue runs its files one after another.",
+      ),
+    ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Add to queue" }));
-    await user.click(screen.getByRole("checkbox", { name: /Don't stop for bit changes in this file/ }));
+    expect(await screen.findByText("Added arm.nc to the queue. The queue now has 1 file.")).toHaveAttribute(
+      "role",
+      "status",
+    );
+    const skip = screen.getByRole("checkbox", {
+      name: "Don't stop for bit changes in this file when the queue runs it",
+    });
+    expect(skip.closest("label")).toHaveClass("field-inline");
+    await user.click(skip);
     await user.click(screen.getByRole("button", { name: "Add to queue" }));
     expect(write.sent).toEqual([
       { file: "jobs/arm.nc", skipBitChanges: false },
       { file: "jobs/arm.nc", skipBitChanges: true },
     ]);
-    expect(await screen.findByText("Added arm.nc to the queue.")).toBeInTheDocument();
+    expect(await screen.findByText("Added arm.nc to the queue. The queue now has 4 files.")).toBeInTheDocument();
+  });
+
+  it("shows the queue's size on the control screen as files are added", async () => {
+    const fetch = fakeFetch({ "/api/files/gcode": gcodeLibrary(), ...routes(jobQueue()) });
+    const { socket } = renderApp("/files/open", { fetch });
+    await screen.findByRole("radio", { name: "arm.nc" });
+    expect(screen.queryByRole("button", { name: /^Queue \(/ })).not.toBeInTheDocument();
+    act(() => socket.serverMessage("jobQueue", three));
+    expect(await screen.findByRole("button", { name: "Queue (4)", hidden: true })).toBeInTheDocument();
   });
 
   it("explains a refusal", async () => {
-    const write = posts(() => jsonResponse({ error: "No such file" }, 404));
+    const answers = [jsonResponse(three), jsonResponse({ error: "No such file" }, 404)];
+    const write = posts(() => answers.shift()!);
     const fetch = fakeFetch({ "/api/files/gcode": gcodeLibrary({ lastFile: "" }), ...routes(jobQueue(), write) });
     const { user } = renderApp("/files/open", { fetch });
     await user.click(await screen.findByRole("button", { name: "Add to queue" }));
     expect(screen.getByRole("alert")).toHaveTextContent("Choose a file to add.");
     await user.click(screen.getByRole("radio", { name: "arm.nc" }));
     await user.click(screen.getByRole("button", { name: "Add to queue" }));
+    expect(await screen.findByText(/^Added arm.nc/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Add to queue" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Could not add arm.nc to the queue.");
+    expect(screen.queryByText(/^Added/)).not.toBeInTheDocument();
   });
 });

@@ -31,17 +31,17 @@ export const OpenGcode = () => {
               client.emit("checkForGCodeUpdate", { data: "Please" });
               if (!signal.aborted) close();
             }}
-            enqueue={async ({ directory, name }) => {
-              await queueApi(fetchImpl).add(`${directory}/${name}`, skipBitChanges);
-            }}
+            enqueue={async ({ directory, name }) =>
+              (await queueApi(fetchImpl).add(`${directory}/${name}`, skipBitChanges)).items.length
+            }
             enqueueOptions={
               <label className="field-inline">
                 <input
                   type="checkbox"
                   checked={skipBitChanges}
                   onChange={(event) => setSkipBitChanges(event.target.checked)}
-                />{" "}
-                Don't stop for bit changes in this file (queue only)
+                />
+                Don't stop for bit changes in this file when the queue runs it
               </label>
             }
           />

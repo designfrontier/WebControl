@@ -121,7 +121,8 @@ pub fn section(settings: &Settings, id: &str, firmware_version: f64, ports: &[St
             .map(|option| describe(title, option))
             .filter(|field| {
                 !RETIRED_KEYS.contains(&field.key.as_str())
-                    && ![THEME_KEY, crate::controls::BUTTONS_KEY].contains(&field.key.as_str())
+                    && ![THEME_KEY, crate::controls::BUTTONS_KEY, crate::pacing::STATS_KEY]
+                        .contains(&field.key.as_str())
             })
             .collect(),
         ports: (id == "maslow").then(|| ports.to_vec()),

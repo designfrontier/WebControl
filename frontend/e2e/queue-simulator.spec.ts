@@ -64,7 +64,7 @@ const addFromOpen = async (page: Page, name: string, skip = false) => {
   await page.getByRole("radio", { name }).click();
   await page.getByRole("checkbox", { name: /Don't stop for bit changes/ }).setChecked(skip);
   await page.getByRole("button", { name: "Add to queue" }).click();
-  await expect(page.getByText(`Added ${name} to the queue.`)).toBeVisible();
+  await expect(page.getByText(`Added ${name} to the queue. The queue now has`)).toBeVisible();
 };
 
 /** Whether the first file is cutting, or its own M6 asks for the bit. */
@@ -107,6 +107,8 @@ test("queued files run back to back, pausing only for a bit the files show to di
   await shoot(page, "control-cutting", page.getByRole("region", { name: "Job queue" }));
 
   await expect.poll(async () => (await queueState(request)).step, { timeout: 60_000 }).toBe("toolChange");
+  // The prompt arrives over the socket after the queue's step changes, and would cover Stop.
+  await expect(prompt(page, 2)).toBeVisible({ timeout: 20_000 });
   await closeServerDialogs(page);
   await page.locator(".run-buttons").getByRole("button", { name: "Stop", exact: true }).click();
   const summary = page.getByRole("region", { name: "Job queue" });

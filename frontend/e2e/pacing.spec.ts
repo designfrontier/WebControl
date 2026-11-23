@@ -11,12 +11,28 @@ const setPacing = async (request: APIRequestContext, mode: string, gap: number) 
     await request.put("/api/run/pacing", { data: { values: { linePacingMode: mode, linePacingGapMs: gap } } }),
   ).toBeOK();
 
-const pacing = (page: Page) => page.getByRole("group", { name: "Line pacing" });
+const showPacing = async (request: APIRequestContext, shown: boolean) =>
+  expect(await request.put("/api/run/pacing", { data: { values: { linePacingStats: shown } } })).toBeOK();
 
-test("a preset saves the pacing settings", async ({ page, baseURL, request }) => {
+const pacing = (page: Page) => page.getByRole("region", { name: "Run" }).getByRole("group", { name: "Line pacing" });
+
+test("the pacing is hidden until Settings > Display shows it, then a preset saves it", async ({
+  page,
+  baseURL,
+  request,
+}) => {
   await resetMachine(baseURL!);
+  await showPacing(request, false);
   await page.goto("/");
   await waitForServer(page);
+  await expect(page.getByRole("region", { name: "Run" }).getByRole("button", { name: "Play" })).toBeVisible();
+  await expect(pacing(page)).toHaveCount(0);
+  await page.goto("/settings/display");
+  await page.getByRole("checkbox", { name: "Show line pacing in the run panel" }).check();
+  await expect(page.getByRole("checkbox", { name: "Show line pacing in the run panel" })).toBeChecked();
+  await page.goto("/");
+  await waitForServer(page);
+  await expect(pacing(page)).toBeVisible();
   await pacing(page).getByLabel("Pacing").selectOption({ label: "Min 25 ms" });
   await expect
     .poll(async () => {
@@ -26,6 +42,7 @@ test("a preset saves the pacing settings", async ({ page, baseURL, request }) =>
     })
     .toEqual(["minimum gap", 25]);
   await setPacing(request, "v0.94", 50);
+  await showPacing(request, false);
 });
 
 test.describe("against the simulator", () => {
@@ -34,6 +51,7 @@ test.describe("against the simulator", () => {
 
   test("a job shows its rate, and a change mid-job ends a segment in the history", async ({ page, request }) => {
     await setPacing(request, "v0.94", 50);
+    await showPacing(request, true);
     await request.post("/api/files/gcode/directories", { data: { name: FOLDER } });
     const lines = ["G21", "G90", ...Array.from({ length: 400 }, (_, n) => `G1 X${(n % 20) / 10} Y0 F3000`)];
     const file = { name: "pacing.nc", mimeType: "text/plain", buffer: Buffer.from(`${lines.join("\n")}\n`) };
@@ -88,5 +106,6 @@ test.describe("against the simulator", () => {
     await details.getByRole("button", { name: "Close" }).click();
     await page.getByRole("button", { name: "Stop" }).first().click();
     await setPacing(request, "v0.94", 50);
+    await showPacing(request, false);
   });
 });

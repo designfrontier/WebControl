@@ -155,8 +155,8 @@ test.describe("the display theme", () => {
       await page.goto("/");
       await waitForServer(page);
       await page.getByRole("button", { name: "Play" }).click();
-      const pacing = page.getByRole("group", { name: "Line pacing" });
-      await expect(pacing.getByText(/^\d+ lines\/min$/)).toBeVisible({ timeout: 15_000 });
+      const line = async () => (await (await request.get("/api/main")).json()).gcode.lineIndex as number;
+      await expect.poll(line, { timeout: 15_000 }).toBeGreaterThan(3);
 
       await chooseMenu(page, "Settings", "Display");
       await choose(page, "Dark");

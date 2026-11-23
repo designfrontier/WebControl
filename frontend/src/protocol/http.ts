@@ -355,7 +355,8 @@ export const httpEndpoints: HttpEndpoint[] = [
   api({
     method: "PUT",
     path: "/api/run/pacing",
-    summary: "Change the line pacing, also during a job; it applies from the next line (Rust only)",
+    summary:
+      "Change the line pacing, also during a job; it applies from the next line. Also shows or hides it (Rust only)",
     body: json(pacingUpdateSchema),
     responses: {
       200: json(pacingStatsSchema, "The pacing and statistics after the change"),

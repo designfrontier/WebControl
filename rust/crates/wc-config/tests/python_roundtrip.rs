@@ -22,7 +22,7 @@ fn opened_python_file() -> (tempfile::TempDir, Paths, Settings) {
 }
 
 /// Options added to the defaults since v0.94, in the order opening a v0.94 file appends them to their sections.
-const ADDED_SINCE_V094: [(&str, &str); 15] = [
+const ADDED_SINCE_V094: [(&str, &str); 16] = [
     ("Maslow Settings", "macro3"),
     ("Maslow Settings", "macro3_title"),
     ("Maslow Settings", "macro4"),
@@ -35,6 +35,7 @@ const ADDED_SINCE_V094: [(&str, &str); 15] = [
     ("WebControl Settings", "opticalCalibrationEnabled"),
     ("WebControl Settings", "linePacingMode"),
     ("WebControl Settings", "linePacingGapMs"),
+    ("WebControl Settings", "linePacingStats"),
     ("WebControl Settings", "uiTheme"),
     ("WebControl Settings", "controlButtons"),
     ("Camera Settings", "cameraSource"),

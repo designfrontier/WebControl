@@ -17,8 +17,8 @@ interface OpenProps {
   /** Shown while the open request is in flight. */
   busyNote?: ReactNode;
   submitOptions?: SubmitOptions;
-  /** Adds the chosen file to the job queue instead of opening it; allowed while a job runs. */
-  enqueue?: (file: LibraryFile) => Promise<void>;
+  /** Adds the chosen file to the job queue instead of opening it, resolving to the queue's length. */
+  enqueue?: (file: LibraryFile) => Promise<number>;
   /** Shown beside Add to queue, such as the file's bit-change override. */
   enqueueOptions?: ReactNode;
 }
@@ -46,12 +46,12 @@ export const OpenFromLibrary = ({
     return run((signal) => open({ directory, name: selected }, signal), `Could not open ${selected}.`);
   };
 
-  const addToQueue = (add: (file: LibraryFile) => Promise<void>) => {
+  const addToQueue = (add: (file: LibraryFile) => Promise<number>) => {
     setQueued(null);
     if (!selected) return adding.setError("Choose a file to add.");
     return adding.run(async () => {
-      await add({ directory, name: selected });
-      setQueued(`Added ${selected} to the queue.`);
+      const count = await add({ directory, name: selected });
+      setQueued(`Added ${selected} to the queue. The queue now has ${count} ${count === 1 ? "file" : "files"}.`);
     }, `Could not add ${selected} to the queue.`);
   };
 
@@ -69,8 +69,13 @@ export const OpenFromLibrary = ({
         legend={legend}
       />
       <FormError message={error ?? adding.error} />
-      {queued && <p role="status">{queued}</p>}
       {lockedReason && <p className="muted">{lockedReason}</p>}
+      {enqueue && (
+        <p className="muted">
+          Open loads the file now, ready for Play. Add to queue saves it for later: the queue runs its files one after
+          another.
+        </p>
+      )}
       {enqueue && enqueueOptions}
       {busy && busyNote}
       <div className="actions">
@@ -84,6 +89,7 @@ export const OpenFromLibrary = ({
         )}
         <CloseButton>Cancel</CloseButton>
       </div>
+      {queued && <p role="status">{queued}</p>}
     </form>
   );
 };

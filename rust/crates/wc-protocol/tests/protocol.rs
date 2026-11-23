@@ -85,6 +85,7 @@ fn pacing_stats(running: Option<PacingSegment>) -> PacingStats {
         segment: running,
         history: vec![segment(Some("pacing change"))],
         estimate_s: Some(3600.0),
+        show_stats: false,
     }
 }
 

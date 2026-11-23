@@ -466,6 +466,9 @@
             "number",
             "null"
           ]
+        },
+        "showStats": {
+          "type": "boolean"
         }
       },
       "required": [

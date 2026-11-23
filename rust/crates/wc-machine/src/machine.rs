@@ -429,7 +429,8 @@ impl Machine {
         let units = Units::from_setting(&settings.text_or_empty("Computed Settings", "units"));
         let workpiece = Arc::new(bed_board(&settings));
         let kinematics = crate::ui::computed_model(&settings);
-        let stats = crate::pacing::Stats::new(crate::pacing::Pacing::read(&settings));
+        let stats =
+            crate::pacing::Stats::new(crate::pacing::Pacing::read(&settings), crate::pacing::stats_shown(&settings));
         let park = crate::park::Park::new(&settings);
         let controls = crate::controls::Shown::new(&settings);
         let settings = Arc::new(settings);

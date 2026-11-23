@@ -100,6 +100,12 @@ test("the tool-change prompt names the bit from the file, and the library takes 
   await expect(summary).toBeVisible();
   await summary.click();
   await expect(viewer.getByText("From this file; not in your tool library.")).toBeVisible();
+  const toggle = (await summary.boundingBox())!;
+  const list = viewer.locator(".file-tools ul");
+  const opened = (await list.boundingBox())!;
+  expect(opened.y, "the list opens below its toggle").toBeGreaterThanOrEqual(toggle.y + toggle.height);
+  expect(opened.x, "the list starts under its toggle").toBeGreaterThanOrEqual(toggle.x - 1);
+  await expect(list).toBeInViewport({ ratio: 1 });
   await shoot(page, "file-tools", viewer);
   await summary.click();
   await run.getByRole("button", { name: "Play" }).click();
@@ -129,4 +135,25 @@ test("the tool-change prompt names the bit from the file, and the library takes 
     "11 6 mm flat end mill",
     '16 3.175 mm (1/8") flat end mill',
   ]);
+});
+
+test("a file with many tools scrolls its list instead of the page", async ({ page, request }) => {
+  await stop();
+  const numbers = [1, 2, 3, 4, 5, 6, 7, 8];
+  const lines = [...numbers.map((n) => `(T${n} D=${n} CR=0 - ZMIN=-1 - flat end mill)`), "G21", "G90"];
+  const text = [...lines, ...numbers.flatMap((n) => [`T${n} M6`, `G0 X${n}`])].join("\n");
+  const file = { name: "many-tools.nc", mimeType: "text/plain", buffer: Buffer.from(`${text}\n`) };
+  expect(await request.post("/uploadGCode", { multipart: { selectedDirectory: ".", "file[]": file } })).toBeOK();
+
+  await Object.entries({ desktop: VIEWPORTS.desktop, ipad: VIEWPORTS.ipad }).reduce(async (previous, [, size]) => {
+    await previous;
+    await page.setViewportSize(size);
+    await page.goto("/");
+    await waitForServer(page);
+    await closeServerDialogs(page);
+    const viewer = page.getByRole("figure");
+    await viewer.getByText(/^Tools: T1, T2/).click();
+    await expect(viewer.locator(".file-tools ul")).toBeInViewport({ ratio: 1 });
+    expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true);
+  }, Promise.resolve());
 });

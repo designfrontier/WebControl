@@ -9,9 +9,10 @@ The job queue runs gcode files one after another: when one file ends, the next o
 
 ## Adding files
 
-- **G-Code ▸ Open**: choose a file and press **Add to queue**. The file is added to the end of the queue without
-  being opened, so you can add files while a job runs. Tick **Don't stop for bit changes in this file** first to add
-  it with its override on (below).
+- **G-Code ▸ Open**: choose a file and press **Add to queue** (**Open** loads it now instead). The file is added to
+  the end of the queue without being opened, so you can add files while a job runs. Tick **Don't stop for bit changes
+  in this file when the queue runs it** first to add it with its override on (below). The screen then says how many
+  files the queue has, and so does the **Queue (N)** button above Play.
 - **G-Code ▸ Job Queue ▸ Add loaded file** adds the file that is loaded now.
 
 The queue is kept on the Raspberry Pi, so every browser sees the same queue, and it is still there after you reload

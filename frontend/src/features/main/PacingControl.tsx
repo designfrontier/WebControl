@@ -129,7 +129,7 @@ export const PacingControl = () => {
   const [custom, setCustom] = useState(false);
   const [details, setDetails] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  if (stats === null) return null;
+  if (stats === null || !stats.showStats) return null;
 
   const current = { mode: stats.mode, gapMs: stats.gapMs };
   const preset = custom ? CUSTOM : presetFor(current);

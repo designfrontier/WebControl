@@ -62,14 +62,17 @@ export const pacingStatsSchema = z.object({
   history: z.array(pacingSegmentSchema),
   /** The loaded file's estimated run time from its moves and feeds; null with no file. */
   estimateS: z.number().nullable().optional(),
+  /** The linePacingStats setting: whether the run panel shows the pacing. Absent reads as hidden. */
+  showStats: z.boolean().optional(),
 });
 export type PacingStats = z.infer<typeof pacingStatsSchema>;
 
-/** PUT /api/run/pacing body; allowed during a job, unlike the settings screens. */
+/** PUT /api/run/pacing body, any of its settings; allowed during a job, unlike the settings screens. */
 export const pacingUpdateSchema = z.object({
   values: z.object({
-    linePacingMode: pacingModeSchema,
-    linePacingGapMs: z.number().int().min(0).max(PACING_GAP_MAX_MS),
+    linePacingMode: pacingModeSchema.optional(),
+    linePacingGapMs: z.number().int().min(0).max(PACING_GAP_MAX_MS).optional(),
+    linePacingStats: z.boolean().optional(),
   }),
 });
 export type PacingUpdate = z.infer<typeof pacingUpdateSchema>;

@@ -217,3 +217,18 @@ code {
 .muted {
   color: var(--muted);
 }
+
+/* A checkbox with its label beside it; a long label wraps under itself, not under the box. */
+.field-inline {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.field-inline input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--accent);
+}

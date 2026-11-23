@@ -43,8 +43,9 @@ Pi `journalctl -u webcontrol-rs | grep "never received the lines"` finds them.
 
 - [ ] Make a file of 3,000 short moves on the Mac and upload it:
       `awk 'BEGIN{print "G21\nG90\nG0 Z5\nG0 X0 Y0\nG1 Z-1 F100"; for(i=0;i<3000;i++){r=20+i*.01; printf "G1 X%.4f Y%.4f F1200\n", r*cos(i*.05), r*sin(i*.05)}; print "G0 Z5\nG0 X0 Y0"}' > ~/pacing.nc`
-- [ ] The run panel has a "Pacing" choice beside the alarm status, reading "v0.94 50 ms" (the default), and a stats
-      button reading "Pacing stats" before any job has run.
+- [ ] The run panel shows no pacing at first. Settings ▸ Display ▸ Line pacing: tick "Show line pacing in the run
+      panel". The run panel now has a "Pacing" choice beside the alarm status, reading "v0.94 50 ms" (the default),
+      and a stats button reading "Pacing stats" before any job has run; the second device shows them too.
 - [ ] The choices are v0.94 50 ms, Min 50 ms, Min 25 ms, Min 0 ms and Custom…. Choose Min 25 ms. The second device
       shows Min 25 ms within a couple of seconds. Settings ▸ WebControl shows Line pacing `minimum gap` and Line pacing
       gap (ms) `25`, and no `Sent: $` line appears: the pacing is not a controller setting.
