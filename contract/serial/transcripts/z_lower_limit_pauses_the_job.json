@@ -2,15 +2,15 @@
   "formatVersion": 1,
   "meta": {
     "name": "z_lower_limit_pauses_the_job",
-    "description": "With a Z lower limit of -10 mm, a file line that would take Z to -12 mm is never sent: the job pauses before it with an alert naming the line, the Z it would reach and the limit, as for an unclosed comment.",
+    "description": "51.292 with a Z lower limit saved at -10 mm (its reply sets WebControl's copy): a file line that would take Z to -12 mm is never sent; the job pauses before it with an alert naming the line, the Z it would reach and the limit, as for an unclosed comment.",
     "firmware": {
       "variant": "holey",
-      "version": "51.27"
+      "version": "51.29",
+      "build": "51.292"
     },
     "webcontrolCommit": "rust"
   },
   "setup": {
-    "settings": {"Maslow Settings": {"zAxisLowerLimit": "-10"}},
     "units": "MM",
     "home": {
       "x": 0,
@@ -37,6 +37,14 @@
     ]
   },
   "events": [
+    {"type": "rx", "line": "<Idle,MPos:0.00,0.00,-10.00,WPos:0.000,0.000,0.000>"},
+    {"type": "ui", "action": {"command": "setMinZ", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "$64=-10 \n"},
+    {"type": "rx", "line": "the value received: -10.00"},
+    {"type": "rx", "line": ""},
+    {"type": "rx", "line": "new zaxis lower limit=-10.00"},
+    {"type": "rx", "line": "Change in setting, rewriting EEPROM"},
+    {"type": "rx", "line": "ok"},
     {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
     {"type": "tx", "bytes": "G21  \n"},
     {"type": "rx", "line": "G21"},

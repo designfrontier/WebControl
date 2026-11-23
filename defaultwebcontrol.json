@@ -807,24 +807,6 @@
         },
         {
             "default": "",
-            "desc": "The highest Z the router may be sent to, in mm in the current Z coordinates. Define Z0 and Touch Z move it with the zero, so it stays at the same place on the Z mechanism. A move above it is refused before it is sent. Blank: no upper limit. Set it with Z-Axis Limits > Set upper limit here.\ndefault setting: ",
-            "key": "zAxisUpperLimit",
-            "section": "Maslow Settings",
-            "title": "Z-Axis Upper Limit in MM",
-            "type": "string",
-            "value": ""
-        },
-        {
-            "default": "",
-            "desc": "The lowest Z the router may be sent to, in mm in the current Z coordinates. Define Z0 and Touch Z move it with the zero, so it stays at the same place on the Z mechanism. A move or probe below it is refused (Touch Z stops at it). Blank: no lower limit. Set it with Z-Axis Limits > Set lower limit here.\ndefault setting: ",
-            "key": "zAxisLowerLimit",
-            "section": "Maslow Settings",
-            "title": "Z-Axis Lower Limit in MM",
-            "type": "string",
-            "value": ""
-        },
-        {
-            "default": "",
             "desc": "Where the sled parks after a file, or the last file of a queue, finishes normally, and when Park is pressed: X in mm from the centre of the bed, in machine coordinates, so setting home does not move it. Blank: no park position. Set Park Here fills both.\ndefault setting: ",
             "key": "parkX",
             "section": "Maslow Settings",

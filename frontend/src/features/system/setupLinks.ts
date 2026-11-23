@@ -28,7 +28,11 @@ export const SETUP_LINKS: SetupLink[] = [
   { to: "/machine/quick-configure", label: "Quick configure" },
   { to: "/machine/sprockets", label: "Set sprockets and chains" },
   { to: "/machine/z-axis", label: "Set Z-axis" },
-  { to: "/machine/z-limits", label: "Set Z-axis limits" },
+  {
+    to: "/machine/z-limits",
+    label: "Set Z-axis limits",
+    blockedBy: (info) => (info?.firmwareSupportsZaxisLimit ? null : needs("holey firmware 51.292 or later", info)),
+  },
   { to: "/machine/reset-chains", label: "Reset chains" },
   {
     to: "/calibration/triangular",

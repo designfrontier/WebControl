@@ -187,7 +187,7 @@ fn saving_writes_every_section_and_unknown_field_back() {
     let saved = read(&paths.settings_file());
     assert_eq!(saved["Mine"], file["Mine"]);
     assert_eq!(saved["Odd"], "text");
-    assert_eq!(saved["Maslow Settings"].as_array().unwrap().len(), 28);
+    assert_eq!(saved["Maslow Settings"].as_array().unwrap().len(), 26);
 }
 
 fn computed(settings: &Value, key: &str) -> Value {

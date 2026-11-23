@@ -18,12 +18,3 @@ export const unitSwitch = (units: Units, distance: number) =>
     : { setting: "toMMZ", value: (distance * MM_PER_INCH).toFixed(2) };
 
 export const unitLabel = (units: Units) => (units === "MM" ? "mm" : "in");
-
-export const LIMIT_KEYS = { upper: "zAxisUpperLimit", lower: "zAxisLowerLimit" } as const;
-export type LimitKey = (typeof LIMIT_KEYS)[keyof typeof LIMIT_KEYS];
-
-/** The reported Z as the limits store it: mm, to the micron. */
-export const zInMm = (z: number, units: Units) => String(Number((units === "MM" ? z : z * MM_PER_INCH).toFixed(3)));
-
-export const limitText = (value: string | number | boolean | undefined) =>
-  value === undefined || String(value).trim() === "" ? "Not set" : `${String(value)} mm`;

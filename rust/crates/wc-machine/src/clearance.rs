@@ -29,13 +29,11 @@ pub(crate) struct BitHeight {
     reported_mm: Option<f64>,
     /// Such a line has not been acknowledged yet, so a report may show the bit mid-move.
     moving: bool,
-    /// While a probe runs: the lowest Z known for the bit, in mm, where a touch would have stopped it.
-    probed_mm: Option<f64>,
 }
 
 impl BitHeight {
     pub fn new() -> BitHeight {
-        BitHeight { commanded: CommandedZ::new(), reported_mm: None, moving: false, probed_mm: None }
+        BitHeight { commanded: CommandedZ::new(), reported_mm: None, moving: false }
     }
 
     /// Every acknowledged line before a raise has finished, so the commanded Z is where the bit is.
@@ -58,9 +56,6 @@ impl BitHeight {
     }
 
     pub fn written(&mut self, line: &str) {
-        if line.contains("G38.2") {
-            self.probed_mm = self.mm();
-        }
         self.commanded = self.starting_here();
         if self.commanded.written(line) {
             self.reported_mm = None;
@@ -75,12 +70,8 @@ impl BitHeight {
 
     /// MPos has two decimals, so the bit may be up to one step above it.
     pub fn reported(&mut self, z: f64) {
-        let Some(units) = self.commanded.units() else { return };
+        let Some(units) = self.commanded.units().filter(|_| !self.moving) else { return };
         let mm_per_unit = if units == Units::Inches { 25.4 } else { 1.0 };
-        self.probed_mm = self.probed_mm.map(|low| low.min(z * mm_per_unit));
-        if self.moving {
-            return;
-        }
         self.reported_mm = z.is_finite().then_some((z + 0.01) * mm_per_unit);
     }
 
@@ -89,14 +80,16 @@ impl BitHeight {
         self.commanded.set_z_mm(None);
         self.reported_mm = None;
         self.moving = false;
-        self.probed_mm = None;
     }
 
-    /// A probe touched and the firmware made that Z 0; where it touched, from the last report before, if known.
-    pub fn zeroed(&mut self) -> Option<f64> {
+    pub fn zeroed(&mut self) {
         self.commanded.set_z_mm(Some(0.0));
         self.reported_mm = None;
-        self.probed_mm.take()
+    }
+
+    /// The units the controller was last told, which it prints its Z limits in.
+    pub fn units(&self) -> Option<Units> {
+        self.commanded.units()
     }
 }
 

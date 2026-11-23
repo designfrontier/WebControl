@@ -49,8 +49,8 @@ export const selectOptions = (setting: Setting, current: string) => {
 export const optionLabel = (option: string, setting: Setting) =>
   option !== "" ? option : setting.key === "COMport" ? "Not set" : "Unassigned";
 
-/** A blank park position or Z limit means none. */
-const BLANK_ALLOWED = ["parkX", "parkY", "zAxisUpperLimit", "zAxisLowerLimit"];
+/** Blank park settings mean no park position. */
+const BLANK_ALLOWED = ["parkX", "parkY"];
 
 const blank = (value: FieldValue | undefined) => typeof value !== "string" || value.trim() === "";
 

@@ -33,8 +33,6 @@ pub enum LineProblem {
     UnsupportedProbe,
     /// It would take Z past a Z travel limit, both in mm.
     ZLimit { z_mm: f64, limit_mm: f64, upper: bool },
-    /// It moves or renames Z from where WebControl cannot tell, so no limit can be checked.
-    ZUnknown,
 }
 
 impl LineProblem {
@@ -45,7 +43,6 @@ impl LineProblem {
             LineProblem::Arc(problem) => problem.title(),
             LineProblem::UnsupportedProbe => "Unsupported Probe",
             LineProblem::ZLimit { .. } => "Beyond Z Limit",
-            LineProblem::ZUnknown => "Z Unknown",
         }
     }
 
@@ -65,9 +62,6 @@ impl LineProblem {
                 let (side, which) = if *upper { ("above", "upper") } else { ("below", "lower") };
                 format!("would move Z to {z_mm:.2} mm, {side} the Z {which} limit of {limit_mm:.2} mm.")
             }
-            LineProblem::ZUnknown => {
-                "moves Z from a height WebControl does not know, so the Z limits cannot be checked.".to_string()
-            }
         }
     }
 
@@ -85,9 +79,8 @@ impl LineProblem {
                  again."
             }
             LineProblem::ZLimit { .. } => {
-                "Resume stops here again: stop the job, or change the Z limits (Maslow Settings) if they are wrong."
+                "Resume stops here again: stop the job, or set the Z limits again if they are wrong."
             }
-            LineProblem::ZUnknown => "Resume tries the line again once a status report has told where Z is.",
         };
         (format!("Line {}", self.title()), format!("Line {} {} {advice}", index + 1, self.reason()))
     }
@@ -180,14 +173,12 @@ mod tests {
             (
                 "Line Beyond Z Limit".to_string(),
                 "Line 4 would move Z to -12.00 mm, below the Z lower limit of -10.00 mm. Resume stops here again: \
-                 stop the job, or change the Z limits (Maslow Settings) if they are wrong."
+                 stop the job, or set the Z limits again if they are wrong."
                     .to_string()
             )
         );
         let above = LineProblem::ZLimit { z_mm: 30.0, limit_mm: 25.4, upper: true };
         assert_eq!(above.reason(), "would move Z to 30.00 mm, above the Z upper limit of 25.40 mm.");
-        assert_eq!(LineProblem::ZUnknown.alert(0).0, "Line Z Unknown");
-        assert!(LineProblem::ZUnknown.alert(0).1.ends_with("once a status report has told where Z is."));
     }
 
     #[test]

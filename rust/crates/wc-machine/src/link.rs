@@ -196,6 +196,7 @@ impl Machine {
         {
             probe.zeroed = true;
         }
+        self.z_limit_line(line);
         if line == "position loaded at:" {
             self.controller.stop_reload = false;
         }
@@ -237,9 +238,8 @@ impl Machine {
     fn probe_answered(&mut self, probe: Probe, ok: bool, effects: &mut Vec<Effect>) {
         self.probing = false;
         if ok && probe.zeroed {
-            if let Some(touched_mm) = self.bit.zeroed() {
-                self.shift_z_limits(-touched_mm);
-            }
+            self.bit.zeroed();
+            self.z_zero_changed();
         } else {
             self.bit.lost();
         }
@@ -324,6 +324,7 @@ impl Machine {
         let body = text.get(9..).unwrap_or_default();
         if text.contains("adjust Z-Axis") {
             self.manual_z_prompt();
+            self.z_zero_changed();
             effects.push(broadcast(&ActivateModal::notification(body, true)));
         } else if text.contains("Unable to find valid") {
             // Setting the sprockets to zero reports a zero chain length, which is expected.
@@ -336,6 +337,7 @@ impl Machine {
     }
 
     fn reported_setting(&mut self, line: &str, key: u32, value: f64, effects: &mut Vec<Effect>) {
+        self.z_limit_setting(key, value);
         if self.controller.queue.contains(&Queued::SettingsSync) {
             self.controller.reported.push((key, value));
             return self.upgrade_setting(line, None);
@@ -538,7 +540,7 @@ impl Machine {
                 let reason = format!("That command {}", problem.reason());
                 effects.push(broadcast(&ActivateModal::titled_alert(&format!("Command {}", problem.title()), &reason)));
                 self.probing = self.probing && !command.contains("G38.2");
-                if matches!(problem, LineProblem::ZLimit { .. } | LineProblem::ZUnknown) {
+                if matches!(problem, LineProblem::ZLimit { .. }) {
                     self.drop_after_z_refusal(effects);
                 }
                 return false;
