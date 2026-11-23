@@ -39,6 +39,10 @@ export const ZMoveButton = ({ move, disabled, className }: Props) => {
           onCancel={() => setConfirming(false)}
         >
           <p>Move the bit down to Z0? Make sure the bit is clear of clamps.</p>
+          <p>
+            At a tool change, do this before taking the old bit out. If the sled is parked for the tool change, it first
+            travels back over the work at the safe height instead; press Go to Z0 again to lower the bit there.
+          </p>
         </ConfirmDialog>
       )}
     </>

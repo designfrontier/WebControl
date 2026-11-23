@@ -361,6 +361,7 @@ describe("Z-Axis modal", () => {
     await user.click(button("Go to Z0"));
     const confirm = screen.getByRole("dialog", { name: "Go to Z0" });
     expect(confirm).toHaveTextContent("Move the bit down to Z0? Make sure the bit is clear of clamps.");
+    expect(confirm).toHaveTextContent("first travels back over the work at the safe height");
     await user.click(within(confirm).getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("dialog", { name: "Go to Z0" })).not.toBeInTheDocument();
     expect(socket.actions()).toEqual([["zToSafeHeight", "", ""]]);
