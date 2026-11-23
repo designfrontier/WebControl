@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
+import type { PacingStats } from "../protocol";
 import { startupState } from "../test/fakeFetch";
 import {
   CONTROLLER_MESSAGE_LIMIT,
   createMachineStore,
   initialMachineState,
   machineReducer,
+  pushedFields,
   selectGcodeLocked,
   selectJobState,
   selectRunState,
@@ -84,6 +86,20 @@ describe("machineReducer control buttons", () => {
     expect(apply([{ type: "startup", state: startupState() }], loaded).controlButtons).toEqual(loaded.controlButtons);
     const pushed = apply([message("controlButtons", { buttons: ["zAxis", "park", "setHome", "macro4"] })], loaded);
     expect(pushed.controlButtons).toEqual(["zAxis", "park", "setHome", "macro4"]);
+  });
+});
+
+describe("machineReducer pacing and job timer", () => {
+  const stats: PacingStats = { mode: "v0.94", gapMs: 50, job: null, segment: null, history: [], estimateS: 600 };
+
+  it("takes the stats from /api/state, keeps them over a snapshot without them and follows pacingStats pushes", () => {
+    expect(initialMachineState.pacing).toBeNull();
+    const loaded = apply([{ type: "startup", state: startupState({ pacing: stats }) }]);
+    expect(loaded.pacing?.estimateS).toBe(600);
+    expect(apply([{ type: "startup", state: startupState() }], loaded).pacing).toBe(loaded.pacing);
+    const event = message("pacingStats", { ...stats, estimateS: null });
+    expect(apply([event], loaded).pacing?.estimateS).toBeNull();
+    expect(pushedFields(event as Extract<MachineEvent, { type: "message" }>)).toEqual(["pacing"]);
   });
 });
 

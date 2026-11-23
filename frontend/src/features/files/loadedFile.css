@@ -10,7 +10,8 @@
 }
 
 .loaded-file-label,
-.loaded-file-folder {
+.loaded-file-folder,
+.loaded-file-estimate {
   color: var(--muted);
 }
 
@@ -18,7 +19,8 @@
   font-weight: 600;
 }
 
-.loaded-file-folder {
+.loaded-file-folder,
+.loaded-file-estimate {
   font-size: 0.85em;
 }
 
