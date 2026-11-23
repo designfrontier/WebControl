@@ -170,7 +170,8 @@ describe("Queue summary on the control screen", () => {
 
 describe("Add to queue from Open G-Code", () => {
   it("adds the chosen file without opening it", async () => {
-    const write = posts();
+    const one = jobQueue({ items: [queueItem({ file: "jobs/arm.nc" })] });
+    const write = posts((body) => jsonResponse((body as { skipBitChanges: boolean }).skipBitChanges ? three : one));
     const fetch = fakeFetch({ "/api/files/gcode": gcodeLibrary(), ...routes(jobQueue(), write) });
     const { user } = renderApp("/files/open", { fetch });
     await user.click(await screen.findByRole("radio", { name: "arm.nc" }));
@@ -180,6 +181,10 @@ describe("Add to queue from Open G-Code", () => {
       ),
     ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Add to queue" }));
+    expect(await screen.findByText("Added arm.nc to the queue. The queue now has 1 file.")).toHaveAttribute(
+      "role",
+      "status",
+    );
     const skip = screen.getByRole("checkbox", {
       name: "Don't stop for bit changes in this file when the queue runs it",
     });
@@ -190,7 +195,16 @@ describe("Add to queue from Open G-Code", () => {
       { file: "jobs/arm.nc", skipBitChanges: false },
       { file: "jobs/arm.nc", skipBitChanges: true },
     ]);
-    expect(await screen.findByText("Added arm.nc to the queue.")).toBeInTheDocument();
+    expect(await screen.findByText("Added arm.nc to the queue. The queue now has 4 files.")).toBeInTheDocument();
+  });
+
+  it("shows the queue's size on the control screen as files are added", async () => {
+    const fetch = fakeFetch({ "/api/files/gcode": gcodeLibrary(), ...routes(jobQueue()) });
+    const { socket } = renderApp("/files/open", { fetch });
+    await screen.findByRole("radio", { name: "arm.nc" });
+    expect(screen.queryByRole("button", { name: /^Queue \(/ })).not.toBeInTheDocument();
+    act(() => socket.serverMessage("jobQueue", three));
+    expect(await screen.findByRole("button", { name: "Queue (4)", hidden: true })).toBeInTheDocument();
   });
 
   it("explains a refusal", async () => {

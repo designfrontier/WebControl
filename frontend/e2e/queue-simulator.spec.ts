@@ -64,7 +64,7 @@ const addFromOpen = async (page: Page, name: string, skip = false) => {
   await page.getByRole("radio", { name }).click();
   await page.getByRole("checkbox", { name: /Don't stop for bit changes/ }).setChecked(skip);
   await page.getByRole("button", { name: "Add to queue" }).click();
-  await expect(page.getByText(`Added ${name} to the queue.`)).toBeVisible();
+  await expect(page.getByText(`Added ${name} to the queue. The queue now has`)).toBeVisible();
 };
 
 /** Whether the first file is cutting, or its own M6 asks for the bit. */

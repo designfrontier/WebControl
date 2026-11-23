@@ -31,9 +31,9 @@ export const OpenGcode = () => {
               client.emit("checkForGCodeUpdate", { data: "Please" });
               if (!signal.aborted) close();
             }}
-            enqueue={async ({ directory, name }) => {
-              await queueApi(fetchImpl).add(`${directory}/${name}`, skipBitChanges);
-            }}
+            enqueue={async ({ directory, name }) =>
+              (await queueApi(fetchImpl).add(`${directory}/${name}`, skipBitChanges)).items.length
+            }
             enqueueOptions={
               <label className="field-inline">
                 <input
