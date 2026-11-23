@@ -11,6 +11,7 @@ use flate2::read::GzDecoder;
 use rig::{Rig, alerts, commands, pushed, settings};
 use serde_json::{Value, json};
 use wc_config::Settings;
+use wc_gcode::estimate::MOVE_S;
 use wc_machine::files::{BoardForm, GCODE_LOCKED, Gcode, Origin, Problem, Reply, Request, TrimForm};
 use wc_machine::{Effect, Event};
 use wc_protocol::main::Units;
@@ -551,7 +552,9 @@ fn a_parsed_file_is_estimated_at_the_machines_feeds() {
     ]);
     let gcode = Gcode::parse("G0 X800\nG1 Z-10 F1000\n", &machine).unwrap();
     let z_seconds = 10.0 / (12.6 * 24.0) * 60.0;
-    assert_eq!(gcode.estimate[0], 120.0, "G0 at maxFeedrate");
-    assert!((f64::from(gcode.estimate[1]) - 120.0 - z_seconds).abs() < 0.01, "Z at maxZRPM's default times the pitch");
+    let g0 = 120.0 + MOVE_S;
+    assert!((f64::from(gcode.estimate[0]) - g0).abs() < 0.001, "G0 at maxFeedrate");
+    let z = f64::from(gcode.estimate[1]) - g0 - MOVE_S;
+    assert!((z - z_seconds).abs() < 0.01, "Z at maxZRPM's default times the pitch");
     assert!(Gcode::empty(Units::Mm).estimate.is_empty());
 }

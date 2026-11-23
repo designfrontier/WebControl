@@ -17,9 +17,10 @@ WebControl adds up the time each move takes at the speed the file asks for:
 - G0 moves at Max Feedrate.
 - Z moves no faster than **Max Z-Axis RPM** times **Z-Axis Pitch**.
 - Arcs by their length, and G4 dwells by their time.
+- 15 ms more for each move, because the controller stops at the end of every line. A file of many short moves takes
+  much longer than its feeds alone say.
 
-Tool changes, M0 pauses and the time you take at them are not in the estimate. The sled rarely reaches the speed the
-file asks for, so the real time is usually longer.
+Tool changes, M0 pauses and the time you take at them are not in the estimate.
 
 ## While a job runs
 

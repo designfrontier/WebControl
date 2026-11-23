@@ -223,7 +223,7 @@ fn a_pacing_change_ends_the_segment_with_a_parsable_summary_and_marks_the_new_on
     assert_eq!(field(second, "median_short_gap_ms"), "30", "a 10 ms ack, then 25 ms since the write in 10 ms ticks");
     let job = &parsed[4].1;
     assert_eq!((field(job, "lines"), field(job, "mode")), ("8".into(), "v0.94".into()));
-    let times = "wall_s=0.3 cutting_s=0.3 estimated_s=0.6 file=none";
+    let times = "wall_s=0.3 cutting_s=0.3 estimated_s=0.7 file=none";
     assert_eq!(log[5], format!("PACING JOB END file_line_end=8 mode=minimum_gap gap_ms=25 ended_by=job_end {times}"));
     assert_eq!(
         console(&effects).iter().filter(|text| text.starts_with("PACING")).collect::<Vec<_>>(),
@@ -313,7 +313,7 @@ fn the_job_timer_leaves_pauses_out_of_cutting_time_and_scales_the_estimate_by_th
     let (_, fields) = parse(&end);
     let seconds = |key: &str| fields[key].parse::<f64>().unwrap();
     assert!(seconds("wall_s") - seconds("cutting_s") >= 10.0, "the pause is wall time only: {end}");
-    assert_eq!((fields["estimated_s"].as_str(), fields["file"].as_str()), ("40", "none"));
+    assert_eq!((fields["estimated_s"].as_str(), fields["file"].as_str()), ("40.1", "none"));
     let ended = job(&effects);
     assert_eq!(ended["remainingS"], Value::Null);
     assert!(ended["wallS"].as_f64().unwrap() - ended["elapsedS"].as_f64().unwrap() >= 10.0);
