@@ -151,15 +151,6 @@ fn the_gcode_cannot_be_replaced_during_a_job() {
 }
 
 #[test]
-fn a_file_too_large_to_draw_raises_pythons_alert() {
-    let mut rig = Rig::new();
-    let mut gcode = parse("G0 X1");
-    gcode.too_large = Some("only the first 300000lines are shown".into());
-    let (_, effects) = ask(&mut rig, Request::LoadGcode { gcode: Box::new(gcode), file: None, origin: Origin::Open });
-    assert_eq!(alerts(&effects), ["only the first 300000lines are shown"]);
-}
-
-#[test]
 fn truncate_cuts_long_decimals_when_the_setting_is_on() {
     let on = settings(&[("Advanced Settings", "truncate", json!(1)), ("Advanced Settings", "digits", json!("2"))]);
     let gcode = Gcode::parse("G1 X1.23456 Y2", &on).unwrap();

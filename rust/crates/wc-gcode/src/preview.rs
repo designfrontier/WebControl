@@ -13,8 +13,12 @@ use crate::arc::{ArcCentres, RADIUS_TOLERANCE_MM, centre_from_radius};
 use crate::load::unreadable_word;
 use crate::{py, words};
 
-/// Python renders at most this many lines; the rest still cut.
+/// Python drew only this many lines; a longer file is drawn whole but thinned.
 pub const MAX_LINES: usize = 300_000;
+/// How far a thinned preview may stray from the toolpath, well under a pixel of the whole bed.
+const THIN_TOLERANCE_MM: f64 = 0.1;
+/// The most points one thinned line may stand for, which bounds the work per point.
+const THIN_SPAN: usize = 64;
 
 const MILLIMETERS: f64 = 1.0 / 25.4;
 const VALID_PREFIXES: [&str; 9] = ["G00", "G0 ", "G1 ", "G01", "G2 ", "G02", "G3 ", "G03", "G17"];
@@ -49,8 +53,6 @@ pub struct Preview {
     pub file_units: Units,
     /// The console lines Python logs while drawing.
     pub warnings: Vec<String>,
-    /// The alert Python raises when only the first `MAX_LINES` lines are drawn.
-    pub too_large: Option<String>,
 }
 
 /// Draws `lines` as loaded, starting from the origin with `machine` units as the file's.
@@ -66,28 +68,40 @@ pub fn render(lines: &[String], machine: Units) -> Preview {
         moves: Vec::new(),
         warnings: Vec::new(),
     };
-    lines.iter().take(MAX_LINES).for_each(|line| drawing.line(line));
-    let too_large = (lines.len() > MAX_LINES).then(|| too_large_alert(lines.len()));
-    Preview { moves: drawing.moves, file_units: drawing.file_units, warnings: drawing.warnings, too_large }
+    lines.iter().for_each(|line| drawing.line(line));
+    if lines.len() > MAX_LINES {
+        let thinned = |run: &mut Move| run.points = thin(&run.points, THIN_TOLERANCE_MM * MILLIMETERS);
+        drawing.moves.iter_mut().filter(|run| run.kind == MoveKind::Line).for_each(thinned);
+    }
+    Preview { moves: drawing.moves, file_units: drawing.file_units, warnings: drawing.warnings }
 }
 
-pub fn too_large_alert(count: usize) -> String {
-    format!(
-        "The file has {} lines of gcode. The preview shows only the first {} lines; the whole file still runs.",
-        grouped(count),
-        grouped(MAX_LINES)
-    )
-}
-
-fn grouped(count: usize) -> String {
-    let digits = count.to_string();
-    digits.char_indices().fold(String::new(), |mut out, (i, digit)| {
-        if i > 0 && (digits.len() - i).is_multiple_of(3) {
-            out.push(',');
+/// Drops each point that lies within `tolerance` of a line drawn past it, keeping the run's first and last points.
+fn thin(points: &[[f64; 3]], tolerance: f64) -> Vec<[f64; 3]> {
+    let Some((&last, inner)) = points.split_last() else { return Vec::new() };
+    let mut kept = vec![points[0]];
+    let mut from = 0;
+    (1..inner.len()).for_each(|at| {
+        let (start, end) = (points[from], points[at + 1]);
+        let strays = |point: &[f64; 3]| distance_to_segment(*point, start, end) > tolerance;
+        if at - from >= THIN_SPAN || points[from + 1..=at].iter().any(strays) {
+            kept.push(points[at]);
+            from = at;
         }
-        out.push(digit);
-        out
-    })
+    });
+    if points.len() > 1 {
+        kept.push(last);
+    }
+    kept
+}
+
+fn distance_to_segment(point: [f64; 3], start: [f64; 3], end: [f64; 3]) -> f64 {
+    let along = |i: usize| end[i] - start[i];
+    let offset = |i: usize| point[i] - start[i];
+    let length = (0..3).map(|i| along(i).powi(2)).sum::<f64>();
+    let t =
+        if length == 0.0 { 0.0 } else { ((0..3).map(|i| along(i) * offset(i)).sum::<f64>() / length).clamp(0.0, 1.0) };
+    (0..3).map(|i| (offset(i) - t * along(i)).powi(2)).sum::<f64>().sqrt()
 }
 
 /// The gzipped JSON `gcodeUpdateCompressed` sends.
@@ -501,17 +515,83 @@ mod tests {
         assert_eq!(last_point(&preview), [1.0, 0.0, 0.0]);
     }
 
+    const TOLERANCE: f64 = THIN_TOLERANCE_MM * MILLIMETERS;
+
+    fn distance_to_path(point: [f64; 3], path: &[[f64; 3]]) -> f64 {
+        path.windows(2).map(|pair| distance_to_segment(point, pair[0], pair[1])).fold(f64::INFINITY, f64::min)
+    }
+
     #[test]
-    fn only_the_first_max_lines_are_drawn() {
-        let lines = vec!["G1 X1 ".to_string(); MAX_LINES + 1];
-        let preview = render(&lines, Units::Inches);
-        assert_eq!(
-            preview.too_large.unwrap(),
-            "The file has 300,001 lines of gcode. The preview shows only the first 300,000 lines; the whole file still \
-             runs."
-        );
-        assert_eq!(preview.moves[0].points.len(), 2);
-        assert_eq!(render(&lines[..2], Units::Inches).too_large, None);
+    fn only_a_file_over_max_lines_is_thinned() {
+        let curve: Vec<String> = (1..=200).map(|i| format!("G1 X{} Y{} ", i, (i as f64 / 9.0).sin() * 0.002)).collect();
+        let mut lines = vec![String::new(); MAX_LINES - curve.len()];
+        lines.extend(curve);
+        let whole = render(&lines, Units::Inches).moves[0].points.clone();
+        assert_eq!(whole.len(), 201);
+        lines.push(String::new());
+        let thinned = &render(&lines, Units::Inches).moves[0].points;
+        assert!(thinned.len() < 50, "{} points", thinned.len());
+        assert_eq!((thinned[0], thinned.last()), (whole[0], whole.last()));
+        assert!(whole.iter().all(|&point| distance_to_path(point, thinned) <= TOLERANCE));
+    }
+
+    #[test]
+    fn thinning_keeps_every_point_within_the_tolerance_and_the_run_ends() {
+        let wave: Vec<[f64; 3]> =
+            (0..5000).map(|i| i as f64 * 0.002).map(|x| [x, (x * 7.0).sin() * 0.3, (x * 3.0).cos() * 0.1]).collect();
+        let thinned = thin(&wave, TOLERANCE);
+        assert!(thinned.len() < wave.len() / 4, "{} points", thinned.len());
+        assert_eq!((thinned[0], thinned.last()), (wave[0], wave.last()));
+        assert!(thinned.iter().all(|point| wave.contains(point)));
+        assert!(wave.iter().all(|&point| distance_to_path(point, &thinned) <= TOLERANCE));
+    }
+
+    #[test]
+    fn thinning_keeps_corners_and_z_steps_larger_than_the_tolerance() {
+        let step = 4.0 * TOLERANCE;
+        let path = [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [2.0, 0.0, -step],
+            [2.0, 1.0, -step],
+            [2.0 + TOLERANCE / 2.0, 1.5, -step],
+            [2.0, 2.0, -step],
+            [3.0, 2.0, -step],
+        ];
+        assert_eq!(thin(&path, TOLERANCE), [path[0], path[1], path[2], path[5], path[6]]);
+        assert_eq!(thin(&path[..1], TOLERANCE), &path[..1]);
+        assert!(thin(&[], TOLERANCE).is_empty());
+        assert_eq!(distance_to_segment([3.0, 4.0, 0.0], [0.0; 3], [0.0; 3]), 5.0);
+    }
+
+    #[test]
+    fn a_long_straight_run_keeps_a_point_every_thin_span() {
+        let line: Vec<[f64; 3]> = (0..=THIN_SPAN * 3).map(|i| [i as f64, 0.0, 0.0]).collect();
+        assert_eq!(thin(&line, TOLERANCE).len(), 4);
+    }
+
+    /// Too slow for CI: `cargo test --release -p wc-gcode --lib a_million -- --ignored`.
+    #[test]
+    #[ignore]
+    fn a_million_line_file_is_drawn_whole_in_reasonable_time_and_every_line_lies_on_it() {
+        let mut lines: Vec<String> = (0..1_000_000)
+            .map(|i| i as f64 * 0.01)
+            .map(|x| format!("G1 X{x:.2} Y{:.3} Z{:.3} ", (x / 3.0).sin() * 20.0, (x / 7.0).cos() - 2.0))
+            .collect();
+        lines.extend(["G0 Z5 ".to_string(), "G0 X0 Y0 ".to_string()]);
+        let started = std::time::Instant::now();
+        let preview = render(&lines, Units::Mm);
+        assert!(started.elapsed().as_secs() < 300, "{:?}", started.elapsed());
+        let run = &preview.moves[0].points;
+        assert!(run.len() < lines.len() / 20, "{} points", run.len());
+        let rest: Vec<_> = preview.moves[1..].iter().map(|m| (m.kind, m.dashed, m.points.len())).collect();
+        assert_eq!(rest, [(MoveKind::Circle, false, 2), (MoveKind::Line, true, 2)]);
+        let drawn_at = |index| {
+            let at = crate::position::find_position_at(&lines, index).unwrap();
+            [at.x, at.y, at.z].map(|mm| mm * MILLIMETERS)
+        };
+        [1, 123_457, 765_433].iter().for_each(|&index| assert!(distance_to_path(drawn_at(index), run) <= TOLERANCE));
+        assert_eq!((run[0], run.last()), (drawn_at(1), Some(&drawn_at(1_000_000))));
     }
 
     #[test]

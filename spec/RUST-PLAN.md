@@ -556,7 +556,8 @@ M5 routes and M6a can follow M1/M2 while M4 is under way.
 7. **Agents write most of the code without hardware.** *Mitigation:* simulator fidelity checked against Python
    transcripts; every milestone ends with the owner's hardware checklist.
 8. **Pi 3B load.** gzip of large 3D payloads and the 25 s pings are cheap in Rust, but 300k-line files allocate.
-   *Mitigation:* stream-parse, measure in M3 against Python (2× budget), and keep the 300k render cap.
+   *Mitigation:* stream-parse, measure in M3 against Python (2× budget), and draw a file over 300k lines whole but
+   thinned to within 0.1 mm (0.7.0; Python drew only its first 300k lines).
 
 ### Open questions for the owner, ranked
 
