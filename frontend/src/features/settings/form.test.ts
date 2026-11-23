@@ -116,6 +116,12 @@ describe("validation", () => {
     expect(validateValue(park, "wide")).toBe("Enter a number");
   });
 
+  it("lets a Z limit be blank, for none", () => {
+    const limit = setting({ key: "zAxisLowerLimit", numeric: true });
+    expect(validateValue(limit, "")).toBeUndefined();
+    expect(validateValue(limit, "deep")).toBe("Enter a number");
+  });
+
   it("accepts any text or bool otherwise", () => {
     expect(validateValue(setting({ key: "macro1" }), "")).toBeUndefined();
     expect(validateValue(setting({ key: "zAxis", type: "bool" }), true)).toBeUndefined();

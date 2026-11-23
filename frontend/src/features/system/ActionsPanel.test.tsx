@@ -228,29 +228,10 @@ describe("ActionsPanel", () => {
     expect(setup.getByRole("button", { name })).toHaveAccessibleDescription(reason);
   });
 
-  it("greys out Z-axis limits with the reason until the controller runs holey 51.292", async () => {
+  it("links Z-axis limits on every firmware, since WebControl keeps travel limits of its own", async () => {
     renderActions({
       fetch: systemFetch({
-        "/api/system/info": systemInfo({ controllerFirmwareVersion: 51.29, firmwareBuild: "51.29x" }),
-      }),
-    });
-    const setup = group("Calibration and setup");
-    const limits = await setup.findByRole("button", { name: "Set Z-axis limits" });
-    expect(limits).toBeDisabled();
-    expect(limits).toHaveAccessibleDescription(
-      "Needs holey firmware 51.292 or later; the controller reports holey 51.29x.",
-    );
-    expect(setup.queryByRole("link", { name: "Set Z-axis limits" })).not.toBeInTheDocument();
-  });
-
-  it("links Z-axis limits on firmware that stores them", async () => {
-    renderActions({
-      fetch: systemFetch({
-        "/api/system/info": systemInfo({
-          controllerFirmwareVersion: 51.29,
-          firmwareBuild: "51.292",
-          firmwareSupportsZaxisLimit: true,
-        }),
+        "/api/system/info": systemInfo({ controllerFirmwareVersion: 51.27, firmwareBuild: "51.27" }),
       }),
     });
     const setup = group("Calibration and setup");

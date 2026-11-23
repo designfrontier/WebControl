@@ -136,6 +136,18 @@
   width: 8rem;
 }
 
+.machine-screen .z-limits {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+}
+
+.machine-screen .z-limits dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
 .machine-screen .sprocket-jog {
   display: grid;
   gap: var(--space-3);

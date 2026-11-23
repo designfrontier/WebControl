@@ -1,6 +1,7 @@
 import { useClient } from "../../app/context";
 import { LoadStatus } from "./LoadStatus";
 import { ControllerLog, Screen } from "./Screen";
+import { TravelLimits } from "./TravelLimits";
 import { useMachineSetup } from "./useLoad";
 import { ZJog } from "./ZJog";
 
@@ -12,6 +13,9 @@ export const ZLimitsPage = () => {
   return (
     <Screen title="Z-axis limits">
       <p>Router Z limits help Maslow avoid damage from plunging too deep or retracting too far.</p>
+      <ZJog />
+      <TravelLimits />
+      <h3>Limits the controller keeps</h3>
       <p>The controller stores each limit in mm. Zeroing Z shifts the saved limits by the same amount.</p>
       <LoadStatus load={setup} what="machine setup" onRetry={retry} />
       {setup.status === "ready" && !supported && (
@@ -20,14 +24,14 @@ export const ZLimitsPage = () => {
           {setup.data.firmwareBuild ?? "no version yet"}.
         </p>
       )}
-      <h3>Step 1: Clear the Z-axis limits</h3>
-      <button type="button" disabled={!supported} onClick={() => client.sendAction("clearZ")}>
-        Clear Z limits
-      </button>
-      <h3>Step 2: Move Z to each limit and save it</h3>
-      <p>Raise Z to its highest safe point and save the maximum, then lower it to its deepest and save the minimum.</p>
-      <ZJog />
+      <p>
+        Clear the controller's limits, then raise Z to its highest safe point and save the maximum, then lower it to its
+        deepest and save the minimum.
+      </p>
       <div className="button-grid">
+        <button type="button" disabled={!supported} onClick={() => client.sendAction("clearZ")}>
+          Clear Z limits
+        </button>
         <button type="button" disabled={!supported} onClick={() => client.sendAction("setMaxZ")}>
           Save Z max
         </button>
