@@ -136,3 +136,23 @@ test("the tool-change prompt names the bit from the file, and the library takes 
     '16 3.175 mm (1/8") flat end mill',
   ]);
 });
+
+test("a file with many tools scrolls its list instead of the page", async ({ page, request }) => {
+  const numbers = [1, 2, 3, 4, 5, 6, 7, 8];
+  const lines = [...numbers.map((n) => `(T${n} D=${n} CR=0 - ZMIN=-1 - flat end mill)`), "G21", "G90"];
+  const text = [...lines, ...numbers.flatMap((n) => [`T${n} M6`, `G0 X${n}`])].join("\n");
+  const file = { name: "many-tools.nc", mimeType: "text/plain", buffer: Buffer.from(`${text}\n`) };
+  expect(await request.post("/uploadGCode", { multipart: { selectedDirectory: "tools", "file[]": file } })).toBeOK();
+
+  await Object.entries({ desktop: VIEWPORTS.desktop, ipad: VIEWPORTS.ipad }).reduce(async (previous, [, size]) => {
+    await previous;
+    await page.setViewportSize(size);
+    await page.goto("/");
+    await waitForServer(page);
+    await closeServerDialogs(page);
+    const viewer = page.getByRole("figure");
+    await viewer.getByText(/^Tools: T1, T2/).click();
+    await expect(viewer.locator(".file-tools ul")).toBeInViewport({ ratio: 1 });
+    expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true);
+  }, Promise.resolve());
+});
