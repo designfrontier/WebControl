@@ -1,5 +1,6 @@
 //! Line pacing (`spec/firmware.md` B3), adjustable for the owner's loss-rate experiment, and its statistics: per
-//! job and per segment (one pacing, from a change or the job's start), each ended with a `PACING` summary line.
+//! job and per segment (one pacing, from a change or the job's start), each ended with a `PACING` summary line. The
+//! job's totals double as the job timer: wall time, streaming (cutting) time and the loaded file's estimate left.
 
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -26,6 +27,8 @@ pub const SHORT_LINE_MARGIN: Duration = Duration::from_millis(100);
 const GAP_BUCKETS: usize = 2001;
 /// Unacked job lines remembered for the short-line gaps; a buffered controller holds far fewer.
 const PENDING_LIMIT: usize = 256;
+/// The share of a job's estimate done before its real pace rescales the time left.
+const PACE_TRUSTED: f64 = 0.02;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Mode {
@@ -113,10 +116,12 @@ struct Tally {
     gaps: Vec<u32>,
     first_line: Option<usize>,
     last_line: Option<usize>,
+    started: Duration,
+    ended: Option<Duration>,
 }
 
 impl Tally {
-    fn new(pacing: Pacing) -> Tally {
+    fn new(pacing: Pacing, now: Duration) -> Tally {
         Tally {
             pacing,
             lines: 0,
@@ -128,7 +133,18 @@ impl Tally {
             gaps: vec![0; GAP_BUCKETS],
             first_line: None,
             last_line: None,
+            started: now,
+            ended: None,
         }
+    }
+
+    fn end(&mut self, now: Duration) {
+        self.streaming(false, now);
+        self.ended = Some(now);
+    }
+
+    fn wall(&self, now: Duration) -> Duration {
+        self.ended.unwrap_or(now).saturating_sub(self.started)
     }
 
     fn streaming(&mut self, streaming: bool, now: Duration) {
@@ -160,7 +176,7 @@ impl Tally {
         median.map(|ms| ms as f64)
     }
 
-    fn report(&self, now: Duration, ended_by: Option<&str>) -> PacingSegment {
+    fn report(&self, now: Duration, ended_by: Option<&str>, remaining: Option<f64>) -> PacingSegment {
         let elapsed = self.elapsed(now).as_secs_f64();
         let lines = self.lines as f64;
         let per = |value: f64, over: f64| (over > 0.0).then(|| value / over);
@@ -177,12 +193,14 @@ impl Tally {
             lost_percent: per(self.lost as f64 * 100.0, lines).map(|n| round(n, 100.0)),
             median_short_gap_ms: self.median_gap_ms(),
             ended_by: ended_by.map(String::from),
+            wall_s: round(self.wall(now).as_secs_f64(), 1000.0),
+            remaining_s: remaining,
         }
     }
 
     /// The stable `key=value` line the serial log, the service log and the console get.
     fn summary(&self, label: &str, now: Duration, ended_by: &str) -> String {
-        let report = self.report(now, Some(ended_by));
+        let report = self.report(now, Some(ended_by), None);
         let number = |value: Option<f64>| value.map_or("none".to_string(), |n| n.to_string());
         let line = |index: Option<usize>| index.map_or("none".to_string(), |i| (i + 1).to_string());
         format!(
@@ -234,10 +252,12 @@ pub(crate) struct Stats {
     /// Set by Stop, so the segment it ends says so.
     stopping: bool,
     /// Something changed since the last push.
-    dirty: bool,
+    pub(crate) dirty: bool,
     job_ended_by: &'static str,
     /// What the last push said; `GET /api/state` and `GET /api/run/pacing` read it.
     pub shown: Arc<PacingStats>,
+    /// The loaded file's estimated seconds through the end of each line.
+    pub estimate: Vec<f32>,
 }
 
 impl Stats {
@@ -259,7 +279,9 @@ impl Stats {
                 job: None,
                 segment: None,
                 history: Vec::new(),
+                estimate_s: None,
             }),
+            estimate: Vec::new(),
         }
     }
 
@@ -267,14 +289,21 @@ impl Stats {
         self.pacing
     }
 
-    fn report(&self, now: Duration) -> PacingStats {
+    fn report(&self, now: Duration, remaining: Option<f64>) -> PacingStats {
+        let ended_by = (!self.in_job).then_some(self.job_ended_by);
         PacingStats {
             mode: self.pacing.mode.setting().into(),
             gap_ms: self.pacing.gap.as_millis() as u64,
-            job: self.job.as_ref().map(|job| job.report(now, (!self.in_job).then_some(self.job_ended_by))),
-            segment: self.segment.as_ref().map(|segment| segment.report(now, None)),
+            job: self.job.as_ref().map(|job| job.report(now, ended_by, remaining)),
+            segment: self.segment.as_ref().map(|segment| segment.report(now, None, None)),
             history: self.history.iter().cloned().collect(),
+            estimate_s: self.estimate.last().map(|&total| round(f64::from(total), 1.0)),
         }
+    }
+
+    /// The estimate's seconds before 0-based `line`.
+    fn estimated_before(&self, line: usize) -> f64 {
+        line.checked_sub(1).and_then(|at| self.estimate.get(at)).map_or(0.0, |&s| f64::from(s))
     }
 
     fn tallies(&mut self) -> impl Iterator<Item = &mut Tally> {
@@ -308,13 +337,13 @@ impl Machine {
                 self.end_segment("pacing change", now, effects);
                 let from = format!("from_mode={} from_gap_ms={}", old.mode.slug(), old.gap.as_millis());
                 announce(format!("PACING CHANGE file_line={file_line} {} {from}", pacing.fields()), effects);
-                self.stats.segment = Some(Tally::new(pacing));
+                self.stats.segment = Some(Tally::new(pacing, now));
             }
         }
         if in_job && !self.stats.in_job {
             announce(format!("PACING JOB START file_line={file_line} {}", pacing.fields()), effects);
-            self.stats.job = Some(Tally::new(pacing));
-            self.stats.segment = Some(Tally::new(pacing));
+            self.stats.job = Some(Tally::new(pacing, now));
+            self.stats.segment = Some(Tally::new(pacing, now));
             self.stats.pending.clear();
             self.stats.in_job = true;
             self.stats.dirty = true;
@@ -327,11 +356,18 @@ impl Machine {
             self.stats.in_job = false;
             self.stats.job_ended_by = why;
             let last = self.stats.job.as_ref().and_then(|job| job.last_line).map_or(0, |index| index + 1);
-            if let Some(job) = &self.stats.job {
+            let times = self.stats.job.as_mut().map_or(String::new(), |job| {
+                job.end(now);
                 announce(job.summary("JOB", now, why), effects);
-            }
-            let fields = pacing.fields();
-            announce(format!("PACING JOB END file_line_end={last} {fields} ended_by={}", slug(why)), effects);
+                let seconds = |time: Duration| round(time.as_secs_f64(), 10.0);
+                format!(" wall_s={} cutting_s={}", seconds(job.wall(now)), seconds(job.elapsed(now)))
+            });
+            let estimated =
+                self.job_estimate().map_or("none".into(), |(total, start)| round(total - start, 10.0).to_string());
+            let file = self.gcode_name().unwrap_or_else(|| "none".into());
+            let fields =
+                format!("{} ended_by={}{times} estimated_s={estimated} file={file}", pacing.fields(), slug(why));
+            announce(format!("PACING JOB END file_line_end={last} {fields}"), effects);
             self.stats.dirty = true;
         }
     }
@@ -343,20 +379,37 @@ impl Machine {
             return;
         }
         self.stats.next_push = now + PUSH_EVERY;
-        let report = self.stats.report(now);
+        let report = self.stats.report(now, self.remaining_s(now));
         effects.push(broadcast(&report));
         self.stats.shown = Arc::new(report);
     }
 
     pub(crate) fn pacing_report(&self, now: Duration) -> PacingStats {
-        self.stats.report(now)
+        self.stats.report(now, self.remaining_s(now))
+    }
+
+    /// The loaded file's estimated total and the estimate before the job's first line.
+    fn job_estimate(&self) -> Option<(f64, f64)> {
+        let total = f64::from(*self.stats.estimate.last()?);
+        let first = self.stats.job.as_ref().and_then(|job| job.first_line).unwrap_or(self.index);
+        Some((total, self.stats.estimated_before(first)))
+    }
+
+    /// The running job's estimate left, scaled by its real pace once enough of it is done to judge.
+    fn remaining_s(&self, now: Duration) -> Option<f64> {
+        let job = self.stats.job.as_ref().filter(|_| self.stats.in_job)?;
+        let (total, start) = self.job_estimate()?;
+        let finished = self.stats.estimated_before(self.controller.accounting.oldest_index().unwrap_or(self.index));
+        let done = finished - start;
+        let pace = if done > PACE_TRUSTED * (total - start) { job.elapsed(now).as_secs_f64() / done } else { 1.0 };
+        Some(round((total - finished).max(0.0) * pace, 1.0))
     }
 
     fn end_segment(&mut self, why: &str, now: Duration, effects: &mut Vec<Effect>) {
         let Some(mut segment) = self.stats.segment.take() else { return };
-        segment.streaming(false, now);
+        segment.end(now);
         announce(segment.summary("SEGMENT", now, why), effects);
-        self.stats.history.push_front(segment.report(now, Some(why)));
+        self.stats.history.push_front(segment.report(now, Some(why), None));
         self.stats.history.truncate(HISTORY);
     }
 

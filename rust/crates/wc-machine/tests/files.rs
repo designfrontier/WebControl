@@ -11,6 +11,7 @@ use flate2::read::GzDecoder;
 use rig::{Rig, alerts, commands, pushed, settings};
 use serde_json::{Value, json};
 use wc_config::Settings;
+use wc_gcode::estimate::MOVE_S;
 use wc_machine::files::{BoardForm, GCODE_LOCKED, Gcode, Origin, Problem, Reply, Request, TrimForm};
 use wc_machine::{Effect, Event};
 use wc_protocol::main::Units;
@@ -130,7 +131,8 @@ fn an_edit_keeps_the_index_where_it_fits_and_pushes_the_preview() {
     assert_eq!(reply, Reply::Done);
     assert_eq!(rig.machine.snapshot().gcode_index, 1);
     assert_eq!(rig.machine.snapshot().gcode_file, Some(PathBuf::from("square.nc")), "an edit keeps the name");
-    assert_eq!(commands(&effects), ["gcodePositionMessage", "showFPSpinner", "gcodeUpdateCompressed"]);
+    let estimate = ["gcodePositionMessage", "showFPSpinner", "gcodeUpdateCompressed", "pacingStats"];
+    assert_eq!(commands(&effects), estimate, "the edit's estimate goes out with the pacing");
     let reload =
         Request::LoadGcode { gcode: Box::new(parse(SQUARE)), file: Some("again.nc".into()), origin: Origin::Reload };
     let (_, effects) = ask(&mut rig, reload);
@@ -167,7 +169,8 @@ fn clear_gcode_empties_the_file_and_pushes_an_empty_preview() {
     let mut rig = Rig::new();
     open(&mut rig, SQUARE, "square.nc");
     let effects = rig.act("clearGCode");
-    assert_eq!(commands(&effects), ["showFPSpinner", "gcodeUpdateCompressed", "gcodeFile"]);
+    assert_eq!(commands(&effects), ["showFPSpinner", "gcodeUpdateCompressed", "gcodeFile", "pacingStats"]);
+    assert_eq!(pushed(&effects, "pacingStats")[0]["estimateS"], json!(null));
     assert_eq!(pushed(&effects, "gcodeFile"), [json!({"file": null})]);
     assert_eq!(inflate(&pushed(&effects, "gcodeUpdateCompressed")[0]), json!([]));
     assert_eq!(rig.machine.snapshot().gcode_count, 0);
@@ -529,4 +532,20 @@ fn a_job_streams_with_the_files_truncate_in_the_home_shift() {
     ask(&mut rig, Request::LoadGcode { gcode: Box::new(gcode), file: None, origin: Origin::Open });
     rig.act("startRun");
     assert_eq!(rig.run_to_quiet(), ["G90", "G0 X3.06"]);
+}
+
+#[test]
+fn a_parsed_file_is_estimated_at_the_machines_feeds() {
+    let machine = settings(&[
+        ("Advanced Settings", "maxFeedrate", json!("400")),
+        ("Advanced Settings", "maxZRPM", json!("")),
+        ("Maslow Settings", "zDistPerRot", json!("-24")),
+    ]);
+    let gcode = Gcode::parse("G0 X800\nG1 Z-10 F1000\n", &machine).unwrap();
+    let z_seconds = 10.0 / (12.6 * 24.0) * 60.0;
+    let g0 = 120.0 + MOVE_S;
+    assert!((f64::from(gcode.estimate[0]) - g0).abs() < 0.001, "G0 at maxFeedrate");
+    let z = f64::from(gcode.estimate[1]) - g0 - MOVE_S;
+    assert!((z - z_seconds).abs() < 0.01, "Z at maxZRPM's default times the pitch");
+    assert!(Gcode::empty(Units::Mm).estimate.is_empty());
 }

@@ -223,7 +223,8 @@ fn a_pacing_change_ends_the_segment_with_a_parsable_summary_and_marks_the_new_on
     assert_eq!(field(second, "median_short_gap_ms"), "30", "a 10 ms ack, then 25 ms since the write in 10 ms ticks");
     let job = &parsed[4].1;
     assert_eq!((field(job, "lines"), field(job, "mode")), ("8".into(), "v0.94".into()));
-    assert_eq!(log[5], "PACING JOB END file_line_end=8 mode=minimum_gap gap_ms=25 ended_by=job_end");
+    let times = "wall_s=0.3 cutting_s=0.3 estimated_s=0.7 file=none";
+    assert_eq!(log[5], format!("PACING JOB END file_line_end=8 mode=minimum_gap gap_ms=25 ended_by=job_end {times}"));
     assert_eq!(
         console(&effects).iter().filter(|text| text.starts_with("PACING")).collect::<Vec<_>>(),
         log.iter().collect::<Vec<_>>()
@@ -289,6 +290,33 @@ fn the_stats_are_pushed_every_2_s_during_a_job_and_resent_on_resync() {
     assert!(pushed(&rig.send(Event::ClientResync { sid: "s1".into() }), "pacingStats").len() == 1);
     rig.act("stopRun");
     assert!(pushed(&rig.advance(4000), "pacingStats").is_empty(), "nothing outside a job");
+}
+
+#[test]
+fn the_job_timer_leaves_pauses_out_of_cutting_time_and_scales_the_estimate_by_the_real_pace() {
+    let mut rig = Rig::connected();
+    rig.machine.load_gcode(&file(&["G1 X10 F60", "G1 X20", "G1 X30", "G1 X40"]));
+    let job = |effects: &[Effect]| pushed(effects, "pacingStats").last().expect("pushed")["job"].clone();
+    let started = rig.act("startRun");
+    assert_eq!(pushed(&started, "pacingStats")[0]["estimateS"], 40.0);
+    assert_eq!(job(&started)["remainingS"], 40.0, "nothing done yet, so the estimate as it is");
+    rig.advance(1000);
+    rig.rx("ok");
+    let paced = job(&rig.advance(2000));
+    assert_eq!(paced["remainingS"], 6.0, "10 s of estimate done in 2 s, so the 30 s left reads as 6 s");
+    rig.act("pauseRun");
+    rig.rx("ok");
+    reports(&mut rig, 10_000);
+    let mut effects = rig.act("resumeRun");
+    effects.extend((0..20).flat_map(|_| [rig.advance(500), rig.rx("ok")].concat()));
+    let end = logged(&effects).into_iter().find(|line| line.starts_with("PACING JOB END")).expect("the job ended");
+    let (_, fields) = parse(&end);
+    let seconds = |key: &str| fields[key].parse::<f64>().unwrap();
+    assert!(seconds("wall_s") - seconds("cutting_s") >= 10.0, "the pause is wall time only: {end}");
+    assert_eq!((fields["estimated_s"].as_str(), fields["file"].as_str()), ("40.1", "none"));
+    let ended = job(&effects);
+    assert_eq!(ended["remainingS"], Value::Null);
+    assert!(ended["wallS"].as_f64().unwrap() - ended["elapsedS"].as_f64().unwrap() >= 10.0);
 }
 
 fn buffered_sim(mode: &str, gap: u64) -> SimRig {

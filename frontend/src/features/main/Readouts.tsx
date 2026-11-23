@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useMachine } from "../../app/context";
 import { selectJobState } from "../../state/machine";
 import { fixed, positioningModeLabel } from "./controls";
+import { jobTime } from "./jobTime";
 
 const Row = ({ term, wide = false, children }: { term: string; wide?: boolean; children: ReactNode }) => (
   <div className={wide ? "wide" : undefined}>
@@ -10,7 +11,7 @@ const Row = ({ term, wide = false, children }: { term: string; wide?: boolean; c
   </div>
 );
 
-/** The classic readout block: line, sled, chain error, home, gcode target, progress, tool and positioning mode. */
+/** The readout block: job state and time, line, sled, chain error, home, gcode target, progress, tool and positioning mode. */
 export const Readouts = ({ lineIndex }: { lineIndex: number | null }) => {
   const position = useMachine((s) => s.position);
   const home = useMachine((s) => s.homePosition);
@@ -18,6 +19,7 @@ export const Readouts = ({ lineIndex }: { lineIndex: number | null }) => {
   const status = useMachine((s) => s.status);
   const error = useMachine((s) => s.positionError);
   const job = useMachine(selectJobState);
+  const time = useMachine((s) => jobTime(s.pacing));
 
   return (
     <dl className="readouts" aria-label="Machine readouts">
@@ -25,6 +27,7 @@ export const Readouts = ({ lineIndex }: { lineIndex: number | null }) => {
         <span className="job-state" data-state={job ?? "unknown"}>
           {job ?? "—"}
         </span>
+        {time ? <span className="job-time">{time}</span> : null}
       </Row>
       <Row term="Line" wide>
         {lineIndex === null ? "—" : lineIndex + 1}

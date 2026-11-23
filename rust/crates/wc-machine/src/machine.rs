@@ -505,6 +505,7 @@ impl Machine {
     pub fn load_gcode(&mut self, text: &str) {
         self.gcode = Arc::new(wc_gcode::load::filter(text, None).unwrap_or_default());
         self.file_tools = Arc::new(wc_gcode::tools::file_tools(text));
+        self.stats.estimate = crate::files::estimate(&self.gcode, &self.settings);
         self.index = 0;
     }
 

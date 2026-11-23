@@ -6,6 +6,7 @@ pub mod arc;
 pub mod board;
 pub mod commanded_z;
 mod decimal;
+pub mod estimate;
 pub mod firmware_gcode;
 pub mod load;
 pub mod position;

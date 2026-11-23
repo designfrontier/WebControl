@@ -8,6 +8,7 @@ use serde_json::Value;
 use wc_config::{Imported, Settings};
 use wc_gcode::arc::arc_centre_note;
 use wc_gcode::board::{Board, BoardEdit, BoardTrim};
+use wc_gcode::estimate::{Rates, cumulative_seconds};
 use wc_gcode::preview::{self, Move};
 use wc_gcode::{GcodeError, load, py};
 use wc_protocol::boards::BoardDataUpdate;
@@ -52,6 +53,8 @@ pub struct Gcode {
     /// The console note for a file with G90.1 or G91.1, which WebControl converts.
     pub arc_centres: Option<String>,
     pub tools: Vec<FileTool>,
+    /// Estimated seconds through the end of each line.
+    pub estimate: Vec<f32>,
 }
 
 /// `Advanced Settings.truncate` is on when it equals 1; `digits` is the text Python splices into its pattern.
@@ -62,6 +65,16 @@ fn truncate_digits(settings: &Settings) -> Result<Option<u32>, GcodeError> {
     }
     let digits = settings.value("Advanced Settings", "digits").and_then(Value::as_str);
     digits.and_then(|text| text.parse::<u32>().ok()).filter(|&d| d > 0).map(Some).ok_or(GcodeError::TruncateDigits)
+}
+
+/// The estimate's speeds; a blank setting reads as its default, and maxZRPM stays blank until the controller reports.
+pub(crate) fn estimate(lines: &[String], settings: &Settings) -> Vec<f32> {
+    let positive = |section, key, default| Some(settings.number(section, key)).filter(|&n| n > 0.0).unwrap_or(default);
+    let max_z_feed =
+        positive("Advanced Settings", "maxZRPM", 12.6) * settings.number("Maslow Settings", "zDistPerRot").abs();
+    let rates = Rates { max_feed: positive("Advanced Settings", "maxFeedrate", 800.0), max_z_feed };
+    let units = Units::from_setting(&settings.text_or_empty("Computed Settings", "units"));
+    cumulative_seconds(lines, units, rates)
 }
 
 impl Gcode {
@@ -84,6 +97,7 @@ impl Gcode {
             truncate,
             arc_centres: arc_centre_note(&lines),
             tools: wc_gcode::tools::file_tools(raw),
+            estimate: estimate(&lines, settings),
             lines,
         })
     }
@@ -98,6 +112,7 @@ impl Gcode {
             truncate: None,
             arc_centres: None,
             tools: Vec::new(),
+            estimate: Vec::new(),
         }
     }
 }
@@ -285,6 +300,8 @@ impl Machine {
         self.preview = Arc::new(gcode.preview);
         self.file_tools = Arc::new(gcode.tools);
         self.truncate = gcode.truncate;
+        self.stats.estimate = gcode.estimate;
+        self.stats.dirty = true;
         if let Some(tolerance) = gcode.tolerance {
             self.set_setting("Computed Settings", "tolerance", Value::from(tolerance));
         }

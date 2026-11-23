@@ -42,6 +42,7 @@ numbers, or the transcripts CI replays.
 | Z travel limits (51.292): refusals, Define Z0 and Touch Z leaving them in place, a job paused before a line | [`z-limits.md`](z-limits.md) | Yes: Z only |
 | Lost-line recovery | [`pacing.md`](pacing.md) 1 | Yes: an air cut |
 | Line pacing: presets, custom, mid-job changes, run-panel stats, `PACING` log lines | [`pacing.md`](pacing.md) 2-4 | Yes: an air cut |
+| Job timer: file estimate, wall, cutting and remaining time, `PACING JOB END` times | [`pacing.md`](pacing.md) 4 | Yes: an air cut |
 | Holey and triangular calibration, the test pattern, computed sled position | [`calibration.md`](calibration.md) | Yes: the pattern, in the air |
 | Firmware upgrade to holey 51.292, self-test, chain lengths, rollback | [`firmware-upgrade.md`](firmware-upgrade.md) | Yes: the self-test |
 | Cameras and optical calibration (experimental, for testers) | [`optical.md`](optical.md) | Yes: the scan |

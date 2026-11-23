@@ -72,6 +72,8 @@ fn segment(ended_by: Option<&str>) -> PacingSegment {
         lost_percent: Some(0.39),
         median_short_gap_ms: None,
         ended_by: ended_by.map(String::from),
+        wall_s: 300.5,
+        remaining_s: ended_by.is_none().then_some(1200.0),
     }
 }
 
@@ -82,6 +84,7 @@ fn pacing_stats(running: Option<PacingSegment>) -> PacingStats {
         job: running.clone(),
         segment: running,
         history: vec![segment(Some("pacing change"))],
+        estimate_s: Some(3600.0),
     }
 }
 

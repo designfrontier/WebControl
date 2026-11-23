@@ -1,4 +1,12 @@
-import type { ControlButton, MessageData, ParkPosition, StartupState, ThemePreference, Units } from "../protocol";
+import type {
+  ControlButton,
+  MessageData,
+  PacingStats,
+  ParkPosition,
+  StartupState,
+  ThemePreference,
+  Units,
+} from "../protocol";
 import type { ConnectionStatus } from "../socket/client";
 
 export interface Point {
@@ -47,6 +55,8 @@ export interface MachineState {
   park: ParkPosition | null;
   /** What the control screen's four button slots hold. */
   controlButtons: ControlButton[];
+  /** The line pacing and job timer as last pushed; null until the server sends them. */
+  pacing: PacingStats | null;
 }
 
 export const DEFAULT_CONTROL_BUTTONS: ControlButton[] = ["park", "zAxis", "setHome", "setPark"];
@@ -70,6 +80,7 @@ export const STORE_COMMANDS = [
   "parkPosition",
   "macros",
   "controlButtons",
+  "pacingStats",
 ] as const;
 export type StoreCommand = (typeof STORE_COMMANDS)[number];
 
@@ -100,6 +111,8 @@ export const pushedFields = (event: MachineMessage): (keyof MachineState)[] => {
       return ["park"];
     case "controlButtons":
       return ["controlButtons"];
+    case "pacingStats":
+      return ["pacing"];
     case "connectionStatus":
       return ["controller"];
     case "homePositionMessage":
@@ -148,6 +161,7 @@ export const initialMachineState: MachineState = {
   theme: null,
   park: null,
   controlButtons: DEFAULT_CONTROL_BUTTONS,
+  pacing: null,
 };
 
 const reportedVersion = (version: number) => (version > 0 ? version : null);
@@ -255,6 +269,8 @@ const applyMessage = (state: MachineState, event: MachineMessage): MachineState 
       return { ...state, macros: event.data.macros };
     case "controlButtons":
       return { ...state, controlButtons: event.data.buttons };
+    case "pacingStats":
+      return { ...state, pacing: event.data };
   }
 };
 
@@ -286,6 +302,7 @@ export const machineReducer = (state: MachineState, event: MachineEvent): Machin
         theme,
         park,
         controlButtons,
+        pacing,
       } = event.state;
       const kept = Object.fromEntries([...(event.keep ?? [])].map((field) => [field, state[field]]));
       return {
@@ -305,6 +322,7 @@ export const machineReducer = (state: MachineState, event: MachineEvent): Machin
         theme: theme ?? state.theme,
         park: park ?? null,
         controlButtons: controlButtons ?? state.controlButtons,
+        pacing: pacing ?? state.pacing,
         controller:
           connectionStatus && state.controller.status === "unknown" ? controllerOf(connectionStatus) : state.controller,
         ...kept,
