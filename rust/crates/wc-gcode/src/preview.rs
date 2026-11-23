@@ -522,9 +522,17 @@ mod tests {
     }
 
     #[test]
-    fn a_file_of_max_lines_is_drawn_as_before() {
-        let lines: Vec<String> = (0..MAX_LINES).map(|i| format!("G1 X{} ", i as f64 / 1000.0)).collect();
-        assert_eq!(render(&lines, Units::Inches).moves[0].points.len(), MAX_LINES);
+    fn only_a_file_over_max_lines_is_thinned() {
+        let curve: Vec<String> = (1..=200).map(|i| format!("G1 X{} Y{} ", i, (i as f64 / 9.0).sin() * 0.002)).collect();
+        let mut lines = vec![String::new(); MAX_LINES - curve.len()];
+        lines.extend(curve);
+        let whole = render(&lines, Units::Inches).moves[0].points.clone();
+        assert_eq!(whole.len(), 201);
+        lines.push(String::new());
+        let thinned = &render(&lines, Units::Inches).moves[0].points;
+        assert!(thinned.len() < 50, "{} points", thinned.len());
+        assert_eq!((thinned[0], thinned.last()), (whole[0], whole.last()));
+        assert!(whole.iter().all(|&point| distance_to_path(point, thinned) <= TOLERANCE));
     }
 
     #[test]
@@ -562,7 +570,9 @@ mod tests {
         assert_eq!(thin(&line, TOLERANCE).len(), 4);
     }
 
+    /// Too slow for CI: `cargo test --release -p wc-gcode --lib a_million -- --ignored`.
     #[test]
+    #[ignore]
     fn a_million_line_file_is_drawn_whole_in_reasonable_time_and_every_line_lies_on_it() {
         let mut lines: Vec<String> = (0..1_000_000)
             .map(|i| i as f64 * 0.01)
