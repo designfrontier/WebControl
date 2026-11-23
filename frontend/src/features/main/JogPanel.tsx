@@ -4,6 +4,8 @@ import { slotAction } from "./controlButtons";
 import type { ControlAvailability } from "./controls";
 import { DistanceField } from "./DistanceField";
 import { useDistanceControl } from "./hooks";
+import { ZMoveButton } from "./ZMoveButton";
+import { isZMove } from "./zMoves";
 
 const JOG_DECIMALS = 3;
 
@@ -45,6 +47,7 @@ const ControlSlot = ({ slot, available }: { slot: number; available: ControlAvai
         Z-Axis
       </Link>
     );
+  if (isZMove(button)) return <ZMoveButton move={button} disabled={!available.manual} className="side-button" />;
   const action = slotAction(button, { available, park, macros });
   return (
     <button

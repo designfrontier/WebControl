@@ -261,6 +261,27 @@ describe("MainPage jogging", () => {
     expect(button("Units: …")).toBeDisabled();
   });
 
+  it("offers Go to Z0 and Go to Safe Height as slots, Go to Z0 behind its confirm", async () => {
+    const fetch = fakeFetch({
+      "/api/main": mainState(),
+      "GET /api/state": startupState({ controlButtons: ["zToZero", "zAxis", "setHome", "zToSafeHeight"] }),
+    });
+    const { socket, user } = renderApp("/", { fetch });
+    const jog = within(await screen.findByRole("region", { name: "Jog" }));
+    await waitFor(() => expect(jog.getByRole("button", { name: "Go to Safe Height" })).toBeEnabled());
+    socket.clearEmitted();
+    await user.click(jog.getByRole("button", { name: "Go to Safe Height" }));
+    await user.click(jog.getByRole("button", { name: "Go to Z0" }));
+    await user.click(
+      within(screen.getByRole("dialog", { name: "Go to Z0" })).getByRole("button", { name: "Go to Z0" }),
+    );
+    expect(socket.actions()).toEqual([
+      ["zToSafeHeight", "", ""],
+      ["zToZero", "", ""],
+    ]);
+    expect(screen.queryByRole("dialog", { name: "Go to Z0" })).not.toBeInTheDocument();
+  });
+
   it("opens the Z-Axis modal from beside the jog pad", async () => {
     const { user } = await renderMain();
     await user.click(screen.getByRole("link", { name: "Z-Axis" }));
@@ -332,6 +353,37 @@ describe("Z-Axis modal", () => {
     socket.serverMessage("statusMessage", { uploadFlag: 0, positioningMode: 0, currentTool: 1, probing: true });
     ["Raise", "Lower", "Set Z Zero Here", "Touch Plate"].forEach((name) => expect(button(name)).toBeDisabled());
     expect(button("Stop Z")).toBeEnabled();
+  });
+
+  it("goes to the safe height at once and to Z0 only once confirmed", async () => {
+    const { socket, user } = await renderZ();
+    await user.click(button("Go to Safe Height"));
+    await user.click(button("Go to Z0"));
+    const confirm = screen.getByRole("dialog", { name: "Go to Z0" });
+    expect(confirm).toHaveTextContent("Move the bit down to Z0? Make sure the bit is clear of clamps.");
+    await user.click(within(confirm).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog", { name: "Go to Z0" })).not.toBeInTheDocument();
+    expect(socket.actions()).toEqual([["zToSafeHeight", "", ""]]);
+    await user.click(button("Go to Z0"));
+    await user.click(
+      within(screen.getByRole("dialog", { name: "Go to Z0" })).getByRole("button", { name: "Go to Z0" }),
+    );
+    expect(socket.actions()).toEqual([
+      ["zToSafeHeight", "", ""],
+      ["zToZero", "", ""],
+    ]);
+  });
+
+  it("disables Go to Z0 and Go to Safe Height while a job runs, and says why", async () => {
+    const { socket } = await renderZ();
+    expect(button("Go to Z0")).toHaveAccessibleDescription(/Lower the bit to Z zero/);
+    status(socket, 1);
+    ["Go to Z0", "Go to Safe Height"].forEach((name) => {
+      expect(button(name)).toBeDisabled();
+      expect(button(name)).toHaveAccessibleDescription("Not while a job runs or Touch Plate probes");
+    });
+    status(socket, 2);
+    expect(button("Go to Z0")).toBeEnabled();
   });
 
   it("probes with the touch plate", async () => {
