@@ -66,6 +66,7 @@ Turn on **Settings ▸ Maslow ▸ Park for Tool Changes** to change bits at the 
   was when it parked, without probing. Lower the bit close to the work and press **Touch Z** again to probe there. Set
   Z over the work, never at the park position: the surface there is not the work's, and Resume goes straight on
   cutting.
+- **Go to Z0** while parked goes back over the work as Touch Z does, and lowers the bit only when pressed again.
 
 If the sled cannot park (an alarm, a controller that did not restart, no park position, a line WebControl could not
 return to, or other lines waiting in the controller behind the tool change, such as a jog pressed just before it), the prompt shows where the sled is, an alert says why, and the log shows `PARK SKIPPED

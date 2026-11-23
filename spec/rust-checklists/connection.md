@@ -42,6 +42,10 @@ log viewer (Help ▸ Logs) open beside the control screen, and a browser.
       sends `G10 Z0` and the Z readout goes to 0 (`move_z_raise_lower_and_zero_mm`).
 - [ ] On a mm machine, switch the Z-Axis dialog's units to inches and raise 0.25 in: Z moves 6.35 mm (`G00 Z6.35`) and
       the main units do not change (`move_z_in_inches_on_a_mm_machine`). Switch it back.
+- [ ] Z-Axis ▸ Go to Safe Height: the log shows `G21`, `G90`, `G00 Z<safe>` and the bit rises (or stays, if higher).
+      Go to Z0 before any Set Z Zero Here or Touch Plate since connecting: an alert says Z zero has not been set. After
+      Set Z Zero Here, Go to Z0 asks to confirm; Cancel sends nothing, Go to Z0 sends `G21`, `G90`, `G00 Z0`
+      (`z_panel.rs`). At a parked tool change it first returns over the work (`go_to_z0_at_a_parked_tool_change_...`).
 - [ ] Home: the log shows `G90`, `G00 Z<safe>`, `G00 X.. Y..`, `G00 Z0` (`home_at_safe_height_mm`). Z rises first,
       the sled travels, then Z lowers to 0.
 - [ ] Raise Z 10 mm above the safe height (Settings ▸ Maslow, Z-Axis Safe Travel Height in MM), then Home again: the
