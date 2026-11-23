@@ -4,7 +4,7 @@
 use std::time::Duration;
 
 use wc_config::{python_float_str, python_str};
-use wc_gcode::commanded_z::CommandedZ;
+use wc_gcode::commanded_z::{CommandedZ, ZChange};
 use wc_gcode::restart::{GcodeState, Options, round_up, sequence};
 use wc_protocol::float;
 use wc_protocol::main::{ActivateModal, PauseButton, Units};
@@ -29,11 +29,13 @@ pub(crate) struct BitHeight {
     reported_mm: Option<f64>,
     /// Such a line has not been acknowledged yet, so a report may show the bit mid-move.
     moving: bool,
+    /// While a probe runs: the lowest Z known for the bit, in mm, where a touch would have stopped it.
+    probed_mm: Option<f64>,
 }
 
 impl BitHeight {
     pub fn new() -> BitHeight {
-        BitHeight { commanded: CommandedZ::new(), reported_mm: None, moving: false }
+        BitHeight { commanded: CommandedZ::new(), reported_mm: None, moving: false, probed_mm: None }
     }
 
     /// Every acknowledged line before a raise has finished, so the commanded Z is where the bit is.
@@ -41,11 +43,25 @@ impl BitHeight {
         self.commanded.z_mm().or(self.reported_mm)
     }
 
-    pub fn written(&mut self, line: &str) {
-        if self.commanded.z_mm().is_none() {
-            // A relative move from an unknown height starts at the report, an upper bound.
-            self.commanded.set_z_mm(self.reported_mm);
+    /// The commanded Z, or else the report: a relative move from an unknown height starts at the report.
+    fn starting_here(&self) -> CommandedZ {
+        let mut commanded = self.commanded.clone();
+        if commanded.z_mm().is_none() {
+            commanded.set_z_mm(self.reported_mm);
         }
+        commanded
+    }
+
+    /// What `line`, written next, does to the bit's Z.
+    pub fn change(&self, line: &str) -> ZChange {
+        self.starting_here().change(line)
+    }
+
+    pub fn written(&mut self, line: &str) {
+        if line.contains("G38.2") {
+            self.probed_mm = self.mm();
+        }
+        self.commanded = self.starting_here();
         if self.commanded.written(line) {
             self.reported_mm = None;
             self.moving = true;
@@ -59,8 +75,12 @@ impl BitHeight {
 
     /// MPos has two decimals, so the bit may be up to one step above it.
     pub fn reported(&mut self, z: f64) {
-        let Some(units) = self.commanded.units().filter(|_| !self.moving) else { return };
+        let Some(units) = self.commanded.units() else { return };
         let mm_per_unit = if units == Units::Inches { 25.4 } else { 1.0 };
+        self.probed_mm = self.probed_mm.map(|low| low.min(z * mm_per_unit));
+        if self.moving {
+            return;
+        }
         self.reported_mm = z.is_finite().then_some((z + 0.01) * mm_per_unit);
     }
 
@@ -69,11 +89,14 @@ impl BitHeight {
         self.commanded.set_z_mm(None);
         self.reported_mm = None;
         self.moving = false;
+        self.probed_mm = None;
     }
 
-    pub fn zeroed(&mut self) {
+    /// A probe touched and the firmware made that Z 0; where it touched, from the last report before, if known.
+    pub fn zeroed(&mut self) -> Option<f64> {
         self.commanded.set_z_mm(Some(0.0));
         self.reported_mm = None;
+        self.probed_mm.take()
     }
 }
 

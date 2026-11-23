@@ -5,6 +5,16 @@ use crate::{Positioning, Units, words};
 /// The G codes whose Z word this follows; a Z beside any other leaves Z unknown.
 const FOLLOWED: [f64; 13] = [0.0, 1.0, 2.0, 3.0, 10.0, 17.0, 20.0, 21.0, 40.0, 90.0, 91.0, 90.1, 91.1];
 
+/// What a line does to Z, in mm; `None` where WebControl cannot tell.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ZChange {
+    Unchanged,
+    /// A move, or a probe's furthest reach.
+    MovesTo(Option<f64>),
+    /// G10: the bit stays where it is and its Z becomes this.
+    Renamed(Option<f64>),
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct CommandedZ {
     /// Unknown until a G20 or G21 is written: a controller that did not reset keeps its own.
@@ -36,6 +46,20 @@ impl CommandedZ {
     /// The units the controller is in, which its status reports use.
     pub fn units(&self) -> Option<Units> {
         self.units
+    }
+
+    /// What `line`, written next, does to Z.
+    pub fn change(&self, line: &str) -> ZChange {
+        let code = words::code(line);
+        if matches!(words::value(&code, 'Z'), Ok(None)) {
+            return ZChange::Unchanged;
+        }
+        let mut after = self.clone();
+        after.written(&code.replace("G38.2", "G1"));
+        match words::numbers('G', &code).contains(&10.0) {
+            true => ZChange::Renamed(after.z_mm),
+            false => ZChange::MovesTo(after.z_mm),
+        }
     }
 
     /// Whether `line` moves Z, redefines it or changes units, which a status report read before it no longer
@@ -158,6 +182,19 @@ mod tests {
     fn an_arcs_z_is_absolute_under_g91_as_the_firmware_reads_it() {
         assert_eq!(after(&["G0 Z5 ", "G91 ", "G2 X1 Y1 I1 J0 Z-1 "]).z_mm(), Some(-1.0));
         assert_eq!(after(&["G0 Z5 ", "G91 ", "G03 X1 Z2 "]).z_mm(), Some(2.0));
+    }
+
+    #[test]
+    fn a_change_says_where_a_line_takes_z() {
+        let z = after(&["G0 Z5 ", "G91 "]);
+        assert_eq!(z.change("G0 X1 "), ZChange::Unchanged);
+        assert_eq!(z.change("G0 Z-2 "), ZChange::MovesTo(Some(3.0)));
+        assert_eq!(z.change("G90 G38.2 Z-10 "), ZChange::MovesTo(Some(-10.0)));
+        assert_eq!(z.change("G20 G0 Z1 "), ZChange::MovesTo(Some(30.4)));
+        assert_eq!(z.change("G10 Z2 "), ZChange::Renamed(Some(2.0)));
+        assert_eq!(z.change("G28 Z0 "), ZChange::MovesTo(None));
+        assert_eq!(z.change("G0 Z. "), ZChange::MovesTo(None));
+        assert_eq!(CommandedZ::new().change("G0 Z1 "), ZChange::MovesTo(None));
     }
 
     #[test]

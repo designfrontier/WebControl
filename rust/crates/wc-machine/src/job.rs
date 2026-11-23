@@ -416,7 +416,7 @@ impl Machine {
     fn as_written(&self, to_send: &str) -> Result<String, LineProblem> {
         let home = self.home_shift();
         let line = self.sled.convert(&shift_to_home(to_send, self.positioning, &home), [home.x, home.y])?;
-        match problem_with(&line).filter(|_| !py::isspace(&line)) {
+        match problem_with(&line).or_else(|| self.z_limit_problem(&line)).filter(|_| !py::isspace(&line)) {
             Some(problem) => Err(problem),
             None => Ok(line),
         }

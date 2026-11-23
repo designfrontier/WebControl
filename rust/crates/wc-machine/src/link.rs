@@ -9,7 +9,7 @@ use wc_firmware::boot::{
 use wc_firmware::settings::{Sync, reinitialises_axes, sync_reported};
 use wc_firmware::{Reply, classify, split_glued};
 use wc_gcode::firmware_gcode::{only_selects_tool, tool_change_line};
-use wc_gcode::sanitise::{problem_with, sanitise};
+use wc_gcode::sanitise::{LineProblem, problem_with, sanitise};
 use wc_gcode::shift::positioning_set_by;
 use wc_protocol::main::{ActivateModal, Alarm, ControllerMessage, PauseButton, Units};
 
@@ -237,7 +237,9 @@ impl Machine {
     fn probe_answered(&mut self, probe: Probe, ok: bool, effects: &mut Vec<Effect>) {
         self.probing = false;
         if ok && probe.zeroed {
-            self.bit.zeroed();
+            if let Some(touched_mm) = self.bit.zeroed() {
+                self.shift_z_limits(-touched_mm);
+            }
         } else {
             self.bit.lost();
         }
@@ -410,6 +412,7 @@ impl Machine {
         if let Some(mode) = positioning_set_by(&message) {
             self.positioning = mode;
         }
+        self.follow_z_rename(text);
         self.bit.written(text);
         self.sled.written(text);
         let setting = text.strip_prefix('$').and_then(|setting| setting.split_once('='));
@@ -525,13 +528,19 @@ impl Machine {
         }
         let command = format!("{command} ");
         let to_send = tool_change_line(&command, self.job.next_tool, self.job.tool).line;
-        let checked = self.sled.convert(&to_send, [0.0; 2]).and_then(|line| problem_with(&line).map_or(Ok(line), Err));
+        let checked = self
+            .sled
+            .convert(&to_send, [0.0; 2])
+            .and_then(|line| problem_with(&line).or_else(|| self.z_limit_problem(&line)).map_or(Ok(line), Err));
         let to_send = match checked {
             Ok(line) => line,
             Err(problem) => {
                 let reason = format!("That command {}", problem.reason());
                 effects.push(broadcast(&ActivateModal::titled_alert(&format!("Command {}", problem.title()), &reason)));
                 self.probing = self.probing && !command.contains("G38.2");
+                if matches!(problem, LineProblem::ZLimit { .. } | LineProblem::ZUnknown) {
+                    self.drop_after_z_refusal(effects);
+                }
                 return false;
             }
         };

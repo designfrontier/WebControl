@@ -1,0 +1,52 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "z_lower_limit_pauses_the_job",
+    "description": "With a Z lower limit of -10 mm, a file line that would take Z to -12 mm is never sent: the job pauses before it with an alert naming the line, the Z it would reach and the limit, as for an unclosed comment.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "rust"
+  },
+  "setup": {
+    "settings": {"Maslow Settings": {"zAxisLowerLimit": "-10"}},
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    },
+    "gcode": {
+      "lines": [
+        "G21",
+        "G0 Z5",
+        "G1 Z-5 F100",
+        "G1 Z-12",
+        "G0 Z5"
+      ]
+    },
+    "bootBanner": [
+      "PCB v1.1 Detected",
+      "Grbl v1.00",
+      "ready",
+      "ok",
+      "[Forward Calculating Position]",
+      "position loaded at:",
+      "247.79",
+      "-5.88"
+    ]
+  },
+  "events": [
+    {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "G21"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 Z5  \n"},
+    {"type": "rx", "line": "G0 Z5"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 Z-5 F100  \n"},
+    {"type": "rx", "line": "G1 Z-5 F100"},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "state": {"uploadFlag": 2, "gcodeIndex": 3}, "alerts": [{"title": "Line Beyond Z Limit", "message": "Line 4 would move Z to -12.00 mm, below the Z lower limit of -10.00 mm."}]}
+  ]
+}

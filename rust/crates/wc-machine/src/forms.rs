@@ -39,7 +39,9 @@ const RING_RADIUS: f64 = 138.4;
 /// Python-only settings an older `webcontrol.json` still carries; kept in the file, left off the screens.
 const RETIRED_KEYS: [&str; 1] = ["recordSerial"];
 pub const THEME_SECTION: &str = "WebControl Settings";
-const PARK_KEYS: [&str; 2] = [crate::park::X_KEY, crate::park::Y_KEY];
+/// Numbers that mean "none" when blank.
+const BLANK_NUMBERS: [&str; 4] =
+    [crate::park::X_KEY, crate::park::Y_KEY, crate::zlimits::UPPER_KEY, crate::zlimits::LOWER_KEY];
 /// Changed only through `PUT /api/display/theme`, so it stays off the section forms.
 pub const THEME_KEY: &str = "uiTheme";
 
@@ -97,7 +99,7 @@ fn describe(section: &str, option: &Map<String, Value>) -> SettingField {
         numeric: kind == "int"
             || kind == "float"
             || (kind == "string" && is_number(value_or_default))
-            || PARK_KEYS.contains(&key.as_str()),
+            || BLANK_NUMBERS.contains(&key.as_str()),
         custom: option.get("custom") == Some(&Value::from(1)),
         key,
         kind,
@@ -158,7 +160,7 @@ fn setting_error(field: &SettingField, value: &Value, enable_custom: bool, ports
         Some("Must be one of the listed options")
     } else if field.kind == "int" && !is_int(value) {
         Some("Must be a whole number")
-    } else if field.numeric && !is_number(Some(value)) && !blank_park(&field.key, value) {
+    } else if field.numeric && !is_number(Some(value)) && !blank_number(&field.key, value) {
         Some("Must be a number")
     } else {
         pid_error(&field.key, value)
@@ -167,9 +169,9 @@ fn setting_error(field: &SettingField, value: &Value, enable_custom: bool, ports
     }
 }
 
-/// Blank park settings mean no park position.
-fn blank_park(key: &str, value: &Value) -> bool {
-    PARK_KEYS.contains(&key) && value.as_str().is_some_and(|text| text.trim().is_empty())
+/// A blank park position or Z limit means none.
+fn blank_number(key: &str, value: &Value) -> bool {
+    BLANK_NUMBERS.contains(&key) && value.as_str().is_some_and(|text| text.trim().is_empty())
 }
 
 /// Home, Return to Center, a restart and Accept refuse to raise to a safe height of 0 or less.

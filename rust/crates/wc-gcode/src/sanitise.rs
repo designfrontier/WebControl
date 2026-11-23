@@ -21,7 +21,7 @@ pub fn sanitise(line: &str) -> String {
     code.chars().filter(|&c| !matches!(c, '!' | '~' | '`' | '?' | '\x00'..='\x1f' | '\x7f')).collect()
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LineProblem {
     /// A `(` survived comment stripping; 51.27 loops forever on a comment.
     UnclosedComment,
@@ -31,6 +31,10 @@ pub enum LineProblem {
     Arc(ArcProblem),
     /// G38.3, G38.4 or G38.5 (any G38 but G38.2): the firmware acks it without moving or zeroing Z.
     UnsupportedProbe,
+    /// It would take Z past a Z travel limit, both in mm.
+    ZLimit { z_mm: f64, limit_mm: f64, upper: bool },
+    /// It moves or renames Z from where WebControl cannot tell, so no limit can be checked.
+    ZUnknown,
 }
 
 impl LineProblem {
@@ -40,6 +44,8 @@ impl LineProblem {
             LineProblem::TooLong { .. } => "Too Long",
             LineProblem::Arc(problem) => problem.title(),
             LineProblem::UnsupportedProbe => "Unsupported Probe",
+            LineProblem::ZLimit { .. } => "Beyond Z Limit",
+            LineProblem::ZUnknown => "Z Unknown",
         }
     }
 
@@ -55,6 +61,13 @@ impl LineProblem {
                                              the controller's firmware does not run: it moves nothing and does not \
                                              set Z."
                 .to_string(),
+            LineProblem::ZLimit { z_mm, limit_mm, upper } => {
+                let (side, which) = if *upper { ("above", "upper") } else { ("below", "lower") };
+                format!("would move Z to {z_mm:.2} mm, {side} the Z {which} limit of {limit_mm:.2} mm.")
+            }
+            LineProblem::ZUnknown => {
+                "moves Z from a height WebControl does not know, so the Z limits cannot be checked.".to_string()
+            }
         }
     }
 
@@ -71,6 +84,10 @@ impl LineProblem {
                 "Resume stops here again: stop the job, change the probe to G38.2 (or remove it) and load the file \
                  again."
             }
+            LineProblem::ZLimit { .. } => {
+                "Resume stops here again: stop the job, or change the Z limits (Maslow Settings) if they are wrong."
+            }
+            LineProblem::ZUnknown => "Resume tries the line again once a status report has told where Z is.",
         };
         (format!("Line {}", self.title()), format!("Line {} {} {advice}", index + 1, self.reason()))
     }
@@ -153,6 +170,24 @@ mod tests {
         assert_eq!(stream_problem(&" ".repeat(200), Positioning::Absolute, &NO_SHIFT), None);
         assert_eq!(stream_problem(&"\x1c".repeat(200), Positioning::Absolute, &NO_SHIFT), None);
         assert_eq!(stream_problem("", Positioning::Absolute, &NO_SHIFT), None);
+    }
+
+    #[test]
+    fn a_z_limit_alert_names_the_height_and_the_limit() {
+        let below = LineProblem::ZLimit { z_mm: -12.0, limit_mm: -10.0, upper: false };
+        assert_eq!(
+            below.alert(3),
+            (
+                "Line Beyond Z Limit".to_string(),
+                "Line 4 would move Z to -12.00 mm, below the Z lower limit of -10.00 mm. Resume stops here again: \
+                 stop the job, or change the Z limits (Maslow Settings) if they are wrong."
+                    .to_string()
+            )
+        );
+        let above = LineProblem::ZLimit { z_mm: 30.0, limit_mm: 25.4, upper: true };
+        assert_eq!(above.reason(), "would move Z to 30.00 mm, above the Z upper limit of 25.40 mm.");
+        assert_eq!(LineProblem::ZUnknown.alert(0).0, "Line Z Unknown");
+        assert!(LineProblem::ZUnknown.alert(0).1.ends_with("once a status report has told where Z is."));
     }
 
     #[test]

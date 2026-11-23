@@ -83,10 +83,10 @@ pub fn move_to(x: f64, y: f64, units: Units, bed_width_mm: f64, bed_height_mm: f
     })
 }
 
-/// G38.2 down to the plunge limit in the machine's units; the firmware probes at a fixed feed.
-pub fn touch_z(plunge_mm: f64, units: Units) -> String {
-    let depth = format!("{:.4}", plunge_mm * scale(Units::Mm, units));
-    format!("G90 G38.2 Z-{}", depth.trim_end_matches('0').trim_end_matches('.'))
+/// G38.2 down to `target_mm`, absolute, in the machine's units; the firmware probes at a fixed feed.
+pub fn touch_z(target_mm: f64, units: Units) -> String {
+    let target = format!("{:.4}", target_mm * scale(Units::Mm, units));
+    format!("G90 G38.2 Z{}", target.trim_end_matches('0').trim_end_matches('.'))
 }
 
 /// Define Home with coordinates takes inches and stores machine units, rounded to 4 places.
