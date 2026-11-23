@@ -223,6 +223,7 @@ the backend had been quiet for `quiet` seconds, one line per settle.
 | `lower_case_file_g91_g90_m0_then_resume` | A lower-case file goes out upper-cased: `g91` stops the home shift, `g90` resumes it, `m0` pauses, Resume returns |
 | `z_limits_refused_on_51_27` | Z-limit actions alert and send nothing below 51.292 |
 | `z_limits_on_51_292` | `$63`/`$64` in mm, clear, `B20`, with 51.292's replies to each |
+| `z_lower_limit_pauses_the_job` | 51.292 with a lower limit saved: a file line that would go below it is never sent; the job pauses before it with an alert (Rust-intended deviation 18) |
 | `holey_calibration_accept_writes_settings` | Calculate sends nothing; Accept writes `$3`, `$2`, `$40`, `$41` |
 | `queue_same_tool_starts_at_once_new_tool_waits` | Tool 1 changed by hand, three queued files: Continue raises Z and runs the first (tool 1); a file with the same tool starts as soon as Z has risen; one with another tool gets `G00 Z…`, `M5`, `T2 M6` and the firmware's prompt first |
 | `queue_override_skips_bit_changes` | A queued file with its bit-change override on starts with no `M5`/`T2 M6` though it names tool 2; its own `T2 M6` is never sent and `T3 M6 G0 X60` goes out as `G0 X60` (Rust-intended deviation 16) |
@@ -683,3 +684,13 @@ Where the Rust backend writes something different from Python by owner decision.
     in the controller or WebControl's queue (job lines buffered behind it, a queued jog, an M6 line that moves on after
     its M6), all of which the `~` would run before the park, leaves the prompt where it is, with no `~`, an alert and
     `PARK SKIPPED trigger=tool_change`. Transcript: `park_at_a_tool_change_skipped_with_lines_buffered_behind_it`. Transcript: `park_at_a_tool_change_then_resume`.
+18. **Z travel limits checked by WebControl** (owner decision, 2026-11-22; upstream #136). Python only set the
+    firmware's (`z_limits_on_51_292`), which 51.292 clamps Z to silently. WebControl mirrors `$63`/`$64` from `$$`,
+    from `new zaxis upper/lower limit=` and from B20 (in the controller's units); a reboot forgets them until its `$$`.
+    Every line it writes that would take Z past one, followed in mm through G20/G21 and G90/G91 from the Z it last
+    commanded (or the last status report), is not written: a file line pauses the job before it (`Line Beyond Z
+    Limit`), a command is dropped with an alert, and so is everything queued after it, with `G90 ` written if a dropped
+    line would have restored it. A Z WebControl cannot follow is left to the firmware. After a G10, a touch or a manual
+    Z adjust (which move the limits by an amount only the firmware knows) the mirror is cleared and `B20 ` written
+    next, and a job streams nothing more until it is acked. Replies printed to 2 decimals are trusted to within half
+    a printed unit. A probe is not checked: the firmware stops it at the lower limit and it misses. Transcript: `z_lower_limit_pauses_the_job`.

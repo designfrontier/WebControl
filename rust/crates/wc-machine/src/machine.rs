@@ -302,6 +302,7 @@ pub(crate) struct Controller {
     /// The G38.2 line awaiting its `ok` or `error:`.
     pub probe: Option<Probe>,
     pub eeprom_reset: bool,
+    pub(crate) z_limits: crate::zlimits::Mirror,
     /// The boot's `$$` reply, read until its `SettingsSync`.
     pub reported: Vec<(u32, f64)>,
     /// A re-initialising `$` line went out on this boot, so the controller must restart before it moves.
@@ -337,6 +338,7 @@ impl Controller {
             queue: VecDeque::new(),
             probe: None,
             eeprom_reset: false,
+            z_limits: Default::default(),
             reported: Vec::new(),
             axes_reinitialised: false,
             reinit_suppressed: false,

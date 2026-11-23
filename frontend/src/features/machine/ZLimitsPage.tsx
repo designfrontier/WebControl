@@ -12,7 +12,11 @@ export const ZLimitsPage = () => {
   return (
     <Screen title="Z-axis limits">
       <p>Router Z limits help Maslow avoid damage from plunging too deep or retracting too far.</p>
-      <p>The controller stores each limit in mm. Zeroing Z shifts the saved limits by the same amount.</p>
+      <p>
+        The controller stores each limit in mm and holds Z there. Zeroing Z shifts the saved limits by the same amount,
+        so they stay at the same place on the mechanism. WebControl refuses a command that would pass one, and pauses a
+        job before such a line.
+      </p>
       <LoadStatus load={setup} what="machine setup" onRetry={retry} />
       {setup.status === "ready" && !supported && (
         <p className="notice" data-tone="warn">
