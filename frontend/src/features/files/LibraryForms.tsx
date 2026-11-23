@@ -71,6 +71,12 @@ export const OpenFromLibrary = ({
       <FormError message={error ?? adding.error} />
       {queued && <p role="status">{queued}</p>}
       {lockedReason && <p className="muted">{lockedReason}</p>}
+      {enqueue && (
+        <p className="muted">
+          Open loads the file now, ready for Play. Add to queue saves it for later: the queue runs its files one after
+          another.
+        </p>
+      )}
       {enqueue && enqueueOptions}
       {busy && busyNote}
       <div className="actions">

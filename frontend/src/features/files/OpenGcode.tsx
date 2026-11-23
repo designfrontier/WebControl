@@ -40,8 +40,8 @@ export const OpenGcode = () => {
                   type="checkbox"
                   checked={skipBitChanges}
                   onChange={(event) => setSkipBitChanges(event.target.checked)}
-                />{" "}
-                Don't stop for bit changes in this file (queue only)
+                />
+                Don't stop for bit changes in this file when the queue runs it
               </label>
             }
           />

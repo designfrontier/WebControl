@@ -174,8 +174,15 @@ describe("Add to queue from Open G-Code", () => {
     const fetch = fakeFetch({ "/api/files/gcode": gcodeLibrary(), ...routes(jobQueue(), write) });
     const { user } = renderApp("/files/open", { fetch });
     await user.click(await screen.findByRole("radio", { name: "arm.nc" }));
+    expect(
+      screen.getByText(
+        "Open loads the file now, ready for Play. Add to queue saves it for later: the queue runs its files one after another.",
+      ),
+    ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Add to queue" }));
-    const skip = screen.getByRole("checkbox", { name: /Don't stop for bit changes in this file/ });
+    const skip = screen.getByRole("checkbox", {
+      name: "Don't stop for bit changes in this file when the queue runs it",
+    });
     expect(skip.closest("label")).toHaveClass("field-inline");
     await user.click(skip);
     await user.click(screen.getByRole("button", { name: "Add to queue" }));
