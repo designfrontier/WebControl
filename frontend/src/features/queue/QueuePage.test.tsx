@@ -208,13 +208,17 @@ describe("Add to queue from Open G-Code", () => {
   });
 
   it("explains a refusal", async () => {
-    const write = posts(() => jsonResponse({ error: "No such file" }, 404));
+    const answers = [jsonResponse(three), jsonResponse({ error: "No such file" }, 404)];
+    const write = posts(() => answers.shift()!);
     const fetch = fakeFetch({ "/api/files/gcode": gcodeLibrary({ lastFile: "" }), ...routes(jobQueue(), write) });
     const { user } = renderApp("/files/open", { fetch });
     await user.click(await screen.findByRole("button", { name: "Add to queue" }));
     expect(screen.getByRole("alert")).toHaveTextContent("Choose a file to add.");
     await user.click(screen.getByRole("radio", { name: "arm.nc" }));
     await user.click(screen.getByRole("button", { name: "Add to queue" }));
+    expect(await screen.findByText(/^Added arm.nc/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Add to queue" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Could not add arm.nc to the queue.");
+    expect(screen.queryByText(/^Added/)).not.toBeInTheDocument();
   });
 });
