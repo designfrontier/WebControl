@@ -100,6 +100,12 @@ test("the tool-change prompt names the bit from the file, and the library takes 
   await expect(summary).toBeVisible();
   await summary.click();
   await expect(viewer.getByText("From this file; not in your tool library.")).toBeVisible();
+  const toggle = (await summary.boundingBox())!;
+  const list = viewer.locator(".file-tools ul");
+  const opened = (await list.boundingBox())!;
+  expect(opened.y, "the list opens below its toggle").toBeGreaterThanOrEqual(toggle.y + toggle.height);
+  expect(opened.x, "the list starts under its toggle").toBeGreaterThanOrEqual(toggle.x - 1);
+  await expect(list).toBeInViewport({ ratio: 1 });
   await shoot(page, "file-tools", viewer);
   await summary.click();
   await run.getByRole("button", { name: "Play" }).click();
