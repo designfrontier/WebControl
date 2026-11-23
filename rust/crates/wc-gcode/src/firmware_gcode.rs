@@ -12,6 +12,9 @@ static TOOL_WORD: LazyLock<Regex> =
 static FIRMWARE_NUMBER: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)").expect("pattern"));
 static M6_WORD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)M0*6([^0-9.]|$)").expect("pattern"));
+static PAUSE_WORD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)M0*[016]([^0-9.]|$)").expect("pattern"));
+static AT_MOST_A_LINE_NUMBER: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)^[\s\x1c-\x1f]*(N[0-9]+)?[\s\x1c-\x1f]*$").expect("pattern"));
 static ONLY_TOOL_WORD: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)^[\s\x1c-\x1f]*(N[0-9]+[\s\x1c-\x1f]*)?T[\s\x1c-\x1f]*[0-9]+(\.[0-9]*)?[\s\x1c-\x1f]*$")
         .expect("pattern")
@@ -134,6 +137,11 @@ pub fn without_tool_change(line: &str) -> String {
     if rest.is_empty() { rest } else { format!("{rest}{trailing}") }
 }
 
+/// Nothing but M0, M1, M6, T words and a line number, so the `~` that releases it runs nothing else.
+pub fn only_pauses(line: &str) -> bool {
+    AT_MOST_A_LINE_NUMBER.is_match(&PAUSE_WORD.replace_all(&TOOL_WORD.replace_all(line, ""), "$1"))
+}
+
 /// The tools a file uses, as the job queue compares them between files.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct FileTools {
@@ -161,6 +169,16 @@ mod tests {
         assert_eq!(without_tool_change("m6"), "");
         assert_eq!(without_tool_change("G1 X1 M60 "), "G1 X1 M60 ");
         assert_eq!(without_tool_change("M6 T2 G1 X2"), "G1 X2");
+    }
+
+    #[test]
+    fn only_a_line_that_pauses_and_nothing_else_only_pauses() {
+        ["T2 M6  ", "N10 T2 M06 ", "M0 ", "m1", "N5 M00  "]
+            .iter()
+            .for_each(|line| assert!(only_pauses(line), "{line}"));
+        ["T2 M6 G0 X40 ", "M0 G1 Z-3", "G1 X1", "M60 ", "M10", "M6 F100"]
+            .iter()
+            .for_each(|line| assert!(!only_pauses(line), "{line}"));
     }
 
     #[test]

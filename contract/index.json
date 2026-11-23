@@ -321,6 +321,18 @@
       "via": "action",
       "schema": "schemas/actions/touchZ.json"
     },
+    "zToZero": {
+      "summary": "Move the bit to Z0, once Z zero is defined (Rust only)",
+      "allowedDuring": "idleOrPaused",
+      "via": "action",
+      "schema": "schemas/actions/zToZero.json"
+    },
+    "zToSafeHeight": {
+      "summary": "Raise the bit to the safe height (Rust only)",
+      "allowedDuring": "idleOrPaused",
+      "via": "action",
+      "schema": "schemas/actions/zToSafeHeight.json"
+    },
     "moveToDefault": {
       "summary": "Move to the default chain lengths",
       "allowedDuring": "idleOrPaused",

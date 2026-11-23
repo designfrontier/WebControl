@@ -195,6 +195,7 @@ fn a_board_that_does_not_reset_is_reported_and_moves_wait_for_a_banner() {
     assert_eq!(sent, handshake_then(&["$13=63.5"]));
     let jog = rig.act_with("move", json!("up"), json!("1"));
     assert!(alerts(&jog)[0].contains("did not restart"));
+    ["zToZero", "zToSafeHeight"].iter().for_each(|c| assert!(alerts(&rig.act(c))[0].contains("did not restart")));
     assert!(rig.run_to_quiet().is_empty());
     rig.boot_reporting("51.27", &report(&[]));
     rig.act_with("move", json!("up"), json!("1"));

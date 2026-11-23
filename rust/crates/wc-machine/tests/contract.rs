@@ -34,7 +34,7 @@ const MESSAGES: [&str; 19] = [
     "updatePorts",
 ];
 
-const ACTIONS: [&str; 31] = [
+const ACTIONS: [&str; 33] = [
     "clearGCode",
     "createDirectory",
     "boardProcessGCode",
@@ -50,6 +50,8 @@ const ACTIONS: [&str; 31] = [
     "moveToDefault",
     "defineZ0",
     "touchZ",
+    "zToZero",
+    "zToSafeHeight",
     "stopRun",
     "stopZ",
     "statusRequest",

@@ -4,7 +4,7 @@
 use std::time::Duration;
 
 use wc_config::{python_float_str, python_str};
-use wc_gcode::commanded_z::CommandedZ;
+use wc_gcode::commanded_z::{CommandedZ, defines_z};
 use wc_gcode::restart::{GcodeState, Options, round_up, sequence};
 use wc_protocol::float;
 use wc_protocol::main::{ActivateModal, PauseButton, Units};
@@ -29,11 +29,13 @@ pub(crate) struct BitHeight {
     reported_mm: Option<f64>,
     /// Such a line has not been acknowledged yet, so a report may show the bit mid-move.
     moving: bool,
+    /// Define Z0 or a touch set Z zero since the controller connected or restarted.
+    zero_known: bool,
 }
 
 impl BitHeight {
     pub fn new() -> BitHeight {
-        BitHeight { commanded: CommandedZ::new(), reported_mm: None, moving: false }
+        BitHeight { commanded: CommandedZ::new(), reported_mm: None, moving: false, zero_known: false }
     }
 
     /// Every acknowledged line before a raise has finished, so the commanded Z is where the bit is.
@@ -41,7 +43,12 @@ impl BitHeight {
         self.commanded.z_mm().or(self.reported_mm)
     }
 
+    pub fn zero_known(&self) -> bool {
+        self.zero_known
+    }
+
     pub fn written(&mut self, line: &str) {
+        self.zero_known |= defines_z(line);
         if self.commanded.z_mm().is_none() {
             // A relative move from an unknown height starts at the report, an upper bound.
             self.commanded.set_z_mm(self.reported_mm);
@@ -72,6 +79,7 @@ impl BitHeight {
     }
 
     pub fn zeroed(&mut self) {
+        self.zero_known = true;
         self.commanded.set_z_mm(Some(0.0));
         self.reported_mm = None;
     }
@@ -80,7 +88,7 @@ impl BitHeight {
 /// A raise whose height is decided when it reaches the controller, after every line queued before it.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Raise {
-    /// Home and Return to Center, in the machine's units.
+    /// Home, Return to Center, Park and Go to Safe Height, in the machine's units.
     Manual {
         units: Units,
         safe_height_mm: f64,

@@ -3,6 +3,8 @@ import type { MachineState } from "../../state/machine";
 import type { ControlAvailability } from "./controls";
 import { macroEntries, macroEntry } from "./macros";
 import { NO_PARK, parkText } from "./park";
+import { Z_MOVES } from "./zMoves";
+import type { ZMove } from "./zMoves";
 
 export const CONTROL_BUTTONS: ControlButton[] = [
   "park",
@@ -13,6 +15,8 @@ export const CONTROL_BUTTONS: ControlButton[] = [
   "macro2",
   "macro3",
   "macro4",
+  "zToZero",
+  "zToSafeHeight",
 ];
 
 /** Where each slot sits on the control screen, in slot order. */
@@ -23,7 +27,14 @@ export const SLOT_NAMES = [
   "Beside the distance",
 ] as const;
 
-const FIXED_LABELS = { park: "Park", zAxis: "Z-Axis", setHome: "Set Home Here", setPark: "Set Park Here" } as const;
+const FIXED_LABELS = {
+  park: "Park",
+  zAxis: "Z-Axis",
+  setHome: "Set Home Here",
+  setPark: "Set Park Here",
+  zToZero: Z_MOVES.zToZero.label,
+  zToSafeHeight: Z_MOVES.zToSafeHeight.label,
+} as const;
 
 /** A choice as the settings list it: a macro by its number, and its title when it has one of its own. */
 export const choiceLabel = (button: ControlButton, macros: MachineState["macros"]) => {
@@ -53,9 +64,9 @@ interface SlotState {
   macros: MachineState["macros"];
 }
 
-/** What a slot's button sends, and when it is disabled; the Z-Axis slot is a link instead. */
+/** What a slot's button sends, and when it is disabled; the Z-Axis slot is a link and the Z moves their own buttons. */
 export const slotAction = (
-  button: Exclude<ControlButton, "zAxis">,
+  button: Exclude<ControlButton, "zAxis" | ZMove>,
   { available, park, macros }: SlotState,
 ): SlotAction => {
   const here = (what: string) => `Make the sled's current position the ${what} position`;

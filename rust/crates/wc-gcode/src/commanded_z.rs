@@ -78,6 +78,12 @@ impl CommandedZ {
     }
 }
 
+/// Whether `line` is a G10 with a Z word, which sets where Z zero is.
+pub fn defines_z(line: &str) -> bool {
+    let line = words::code(line);
+    words::numbers('G', &line).contains(&10.0) && matches!(words::value(&line, 'Z'), Ok(Some(_)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -158,6 +164,12 @@ mod tests {
     fn an_arcs_z_is_absolute_under_g91_as_the_firmware_reads_it() {
         assert_eq!(after(&["G0 Z5 ", "G91 ", "G2 X1 Y1 I1 J0 Z-1 "]).z_mm(), Some(-1.0));
         assert_eq!(after(&["G0 Z5 ", "G91 ", "G03 X1 Z2 "]).z_mm(), Some(2.0));
+    }
+
+    #[test]
+    fn only_a_g10_with_a_z_word_defines_z() {
+        assert!(defines_z("G10 Z0 ") && defines_z("g10 l20 z5"));
+        assert!(!defines_z("G0 Z0 ") && !defines_z("G10 X0 ") && !defines_z("G10 Z. "));
     }
 
     #[test]
