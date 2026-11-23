@@ -206,9 +206,9 @@ describe("optical camera", () => {
     expect(button("Stop live view")).toBeInTheDocument();
 
     socket.serverMessage("cameraMessage", { command: "updateCamera", data: "off" });
-    expect(screen.queryByRole("img", { name: "Live camera view" })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("img", { name: "Live camera view" })).not.toBeInTheDocument());
     socket.serverMessage("cameraMessage", { command: "updateCamera", data: "on" });
-    expect(screen.getByText("Live view is off.")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("Live view is off.")).toBeInTheDocument());
   });
 
   it("says when the configured camera is missing", async () => {
@@ -277,22 +277,24 @@ describe("optical scan", () => {
     await user.click(button("Start scan"));
     await waitFor(() => expect(status()).toHaveTextContent("Scan started: 465 squares."));
     socket.serverMessage("opticalScanProgress", progress({ state: "moving", done: 3 }));
-    expect(status()).toHaveTextContent("Scan started: 465 squares.");
+    await waitFor(() => expect(status()).toHaveTextContent("Scan started: 465 squares."));
 
     socket.serverMessage("opticalScanProgress", progress({ state: "failed", done: 3 }));
-    expect(status()).toHaveTextContent("Scan waiting on a failed square after 3 of 465 squares.");
-    expect(status()).toHaveAttribute("data-tone", "error");
+    await waitFor(() => expect(status()).toHaveTextContent("Scan waiting on a failed square after 3 of 465 squares."));
+    await waitFor(() => expect(status()).toHaveAttribute("data-tone", "error"));
     socket.serverMessage("opticalScanProgress", progress({ state: "measuring", done: 3 }));
-    expect(status()).toHaveTextContent("Scan resumed after 3 of 465 squares.");
+    await waitFor(() => expect(status()).toHaveTextContent("Scan resumed after 3 of 465 squares."));
     socket.serverMessage("opticalScanProgress", progress({ state: "stopped", done: 4 }));
-    expect(status()).toHaveTextContent("Scan stopped after 4 of 465 squares.");
+    await waitFor(() => expect(status()).toHaveTextContent("Scan stopped after 4 of 465 squares."));
 
     await user.click(button("Start scan"));
     await waitFor(() => expect(status()).toHaveTextContent("Scan started: 465 squares."));
     socket.serverMessage("opticalScanProgress", progress({ state: "done", cell: null, done: 465 }));
-    expect(status()).toHaveTextContent("Scan done: 465 of 465 squares.");
-    expect(status()).toHaveAttribute("data-tone", "ok");
-    expect(screen.getByRole("progressbar", { name: "Scan progress" })).toHaveClass("scan-progress");
+    await waitFor(() => expect(status()).toHaveTextContent("Scan done: 465 of 465 squares."));
+    await waitFor(() => expect(status()).toHaveAttribute("data-tone", "ok"));
+    await waitFor(() =>
+      expect(screen.getByRole("progressbar", { name: "Scan progress" })).toHaveClass("scan-progress"),
+    );
   });
 
   it("shows why a scan could not start", async () => {
@@ -313,12 +315,14 @@ describe("optical scan", () => {
     const loads = calls(fetch, OPTICAL);
 
     socket.serverMessage("opticalScanProgress", progress({ state: "moving" }));
-    expect(screen.getByText("Moving: column -15, row 7, attempt 1")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("Moving: column -15, row 7, attempt 1")).toBeInTheDocument());
     expect(button("Start scan")).toBeDisabled();
     await waitFor(() => expect(calls(fetch, OPTICAL)).toBe(loads + 1));
 
     socket.serverMessage("opticalScanProgress", progress({ state: "measuring" }));
-    expect(screen.getByRole("progressbar", { name: "Scan progress" })).toHaveAttribute("value", "0");
+    await waitFor(() =>
+      expect(screen.getByRole("progressbar", { name: "Scan progress" })).toHaveAttribute("value", "0"),
+    );
     expect(calls(fetch, OPTICAL)).toBe(loads + 1);
 
     const recorded = opticalSession({
@@ -340,7 +344,9 @@ describe("optical scan", () => {
       "opticalScanProgress",
       progress({ state: "failed", cell: { i: 2, j: -3 }, attempt: 6, error: "No square found" }),
     );
-    expect(screen.getByRole("alert")).toHaveTextContent("The square at column 2, row -3 failed: No square found");
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent("The square at column 2, row -3 failed: No square found"),
+    );
     expect(
       within(screen.getByRole("img", { name: /^Error map/ })).getByText(/column 2, row -3/).parentElement,
     ).toHaveClass("heat-failed");
@@ -368,7 +374,7 @@ describe("optical scan", () => {
     const { ready, socket } = setup();
     await ready;
     socket.serverMessage("opticalScanProgress", progress({ state: "failed", cell: null }));
-    expect(screen.getByRole("alert")).toHaveTextContent(/^A square failed\.Retry square/);
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/^A square failed\.Retry square/));
   });
 
   it("shows the camera orientation and warns about a mirrored or turned camera", async () => {
@@ -382,9 +388,9 @@ describe("optical scan", () => {
     await ready;
     expect(screen.getByText("Camera turned 1.3°, not mirrored, 4.70 px/mm.")).toBeInTheDocument();
     socket.serverMessage("opticalOrientation", { rotationDeg: 180, mirrored: false, pxPerMm: 4.7 });
-    expect(screen.getByText(/Camera turned 180.0°.*remount it\./)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/Camera turned 180.0°.*remount it\./)).toBeInTheDocument());
     socket.serverMessage("opticalOrientation", { rotationDeg: 0, mirrored: true, pxPerMm: 4.7 });
-    expect(screen.getByText(/mirrored, 4.70 px\/mm\. A scan refuses/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/mirrored, 4.70 px\/mm\. A scan refuses/)).toBeInTheDocument());
   });
 
   it("tracks the sled on the sheet", async () => {
