@@ -11,7 +11,7 @@ same numbers, and reloading the page loses nothing.
 
 ## The estimate
 
-When you open a file, the run panel shows its estimated run time after the name, such as `leg.nc in jobs · est. 1h 23m`.
+When you open a file, the **Job** row in the readouts shows its estimated run time, such as `Idle est. 1h 23m`.
 WebControl adds up the time each move takes at the speed the file asks for:
 
 - G1, G2 and G3 moves at their feed (F), limited to **Max Feedrate** (Settings ▸ Advanced).
@@ -32,7 +32,7 @@ The **Job** row in the readouts shows, after the job's state:
 - the time since the job started, pauses included;
 - `cutting`: the time the job was running, without pauses and tool changes.
 
-After the job the Job row keeps the last job's times until the next one starts.
+After the job the Job row shows the file's estimate again, then the last job's times until the next one starts.
 
 ## In the log
 

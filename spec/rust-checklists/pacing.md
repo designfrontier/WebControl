@@ -59,8 +59,8 @@ Pi `journalctl -u webcontrol-rs | grep "never received the lines"` finds them.
 - [ ] The stats button shows the lines per minute and "Lost 0 (0.00%)", and both devices update about every 2 s.
 - [ ] After about a minute, choose Min 25 ms while the job runs. It is not refused, and from the next line on the
       log shows the lines going out closer together. The logs show a `PACING SEGMENT` line with `mode=v0.94
-      gap_ms=50 ... ended_by=pacing_change`, then `PACING CHANGE file_line=<n> mode=minimum_gap gap_ms=25
-      from_mode=v0.94 from_gap_ms=50`.
+    gap_ms=50 ... ended_by=pacing_change`, then `PACING CHANGE file_line=<n> mode=minimum_gap gap_ms=25
+    from_mode=v0.94 from_gap_ms=50`.
 - [ ] Every word after the upper-case label is a `key=value` pair, and unknown numbers read `none`. The segment line
       has `lines`, `lost`, `lost_twice`, `lost_pct`, `lines_per_min`, `s_per_line`, `recovery_s`,
       `median_short_gap_ms`, `duration_s`, `file_line_start`, `file_line_end` and `ended_by`.
@@ -82,10 +82,10 @@ Pi `journalctl -u webcontrol-rs | grep "never received the lines"` finds them.
       Its numbers match the `PACING SEGMENT` lines.
 - [ ] On a portrait iPad or a phone, the table scrolls inside the dialog and the dialog closes with its Close button.
 - [ ] Reload the page, and open the control screen on the second device: both show the same last job.
-- [ ] Job timer: before Play, the run panel's file reads `· est. <time>`. During the job the readouts' **Job** row
+- [ ] Job timer: before Play, the readouts' **Job** row reads `est. <time>`. During the job the readouts' **Job** row
       shows `~<time> left`, wall time and `cutting <time>`, the same on the second device and after a reload; a Pause
       adds to wall time only. At the end `PACING JOB END` gives `wall_s`, `cutting_s`, `estimated_s` and `file`, and
-      the Job row keeps the last job's times. Note estimated ______ s against cutting ______ s.
+      the Job row shows the estimate and the last job's times. Note estimated ______ s against cutting ______ s.
 - [ ] Choose v0.94 50 ms again, unless you are running the experiment below.
 
 ## 5. Optional: the loss-rate experiment (router on)

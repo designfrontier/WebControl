@@ -1,6 +1,5 @@
 import { Fragment } from "react";
 import { useMachine } from "../../app/context";
-import { duration } from "../main/jobTime";
 import "./loadedFile.css";
 
 /** "jobs/leg.nc" as its folder and file name; a file at the library root has no folder. */
@@ -19,19 +18,15 @@ const breakable = (name: string) =>
     </Fragment>
   ));
 
-/** The loaded gcode file: its name, folder and estimated run time, over at most two lines with an ellipsis past them. */
+/** The loaded gcode file: its name, then its folder, over at most two lines with an ellipsis past them. */
 export const LoadedFile = ({ className }: { className: string }) => {
   const file = useMachine((s) => s.gcodeFile);
-  const estimate = useMachine((s) => s.pacing?.estimateS ?? null);
   const { folder, name } = splitGcodePath(file ?? "");
   return (
     <p className={`loaded-file ${className}`} title={file ?? undefined} data-loaded={file !== null}>
       <span className="loaded-file-label">File:</span>{" "}
       <span className="loaded-file-name">{file === null ? "No file loaded" : breakable(name)}</span>
       {folder ? <span className="loaded-file-folder"> in {folder}</span> : null}
-      {file !== null && estimate !== null ? (
-        <span className="loaded-file-estimate"> · est. {duration(estimate)}</span>
-      ) : null}
     </p>
   );
 };

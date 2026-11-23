@@ -7,10 +7,15 @@ export const duration = (seconds: number) => {
   return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
 };
 
-/** While a job runs its time left, then the running or last job's wall and cutting time; null before any job. */
+/** The time left while a job runs, else the loaded file's estimate; then the job's wall and cutting time. */
 export const jobTime = (pacing: PacingStats | null) => {
   const job = pacing?.job;
-  if (!job || job.wallS === undefined) return null;
-  const left = job.endedBy === null && job.remainingS != null ? [`~${duration(job.remainingS)} left`] : [];
-  return [...left, duration(job.wallS), `cutting ${duration(job.elapsedS)}`].join(" · ");
+  const wall = job?.wallS;
+  const running = job?.endedBy === null;
+  const ahead = running ? job.remainingS : pacing?.estimateS;
+  const parts = [
+    ahead == null ? null : running ? `~${duration(ahead)} left` : `est. ${duration(ahead)}`,
+    ...(job && wall !== undefined ? [duration(wall), `cutting ${duration(job.elapsedS)}`] : []),
+  ].filter((part) => part !== null);
+  return parts.length > 0 ? parts.join(" · ") : null;
 };

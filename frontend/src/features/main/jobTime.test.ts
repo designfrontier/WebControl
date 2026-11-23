@@ -48,16 +48,18 @@ describe("duration", () => {
 describe("jobTime", () => {
   it("gives the time left first, then wall and cutting time, while a job runs", () => {
     expect(jobTime(stats(job()))).toBe("~12m left · 1h 02m · cutting 50m");
-  });
-
-  it("drops the time left once the job ends or when there is no estimate", () => {
-    expect(jobTime(stats(job({ endedBy: "job end" })))).toBe("1h 02m · cutting 50m");
     expect(jobTime(stats(job({ remainingS: null })))).toBe("1h 02m · cutting 50m");
   });
 
-  it("is null before any job, or from a backend without the timer", () => {
+  it("gives the loaded file's estimate before the last job's times when no job runs", () => {
+    expect(jobTime(stats(job({ endedBy: "job end" })))).toBe("est. 1h 07m · 1h 02m · cutting 50m");
+    expect(jobTime(stats(null))).toBe("est. 1h 07m");
+    expect(jobTime({ ...stats(null), estimateS: null })).toBeNull();
+  });
+
+  it("is null with nothing to show, or from a backend without the timer", () => {
     expect(jobTime(null)).toBeNull();
-    expect(jobTime(stats(null))).toBeNull();
-    expect(jobTime(stats(job({ wallS: undefined })))).toBeNull();
+    const old = { ...stats(job({ wallS: undefined, remainingS: undefined })), estimateS: undefined };
+    expect(jobTime(old)).toBeNull();
   });
 });
