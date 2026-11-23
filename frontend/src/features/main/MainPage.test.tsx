@@ -494,7 +494,7 @@ describe("MainPage loaded file", () => {
       ...{ linesPerMinute: 1, secondsPerLine: 60, lostPercent: 0, elapsedS: 600, wallS: 750, remainingS: 1500 },
     } as const;
     socket.serverMessage("pacingStats", { ...pacing, job: { ...job, endedBy: null }, estimateS: 4980 });
-    expect(time()).toHaveTextContent(/13m · cutting 10m · ~25m left$/);
+    expect(time()).toHaveTextContent(/~25m left · 13m · cutting 10m$/);
     socket.serverMessage("pacingStats", { ...pacing, job: { ...job, endedBy: "job end" }, estimateS: 4980 });
     expect(time()).toHaveTextContent(/13m · cutting 10m$/);
   });

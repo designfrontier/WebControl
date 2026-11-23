@@ -83,7 +83,7 @@ Pi `journalctl -u webcontrol-rs | grep "never received the lines"` finds them.
 - [ ] On a portrait iPad or a phone, the table scrolls inside the dialog and the dialog closes with its Close button.
 - [ ] Reload the page, and open the control screen on the second device: both show the same last job.
 - [ ] Job timer: before Play, the run panel's file reads `· est. <time>`. During the job the readouts' **Job** row
-      shows wall time, `cutting <time>` and `~<time> left`, the same on the second device and after a reload; a Pause
+      shows `~<time> left`, wall time and `cutting <time>`, the same on the second device and after a reload; a Pause
       adds to wall time only. At the end `PACING JOB END` gives `wall_s`, `cutting_s`, `estimated_s` and `file`, and
       the Job row keeps the last job's times. Note estimated ______ s against cutting ______ s.
 - [ ] Choose v0.94 50 ms again, unless you are running the experiment below.

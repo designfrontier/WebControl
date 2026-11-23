@@ -27,10 +27,10 @@ Tool changes, M0 pauses and the time you take at them are not in the estimate.
 
 The **Job** row in the readouts shows, after the job's state:
 
-- the time since the job started, pauses included;
-- `cutting`: the time the job was running, without pauses and tool changes;
 - `~12m left`: the estimated time left. Once about 2% of the job is done, WebControl scales the estimate by how the
-  job's real time compares with it so far, so the time left gets closer to the truth as the job runs.
+  job's real time compares with it so far, so the time left gets closer to the truth as the job runs;
+- the time since the job started, pauses included;
+- `cutting`: the time the job was running, without pauses and tool changes.
 
 After the job the Job row keeps the last job's times until the next one starts.
 

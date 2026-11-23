@@ -46,8 +46,8 @@ describe("duration", () => {
 });
 
 describe("jobTime", () => {
-  it("gives wall time, cutting time and the time left while a job runs", () => {
-    expect(jobTime(stats(job()))).toBe("1h 02m · cutting 50m · ~12m left");
+  it("gives the time left first, then wall and cutting time, while a job runs", () => {
+    expect(jobTime(stats(job()))).toBe("~12m left · 1h 02m · cutting 50m");
   });
 
   it("drops the time left once the job ends or when there is no estimate", () => {
