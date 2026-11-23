@@ -19,7 +19,7 @@ const breakable = (name: string) =>
     </Fragment>
   ));
 
-/** The loaded gcode file: its name, estimated run time and folder, over at most two lines with an ellipsis past them. */
+/** The loaded gcode file: its name, folder and estimated run time, over at most two lines with an ellipsis past them. */
 export const LoadedFile = ({ className }: { className: string }) => {
   const file = useMachine((s) => s.gcodeFile);
   const estimate = useMachine((s) => s.pacing?.estimateS ?? null);
@@ -28,10 +28,10 @@ export const LoadedFile = ({ className }: { className: string }) => {
     <p className={`loaded-file ${className}`} title={file ?? undefined} data-loaded={file !== null}>
       <span className="loaded-file-label">File:</span>{" "}
       <span className="loaded-file-name">{file === null ? "No file loaded" : breakable(name)}</span>
+      {folder ? <span className="loaded-file-folder"> in {folder}</span> : null}
       {file !== null && estimate !== null ? (
         <span className="loaded-file-estimate"> · est. {duration(estimate)}</span>
       ) : null}
-      {folder ? <span className="loaded-file-folder"> in {folder}</span> : null}
     </p>
   );
 };

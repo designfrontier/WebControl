@@ -11,7 +11,7 @@ const Row = ({ term, wide = false, children }: { term: string; wide?: boolean; c
   </div>
 );
 
-/** The readout block: line, sled, chain error, home, gcode target, job time, progress, tool and positioning mode. */
+/** The readout block: job state and time, line, sled, chain error, home, gcode target, progress, tool and positioning mode. */
 export const Readouts = ({ lineIndex }: { lineIndex: number | null }) => {
   const position = useMachine((s) => s.position);
   const home = useMachine((s) => s.homePosition);
@@ -27,6 +27,7 @@ export const Readouts = ({ lineIndex }: { lineIndex: number | null }) => {
         <span className="job-state" data-state={job ?? "unknown"}>
           {job ?? "—"}
         </span>
+        {time ? <span className="job-time">{time}</span> : null}
       </Row>
       <Row term="Line" wide>
         {lineIndex === null ? "—" : lineIndex + 1}
@@ -43,9 +44,6 @@ export const Readouts = ({ lineIndex }: { lineIndex: number | null }) => {
       </Row>
       <Row term="GCode" wide>
         {gcode ? `X ${fixed(gcode.x)} Y ${fixed(gcode.y)} Z ${fixed(gcode.z)}` : "—"}
-      </Row>
-      <Row term="Time" wide>
-        {time ?? "—"}
       </Row>
       <Row term="Complete">{position?.percentComplete || "—"}</Row>
       <Row term="State">{position?.state || "—"}</Row>

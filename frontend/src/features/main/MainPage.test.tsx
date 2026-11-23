@@ -480,10 +480,10 @@ describe("MainPage loaded file", () => {
     expect(runFile()).not.toHaveAttribute("title");
   });
 
-  it("shows the loaded file's estimated run time, and the job's times beside Complete", async () => {
+  it("shows the loaded file's estimated run time, and the job's times beside its state", async () => {
     const { socket } = await renderMain();
-    const time = () => screen.getByText("Time").nextSibling;
-    expect(time()).toHaveTextContent("—");
+    const time = () => screen.getByText("Job", { exact: true }).nextSibling;
+    expect(time()).not.toHaveTextContent("cutting");
     socket.serverMessage("gcodeFile", { file: "leg.nc" });
     const pacing = { mode: "v0.94", gapMs: 50, segment: null, history: [] } as const;
     socket.serverMessage("pacingStats", { ...pacing, job: null, estimateS: 4980 });
@@ -494,9 +494,9 @@ describe("MainPage loaded file", () => {
       ...{ linesPerMinute: 1, secondsPerLine: 60, lostPercent: 0, elapsedS: 600, wallS: 750, remainingS: 1500 },
     } as const;
     socket.serverMessage("pacingStats", { ...pacing, job: { ...job, endedBy: null }, estimateS: 4980 });
-    expect(time()).toHaveTextContent("13m · cutting 10m · ~25m left");
+    expect(time()).toHaveTextContent(/13m · cutting 10m · ~25m left$/);
     socket.serverMessage("pacingStats", { ...pacing, job: { ...job, endedBy: "job end" }, estimateS: 4980 });
-    expect(time()).toHaveTextContent(/^13m · cutting 10m$/);
+    expect(time()).toHaveTextContent(/13m · cutting 10m$/);
   });
 });
 

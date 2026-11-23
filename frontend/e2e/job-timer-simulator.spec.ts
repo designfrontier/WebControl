@@ -22,7 +22,7 @@ const shoot = async (page: Page, name: string) => {
     await ["light", "dark"].reduce(async (before, scheme) => {
       await before;
       await page.emulateMedia({ colorScheme: scheme as "light" | "dark" });
-      await page.getByText("Time", { exact: true }).scrollIntoViewIfNeeded();
+      await page.getByLabel("Machine readouts").getByText("Job", { exact: true }).scrollIntoViewIfNeeded();
       await page.waitForTimeout(150);
       await page.screenshot({ path: `${SHOTS}/timer-${name}-${label}-${scheme}.png` });
     }, Promise.resolve());
@@ -43,9 +43,9 @@ test("a job shows the file's estimate, then its wall, cutting and remaining time
   await shoot(page, "loaded");
 
   await page.locator(".run-buttons").getByRole("button", { name: "Play" }).click();
-  const time = page.getByText("Time", { exact: true }).locator("+ dd");
-  await expect(time).toHaveText(/^\d+s · cutting \d+s · ~\d+[sm].* left$/, { timeout: 20_000 });
+  const time = page.getByLabel("Machine readouts").getByText("Job", { exact: true }).locator("+ dd");
+  await expect(time).toHaveText(/\d+s · cutting \d+s · ~\d+[sm].* left$/, { timeout: 20_000 });
   await shoot(page, "running");
   await page.locator(".run-buttons").getByRole("button", { name: "Stop", exact: true }).click();
-  await expect(time).toHaveText(/^\d+s · cutting \d+s$/, { timeout: 20_000 });
+  await expect(time).toHaveText(/\d+s · cutting \d+s$/, { timeout: 20_000 });
 });
