@@ -22,7 +22,7 @@ WebControl restarts.
 | --- | --- |
 | Very fast flicker (10 times a second) | An alarm, such as "Sled Not Keeping Up" or a lost position; press Stop to clear it |
 | Two short flashes, then a pause | Not connected to the controller |
-| Fast (on and off 4 times a second) | Paused: Pause, an M0, a tool change or a manual Z prompt waits for you |
+| Fast (a quarter second on, a quarter second off) | Paused: Pause, an M0, a tool change or a manual Z prompt waits for you |
 | Slow (1 second on, 1 second off) | Running a G-code file |
 | Steady on | Connected and idle, ready for a job |
 | Off | WebControl is not running |
@@ -36,4 +36,4 @@ Wire it one of two ways, each with a resistor (about 330 Ω) in series with the 
 - **StatusLED**: from the pin to the LED anode, cathode to ground. The pin goes high to light it.
 
 You can set more than one pin to a status LED; they all show the same state. When WebControl stops it turns the LED
-off and releases the pin. If WebControl crashes or the Pi loses power, the LED may stay as it was.
+off and keeps the pin holding it off. If WebControl crashes or the Pi loses power, the LED may stay as it was.

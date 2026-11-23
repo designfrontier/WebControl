@@ -156,9 +156,9 @@ Watch the sled and the log viewer side by side. The lines after each press are t
       sending gcode." and nothing moves. A bouncing button does not trigger twice.
 - [ ] Status LED: wire an LED and resistor from 3.3 V to a free pin (active low) and set that pin to `StatusLED Active
       Low`, then restart WebControl. With the USB unplugged it double-blinks; plugged in and idle it is steady on.
-      During the air cut it blinks slowly (1 s on, 1 s off); Pause, an M0 and a tool change blink it fast (4 times a
-      second); unplugging the USB mid-job double-blinks it. An alarm (for example the sled held back until "Sled Not
-      Keeping Up") flickers it until Stop. Play, Pause and Stop LEDs, if wired, still follow as above.
+      During the air cut it blinks slowly (1 s on, 1 s off); Pause, an M0 and a tool change blink it fast (0.25 s on,
+      0.25 s off); unplugging the USB mid-job double-blinks it. An alarm (for example the sled held back until "Sled
+      Not Keeping Up") flickers it until Stop. Play, Pause and Stop LEDs, if wired, still follow as above.
 - [ ] `sudo systemctl stop webcontrol-rs` turns the status LED off and it stays off. Rewire it from the pin to ground
       (active high), set the pin to `StatusLED`, restart: the same patterns show, and stopping turns it off.
 

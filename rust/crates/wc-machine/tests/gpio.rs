@@ -231,6 +231,9 @@ impl LedPin for TimedLed {
         let ms = u64::try_from(self.start.elapsed().as_millis()).unwrap();
         self.timeline.lock().unwrap().push((ms, self.pin, high));
     }
+    fn keep(&mut self) {
+        self.timeline.lock().unwrap().push((u64::MAX, self.pin, false));
+    }
 }
 
 struct TimedPins(tokio::time::Instant, Timeline);
@@ -263,9 +266,14 @@ fn status_leds(status: Status) -> (Gpio, Timeline, tokio::sync::watch::Sender<Sn
     (gpio, timeline, sender)
 }
 
+/// The pins left driving their level after exit.
+fn kept(timeline: &Timeline) -> Vec<u8> {
+    timeline.lock().unwrap().iter().filter(|(ms, ..)| *ms == u64::MAX).map(|&(_, pin, _)| pin).collect()
+}
+
 /// When the LED lit and went dark, checking the active-low pin always reads the opposite.
 fn lit(timeline: &Timeline) -> Vec<(u64, bool)> {
-    let changes = timeline.lock().unwrap().clone();
+    let changes: Vec<_> = timeline.lock().unwrap().iter().copied().filter(|(ms, ..)| *ms != u64::MAX).collect();
     let pin = |wanted: u8| changes.iter().filter(move |(_, pin, _)| *pin == wanted).map(|&(ms, _, high)| (ms, high));
     let inverted: Vec<_> = pin(26).map(|(ms, high)| (ms, !high)).collect();
     assert_eq!(pin(25).collect::<Vec<_>>(), inverted);
@@ -297,8 +305,10 @@ async fn one_task_blinks_every_status_led_and_restarts_the_pattern_on_a_new_stat
 async fn shutting_down_turns_a_lit_status_led_off() {
     let (gpio, timeline, _sender) = status_leds(Status::Idle);
     tokio::time::sleep(Duration::from_millis(10)).await;
+    assert_eq!(kept(&timeline), [] as [u8; 0]);
     drop(gpio);
     assert_eq!(lit(&timeline), [(0, false), (0, true), (10, false)]);
+    assert_eq!(kept(&timeline), [25, 26], "both pins keep driving the LED off once WebControl exits");
 }
 
 #[tokio::test(start_paused = true)]

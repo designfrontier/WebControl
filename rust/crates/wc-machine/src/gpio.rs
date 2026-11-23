@@ -220,6 +220,8 @@ impl Debounce {
 
 pub trait LedPin: Send {
     fn set(&mut self, on: bool);
+    /// Keeps driving the pin's level once WebControl exits, instead of letting it float.
+    fn keep(&mut self) {}
 }
 
 /// The Pi's pins, or a stand-in.
@@ -267,6 +269,7 @@ impl StatusPins {
     fn stop(&mut self) {
         self.light(false);
         self.stopped = true;
+        self.pins.iter_mut().for_each(|(pin, _)| pin.keep());
     }
 }
 
