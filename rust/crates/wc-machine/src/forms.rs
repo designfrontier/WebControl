@@ -21,7 +21,7 @@ pub const SECTIONS: [(&str, &str); 5] = [
     ("gpio", "GPIO Settings"),
 ];
 /// `GPIOActions.actionList`: what a GPIO pin setting may be set to.
-pub const GPIO_ACTIONS: [&str; 12] = [
+pub const GPIO_ACTIONS: [&str; 14] = [
     "Spindle On",
     "Spindle Off",
     "Shutdown",
@@ -34,6 +34,8 @@ pub const GPIO_ACTIONS: [&str; 12] = [
     "PlayLED",
     "PauseLED",
     "StopLED",
+    "StatusLED",
+    "StatusLED Active Low",
 ];
 const RING_RADIUS: f64 = 138.4;
 /// Python-only settings an older `webcontrol.json` still carries; kept in the file, left off the screens.

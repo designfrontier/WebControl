@@ -34,7 +34,7 @@ numbers, or the transcripts CI replays.
 | Backup, restore, diagnostics, imports | [`files-boards.md`](files-boards.md) 5 | No |
 | Jobs: Play, Pause, Resume, Stop, M0, tool change, restart mid-file | [`jobs.md`](jobs.md) 1-3 | Yes: an air cut |
 | The job lock, refusals, probes in a file, a lost USB link | [`jobs.md`](jobs.md) 4 | Yes |
-| Buffered mode, GPIO buttons and LEDs | [`jobs.md`](jobs.md) 5, 6 | Yes |
+| Buffered mode, GPIO buttons, LEDs and the status LED | [`jobs.md`](jobs.md) 5, 6 | Yes |
 | The first real cut | [`jobs.md`](jobs.md) 7 | Yes: router on |
 | Job queue: files back to back, bit checks and the override, stops, Continue, restarts | [`queue.md`](queue.md) | Yes: an air cut |
 | The tool library, a file's tools at a tool change | [`tools.md`](tools.md) | Yes: an air cut |
