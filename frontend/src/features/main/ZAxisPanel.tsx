@@ -4,6 +4,7 @@ import { controlsFor } from "./controls";
 import type { ControlAvailability } from "./controls";
 import { DistanceField } from "./DistanceField";
 import { useDistanceControl, useMainScreenState } from "./hooks";
+import { ZMoveButton } from "./ZMoveButton";
 import "./main.css";
 
 const Z_DECIMALS = 5;
@@ -51,6 +52,8 @@ export const ZAxisPanel = ({ available, touchPlate }: Props) => {
         <button type="button" disabled={!available.manual} onClick={() => moveZ("lower")}>
           <span aria-hidden="true">↓</span> Lower
         </button>
+        <ZMoveButton move="zToSafeHeight" disabled={!available.manual} />
+        <ZMoveButton move="zToZero" disabled={!available.manual} />
         <button type="button" disabled={!available.manual} onClick={() => client.sendAction("defineZ0")}>
           Set Z Zero Here
         </button>

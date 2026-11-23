@@ -468,3 +468,18 @@ fn touch_z_at_a_parked_job_tool_change_goes_back_over_the_work_before_it_probes(
     );
     assert!(!sent.iter().take_while(|line| !line.contains("X140")).any(|line| line.contains("Z-")), "{sent:?}");
 }
+
+#[test]
+fn go_to_z0_at_a_parked_tool_change_goes_back_over_the_work_before_it_lowers() {
+    let mut rig = parks_for_tool_changes(&[("Advanced Settings", "homeX", json!("100"))]);
+    rig.act("defineZ0");
+    rig.run_to_quiet();
+    at_the_tool_change(&mut rig);
+    let back = rig.act("zToZero");
+    assert!(alerts(&back)[0].ends_with("Press Go to Z0 again to lower the bit there."), "{:?}", alerts(&back));
+    assert_eq!(rig.run_to_quiet(), ["G21", "G90", "G00 Z5.0", "G00 X120.0 Y10.0"], "no plunge at the park position");
+    rig.act("zToZero");
+    assert_eq!(rig.run_to_quiet(), ["G21", "G90", "G00 Z0"], "the second press lowers over the work");
+    rig.act("zToSafeHeight");
+    assert_eq!(rig.run_to_quiet(), ["G21", "G90", "G00 Z5.0"]);
+}

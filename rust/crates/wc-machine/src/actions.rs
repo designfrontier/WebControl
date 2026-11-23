@@ -17,12 +17,16 @@ use crate::machine::{Effect, Link, Machine, alert, broadcast};
 pub(crate) const PROBING: &str = "Wait for Touch Z to finish or press Stop";
 const NOT_CONNECTED: &str = "The controller is not connected.";
 const Z_LIMITS_UNSUPPORTED: &str = "Z-axis limits need holey firmware 51.292 or later.";
-const JOB_LINES_HELD: &str = "The controller paused with lines of the job still in its buffer, which would run before \
+const JOB_LINES_HELD: &str = "The controller paused with other lines waiting behind the pause, which would run before \
                               this move. Press Resume or STOP first.";
 const NO_JOG_DISTANCE: &str = "Enter a jog distance that is a number other than zero.";
 const ADJUST_Z_FIRST: &str = "The controller is waiting for Z to be adjusted by hand. Adjust it, then press Resume.";
 const GCODE_LOADING: &str = "Gcode is still loading. Start the job when the preview appears.";
 const CLEARED_Z_LIMIT_MM: i32 = 9999;
+const Z_ZERO_UNKNOWN: &str = "Z zero has not been set since the controller connected, so the bit did not move. Set it \
+                              with Set Z Zero Here or Touch Plate first.";
+const TOUCH_AGAIN: &str = "Lower the bit close to the work and press Touch Z again.";
+const ZERO_AGAIN: &str = "Press Go to Z0 again to lower the bit there.";
 /// Stop, Pause and the actions that send the controller nothing.
 const SAFE_WHILE_PROBING: [&str; 13] = [
     "stopRun",
@@ -40,10 +44,12 @@ const SAFE_WHILE_PROBING: [&str; 13] = [
     "boardClearBoard",
 ];
 /// Commands that reach the controller, so they need it connected.
-const MACHINE_COMMANDS: [&str; 21] = [
+const MACHINE_COMMANDS: [&str; 23] = [
     "move",
     "moveTo",
     "moveZ",
+    "zToZero",
+    "zToSafeHeight",
     "reportSettings",
     "home",
     "defineZ0",
@@ -64,7 +70,7 @@ const MACHINE_COMMANDS: [&str; 21] = [
     "definePark",
 ];
 /// Python's `MACHINE_COMMANDS`: the manual commands a firmware pause refuses or a jog's `~` releases.
-const MANUAL_COMMANDS: usize = 17;
+const MANUAL_COMMANDS: usize = 19;
 
 fn is_blank(value: &Value) -> bool {
     value.as_str() == Some("")
@@ -95,7 +101,7 @@ impl Machine {
         let machine_command = MACHINE_COMMANDS.contains(&command);
         let manual_command = MACHINE_COMMANDS[..MANUAL_COMMANDS].contains(&command);
         if manual_command && self.job.firmware_paused && self.job.flow != Flow::Streaming {
-            if self.job.holds_job_lines {
+            if self.lines_behind_pause() {
                 return effects.push(alert(JOB_LINES_HELD));
             }
             // A `~` here would tell the firmware Z was adjusted by hand ($16=0) and carry on with the line.
@@ -117,10 +123,6 @@ impl Machine {
         }
         if machine_command && !matches!(self.link, Link::Connected { .. }) {
             return effects.push(alert(NOT_CONNECTED));
-        }
-        if manual_command && self.job.firmware_paused {
-            // Streaming stays held, so releasing the firmware lets the jog run now instead of on Resume.
-            self.release_firmware(now, effects);
         }
         let failure = match command {
             "stopRun" => self.stop_run(now, effects),
@@ -148,7 +150,9 @@ impl Machine {
                 self.queue(["G10 Z0 ".to_string()]);
                 None
             }
-            "touchZ" => self.touch_z_from_park().or_else(|| self.touch_z()),
+            "touchZ" => self.back_from_park(TOUCH_AGAIN).or_else(|| self.touch_z()),
+            "zToZero" => self.z_to_zero(),
+            "zToSafeHeight" => self.safe_height("raising the bit").map(|safe| self.queue_safe_height(safe)).err(),
             "reportSettings" => {
                 self.queue(["$$".to_string()]);
                 None
@@ -200,6 +204,10 @@ impl Machine {
             _ if crate::optical::COMMANDS.contains(&command) => self.optical_action(command, now, effects),
             _ => Some(format!("Function not currently implemented.. Sorry.[{command}]")),
         };
+        if manual_command && self.job.firmware_paused && !self.controller.queue.is_empty() {
+            // Streaming stays held, so releasing the firmware lets the jog run now instead of on Resume.
+            self.release_firmware(now, effects);
+        }
         if let Some(text) = failure {
             effects.push(alert(&text));
         }
@@ -255,6 +263,16 @@ impl Machine {
         let units_z = Units::from_setting(&self.settings.text_or_empty("Computed Settings", "unitsZ"));
         self.queue(commands::move_z(&action.arg_text(), distance, self.units(), units_z));
         None
+    }
+
+    fn z_to_zero(&mut self) -> Option<String> {
+        if !self.bit.zero_known() {
+            return Some(Z_ZERO_UNKNOWN.into());
+        }
+        self.back_from_park(ZERO_AGAIN).or_else(|| {
+            self.queue([crate::park::units_line(self.units()).into(), "G90 ".into(), "G00 Z0 ".into()]);
+            None
+        })
     }
 
     fn home(&mut self) -> Option<String> {

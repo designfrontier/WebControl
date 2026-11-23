@@ -77,7 +77,7 @@ fn the_control_buttons_are_four_known_buttons_none_twice_and_every_client_hears_
     let mut rig = Rig::connected();
     let buttons = |rig: &Rig| wc_machine::controls::buttons(&rig.machine.snapshot().settings);
     assert_eq!(buttons(&rig), ["park", "zAxis", "setHome", "setPark"]);
-    let chosen = json!(["macro4", "setPark", "zAxis", "park"]);
+    let chosen = json!(["macro4", "zToZero", "zAxis", "zToSafeHeight"]);
     let (response, effects) = put_buttons(&mut rig, json!({ "buttons": chosen }));
     assert_eq!((response.status, response.body.clone()), (200, json!({ "buttons": chosen })));
     assert_eq!(pushed(&effects, "controlButtons"), [json!({ "buttons": chosen })]);
@@ -93,7 +93,7 @@ fn the_control_buttons_are_four_known_buttons_none_twice_and_every_client_hears_
         json!(["park", "zAxis", "setHome", "setPark"]),
     ];
     refused.into_iter().for_each(|body| assert_eq!(put_buttons(&mut rig, body).0.status, 400));
-    assert_eq!(buttons(&rig), ["macro4", "setPark", "zAxis", "park"]);
+    assert_eq!(buttons(&rig), ["macro4", "zToZero", "zAxis", "zToSafeHeight"]);
 }
 
 #[test]

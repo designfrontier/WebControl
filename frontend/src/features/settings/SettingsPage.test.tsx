@@ -315,10 +315,11 @@ describe("SettingsPage", () => {
       within(pin)
         .getAllByRole("option")
         .map((o) => o.textContent),
-    ).toEqual(["Unassigned", "Stop", "Pause"]);
+    ).toEqual(["Unassigned", "Stop", "Pause", "StatusLED", "StatusLED Active Low"]);
     await user.selectOptions(pin, "Stop");
+    await user.selectOptions(within(gpio).getByLabelText("GPIO3"), "StatusLED Active Low");
     await user.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(puts).toEqual([{ gpio2: "Stop" }]));
+    await waitFor(() => expect(puts).toEqual([{ gpio2: "Stop", gpio3: "StatusLED Active Low" }]));
   });
 
   it("turns on a WebControl setting from its tab", async () => {

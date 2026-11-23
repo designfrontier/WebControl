@@ -34,6 +34,10 @@ mod pi {
         fn set(&mut self, on: bool) {
             if on { self.0.set_high() } else { self.0.set_low() }
         }
+
+        fn keep(&mut self) {
+            self.0.set_reset_on_drop(false);
+        }
     }
 
     impl Pins for RppalPins {

@@ -47,6 +47,8 @@ describe("Control buttons settings", () => {
         "Macro 2",
         "Macro 3",
         "Macro 4: Vacuum",
+        "Go to Z0",
+        "Go to Safe Height",
       ]),
     );
     expect(screen.getByRole("group", { name: "Control buttons" })).toHaveAccessibleDescription(/swaps the two/);

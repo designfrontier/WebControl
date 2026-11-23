@@ -88,7 +88,15 @@ export const macroSchema = z.object({
 });
 
 /** What a control-screen button slot holds: an action, the Z-Axis dialog, or a macro. */
-export const controlButtonSchema = z.enum(["park", "zAxis", "setHome", "setPark", ...macroCommandSchema.options]);
+export const controlButtonSchema = z.enum([
+  "park",
+  "zAxis",
+  "setHome",
+  "setPark",
+  ...macroCommandSchema.options,
+  "zToZero",
+  "zToSafeHeight",
+]);
 export type ControlButton = z.infer<typeof controlButtonSchema>;
 /** The four slots, top to bottom down the jog pad's right side, then beside the distance; never one twice. */
 export const controlButtonsSchema = z.array(controlButtonSchema).length(4);
@@ -180,6 +188,8 @@ export const mainActions = [
   "resetHomeToCenter",
   "defineZ0",
   "touchZ",
+  "zToZero",
+  "zToSafeHeight",
   "returnToCenter",
   "park",
   "definePark",

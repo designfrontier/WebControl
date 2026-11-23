@@ -15,10 +15,12 @@ const MACRO_SECTION: &str = "Maslow Settings";
 pub const BUTTONS_SECTION: &str = "WebControl Settings";
 /// Changed only through `PUT /api/display/controls`, so it stays off the section forms.
 pub const BUTTONS_KEY: &str = "controlButtons";
-const BUTTONS: [&str; 8] = ["park", "zAxis", "setHome", "setPark", "macro1", "macro2", "macro3", "macro4"];
+const BUTTONS: [&str; 10] =
+    ["park", "zAxis", "setHome", "setPark", "macro1", "macro2", "macro3", "macro4", "zToZero", "zToSafeHeight"];
 const DEFAULT_BUTTONS: [&str; 4] = ["park", "zAxis", "setHome", "setPark"];
 const SLOTS: usize = 4;
-const INVALID: &str = "Expected {\"buttons\": [four of park, zAxis, setHome, setPark, macro1 to macro4, none twice]}";
+const INVALID: &str = "Expected {\"buttons\": [four of park, zAxis, setHome, setPark, macro1 to macro4, zToZero, \
+                       zToSafeHeight, none twice]}";
 
 /// Each macro's title and whether its gcode is blank.
 pub fn macros(settings: &Settings) -> Vec<Macro> {

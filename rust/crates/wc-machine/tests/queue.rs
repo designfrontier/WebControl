@@ -522,6 +522,8 @@ fn play_and_other_loads_wait_while_the_queue_loads_its_next_file() {
     shop.hold = true;
     shop.run();
     assert_eq!((shop.queue()["step"].as_str(), shop.held.len()), (Some("loading"), 1));
+    let led = shop.rig.machine.snapshot().led_status;
+    assert_eq!(led, wc_machine::gpio::Status::Running, "the status LED still shows the queue running");
     let refused = shop.rig.act("startRun");
     assert!(alerts(&refused).iter().any(|alert| alert.contains("starting its next file")), "{:?}", alerts(&refused));
     let request = Ask::LoadGcode { gcode: shop.gcode("a.nc"), file: Some(path("a.nc")), origin: Origin::Open };

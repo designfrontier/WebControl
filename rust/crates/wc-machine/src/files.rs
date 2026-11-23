@@ -50,8 +50,6 @@ pub struct Gcode {
     pub tolerance: Option<f64>,
     pub preview: Preview,
     pub truncate: Option<u32>,
-    /// The alert Python raises when only the first 300,000 lines are drawn.
-    pub too_large: Option<String>,
     /// The console note for a file with G90.1 or G91.1, which WebControl converts.
     pub arc_centres: Option<String>,
     pub tools: Vec<FileTool>,
@@ -97,7 +95,6 @@ impl Gcode {
                 file_units: drawn.file_units,
             },
             truncate,
-            too_large: drawn.too_large,
             arc_centres: arc_centre_note(&lines),
             tools: wc_gcode::tools::file_tools(raw),
             estimate: estimate(&lines, settings),
@@ -113,7 +110,6 @@ impl Gcode {
             tolerance: None,
             preview: Preview { compressed: Some(preview::compress(&[])), moves: Vec::new(), file_units: units },
             truncate: None,
-            too_large: None,
             arc_centres: None,
             tools: Vec::new(),
             estimate: Vec::new(),
@@ -317,9 +313,6 @@ impl Machine {
         let refused = if queued { !self.queue_loading() } else { self.gcode_locked() };
         if refused {
             return Reply::Refused(GCODE_LOCKED.into());
-        }
-        if let Some(text) = &gcode.too_large {
-            effects.push(alert(text));
         }
         if let Some(text) = gcode.arc_centres.as_ref().filter(|_| origin != Origin::Edit) {
             effects.push(broadcast(&ControllerMessage(text.clone())));

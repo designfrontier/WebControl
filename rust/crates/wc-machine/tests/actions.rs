@@ -331,6 +331,24 @@ fn lines_the_controller_cannot_take_pause_the_job_with_an_alert() {
     });
 }
 
+/// Upstream #51: the refused line's number is its line in View/Edit G-code, whose text is the loaded lines.
+#[test]
+fn a_refused_lines_number_is_its_line_in_the_editor() {
+    let mut rig = Rig::connected();
+    rig.machine.load_gcode("\u{feff}(header)\n\nG21\n\n\n; note\nG0 X1\nG0 (unclosed\nG0 X2\n");
+    let editor = rig.machine.snapshot().gcode.join("\n");
+    let line = editor.lines().position(|text| text.contains("(unclosed")).unwrap() + 1;
+    let mut effects = rig.act("startRun");
+    (0..6).for_each(|_| {
+        effects.extend(rig.advance(100));
+        effects.extend(rig.rx("ok"));
+    });
+    let modal = pushed(&effects, "activateModal");
+    let message = modal.last().unwrap()["message"].as_str().unwrap().to_string();
+    assert!(message.starts_with(&format!("Line {line} has an unclosed comment")), "{message}");
+    assert_eq!(rig.machine.snapshot().gcode_index + 1, line, "Resume, and the Line readout, start from it");
+}
+
 /// Ported from test_ui_processor: position reports go out when the sled moves, with default power and feed.
 #[test]
 fn position_reports_are_sent_when_the_sled_moves() {
