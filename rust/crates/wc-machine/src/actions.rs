@@ -23,6 +23,10 @@ const NO_JOG_DISTANCE: &str = "Enter a jog distance that is a number other than 
 const ADJUST_Z_FIRST: &str = "The controller is waiting for Z to be adjusted by hand. Adjust it, then press Resume.";
 const GCODE_LOADING: &str = "Gcode is still loading. Start the job when the preview appears.";
 const CLEARED_Z_LIMIT_MM: i32 = 9999;
+const Z_ZERO_UNKNOWN: &str = "Z zero has not been set since the controller connected, so the bit did not move. Set it \
+                              with Set Z Zero Here or Touch Plate first.";
+const TOUCH_AGAIN: &str = "Lower the bit close to the work and press Touch Z again.";
+const ZERO_AGAIN: &str = "Press Go to Z0 again to lower the bit there.";
 /// Stop, Pause and the actions that send the controller nothing.
 const SAFE_WHILE_PROBING: [&str; 13] = [
     "stopRun",
@@ -40,10 +44,12 @@ const SAFE_WHILE_PROBING: [&str; 13] = [
     "boardClearBoard",
 ];
 /// Commands that reach the controller, so they need it connected.
-const MACHINE_COMMANDS: [&str; 21] = [
+const MACHINE_COMMANDS: [&str; 23] = [
     "move",
     "moveTo",
     "moveZ",
+    "zToZero",
+    "zToSafeHeight",
     "reportSettings",
     "home",
     "defineZ0",
@@ -64,7 +70,7 @@ const MACHINE_COMMANDS: [&str; 21] = [
     "definePark",
 ];
 /// Python's `MACHINE_COMMANDS`: the manual commands a firmware pause refuses or a jog's `~` releases.
-const MANUAL_COMMANDS: usize = 17;
+const MANUAL_COMMANDS: usize = 19;
 
 fn is_blank(value: &Value) -> bool {
     value.as_str() == Some("")
@@ -148,7 +154,9 @@ impl Machine {
                 self.queue(["G10 Z0 ".to_string()]);
                 None
             }
-            "touchZ" => self.touch_z_from_park().or_else(|| self.touch_z()),
+            "touchZ" => self.back_from_park(TOUCH_AGAIN).or_else(|| self.touch_z()),
+            "zToZero" => self.z_to_zero(),
+            "zToSafeHeight" => self.safe_height("raising the bit").map(|safe| self.queue_safe_height(safe)).err(),
             "reportSettings" => {
                 self.queue(["$$".to_string()]);
                 None
@@ -255,6 +263,16 @@ impl Machine {
         let units_z = Units::from_setting(&self.settings.text_or_empty("Computed Settings", "unitsZ"));
         self.queue(commands::move_z(&action.arg_text(), distance, self.units(), units_z));
         None
+    }
+
+    fn z_to_zero(&mut self) -> Option<String> {
+        if !self.bit.zero_known() {
+            return Some(Z_ZERO_UNKNOWN.into());
+        }
+        self.back_from_park(ZERO_AGAIN).or_else(|| {
+            self.queue([crate::park::units_line(self.units()).into(), "G90 ".into(), "G00 Z0 ".into()]);
+            None
+        })
     }
 
     fn home(&mut self) -> Option<String> {

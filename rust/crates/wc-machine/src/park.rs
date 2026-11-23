@@ -26,12 +26,15 @@ pub const NOT_SET: &str = "No park position is set. Press Set Park Here with the
 pub const TOOL_CHANGE: &str = "Cannot park while a tool change waits. Press Resume or STOP first.";
 pub const QUEUE_BUSY: &str = "The queue is between files. Wait for it, or press Stop.";
 pub const CONTROLLER_PAUSED: &str = "The controller is paused. Press Resume or STOP first.";
-pub const RETURNED: &str = "The sled went back to where the job was, at the safe height. Lower the bit close to the work \
-                            and press Touch Z again.";
+pub const RETURNED: &str = "The sled went back to where the job was, at the safe height.";
 const XY_UNKNOWN: &str = "Where the sled is is not known, so it could not come back.";
 const BUFFER_BUSY: &str = "Lines other than the tool change wait in the controller, and would run before the park.";
 pub const UNPLACED: &str =
     "The sled's position is not known yet. Wait for it to stop and the controller to report it, then try again.";
+
+pub(crate) fn units_line(units: Units) -> &'static str {
+    if units == Units::Inches { "G20 " } else { "G21 " }
+}
 
 /// The park position in mm, machine coordinates, when both settings hold a number.
 pub fn position(settings: &Settings) -> Option<Point> {
@@ -153,8 +156,8 @@ impl Machine {
         true
     }
 
-    /// Touch Z while parked goes back over the work first, so Z is never set on the surface at the park position.
-    pub(crate) fn touch_z_from_park(&mut self) -> Option<String> {
+    /// Touch Z or Go to Z0 while parked goes back over the work first: the bit never goes down at the park position.
+    pub(crate) fn back_from_park(&mut self, then: &str) -> Option<String> {
         let xy = self.park.return_to?;
         let safe_height_mm = match self.safe_height("returning to the work") {
             Ok(height) => height,
@@ -162,7 +165,7 @@ impl Machine {
         };
         self.park.return_to = None;
         self.queue_raised_travel(safe_height_mm, xy);
-        Some(RETURNED.into())
+        Some(format!("{RETURNED} {then}"))
     }
 
     pub(crate) fn park_when_finished(&mut self, trigger: Trigger) {
@@ -229,14 +232,18 @@ impl Machine {
         self.queue_raised_travel(lines.safe_height_mm, lines.xy);
     }
 
-    /// The units the move was converted to and G90, Z up as Home raises it, then a rapid to machine X and Y in mm.
+    /// Z up to the safe height, then a rapid to machine X and Y in mm.
     fn queue_raised_travel(&mut self, safe_height_mm: f64, xy_mm: [f64; 2]) {
-        let units = self.units();
-        let units_line = if units == Units::Inches { "G20 " } else { "G21 " };
-        self.queue([units_line.to_string(), "G90 ".into()]);
-        self.queue_raise(Raise::Manual { units, safe_height_mm });
+        self.queue_safe_height(safe_height_mm);
         let [x, y] = self.in_units(xy_mm);
         self.queue([format!("G00 X{x} Y{y} ")]);
+    }
+
+    /// The units line and G90, then Z up to the safe height as Home raises it.
+    pub(crate) fn queue_safe_height(&mut self, safe_height_mm: f64) {
+        let units = self.units();
+        self.queue([units_line(units).to_string(), "G90 ".into()]);
+        self.queue_raise(Raise::Manual { units, safe_height_mm });
     }
 
     /// X and Y in mm, written in the units WebControl is in.

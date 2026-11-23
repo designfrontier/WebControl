@@ -35,10 +35,12 @@ pub const ALWAYS: [&str; 10] = [
     "shutdown",
     "TurnOffRPI",
 ];
-pub const IDLE_OR_PAUSED: [&str; 21] = [
+pub const IDLE_OR_PAUSED: [&str; 23] = [
     "move",
     "moveTo",
     "moveZ",
+    "zToZero",
+    "zToSafeHeight",
     "setMaxZ",
     "setMinZ",
     "clearZ",
