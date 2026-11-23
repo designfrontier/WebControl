@@ -409,6 +409,10 @@ pub struct PacingSegment {
     pub median_short_gap_ms: Option<f64>,
     /// `"pacing change"`, `"job end"` or `"Stop"`; `None` while it runs.
     pub ended_by: Option<String>,
+    /// Wall-clock time since it started, pauses included.
+    pub wall_s: f64,
+    /// A running job's estimated time left, scaled by how its estimate compares with its time so far.
+    pub remaining_s: Option<f64>,
 }
 
 /// The line pacing and its statistics; pushed on every change and every 2 s during a job.
@@ -423,6 +427,8 @@ pub struct PacingStats {
     pub segment: Option<PacingSegment>,
     /// The latest ended segments since WebControl started, newest first.
     pub history: Vec<PacingSegment>,
+    /// The loaded file's estimated run time from its moves and feeds; `None` with no file.
+    pub estimate_s: Option<f64>,
 }
 
 impl Message for PacingStats {

@@ -44,6 +44,10 @@ export const pacingSegmentSchema = z.object({
   medianShortGapMs: z.number().nullable(),
   /** Null while it runs. */
   endedBy: z.enum(["pacing change", "job end", "Stop"]).nullable(),
+  /** Wall-clock time since it started, pauses included. */
+  wallS: z.number().optional(),
+  /** A running job's estimated time left, scaled by how its estimate compares with its time so far. */
+  remainingS: z.number().nullable().optional(),
 });
 export type PacingSegment = z.infer<typeof pacingSegmentSchema>;
 
@@ -56,6 +60,8 @@ export const pacingStatsSchema = z.object({
   segment: pacingSegmentSchema.nullable(),
   /** The latest ended segments since the backend started, newest first. */
   history: z.array(pacingSegmentSchema),
+  /** The loaded file's estimated run time from its moves and feeds; null with no file. */
+  estimateS: z.number().nullable().optional(),
 });
 export type PacingStats = z.infer<typeof pacingStatsSchema>;
 

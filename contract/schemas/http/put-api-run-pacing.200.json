@@ -81,6 +81,15 @@
                   "type": "null"
                 }
               ]
+            },
+            "wallS": {
+              "type": "number"
+            },
+            "remainingS": {
+              "type": [
+                "number",
+                "null"
+              ]
             }
           },
           "required": [
@@ -170,6 +179,15 @@
                 {
                   "type": "null"
                 }
+              ]
+            },
+            "wallS": {
+              "type": "number"
+            },
+            "remainingS": {
+              "type": [
+                "number",
+                "null"
               ]
             }
           },
@@ -261,6 +279,15 @@
                 "type": "null"
               }
             ]
+          },
+          "wallS": {
+            "type": "number"
+          },
+          "remainingS": {
+            "type": [
+              "number",
+              "null"
+            ]
           }
         },
         "required": [
@@ -278,6 +305,12 @@
           "endedBy"
         ]
       }
+    },
+    "estimateS": {
+      "type": [
+        "number",
+        "null"
+      ]
     }
   },
   "required": [
