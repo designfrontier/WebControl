@@ -1,6 +1,11 @@
 import { getJson, sendJson } from "../../api/http";
 import type { Fetch } from "../../api/http";
-import { controlButtonsUpdateSchema, settingsSectionSchema, themeUpdateSchema } from "../../protocol";
+import {
+  controlButtonsUpdateSchema,
+  pacingStatsSchema,
+  settingsSectionSchema,
+  themeUpdateSchema,
+} from "../../protocol";
 import type { ControlButton, SettingsSectionId, SettingsUpdate, ThemePreference } from "../../protocol";
 
 export const saveTheme = (fetchImpl: Fetch, theme: ThemePreference) =>
@@ -8,6 +13,9 @@ export const saveTheme = (fetchImpl: Fetch, theme: ThemePreference) =>
 
 export const saveControlButtons = (fetchImpl: Fetch, buttons: ControlButton[]) =>
   sendJson(fetchImpl, "PUT", "/display/controls", { buttons }, controlButtonsUpdateSchema);
+
+export const savePacingShown = (fetchImpl: Fetch, shown: boolean) =>
+  sendJson(fetchImpl, "PUT", "/run/pacing", { values: { linePacingStats: shown } }, pacingStatsSchema);
 
 export const getSettingsSection = (fetchImpl: Fetch, id: SettingsSectionId) =>
   getJson(fetchImpl, `/settings/${id}`, settingsSectionSchema);

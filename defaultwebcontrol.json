@@ -1148,6 +1148,15 @@
             "value": 50
         },
         {
+            "default": 0,
+            "desc": "Show the line pacing picker and its lines/min and lost-line stats in the run panel on every device. Changed in Settings > Display.\ndefault setting: disabled",
+            "key": "linePacingStats",
+            "section": "WebControl Settings",
+            "title": "Show line pacing",
+            "type": "bool",
+            "value": 0
+        },
+        {
             "default": "system",
             "desc": "Light or dark screens on every device showing WebControl. system follows each device's own light or dark setting.\ndefault setting: system",
             "key": "uiTheme",

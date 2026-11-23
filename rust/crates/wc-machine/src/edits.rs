@@ -179,11 +179,15 @@ impl Machine {
         let Some(section) = self.section_now("webcontrol") else {
             return Response::error(404, "Not found");
         };
-        let update = match SettingsUpdate::parse(body) {
+        let mut update = match SettingsUpdate::parse(body) {
             Ok(update) => update,
             Err(message) => return Response::error(400, &message),
         };
+        let show = update.values.remove(pacing::STATS_KEY);
         let mut errors = forms::errors(&section, &update.values, &self.ports);
+        if show.as_ref().is_some_and(|value| !value.is_boolean()) {
+            errors.insert(pacing::STATS_KEY.into(), Value::from("Expected true or false"));
+        }
         update.values.keys().filter(|key| ![pacing::MODE_KEY, pacing::GAP_KEY].contains(&key.as_str())).for_each(
             |key| {
                 errors.insert(key.clone(), Value::from("Not a line pacing setting"));
@@ -199,6 +203,9 @@ impl Machine {
                 settings.store(pacing::SECTION, &field.key, &forms::form_value(field, value));
             }
         });
+        if let Some(show) = show {
+            settings.store(pacing::SECTION, pacing::STATS_KEY, &show);
+        }
         self.pacing_observe(now, effects);
         Response::ok(200, &self.pacing_report(now))
     }

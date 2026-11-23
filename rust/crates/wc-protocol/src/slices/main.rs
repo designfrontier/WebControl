@@ -429,6 +429,8 @@ pub struct PacingStats {
     pub history: Vec<PacingSegment>,
     /// The loaded file's estimated run time from its moves and feeds; `None` with no file.
     pub estimate_s: Option<f64>,
+    /// The `linePacingStats` setting: whether the run panel shows the pacing.
+    pub show_stats: bool,
 }
 
 impl Message for PacingStats {

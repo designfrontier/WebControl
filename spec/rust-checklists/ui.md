@@ -82,8 +82,9 @@ On the iPad use Safari, and check each box in landscape and in portrait.
       press Resume at the M0, and let it run until it stops at the tool change (`T2 M6`). Leave it there for the boxes
       below.
 - [ ] Landscape: the menus and the status bar share one header row. Portrait: the header takes two rows.
-- [ ] The page does not scroll in either direction. Play, Resume and Stop, the "File:" line, the line pacing control,
-      the Job, Line and Complete readouts, the jog arrows and the Controller Messages are all in view at once.
+- [ ] The page does not scroll in either direction. Play, Resume and Stop, the "File:" line, the line pacing control
+      (when Settings ▸ Display shows it), the Job, Line and Complete readouts, the jog arrows and the Controller
+      Messages are all in view at once.
 - [ ] Every button is easy to hit with a finger (Playwright checks 44 px). No two controls overlap.
 - [ ] The viewer keeps a wide shape; in portrait it takes at most about 40% of the height.
 - [ ] Rotate the iPad while the job waits: the layout changes, nothing is lost, and the tool-change prompt is still

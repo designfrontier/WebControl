@@ -16,6 +16,8 @@ use crate::machine::{Effect, Machine, broadcast};
 pub const SECTION: &str = "WebControl Settings";
 pub const MODE_KEY: &str = "linePacingMode";
 pub const GAP_KEY: &str = "linePacingGapMs";
+/// Changed only through `PUT /api/run/pacing`, so it stays off the section forms.
+pub const STATS_KEY: &str = "linePacingStats";
 pub const MAX_GAP_MS: u64 = 500;
 pub const DEFAULT_GAP_MS: u64 = 50;
 /// Ended segments kept for the run panel's history.
@@ -100,6 +102,11 @@ impl Pacing {
             Mode::MinimumGap => !recent,
         }
     }
+}
+
+/// Whether the run panel shows the pacing; off unless the setting says otherwise.
+pub fn stats_shown(settings: &Settings) -> bool {
+    matches!(settings.value(SECTION, STATS_KEY), Some(v) if v == 1 || v == true)
 }
 
 /// One segment's or one job's counts.
@@ -243,6 +250,7 @@ struct Pending {
 #[derive(Debug, Clone)]
 pub(crate) struct Stats {
     pacing: Pacing,
+    show: bool,
     in_job: bool,
     job: Option<Tally>,
     segment: Option<Tally>,
@@ -261,9 +269,10 @@ pub(crate) struct Stats {
 }
 
 impl Stats {
-    pub fn new(pacing: Pacing) -> Stats {
+    pub fn new(pacing: Pacing, show: bool) -> Stats {
         Stats {
             pacing,
+            show,
             in_job: false,
             job: None,
             segment: None,
@@ -280,6 +289,7 @@ impl Stats {
                 segment: None,
                 history: Vec::new(),
                 estimate_s: None,
+                show_stats: show,
             }),
             estimate: Vec::new(),
         }
@@ -298,6 +308,7 @@ impl Stats {
             segment: self.segment.as_ref().map(|segment| segment.report(now, None, None)),
             history: self.history.iter().cloned().collect(),
             estimate_s: self.estimate.last().map(|&total| round(f64::from(total), 1.0)),
+            show_stats: self.show,
         }
     }
 
@@ -328,6 +339,11 @@ impl Machine {
         let pacing = Pacing::read(&self.settings);
         let in_job = self.job.flow.in_job();
         let file_line = self.index + 1;
+        let show = stats_shown(&self.settings);
+        if show != self.stats.show {
+            self.stats.show = show;
+            self.stats.dirty = true;
+        }
         if pacing != self.stats.pacing {
             let old = self.stats.pacing;
             self.stats.pacing = pacing;

@@ -119,9 +119,14 @@ const expectCommitShown = async (page: Page, size: string) => {
   await expect.poll(() => shownSoftware(page), { message: `build commit on ${size}` }).toContain(commit);
 };
 
+const showPacing = async (page: Page, shown: boolean) =>
+  expect(await page.request.put("/api/run/pacing", { data: { values: { linePacingStats: shown } } })).toBeOK();
+
 test("a job at its tool change fits every iPad without scrolling, with run, status and messages in view", async ({
   page,
 }) => {
+  // The worst case: the pacing control is hidden by default and only frees room.
+  await showPacing(page, true);
   await startJob(page);
   const run = page.getByRole("region", { name: "Run" });
   const readouts = page.getByRole("definition").locator("..");
@@ -166,6 +171,8 @@ test("a job at its tool change fits every iPad without scrolling, with run, stat
     expect(m.logSpare, `message log room on ${size}`).toBeGreaterThanOrEqual(SPARE_PX);
     if (!portrait) expect(m.controlsSpare, `controls room on ${size}`).toBeGreaterThanOrEqual(SPARE_PX);
   }, Promise.resolve());
+  await showPacing(page, false);
+  await expect(run.getByRole("group", { name: "Line pacing" })).toHaveCount(0);
 });
 
 test("Units and Set Home Here look enabled when idle", async ({ page }) => {

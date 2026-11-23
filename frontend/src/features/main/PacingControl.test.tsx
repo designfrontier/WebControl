@@ -28,6 +28,7 @@ const stats = (over: Partial<PacingStats> = {}): PacingStats => ({
   job: null,
   segment: null,
   history: [],
+  showStats: true,
   ...over,
 });
 
@@ -114,6 +115,21 @@ describe("PacingControl", () => {
     );
     expect(screen.getByLabelText("Pacing")).toHaveValue("min-25");
     expect(screen.getByRole("button", { name: /612 lines\/min/ })).toBeInTheDocument();
+  });
+
+  it("stays hidden until the setting shows it, on every page through the push", async () => {
+    const loads: number[] = [];
+    const hidden = () => {
+      loads.push(1);
+      return jsonResponse(stats({ showStats: undefined }));
+    };
+    const { socket } = renderWithProviders(<PacingControl />, { fetch: fakeFetch({ "/api/run/pacing": hidden }) });
+    await waitFor(() => expect(loads).toHaveLength(1));
+    expect(screen.queryByRole("group", { name: "Line pacing" })).not.toBeInTheDocument();
+    socket.serverMessage("pacingStats", stats());
+    expect(await screen.findByRole("group", { name: "Line pacing" })).toBeInTheDocument();
+    socket.serverMessage("pacingStats", stats({ showStats: false }));
+    expect(screen.queryByRole("group", { name: "Line pacing" })).not.toBeInTheDocument();
   });
 
   it("keeps a push that lands while the pacing is still loading", async () => {

@@ -170,7 +170,8 @@ async fn api_state_reports_the_settings_and_the_rust_backend() {
                 {"command": "macro4", "title": "Macro 4", "empty": true}],
             "backend": "rust", "version": wc_server::VERSION,
             "commit": wc_server::COMMIT, "experimental": [], "gcodeFile": null,
-            "pacing": {"mode": "v0.94", "gapMs": 50, "job": null, "segment": null, "history": [], "estimateS": null},
+            "pacing": {"mode": "v0.94", "gapMs": 50, "job": null, "segment": null, "history": [], "estimateS": null,
+                "showStats": false},
             "theme": "dark", "park": {"x": -250.0, "y": 100.5},
             "controlButtons": ["park", "zAxis", "setHome", "setPark"]})
     );

@@ -147,6 +147,32 @@ fn the_pacing_endpoint_works_during_a_job_where_the_settings_screens_are_locked(
     assert_eq!((response.body["mode"].clone(), response.body["gapMs"].clone()), (json!("minimum gap"), json!(25)));
 }
 
+#[test]
+fn the_pacing_is_hidden_until_shown_and_every_client_hears_the_change() {
+    let mut rig = Rig::connected();
+    let report = respond(&mut rig, Request::Pacing(json!({"values": {}}))).0;
+    assert_eq!(report.body["showStats"], false, "hidden by default");
+    let form = respond(&mut rig, Request::UpdateSettings { section: "webcontrol".into(), body: json!({"values": {}}) });
+    assert!(form.0.body["settings"].as_array().unwrap().iter().all(|field| field["key"] != "linePacingStats"));
+
+    let show = |rig: &mut Rig, value: Value| {
+        let (response, effects) = respond(rig, Request::Pacing(json!({"values": {"linePacingStats": value}})));
+        let checked = ResponseBody::Json(response.body.clone());
+        Contract::shared().validate_response("PUT", "/api/run/pacing", response.status, &checked).unwrap();
+        (response, effects)
+    };
+    let (response, _) = show(&mut rig, json!("yes"));
+    assert_eq!((response.status, &response.body["errors"]["linePacingStats"]), (400, &json!("Expected true or false")));
+    let (response, effects) = show(&mut rig, json!(true));
+    assert_eq!((response.status, &response.body["showStats"]), (200, &json!(true)));
+    assert_eq!((response.body["mode"].clone(), response.body["gapMs"].clone()), (json!("v0.94"), json!(50)));
+    let pushes = [effects, rig.advance(10)].concat();
+    assert_eq!(pushed(&pushes, "pacingStats").last().expect("pushed")["showStats"], true);
+    let stored = rig.machine.snapshot().settings.value("WebControl Settings", "linePacingStats").cloned();
+    assert_eq!(stored, Some(json!(1)));
+    assert_eq!(show(&mut rig, json!(false)).0.body["showStats"], false);
+}
+
 /// `PACING <LABEL WORDS> key=value ...` as a log reader would split it: every word after the label is a pair.
 fn parse(line: &str) -> (String, HashMap<String, String>) {
     let words: Vec<&str> = line.split(' ').collect();

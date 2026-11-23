@@ -4,6 +4,7 @@ import { useTheme } from "../../app/themePreference";
 import type { ThemePreference } from "../../protocol";
 import { saveTheme } from "./api";
 import { ControlButtonsSection } from "./ControlButtonsSection";
+import { PacingDisplaySection } from "./PacingDisplaySection";
 
 const THEMES: { value: ThemePreference; label: string }[] = [
   { value: "light", label: "Light" },
@@ -56,6 +57,7 @@ export const DisplaySection = () => {
         </p>
       )}
       <ControlButtonsSection />
+      <PacingDisplaySection />
     </div>
   );
 };

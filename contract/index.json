@@ -645,7 +645,7 @@
       "method": "PUT",
       "path": "/api/run/pacing",
       "family": "api",
-      "summary": "Change the line pacing, also during a job; it applies from the next line (Rust only)",
+      "summary": "Change the line pacing, also during a job; it applies from the next line. Also shows or hides it (Rust only)",
       "body": {
         "contentType": "application/json",
         "schema": "schemas/http/put-api-run-pacing.request.json"

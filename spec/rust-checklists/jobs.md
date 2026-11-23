@@ -190,8 +190,8 @@ clear of every clamp.
 - [ ] Pause once mid-side and Resume: the bit lifts, returns, lowers to 1 mm at the plunge feed, and carries on.
 - [ ] The cut is a closed 50 mm square, 1 mm deep, with no gouge at the pause point, no double cut and no missing
       segment. Measure it: ______ mm by ______ mm.
-- [ ] Router off. The run panel's pacing stats show the job's lines per minute and lost lines: note them for
-      `pacing.md`.
+- [ ] Router off. The run panel's pacing stats (shown from Settings ▸ Display) show the job's lines per minute and
+      lost lines: note them for `pacing.md`.
 
 Report as the README says.
 

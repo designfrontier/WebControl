@@ -17,12 +17,11 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 500
+        },
+        "linePacingStats": {
+          "type": "boolean"
         }
-      },
-      "required": [
-        "linePacingMode",
-        "linePacingGapMs"
-      ]
+      }
     }
   },
   "required": [
