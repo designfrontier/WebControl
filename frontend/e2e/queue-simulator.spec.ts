@@ -107,6 +107,8 @@ test("queued files run back to back, pausing only for a bit the files show to di
   await shoot(page, "control-cutting", page.getByRole("region", { name: "Job queue" }));
 
   await expect.poll(async () => (await queueState(request)).step, { timeout: 60_000 }).toBe("toolChange");
+  // The prompt arrives over the socket after the queue's step changes, and would cover Stop.
+  await expect(prompt(page, 2)).toBeVisible({ timeout: 20_000 });
   await closeServerDialogs(page);
   await page.locator(".run-buttons").getByRole("button", { name: "Stop", exact: true }).click();
   const summary = page.getByRole("region", { name: "Job queue" });
