@@ -40,7 +40,9 @@ The Z-Axis controls (and the control button slots) have two buttons that move on
   Park do. A bit already above the safe height stays where it is.
 
 Both send the units line and `G90` first. They run when Raise and Lower do: not while a job runs, but while it is
-paused or a tool change waits. At a tool change parked by Park for Tool Changes, Go to Z0 first takes the sled back
+paused or a tool change waits. As Raise and Lower, they are refused while anything but the line the controller paused
+on waits in it (job lines, a jog pressed just before, or a move on the tool change's own line), since releasing the
+pause would run those first. At a tool change parked by Park for Tool Changes, Go to Z0 first takes the sled back
 over the work at the safe height, as Touch Z does; press it again to lower the bit there.
 
 ## Macros

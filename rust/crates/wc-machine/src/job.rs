@@ -7,7 +7,7 @@ use std::time::Duration;
 use serde_json::Value;
 use wc_config::python_float;
 use wc_firmware::settings::reinitialises_axes;
-use wc_gcode::firmware_gcode::{only_selects_tool, pauses_firmware, tool_change_line};
+use wc_gcode::firmware_gcode::{only_pauses, only_selects_tool, pauses_firmware, tool_change_line};
 use wc_gcode::position::{Position, line_target, word};
 use wc_gcode::restart::{GcodeState, Options, Restart, continue_arc, sequence, state_at};
 use wc_gcode::sanitise::{LineProblem, problem_with, sanitise};
@@ -189,6 +189,13 @@ impl Machine {
         self.job.flow = Flow::Idle;
         self.job.arc_after_restart = None;
         self.index = 0;
+    }
+
+    /// A `~` runs whatever the controller holds or WebControl queued first, so only the line it paused on may wait.
+    pub(crate) fn lines_behind_pause(&self) -> bool {
+        self.job.holds_job_lines
+            || !self.controller.queue.is_empty()
+            || !self.controller.accounting.texts().all(only_pauses)
     }
 
     pub(crate) fn release_firmware(&mut self, now: Duration, effects: &mut Vec<Effect>) {

@@ -8,11 +8,8 @@ use serde_json::Value;
 use wc_config::{Settings, python_float, python_float_str};
 use wc_protocol::main::{ParkPositionMessage, Point, Units};
 
-use wc_gcode::firmware_gcode::{changes_tool, without_tool_change};
-
 use crate::clearance::Raise;
 use crate::commands::round4;
-use crate::job::blank;
 use crate::machine::{Effect, Machine, alert, broadcast};
 use crate::pacing::announce;
 
@@ -133,13 +130,8 @@ impl Machine {
         }
     }
 
-    /// The `~` runs whatever the controller holds or WebControl queued before the park, so only the bare M6 may wait.
     fn tool_change_buffer_refusal(&self) -> Option<String> {
-        let only_the_change = |text: &str| changes_tool(text) && blank(&without_tool_change(text));
-        let busy = self.job.holds_job_lines
-            || !self.controller.queue.is_empty()
-            || !self.controller.accounting.texts().all(only_the_change);
-        busy.then(|| BUFFER_BUSY.to_string())
+        self.lines_behind_pause().then(|| BUFFER_BUSY.to_string())
     }
 
     /// Resume must be able to bring the sled back: a job returns to its line, the queue to where the sled was.

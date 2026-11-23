@@ -17,7 +17,7 @@ use crate::machine::{Effect, Link, Machine, alert, broadcast};
 pub(crate) const PROBING: &str = "Wait for Touch Z to finish or press Stop";
 const NOT_CONNECTED: &str = "The controller is not connected.";
 const Z_LIMITS_UNSUPPORTED: &str = "Z-axis limits need holey firmware 51.292 or later.";
-const JOB_LINES_HELD: &str = "The controller paused with lines of the job still in its buffer, which would run before \
+const JOB_LINES_HELD: &str = "The controller paused with other lines waiting behind the pause, which would run before \
                               this move. Press Resume or STOP first.";
 const NO_JOG_DISTANCE: &str = "Enter a jog distance that is a number other than zero.";
 const ADJUST_Z_FIRST: &str = "The controller is waiting for Z to be adjusted by hand. Adjust it, then press Resume.";
@@ -101,7 +101,7 @@ impl Machine {
         let machine_command = MACHINE_COMMANDS.contains(&command);
         let manual_command = MACHINE_COMMANDS[..MANUAL_COMMANDS].contains(&command);
         if manual_command && self.job.firmware_paused && self.job.flow != Flow::Streaming {
-            if self.job.holds_job_lines {
+            if self.lines_behind_pause() {
                 return effects.push(alert(JOB_LINES_HELD));
             }
             // A `~` here would tell the firmware Z was adjusted by hand ($16=0) and carry on with the line.
@@ -123,10 +123,6 @@ impl Machine {
         }
         if machine_command && !matches!(self.link, Link::Connected { .. }) {
             return effects.push(alert(NOT_CONNECTED));
-        }
-        if manual_command && self.job.firmware_paused {
-            // Streaming stays held, so releasing the firmware lets the jog run now instead of on Resume.
-            self.release_firmware(now, effects);
         }
         let failure = match command {
             "stopRun" => self.stop_run(now, effects),
@@ -208,6 +204,10 @@ impl Machine {
             _ if crate::optical::COMMANDS.contains(&command) => self.optical_action(command, now, effects),
             _ => Some(format!("Function not currently implemented.. Sorry.[{command}]")),
         };
+        if manual_command && self.job.firmware_paused && !self.controller.queue.is_empty() {
+            // Streaming stays held, so releasing the firmware lets the jog run now instead of on Resume.
+            self.release_firmware(now, effects);
+        }
         if let Some(text) = failure {
             effects.push(alert(&text));
         }
