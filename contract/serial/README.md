@@ -690,5 +690,6 @@ Where the Rust backend writes something different from Python by owner decision.
     commanded (or the last status report), is not written: a file line pauses the job before it (`Line Beyond Z
     Limit`), a command is dropped with an alert, and so is everything queued after it, with `G90 ` written if a dropped
     line would have restored it. A Z WebControl cannot follow is left to the firmware. After a G10, a touch or a manual
-    Z adjust (which move the limits by an amount only the firmware knows) the mirror is cleared and `B20 ` queued.
-    Touch Z probes no deeper than the lower limit. Transcript: `z_lower_limit_pauses_the_job`.
+    Z adjust (which move the limits by an amount only the firmware knows) the mirror is cleared and `B20 ` written
+    next, and a job streams nothing more until it is acked. Replies printed to 2 decimals are trusted to within half
+    a printed unit. A probe is not checked: the firmware stops it at the lower limit and it misses. Transcript: `z_lower_limit_pauses_the_job`.
