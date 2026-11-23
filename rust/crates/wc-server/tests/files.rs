@@ -97,6 +97,25 @@ async fn a_directory_that_cannot_be_made_is_a_server_error() {
     assert_eq!(reply.status, StatusCode::INTERNAL_SERVER_ERROR);
 }
 
+/// Upstream #51: View/Edit G-code line N, Go to line N (which sends N - 1) and the Line readout are the same line.
+#[tokio::test]
+async fn go_to_line_n_shows_the_editors_line_n() {
+    let server = Server::new();
+    server.write("gcode/numbered.nc", "\u{feff}(header)\r\n\r\nG21\n\n\n; note\nG0 X1\n\n(cut)\nG1 X2\nG1 X3\n");
+    server.post_form("/openGCode", &[Part::Field("selectedGCode", "numbered.nc")]).await;
+    let editor = server.get("/api/files/gcode/text").await.json()["text"].as_str().unwrap().to_string();
+    for (at, text) in editor.lines().enumerate() {
+        let line = at + 1;
+        server.act("moveGcodeGoto", json!(line - 1));
+        server.settle().await;
+        let shown = server.get("/api/main").await.json()["gcode"].clone();
+        assert_eq!(
+            (shown["lineIndex"].as_u64().unwrap() as usize + 1, shown["line"].as_str().unwrap().trim_end()),
+            (line, text.trim_end())
+        );
+    }
+}
+
 #[tokio::test]
 async fn opening_a_listed_file_loads_it_and_names_where_it_came_from() {
     let server = Server::new();
