@@ -675,8 +675,9 @@ Where the Rust backend writes something different from Python by owner decision.
     the bed, an alarm, a missed restart) writes nothing, logs `PARK SKIPPED` and alerts. Transcript:
     `park_after_a_file_finishes`. With Park for Tool Changes on (`parkForToolChange`, off by default), a job's tool
     change, once the firmware has paused for it, gets `~` (as a jog does) and the same park lines, the prompt still up;
-    Resume returns to the line at safe height as after a jog. The queue's bit change between files parks too; Resume,
-    or Touch Z, first raises Z and rapids back to where the sled was (Touch Z then needs pressing again to probe). An
+    Resume returns to the line at safe height as after a jog. The queue's bit change between files parks too; Resume
+    first raises Z and rapids back to where the sled was. Touch Z while parked, for a job's tool change or the queue's,
+    raises Z and rapids back over the work instead of probing at the park position; pressed again, it probes. An
     alarm, a missed restart, no park position, a line Resume could not return to, or anything but the bare M6 waiting
     in the controller or WebControl's queue (job lines buffered behind it, a queued jog, an M6 line that moves on after
     its M6), all of which the `~` would run before the park, leaves the prompt where it is, with no `~`, an alert and

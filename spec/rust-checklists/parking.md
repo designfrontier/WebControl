@@ -50,6 +50,8 @@ switched off at its own switch, the bit removed, Z zeroed 30 mm above the work, 
       At the tool change the sled rises and goes to the park position (`PARK START trigger=tool_change`); the prompt
       stays up.
 - [ ] Press **Resume**: the sled goes back to X30 Y0 at the safe height, then the file goes on; at its end it parks.
+- [ ] Play it again; at the parked prompt close the prompt and press **Touch Z**: the sled goes back to X30 Y0 at the
+      safe height and does not probe; lower the bit, **Touch Z** again probes there; **Resume** goes on.
 - [ ] Play it again and press **Stop** at the parked prompt: Z stays up, nothing else moves.
 - [ ] Queue `park-a.nc` and `park-tool.nc` with tool 1 fitted: between them the sled parks; **Touch Z** takes it
       back over the work without probing; lower the bit, **Touch Z** again probes; **Resume** starts the next file.

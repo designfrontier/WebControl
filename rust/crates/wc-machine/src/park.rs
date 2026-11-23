@@ -71,7 +71,7 @@ pub(crate) struct Park {
     pending: Option<Trigger>,
     /// A tool change prompted; it parks once the firmware has paused for it.
     tool_change_asked: bool,
-    /// Parked for a tool change between queued files: where the sled was, in mm, to go back to.
+    /// Parked for a tool change: where the sled was, in mm, which Touch Z goes back to before it probes.
     return_to: Option<[f64; 2]>,
     shown: Option<Point>,
 }
@@ -118,7 +118,7 @@ impl Machine {
                         // Streaming stays held; the firmware runs the park now, as it runs a jog.
                         self.release_firmware(now, effects);
                     }
-                    self.park.return_to = from.filter(|_| !self.job.flow.in_job());
+                    self.park.return_to = from;
                     self.queue_park_lines(lines, effects);
                 })
             },
@@ -141,7 +141,7 @@ impl Machine {
 
     /// Resume must be able to bring the sled back: a job returns to its line, the queue to where the sled was.
     fn tool_change_return_refusal(&self) -> Option<String> {
-        let back = if self.job.flow.in_job() { self.can_return_to_line() } else { self.sled.xy_mm().is_some() };
+        let back = self.sled.xy_mm().is_some() && (!self.job.flow.in_job() || self.can_return_to_line());
         (!back).then(|| XY_UNKNOWN.to_string())
     }
 
@@ -153,7 +153,7 @@ impl Machine {
         true
     }
 
-    /// Touch Z while parked between queued files goes back to the work first, and probes only when pressed again.
+    /// Touch Z while parked goes back over the work first, so Z is never set on the surface at the park position.
     pub(crate) fn touch_z_from_park(&mut self) -> Option<String> {
         let xy = self.park.return_to?;
         let safe_height_mm = match self.safe_height("returning to the work") {

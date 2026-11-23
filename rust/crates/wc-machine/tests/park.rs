@@ -446,3 +446,25 @@ fn a_tool_change_line_that_moves_after_its_m6_does_not_park() {
     assert!(written(&effects).is_empty(), "{:?}", written(&effects));
     assert_eq!(logged(&effects, "PARK SKIPPED").len(), 1);
 }
+
+#[test]
+fn touch_z_at_a_parked_job_tool_change_goes_back_over_the_work_before_it_probes() {
+    let touch = [("Advanced Settings", "homeX", json!("100")), ("Advanced Settings", "touchPlate", json!(1))];
+    let mut rig = parks_for_tool_changes(&touch);
+    at_the_tool_change(&mut rig);
+    rig.act("touchZ");
+    assert_eq!(rig.run_to_quiet(), ["G21", "G90", "G00 Z5.0", "G00 X120.0 Y10.0"], "no probe at the park position");
+    let probe = [written(&rig.act("touchZ")), written(&rig.advance(100))].concat();
+    assert!(probe.len() == 1 && probe[0].contains("G38.2"), "the second press probes over the work: {probe:?}");
+    rig.rx("z axis zeroed");
+    rig.rx("ok");
+    rig.clear_written();
+    rig.act("resumeRun");
+    let sent = rig.run_to_quiet();
+    assert_eq!(
+        sent[..5],
+        ["~", "G21", "G90", "G0 Z5.0", "G0 X120.0 Y10.0"],
+        "Resume rises before it returns: {sent:?}"
+    );
+    assert!(!sent.iter().take_while(|line| !line.contains("X140")).any(|line| line.contains("Z-")), "{sent:?}");
+}

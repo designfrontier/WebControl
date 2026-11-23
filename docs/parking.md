@@ -62,9 +62,10 @@ Turn on **Settings ▸ Maslow ▸ Park for Tool Changes** to change bits at the 
   tool change.
 - **A bit change between queued files**: the sled parks the same way. **Resume** raises Z and takes the sled back to
   where the last file ended before the next file starts.
-- **Touch Z** at a parked bit change between queued files first takes the sled back over the work at the safe
-  height, without probing. Lower the bit close to the work and press **Touch Z** again. During a file's tool change,
-  set Z after Resume if the surface at the park position is not the same height as the work.
+- **Touch Z** while parked for either kind of bit change first raises Z and takes the sled back over the work, where it
+  was when it parked, without probing. Lower the bit close to the work and press **Touch Z** again to probe there. Set
+  Z over the work, never at the park position: the surface there is not the work's, and Resume goes straight on
+  cutting.
 
 If the sled cannot park (an alarm, a controller that did not restart, no park position, a line WebControl could not
 return to, or other lines waiting in the controller behind the tool change, such as a jog pressed just before it), the prompt shows where the sled is, an alert says why, and the log shows `PARK SKIPPED
