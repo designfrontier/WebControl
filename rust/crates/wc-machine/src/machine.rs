@@ -226,6 +226,7 @@ pub struct Snapshot {
     /// The line pacing and its statistics as last pushed.
     pub pacing: Shared<wc_protocol::main::PacingStats>,
     pub queue: Shared<wc_protocol::queue::JobQueue>,
+    pub led_status: crate::gpio::Status,
 }
 
 impl Snapshot {
@@ -648,6 +649,7 @@ impl Machine {
             optical: Shared(self.optical.view()),
             pacing: Shared(self.stats.shown.clone()),
             queue: Shared(self.queue.shown.clone()),
+            led_status: self.led_status(),
         }
     }
 }

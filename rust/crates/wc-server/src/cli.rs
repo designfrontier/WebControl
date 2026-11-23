@@ -173,13 +173,16 @@ pub fn true_sled_position(sim: Arc<Mutex<Sim>>, machine: MachineHandle) -> SledP
     })
 }
 
-/// The buttons and LEDs `GPIO Settings` names; a press reaches the machine as the UI's action would.
+/// The buttons and LEDs `GPIO Settings` names; a press reaches the machine as the UI's action would, and the status
+/// LED follows the machine.
 fn start_gpio(machine: &MachineHandle) -> Gpio {
     let plan = Plan::from_settings(&machine.snapshot().settings);
     let presses = machine.clone();
     let started = std::time::Instant::now();
     let press = Arc::new(move |button| presses.send(Event::Button(button)));
-    Gpio::start(&plan, crate::gpio::open(), press, Arc::new(move || started.elapsed()))
+    let mut gpio = Gpio::start(&plan, crate::gpio::open(), press, Arc::new(move || started.elapsed()));
+    gpio.follow(machine.watch());
+    gpio
 }
 
 async fn terminated() {

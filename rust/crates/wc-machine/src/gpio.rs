@@ -1,10 +1,17 @@
 //! GPIO buttons and status LEDs (`Actions/gpioActions.py`). `GPIO Settings` names each pin's job; a press becomes
-//! the action the UI would send and goes through the machine's gates, and the LEDs follow Play, Pause and Stop.
+//! the action the UI would send and goes through the machine's gates, and the LEDs follow Play, Pause and Stop. A
+//! status LED blinks a pattern for the machine's state.
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use tokio::sync::watch;
+use tokio::task::JoinHandle;
+use tokio::time::Instant;
 use wc_config::Settings;
+
+use crate::job::Flow;
+use crate::machine::{Link, Machine, Snapshot};
 
 /// gpiozero's `bounce_time`: edges this soon after an accepted press are contact bounce.
 pub const BOUNCE: Duration = Duration::from_millis(100);
@@ -102,11 +109,78 @@ impl Leds {
     }
 }
 
+/// What the status LED shows, most urgent first: when several hold, the first wins.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Status {
+    /// An alarm hold, including the firmware's position errors.
+    Alarm,
+    Disconnected,
+    /// Pause, an M0, a tool change or a manual Z prompt.
+    Paused,
+    Running,
+    Idle,
+}
+
+impl Status {
+    /// Alternating on and off times in ms, from the moment the state began; none is steady on.
+    fn blinks(self) -> &'static [u64] {
+        match self {
+            Status::Alarm => &[50, 50],
+            Status::Disconnected => &[150, 150, 150, 1050],
+            Status::Paused => &[250, 250],
+            Status::Running => &[1000, 1000],
+            Status::Idle => &[],
+        }
+    }
+
+    /// Whether the LED is lit `elapsed` into this state, and for how much longer.
+    pub fn level(self, elapsed: Duration) -> (bool, Option<Duration>) {
+        let blinks = self.blinks();
+        let period: u64 = blinks.iter().sum();
+        if period == 0 {
+            return (true, None);
+        }
+        let at = u64::try_from(elapsed.as_millis() % u128::from(period)).unwrap_or_default();
+        let ends = blinks.iter().scan(0, |end, ms| {
+            *end += ms;
+            Some(*end)
+        });
+        let (index, end) = ends.enumerate().find(|&(_, end)| at < end).unwrap_or((0, period));
+        (index % 2 == 0, Some(Duration::from_millis(end - at)))
+    }
+
+    /// `StatusLED` drives the pin high to light it, `StatusLED Active Low` low.
+    pub fn active_low(text: &str) -> Option<bool> {
+        match text {
+            "StatusLED" => Some(false),
+            "StatusLED Active Low" => Some(true),
+            _ => None,
+        }
+    }
+}
+
+impl Machine {
+    pub(crate) fn led_status(&self) -> Status {
+        let job = &self.job;
+        match () {
+            _ if self.alarm_held() => Status::Alarm,
+            _ if !matches!(self.link, Link::Connected { .. }) => Status::Disconnected,
+            _ if job.firmware_paused || job.manual_z.is_some() || matches!(job.flow, Flow::Paused | Flow::Held) => {
+                Status::Paused
+            }
+            _ if job.flow.in_job() => Status::Running,
+            _ => Status::Idle,
+        }
+    }
+}
+
 /// What `GPIO Settings` asks of each pin.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Plan {
     pub buttons: Vec<(u8, Button)>,
     pub leds: Vec<(u8, Led)>,
+    /// Status LED pins, each with whether it is active low.
+    pub status: Vec<(u8, bool)>,
     /// Pins set to something that is neither, such as `Spindle On`, which Python leaves unconfigured too.
     pub unsupported: Vec<(u8, String)>,
 }
@@ -116,10 +190,11 @@ impl Plan {
         let mut plan = Plan::default();
         (FIRST_PIN..=LAST_PIN).for_each(|pin| {
             let value = settings.text_or_empty("GPIO Settings", &format!("gpio{pin}"));
-            match (Button::from_setting(&value), Led::from_setting(&value)) {
+            match (Button::from_setting(&value), Led::from_setting(&value), Status::active_low(&value)) {
                 _ if value.is_empty() => {}
-                (Some(button), _) => plan.buttons.push((pin, button)),
-                (_, Some(led)) => plan.leds.push((pin, led)),
+                (Some(button), _, _) => plan.buttons.push((pin, button)),
+                (_, Some(led), _) => plan.leds.push((pin, led)),
+                (_, _, Some(low)) => plan.status.push((pin, low)),
                 _ => plan.unsupported.push((pin, value)),
             }
         });
@@ -172,10 +247,61 @@ impl Pins for NoPins {
     }
 }
 
+/// The status LED pins; once stopped they stay dark.
+#[derive(Default)]
+struct StatusPins {
+    pins: Vec<(Box<dyn LedPin>, bool)>,
+    lit: Option<bool>,
+    stopped: bool,
+}
+
+impl StatusPins {
+    fn light(&mut self, on: bool) {
+        if self.stopped || self.lit == Some(on) {
+            return;
+        }
+        self.lit = Some(on);
+        self.pins.iter_mut().for_each(|(pin, low)| pin.set(on != *low));
+    }
+
+    fn stop(&mut self) {
+        self.light(false);
+        self.stopped = true;
+    }
+}
+
+/// Blinks the status LED for the machine's state until the machine ends; each new state starts its pattern afresh.
+async fn blink(pins: Arc<Mutex<StatusPins>>, mut snapshots: watch::Receiver<Snapshot>) {
+    let mut showing: Option<(Status, Instant)> = None;
+    loop {
+        let status = snapshots.borrow_and_update().led_status;
+        let since = match showing {
+            Some((shown, since)) if shown == status => since,
+            _ => Instant::now(),
+        };
+        showing = Some((status, since));
+        let (on, left) = status.level(since.elapsed());
+        pins.lock().expect("status LED lock").light(on);
+        let next = async {
+            match left {
+                Some(left) => tokio::time::sleep(left).await,
+                None => std::future::pending().await,
+            }
+        };
+        tokio::select! {
+            changed = snapshots.changed() => if changed.is_err() { break },
+            () = next => {}
+        }
+    }
+    pins.lock().expect("status LED lock").stop();
+}
+
 /// The configured pins, kept open for as long as this lives.
 pub struct Gpio {
     _pins: Box<dyn Pins>,
     leds: Vec<(Led, Box<dyn LedPin>)>,
+    status: Arc<Mutex<StatusPins>>,
+    blinker: Option<JoinHandle<()>>,
 }
 
 pub type Clock = Arc<dyn Fn() -> Duration + Send + Sync>;
@@ -205,10 +331,34 @@ impl Gpio {
                 opened.ok().map(|output| (led, output))
             })
             .collect();
-        Gpio { _pins: pins, leds }
+        let status = plan
+            .status
+            .iter()
+            .filter_map(|&(pin, low)| {
+                let opened = pins.led(pin).inspect_err(|error| tracing::warn!(pin, error, "no GPIO status LED"));
+                opened.ok().map(|output| (output, low))
+            })
+            .collect();
+        let status = Arc::new(Mutex::new(StatusPins { pins: status, ..StatusPins::default() }));
+        status.lock().expect("status LED lock").light(false);
+        Gpio { _pins: pins, leds, status, blinker: None }
+    }
+
+    /// Starts blinking the status LED, if there is one, on the current tokio runtime.
+    pub fn follow(&mut self, snapshots: watch::Receiver<Snapshot>) {
+        if !self.status.lock().expect("status LED lock").pins.is_empty() {
+            self.blinker = Some(tokio::spawn(blink(self.status.clone(), snapshots)));
+        }
     }
 
     pub fn show(&mut self, leds: Leds) {
         self.leds.iter_mut().for_each(|(led, output)| output.set(leds.is_on(*led)));
+    }
+}
+
+impl Drop for Gpio {
+    fn drop(&mut self) {
+        self.blinker.take().into_iter().for_each(|blinker| blinker.abort());
+        self.status.lock().unwrap_or_else(std::sync::PoisonError::into_inner).stop();
     }
 }
