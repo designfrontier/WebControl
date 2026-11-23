@@ -9,7 +9,7 @@ use wc_firmware::boot::{
 use wc_firmware::settings::{Sync, reinitialises_axes, sync_reported};
 use wc_firmware::{Reply, classify, split_glued};
 use wc_gcode::firmware_gcode::{only_selects_tool, tool_change_line};
-use wc_gcode::sanitise::{problem_with, sanitise};
+use wc_gcode::sanitise::{LineProblem, problem_with, sanitise};
 use wc_gcode::shift::positioning_set_by;
 use wc_protocol::main::{ActivateModal, Alarm, ControllerMessage, PauseButton, Units};
 
@@ -196,6 +196,7 @@ impl Machine {
         {
             probe.zeroed = true;
         }
+        self.z_limit_line(line);
         if line == "position loaded at:" {
             self.controller.stop_reload = false;
         }
@@ -238,6 +239,7 @@ impl Machine {
         self.probing = false;
         if ok && probe.zeroed {
             self.bit.zeroed();
+            self.z_zero_changed();
         } else {
             self.bit.lost();
         }
@@ -322,6 +324,7 @@ impl Machine {
         let body = text.get(9..).unwrap_or_default();
         if text.contains("adjust Z-Axis") {
             self.manual_z_prompt();
+            self.z_zero_changed();
             effects.push(broadcast(&ActivateModal::notification(body, true)));
         } else if text.contains("Unable to find valid") {
             // Setting the sprockets to zero reports a zero chain length, which is expected.
@@ -334,6 +337,7 @@ impl Machine {
     }
 
     fn reported_setting(&mut self, line: &str, key: u32, value: f64, effects: &mut Vec<Effect>) {
+        self.z_limit_setting(key, value);
         if self.controller.queue.contains(&Queued::SettingsSync) {
             self.controller.reported.push((key, value));
             return self.upgrade_setting(line, None);
@@ -410,6 +414,7 @@ impl Machine {
         if let Some(mode) = positioning_set_by(&message) {
             self.positioning = mode;
         }
+        self.follow_z_rename(text);
         self.bit.written(text);
         self.sled.written(text);
         let setting = text.strip_prefix('$').and_then(|setting| setting.split_once('='));
@@ -449,6 +454,7 @@ impl Machine {
         self.job.flow == Flow::Streaming
             && !self.alarm_held()
             && !self.probing
+            && !self.z_limits_awaited()
             && !self.gcode.is_empty()
             && self.controller.queue.is_empty()
             && self.may_write(now)
@@ -525,13 +531,19 @@ impl Machine {
         }
         let command = format!("{command} ");
         let to_send = tool_change_line(&command, self.job.next_tool, self.job.tool).line;
-        let checked = self.sled.convert(&to_send, [0.0; 2]).and_then(|line| problem_with(&line).map_or(Ok(line), Err));
+        let checked = self
+            .sled
+            .convert(&to_send, [0.0; 2])
+            .and_then(|line| problem_with(&line).or_else(|| self.z_limit_problem(&line)).map_or(Ok(line), Err));
         let to_send = match checked {
             Ok(line) => line,
             Err(problem) => {
                 let reason = format!("That command {}", problem.reason());
                 effects.push(broadcast(&ActivateModal::titled_alert(&format!("Command {}", problem.title()), &reason)));
                 self.probing = self.probing && !command.contains("G38.2");
+                if matches!(problem, LineProblem::ZLimit { .. }) {
+                    self.drop_after_z_refusal(effects);
+                }
                 return false;
             }
         };

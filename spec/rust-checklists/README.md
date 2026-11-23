@@ -39,6 +39,7 @@ numbers, or the transcripts CI replays.
 | Job queue: files back to back, bit checks and the override, stops, Continue, restarts | [`queue.md`](queue.md) | Yes: an air cut |
 | The tool library, a file's tools at a tool change | [`tools.md`](tools.md) | Yes: an air cut |
 | Parking: Set Park Here, Park, the park after a file or a queue, the refusals | [`parking.md`](parking.md) | Yes: an air cut |
+| Z travel limits (51.292): refusals, Define Z0 and Touch Z leaving them in place, a job paused before a line | [`z-limits.md`](z-limits.md) | Yes: Z only |
 | Lost-line recovery | [`pacing.md`](pacing.md) 1 | Yes: an air cut |
 | Line pacing: presets, custom, mid-job changes, run-panel stats, `PACING` log lines | [`pacing.md`](pacing.md) 2-4 | Yes: an air cut |
 | Holey and triangular calibration, the test pattern, computed sled position | [`calibration.md`](calibration.md) | Yes: the pattern, in the air |

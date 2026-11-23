@@ -4,7 +4,7 @@
 use std::time::Duration;
 
 use wc_config::{python_float_str, python_str};
-use wc_gcode::commanded_z::{CommandedZ, defines_z};
+use wc_gcode::commanded_z::{CommandedZ, ZChange, defines_z};
 use wc_gcode::restart::{GcodeState, Options, round_up, sequence};
 use wc_protocol::float;
 use wc_protocol::main::{ActivateModal, PauseButton, Units};
@@ -47,12 +47,23 @@ impl BitHeight {
         self.zero_known
     }
 
+    /// The commanded Z, or else the report: a relative move from an unknown height starts at the report.
+    fn starting_here(&self) -> CommandedZ {
+        let mut commanded = self.commanded.clone();
+        if commanded.z_mm().is_none() {
+            commanded.set_z_mm(self.reported_mm);
+        }
+        commanded
+    }
+
+    /// What `line`, written next, does to the bit's Z.
+    pub fn change(&self, line: &str) -> ZChange {
+        self.starting_here().change(line)
+    }
+
     pub fn written(&mut self, line: &str) {
         self.zero_known |= defines_z(line);
-        if self.commanded.z_mm().is_none() {
-            // A relative move from an unknown height starts at the report, an upper bound.
-            self.commanded.set_z_mm(self.reported_mm);
-        }
+        self.commanded = self.starting_here();
         if self.commanded.written(line) {
             self.reported_mm = None;
             self.moving = true;
@@ -82,6 +93,11 @@ impl BitHeight {
         self.zero_known = true;
         self.commanded.set_z_mm(Some(0.0));
         self.reported_mm = None;
+    }
+
+    /// The units the controller was last told, which it prints its Z limits in.
+    pub fn units(&self) -> Option<Units> {
+        self.commanded.units()
     }
 }
 

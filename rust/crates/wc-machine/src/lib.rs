@@ -29,6 +29,7 @@ mod sync;
 mod ui;
 mod upgrade;
 mod work;
+mod zlimits;
 
 pub use camera::CameraReport;
 pub use edits::{Request, Response};
