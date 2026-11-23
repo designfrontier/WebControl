@@ -3,7 +3,7 @@
 
 mod rig;
 
-use rig::{Rig, alerts, pushed, settings};
+use rig::{Rig, alerts, pushed, settings, written};
 use serde_json::{Value, json};
 use wc_machine::{Effect, Event, Request};
 
@@ -376,4 +376,73 @@ fn stop_at_a_parked_tool_change_leaves_z_up() {
     let sent = rig.run_to_quiet();
     assert!(sent.iter().all(|line| !line.starts_with("G00 Z") && !line.starts_with("G0 Z")), "{sent:?}");
     assert!(!rig.machine.snapshot().job_in_progress);
+}
+
+/// Streams `file`, answering each line before the M6; the M6 and what follows wait for the firmware's `~`.
+fn to_an_unanswered_tool_change(rig: &mut Rig, file: &str) -> Vec<String> {
+    let mut pending = written(&play(rig, file));
+    let mut sent = Vec::new();
+    loop {
+        if pending.is_empty() {
+            pending = written(&rig.advance(100));
+        }
+        if pending.is_empty() {
+            return sent;
+        }
+        let line = pending.remove(0);
+        if !line.contains("M6") && !sent.iter().any(|sent: &String| sent.contains("M6")) {
+            pending.extend(written(&rig.rx("ok")));
+        }
+        sent.push(line);
+    }
+}
+
+fn paused_for_tool_2(rig: &mut Rig) -> Vec<Effect> {
+    rig.rx("Tool Change: Please insert tool 2");
+    rig.rx("Maslow Paused")
+}
+
+#[test]
+fn buffered_streaming_stops_at_the_m6_so_the_tilde_runs_only_the_park() {
+    let mut rig = parks_for_tool_changes(&[("Maslow Settings", "bufferOn", json!(1))]);
+    let sent = to_an_unanswered_tool_change(&mut rig, TOOL_CHANGE_FILE);
+    assert_eq!(sent.last().map(String::as_str), Some("T2 M6"), "nothing after the M6 went out: {sent:?}");
+    let effects = paused_for_tool_2(&mut rig);
+    assert_eq!(written(&effects)[0], "~");
+    assert!(logged(&rig.take_effects(), "PARK START").len() == 1);
+}
+
+#[test]
+fn a_jog_queued_behind_the_m6_keeps_the_firmware_paused_and_skips_the_park() {
+    let mut rig = parks_for_tool_changes(&[("Maslow Settings", "bufferOn", json!(1))]);
+    to_an_unanswered_tool_change(&mut rig, TOOL_CHANGE_FILE);
+    let jog = rig.act_with("move", json!("right"), json!("10"));
+    assert!([written(&jog), written(&rig.advance(100))].concat().is_empty(), "the jog waits for the M6's ok");
+    let effects = paused_for_tool_2(&mut rig);
+    assert!(written(&effects).is_empty(), "no ~, so the jog and the park cannot run now: {:?}", written(&effects));
+    assert_eq!(logged(&effects, "PARK SKIPPED").len(), 1);
+    assert!(alerts(&effects)[0].contains("would run before the park"), "{:?}", alerts(&effects));
+}
+
+#[test]
+fn job_lines_buffered_behind_an_unexpected_tool_change_never_get_a_tilde() {
+    let mut rig = parks_for_tool_changes(&[("Maslow Settings", "bufferOn", json!(1))]);
+    // WebControl takes tool 0 to be fitted, so `T0 M6` streams on; a firmware that disagrees still prompts.
+    let file = format!("G21\nT0 M6\nG1 Z-3 F100\n{}", "G1 X40 Y40 F600\nG1 X10 Y10 F600\n".repeat(8));
+    let sent = to_an_unanswered_tool_change(&mut rig, &file);
+    assert!(sent[2..].starts_with(&["G1 Z-3 F100".to_string()]), "{sent:?}");
+    assert!(rig.machine.snapshot().job_in_progress, "the buffer is full, the job not yet streamed");
+    rig.rx("Tool Change: Please insert tool 0");
+    let effects = rig.rx("Maslow Paused");
+    assert!(written(&effects).is_empty(), "a ~ would cut with the old bit: {:?}", written(&effects));
+    assert_eq!(logged(&effects, "PARK SKIPPED").len(), 1);
+}
+
+#[test]
+fn a_tool_change_line_that_moves_after_its_m6_does_not_park() {
+    let mut rig = parks_for_tool_changes(&[]);
+    to_an_unanswered_tool_change(&mut rig, "G21\nG0 Z5\nT2 M6 G0 X40 Y40\nG1 Z-3 F100\n");
+    let effects = paused_for_tool_2(&mut rig);
+    assert!(written(&effects).is_empty(), "{:?}", written(&effects));
+    assert_eq!(logged(&effects, "PARK SKIPPED").len(), 1);
 }

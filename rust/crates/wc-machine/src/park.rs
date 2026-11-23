@@ -8,8 +8,11 @@ use serde_json::Value;
 use wc_config::{Settings, python_float, python_float_str};
 use wc_protocol::main::{ParkPositionMessage, Point, Units};
 
+use wc_gcode::firmware_gcode::{changes_tool, without_tool_change};
+
 use crate::clearance::Raise;
 use crate::commands::round4;
+use crate::job::blank;
 use crate::machine::{Effect, Machine, alert, broadcast};
 use crate::pacing::announce;
 
@@ -26,6 +29,7 @@ pub const CONTROLLER_PAUSED: &str = "The controller is paused. Press Resume or S
 pub const RETURNED: &str = "The sled went back to where the job was, at the safe height. Lower the bit close to the work \
                             and press Touch Z again.";
 const XY_UNKNOWN: &str = "Where the sled is is not known, so it could not come back.";
+const BUFFER_BUSY: &str = "Lines other than the tool change wait in the controller, and would run before the park.";
 pub const UNPLACED: &str =
     "The sled's position is not known yet. Wait for it to stop and the controller to report it, then try again.";
 
@@ -101,7 +105,10 @@ impl Machine {
         if !std::mem::take(&mut self.park.tool_change_asked) {
             return;
         }
-        let refused = self.park_refusal().or_else(|| self.tool_change_return_refusal());
+        let refused = self
+            .park_refusal()
+            .or_else(|| self.tool_change_buffer_refusal())
+            .or_else(|| self.tool_change_return_refusal());
         let parked = refused.map_or_else(
             || {
                 let from = self.sled.xy_mm();
@@ -121,6 +128,15 @@ impl Machine {
             announce(format!("PARK SKIPPED trigger={} reason={why}", Trigger::ToolChange.name()), effects);
             effects.push(alert(&format!("The sled did not park for the tool change. {why}")));
         }
+    }
+
+    /// The `~` runs whatever the controller holds or WebControl queued before the park, so only the bare M6 may wait.
+    fn tool_change_buffer_refusal(&self) -> Option<String> {
+        let only_the_change = |text: &str| changes_tool(text) && blank(&without_tool_change(text));
+        let busy = self.job.holds_job_lines
+            || !self.controller.queue.is_empty()
+            || !self.controller.accounting.texts().all(only_the_change);
+        busy.then(|| BUFFER_BUSY.to_string())
     }
 
     /// Resume must be able to bring the sled back: a job returns to its line, the queue to where the sled was.

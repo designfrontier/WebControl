@@ -227,6 +227,7 @@ the backend had been quiet for `quiet` seconds, one line per settle.
 | `queue_override_skips_bit_changes` | A queued file with its bit-change override on starts with no `M5`/`T2 M6` though it names tool 2; its own `T2 M6` is never sent and `T3 M6 G0 X60` goes out as `G0 X60` (Rust-intended deviation 16) |
 | `park_after_a_file_finishes` | With a park position set, a file shifted by home runs to its end; once its last line is answered, units, `G90`, Z to the safe height and a rapid to the park position, unshifted (Rust-intended deviation 17) |
 | `park_at_a_tool_change_then_resume` | Park for Tool Changes on: at a file's `T2 M6` prompt, `~`, then units, `G90`, Z to the safe height and a rapid to the park position with the prompt still up; Resume returns to the file's XY at safe height and streams on, and the file's end parks again (Rust-intended deviation 17) |
+| `park_at_a_tool_change_skipped_with_lines_buffered_behind_it` | Park for Tool Changes on, buffered: a tool change WebControl did not expect reaches the firmware with cutting lines buffered behind it; no `~`, nothing written, an alert that the sled did not park (Rust-intended deviation 17) |
 | `real_*` | the owner's real jobs, with the controller's recorded replies ("Real jobs" below) |
 
 ## Adding or changing a transcript
@@ -676,5 +677,7 @@ Where the Rust backend writes something different from Python by owner decision.
     change, once the firmware has paused for it, gets `~` (as a jog does) and the same park lines, the prompt still up;
     Resume returns to the line at safe height as after a jog. The queue's bit change between files parks too; Resume,
     or Touch Z, first raises Z and rapids back to where the sled was (Touch Z then needs pressing again to probe). An
-    alarm, a missed restart, no park position or a line Resume could not return to leaves the prompt where it is,
-    with an alert and `PARK SKIPPED trigger=tool_change`. Transcript: `park_at_a_tool_change_then_resume`.
+    alarm, a missed restart, no park position, a line Resume could not return to, or anything but the bare M6 waiting
+    in the controller or WebControl's queue (job lines buffered behind it, a queued jog, an M6 line that moves on after
+    its M6), all of which the `~` would run before the park, leaves the prompt where it is, with no `~`, an alert and
+    `PARK SKIPPED trigger=tool_change`. Transcript: `park_at_a_tool_change_skipped_with_lines_buffered_behind_it`. Transcript: `park_at_a_tool_change_then_resume`.

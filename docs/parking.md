@@ -66,8 +66,8 @@ Turn on **Settings ▸ Maslow ▸ Park for Tool Changes** to change bits at the 
   height, without probing. Lower the bit close to the work and press **Touch Z** again. During a file's tool change,
   set Z after Resume if the surface at the park position is not the same height as the work.
 
-If the sled cannot park (an alarm, a controller that did not restart, no park position, or a line WebControl could not
-return to), the prompt shows where the sled is, an alert says why, and the log shows `PARK SKIPPED
+If the sled cannot park (an alarm, a controller that did not restart, no park position, a line WebControl could not
+return to, or other lines waiting in the controller behind the tool change, such as a jog pressed just before it), the prompt shows where the sled is, an alert says why, and the log shows `PARK SKIPPED
 trigger=tool_change`. A bit change the queue's override skips does not park. Stop at a parked prompt leaves Z up.
 
 ## When Park is refused
