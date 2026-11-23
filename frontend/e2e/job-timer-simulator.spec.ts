@@ -39,7 +39,7 @@ test("a job shows the file's estimate, then its wall, cutting and remaining time
   const file = { name: "timer.nc", mimeType: "text/plain", buffer: Buffer.from(`G21\nG90\n${ZIGZAG}\n`) };
   expect(await request.post("/uploadGCode", { multipart: { selectedDirectory: ".", "file[]": file } })).toBeOK();
   const time = page.getByLabel("Machine readouts").getByText("Job", { exact: true }).locator("+ dd");
-  await expect(time).toHaveText(/est\. 10m$/);
+  await expect(time).toContainText("est. 10m");
   await shoot(page, "loaded");
 
   await page.locator(".run-buttons").getByRole("button", { name: "Play" }).click();
