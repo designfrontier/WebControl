@@ -53,6 +53,12 @@ export const gpioSection = (): SettingsSection => ({
   title: "GPIO Settings",
   enableCustom: false,
   settings: [2, 3].map((pin) =>
-    setting({ key: `gpio${pin}`, title: `GPIO${pin}`, type: "options", options: ["", "Stop", "Pause"], value: "" }),
+    setting({
+      key: `gpio${pin}`,
+      title: `GPIO${pin}`,
+      type: "options",
+      options: ["", "Stop", "Pause", "StatusLED", "StatusLED Active Low"],
+      value: "",
+    }),
   ),
 });
