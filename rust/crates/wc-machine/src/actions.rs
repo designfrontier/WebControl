@@ -5,7 +5,7 @@ use std::time::Duration;
 use serde_json::Value;
 use wc_config::{python_float_str, python_str};
 use wc_firmware::settings::setting_line;
-use wc_protocol::main::{HomePositionMessage, PauseButton, RequestedSetting, Units};
+use wc_protocol::main::{ActivateModal, HomePositionMessage, PauseButton, RequestedSetting, Units};
 use wc_protocol::{Action, float};
 
 use crate::clearance::Raise;
@@ -205,8 +205,18 @@ impl Machine {
             _ => Some(format!("Function not currently implemented.. Sorry.[{command}]")),
         };
         if manual_command && self.job.firmware_paused && !self.controller.queue.is_empty() {
-            // Streaming stays held, so releasing the firmware lets the jog run now instead of on Resume.
-            self.release_firmware(now, effects);
+            match self.queued_z_problem() {
+                Some(problem) => {
+                    self.drop_user_commands();
+                    let reason = format!("That command {}", problem.reason());
+                    effects.push(broadcast(&ActivateModal::titled_alert(
+                        &format!("Command {}", problem.title()),
+                        &reason,
+                    )));
+                }
+                // Streaming stays held, so releasing the firmware lets the jog run now instead of on Resume.
+                None => self.release_firmware(now, effects),
+            }
         }
         if let Some(text) = failure {
             effects.push(alert(&text));

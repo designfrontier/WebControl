@@ -3,10 +3,12 @@
 
 use wc_gcode::Positioning;
 use wc_gcode::commanded_z::ZChange;
-use wc_gcode::sanitise::LineProblem;
+use wc_gcode::firmware_gcode::tool_change_line;
+use wc_gcode::sanitise::{LineProblem, sanitise};
 use wc_gcode::shift::positioning_set_by;
 use wc_protocol::main::{PauseButton, Units};
 
+use crate::clearance::BitHeight;
 use crate::gpio::Led;
 use crate::job::{Flow, pause_button};
 use crate::machine::{Effect, Machine, Queued};
@@ -32,7 +34,11 @@ impl Machine {
     /// Why `line`, written next, would take Z past a limit. Where WebControl cannot follow Z (a probe, which the
     /// firmware stops at the limit, among them), the firmware's clamp still holds.
     pub(crate) fn z_limit_problem(&self, line: &str) -> Option<LineProblem> {
-        let ZChange::MovesTo(Some(z_mm)) = self.bit.change(line) else { return None };
+        self.z_limit_problem_from(&self.bit, line)
+    }
+
+    fn z_limit_problem_from(&self, bit: &BitHeight, line: &str) -> Option<LineProblem> {
+        let ZChange::MovesTo(Some(z_mm)) = bit.change(line) else { return None };
         let Mirror { upper, lower, .. } = self.controller.z_limits;
         let below = lower.filter(|&(limit, slack)| z_mm < limit - slack).map(|(limit, _)| (limit, false));
         let above = upper.filter(|&(limit, slack)| z_mm > limit + slack).map(|(limit, _)| (limit, true));
@@ -74,6 +80,25 @@ impl Machine {
         let mm = |text: &str| number(text).map_or(f64::NAN, |value| value * mm_per_unit);
         self.z_limit_reported(63, mm(upper), PRINTED * mm_per_unit);
         self.z_limit_reported(64, mm(lower), PRINTED * mm_per_unit);
+    }
+
+    /// The first queued line that will be refused, followed as `send_queued` writes them, raises included.
+    pub(crate) fn queued_z_problem(&self) -> Option<LineProblem> {
+        let mut bit = self.bit.clone();
+        self.controller.queue.iter().find_map(|queued| {
+            let lines = match queued {
+                Queued::Line { text, .. } => vec![text.clone()],
+                Queued::Raise(raise) => raise.lines(bit.mm()),
+                _ => Vec::new(),
+            };
+            lines.iter().find_map(|text| {
+                let to_send = tool_change_line(&format!("{} ", sanitise(text)), self.job.next_tool, self.job.tool).line;
+                let line = self.sled.convert(&to_send, [0.0; 2]).ok()?;
+                let problem = self.z_limit_problem_from(&bit, &line);
+                bit.written(&line);
+                problem
+            })
+        })
     }
 
     /// A job streams no further while a B20 is unanswered, so no line goes out unchecked after a change of zero.

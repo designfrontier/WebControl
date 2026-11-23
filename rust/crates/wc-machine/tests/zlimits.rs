@@ -247,3 +247,45 @@ fn a_probe_in_a_file_past_the_lower_limit_is_left_to_the_firmware() {
     assert_eq!(rig.run_to_quiet(), ["G21", "G0 Z5", "G38.2 Z-20 F100"]);
     assert!(raised_alerts(&mut rig).iter().all(|alert| !alert.contains("limit")));
 }
+
+#[test]
+fn go_to_z0_below_the_lower_limit_is_refused() {
+    let mut rig = reporting(&[], "20.00000000", "2.00000000");
+    rig.act("defineZ0");
+    rig.run_to_quiet();
+    rig.rx("Z Axis Upper Limit: 20.00 Lower Limit: 2.00");
+    rig.take_effects();
+    assert_eq!(typed(&mut rig, "G0 Z3"), ["G0 Z3"]);
+    rig.act("zToZero");
+    assert_eq!(rig.run_to_quiet(), ["G21", "G90"]);
+    assert_eq!(raised_alerts(&mut rig), ["That command would move Z to 0.00 mm, below the Z lower limit of 2.00 mm."]);
+}
+
+#[test]
+fn a_command_past_a_limit_at_a_tool_change_sends_no_tilde_and_nothing_else() {
+    let mut rig = reporting(&[], "3.00000000", "-10.00000000");
+    rig.act("defineZ0");
+    rig.run_to_quiet();
+    rig.rx("Z Axis Upper Limit: 3.00 Lower Limit: -10.00");
+    rig.machine.load_gcode("G21\nT2 M6\nG1 X2\n");
+    rig.act("startRun");
+    rig.run_to_quiet();
+    rig.rx("Tool Change: Please insert tool 2");
+    rig.rx("Maslow Paused");
+    rig.take_effects();
+    ["zToSafeHeight", "home"].iter().for_each(|command| {
+        let mut effects = rig.act(command);
+        effects.extend(rig.advance(200));
+        assert!(written(&effects).is_empty(), "{command}: {:?}", written(&effects));
+        assert!(
+            alerts(&effects)[0].contains("above the Z upper limit of 3.00 mm"),
+            "{command}: {:?}",
+            alerts(&effects)
+        );
+    });
+    assert_eq!(
+        written(&rig.act_with("moveZ", json!("raise"), json!(2))),
+        ["~"],
+        "a move within the limits releases it"
+    );
+}
