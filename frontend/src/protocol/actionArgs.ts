@@ -87,6 +87,8 @@ export const actionSpecs = {
   moveGcodeIndex: notRunning("Step the gcode index", { arg: integer.describe("Lines to step, signed") }),
   macro1: notRunning("Run macro 1"),
   macro2: notRunning("Run macro 2"),
+  macro3: notRunning("Run macro 3 (Rust only)"),
+  macro4: notRunning("Run macro 4 (Rust only)"),
   clearLogs: notRunning("Delete old log files"),
   clearGCode: noJob("Unload the gcode"),
   startRun: spec(
@@ -141,4 +143,6 @@ export const actionSpecs = {
     arg: z.union([z.literal(0), z.literal(1)]),
   }),
   resetHomeToCenter: noJob("Move home back to the bed centre"),
+  park: idle("Raise Z to the safe height and rapid to the park position (Rust only)"),
+  definePark: noJob("Make the sled's current position the park position (Rust only)"),
 } satisfies Record<ActionCommand, ActionSpec>;

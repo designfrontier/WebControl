@@ -38,6 +38,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/main", get(api::main_screen))
         .route("/api/run/pacing", get(api::pacing).put(api::update_pacing))
         .route("/api/display/theme", put(api::update_theme))
+        .route("/api/display/controls", put(api::update_controls))
         .route("/api/queue", get(queue::view))
         .route("/api/queue/add", post(queue::add))
         .route("/api/queue/move", post(queue::move_item))

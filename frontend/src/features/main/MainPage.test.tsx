@@ -86,7 +86,7 @@ describe("MainPage run status", () => {
     expect(button("Play")).toBeDisabled();
     expect(button("Pause")).toBeEnabled();
     expect(button("Up")).toBeDisabled();
-    expect(button("Macro 1")).toBeDisabled();
+    expect(button("Set Park Here")).toBeDisabled();
     expect(button("Next line")).toBeDisabled();
     expect(button("Units: mm")).toBeDisabled();
     expect(button("Stop")).toBeEnabled();
@@ -200,41 +200,64 @@ describe("MainPage jogging", () => {
     expect(socket.emittedEvents("updateSetting")).toEqual([{ data: { setting: "toInches", value: "0.394" } }]);
   });
 
-  it("homes, sets home, returns to center and runs macros", async () => {
+  it("homes, sets home and park, and parks once a park position is set", async () => {
     const { socket, user } = await renderMain();
     await user.click(button("Home"));
     await user.click(button("Set Home Here"));
-    await user.click(button("Macro 1"));
-    await user.click(button("Macro 2"));
+    await user.click(button("Set Park Here"));
+    expect(button("Park")).toBeDisabled();
+    expect(button("Park")).toHaveAccessibleDescription(/No park position yet/);
+    expect(screen.getByText("Set a park position to use Park.")).toBeVisible();
+    socket.serverMessage("parkPosition", { position: { x: -300, y: 200.5 } });
+    await waitFor(() => expect(button("Park")).toBeEnabled());
+    expect(screen.queryByText("Set a park position to use Park.")).not.toBeInTheDocument();
+    expect(button("Park")).toHaveAccessibleDescription("Parks at X -300, Y 200.5 mm (machine coordinates).");
+    await user.click(button("Park"));
     expect(socket.actions()).toEqual([
       ["home", "", ""],
       ["defineHome", "", ""],
-      ["macro1", "", ""],
-      ["macro2", "", ""],
+      ["definePark", "", ""],
+      ["park", "", ""],
     ]);
   });
 
-  it("labels macros with their configured titles, falling back to their names", async () => {
+  it("puts three slots down the pad's right side and the fourth beside the distance, as the server names them", async () => {
     const fetch = fakeFetch({
       "/api/main": mainState(),
-      "GET /api/state": {
-        ...(await (await fakeFetch()("/api/state")).json()),
+      "GET /api/state": startupState({
+        controlButtons: ["macro1", "macro2", "zAxis", "macro4"],
         macros: [
-          { command: "macro1", title: "Spindle on" },
-          { command: "macro2", title: " " },
+          { command: "macro1", title: "Spindle on", empty: false },
+          { command: "macro2", title: " ", empty: false },
+          { command: "macro3", title: "Macro 3", empty: true },
+          { command: "macro4", title: "Vacuum", empty: true },
         ],
-      },
+      }),
     });
-    renderApp("/", { fetch });
-    expect(await screen.findByRole("button", { name: "Spindle on" })).toBeInTheDocument();
-    expect(button("Macro 2")).toBeInTheDocument();
+    const { socket, user } = renderApp("/", { fetch });
+    const jog = within(await screen.findByRole("region", { name: "Jog" }));
+    expect(await jog.findByRole("button", { name: "Spindle on" })).toBeInTheDocument();
+    const grid = Array.from(document.querySelectorAll(".jog-grid > *")).map((cell) => cell.textContent);
+    expect([grid[3], grid[7], grid[11]]).toEqual(["Spindle on", "Macro 2", "Z-Axis"]);
+    expect(document.querySelector(".jog-distance > .side-button")).toHaveTextContent("Vacuum");
+    expect(jog.getByRole("button", { name: "Vacuum" })).toBeDisabled();
+    expect(jog.getByRole("button", { name: "Vacuum" })).toHaveAccessibleDescription(/no gcode yet/);
+    await user.click(jog.getByRole("button", { name: "Macro 2" }));
+    expect(socket.actions()).toEqual([["macro2", "", ""]]);
+
+    expect(screen.queryByText("Set a park position to use Park.")).not.toBeInTheDocument();
+    socket.serverMessage("controlButtons", { buttons: ["setPark", "park", "setHome", "zAxis"] });
+    expect(await jog.findByRole("button", { name: "Set Park Here" })).toBeInTheDocument();
+    expect(screen.getByText("Set a park position to use Park.")).toBeVisible();
+    expect(jog.queryByRole("button", { name: "Spindle on" })).not.toBeInTheDocument();
+    expect(document.querySelector(".jog-distance > .side-button")).toHaveTextContent("Z-Axis");
   });
 
-  it("keeps both macro buttons, named by default, when the server lists none", async () => {
+  it("shows the default slots when the server lists none", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     renderApp("/", { fetch: fakeFetch({ "/api/state": () => jsonResponse({}, 500) }) });
-    expect(button("Macro 1")).toBeInTheDocument();
-    expect(button("Macro 2")).toBeInTheDocument();
+    ["Park", "Set Home Here", "Set Park Here"].forEach((name) => expect(button(name)).toBeInTheDocument());
+    expect(screen.getByRole("link", { name: "Z-Axis" })).toBeInTheDocument();
     expect(button("Units: …")).toBeDisabled();
   });
 
@@ -510,7 +533,7 @@ describe("MainPage job state", () => {
     const { socket } = await renderMain();
     socket.serverMessage("statusMessage", { uploadFlag: 0, positioningMode: 0, currentTool: 1, probing: true });
     expect(job()).toHaveTextContent("Probing");
-    ["Play", "Up", "Home", "Macro 1", "Set Home Here", "Next line"].forEach((name) =>
+    ["Play", "Up", "Home", "Set Park Here", "Set Home Here", "Next line"].forEach((name) =>
       expect(button(name)).toBeDisabled(),
     );
     expect(button("Stop")).toBeEnabled();

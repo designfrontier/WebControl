@@ -45,6 +45,8 @@ pause for a bit change". A tool's description comes from Settings ▸ Tools.
 **Pause** and **Resume** work as for any job, and the queue goes on when the file ends. Pause once the file's last
 line has been sent stops the queue instead (below).
 
+With a park position set ([Parking](parking.md)), the sled parks after the queue's last file, never between files.
+
 ## Skipping bit changes in a file
 
 A file added with **Don't stop for bit changes** (or with the box ticked in G-Code ▸ Job Queue) never waits for a bit

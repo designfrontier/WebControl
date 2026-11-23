@@ -1,0 +1,138 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "park_at_a_tool_change_skipped_with_lines_buffered_behind_it",
+    "description": "Park for Tool Changes on, buffered streaming. A tool change WebControl did not expect (it takes tool 0 to be fitted) reaches the firmware with cutting lines in the controller's buffer behind it. The firmware prompts and pauses; WebControl sends no ~ (which would run those lines with the old bit), writes nothing, and alerts that the sled did not park (Rust-intended deviation 17).",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "ff4e523"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    },
+    "gcode": {
+      "lines": [
+        "G21",
+        "T0 M6",
+        "G1 Z-3 F100",
+        "G1 X40 Y40 F600",
+        "G1 X10 Y10 F600",
+        "G1 X40 Y40 F600",
+        "G1 X10 Y10 F600",
+        "G1 X40 Y40 F600",
+        "G1 X10 Y10 F600",
+        "G1 X40 Y40 F600",
+        "G1 X10 Y10 F600"
+      ]
+    },
+    "bootBanner": [
+      "PCB v1.1 Detected",
+      "Grbl v1.00",
+      "ready",
+      "ok",
+      "[Forward Calculating Position]",
+      "position loaded at:",
+      "247.79",
+      "-5.88"
+    ],
+    "settings": {
+      "Maslow Settings": {
+        "bufferOn": 1,
+        "parkX": "-300",
+        "parkY": "200.5",
+        "parkForToolChange": 1
+      }
+    }
+  },
+  "events": [
+    {
+      "type": "ui",
+      "action": {
+        "command": "startRun",
+        "arg": "",
+        "arg1": ""
+      }
+    },
+    {
+      "type": "tx",
+      "bytes": "G21  \n"
+    },
+    {
+      "type": "tx",
+      "bytes": "T0 M6  \n"
+    },
+    {
+      "type": "tx",
+      "bytes": "G1 Z-3 F100  \n"
+    },
+    {
+      "type": "tx",
+      "bytes": "G1 X40 Y40 F600  \n"
+    },
+    {
+      "type": "tx",
+      "bytes": "G1 X10 Y10 F600  \n"
+    },
+    {
+      "type": "tx",
+      "bytes": "G1 X40 Y40 F600  \n"
+    },
+    {
+      "type": "tx",
+      "bytes": "G1 X10 Y10 F600  \n"
+    },
+    {
+      "type": "tx",
+      "bytes": "G1 X40 Y40 F600  \n",
+      "comment": "The buffer holds the M6 and five cutting lines after it: WebControl takes tool 0 to be fitted, so T0 M6 does not stop the stream."
+    },
+    {
+      "type": "rx",
+      "line": "G21"
+    },
+    {
+      "type": "rx",
+      "line": "ok"
+    },
+    {
+      "type": "rx",
+      "line": "T0 "
+    },
+    {
+      "type": "rx",
+      "line": "Tool change to tool 0"
+    },
+    {
+      "type": "rx",
+      "line": "M6"
+    },
+    {
+      "type": "rx",
+      "line": "Tool Change: Please insert tool 0",
+      "comment": "A firmware whose tool WebControl lost track of prompts all the same."
+    },
+    {
+      "type": "rx",
+      "line": "Maslow Paused",
+      "comment": "No ~: it would run the buffered G1 Z-3 and cuts with the old bit before any park."
+    },
+    {
+      "type": "expect",
+      "state": {
+        "manualZAxisAdjust": true,
+        "jobInProgress": true,
+        "uploadFlag": 0
+      },
+      "alerts": [
+        {
+          "message": "The sled did not park for the tool change. Lines other than the tool change wait in the controller"
+        }
+      ]
+    }
+  ]
+}

@@ -49,10 +49,9 @@ jobs:
           retention-days: 14
 
   rust:
-    name: Rust test, coverage, aarch64 build and e2e smoke
-    needs: firmware
+    name: Rust format, lint, tests and coverage
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: rust
@@ -65,33 +64,56 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci && npm run build
         working-directory: frontend
-      - uses: actions/cache@v5
-        with:
-          path: |
-            ~/.cargo/bin
-            ~/.cargo/.crates.toml
-            ~/.cargo/.crates2.json
-            ~/.cargo/registry
-            ~/.cargo/git
-            rust/target
-          key: rust-${{ runner.os }}-${{ hashFiles('rust/Cargo.lock', 'rust/rust-toolchain.toml') }}
-          restore-keys: rust-${{ runner.os }}-
       # rust-toolchain.toml names the toolchain, its components and the aarch64 target.
       - run: rustup toolchain install
-      - name: Install zig, cargo-zigbuild and cargo-llvm-cov
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust -> target
+          shared-key: check
+          save-if: ${{ github.ref == 'refs/heads/master' }}
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+      - run: cargo fmt --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      # Runs every workspace test once, under coverage.
+      - name: Tests and coverage, 95% lines for every crate
+        run: scripts/coverage.sh
+
+  pi:
+    name: Pi install scripts and aarch64 build
+    needs: firmware
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@v7
+      - run: bash deploy/test.sh
+      - run: bash deploy/update-test.sh
+      - run: bash scripts/release-test.sh
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci && npm run build
+        working-directory: frontend
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust -> target
+          shared-key: pi
+          save-if: ${{ github.ref == 'refs/heads/master' }}
+      - name: Install zig and cargo-zigbuild
         run: |
           python3 -m venv "$HOME/zig"
           "$HOME/zig/bin/pip" install ziglang
           echo "$HOME/zig/bin" >> "$GITHUB_PATH"
-          cargo install --locked cargo-zigbuild cargo-llvm-cov
-      - run: cargo fmt --check
-      - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo test --workspace
-      - name: Coverage, 95% lines for every crate
-        run: scripts/coverage.sh
-      - run: bash deploy/test.sh
-      - run: bash deploy/update-test.sh
-      - run: bash scripts/release-test.sh
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild
       - uses: actions/download-artifact@v8
         with:
           name: holey-51.292-hex
@@ -105,10 +127,32 @@ jobs:
           name: webcontrol-rs-aarch64
           path: rust/target/aarch64-unknown-linux-gnu/release/webcontrol-rs
           retention-days: 14
+
+  e2e:
+    name: Playwright against webcontrol-rs
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: rustup toolchain install
+        working-directory: rust
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust -> target
+          shared-key: e2e
+          save-if: ${{ github.ref == 'refs/heads/master' }}
       - run: npx playwright install --with-deps chromium
-        working-directory: frontend
+      # The Playwright config builds the app and webcontrol-rs before serving them.
       - run: npm run test:e2e
-        working-directory: frontend
       - uses: actions/upload-artifact@v7
         if: failure()
         with:

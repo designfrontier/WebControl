@@ -1,4 +1,4 @@
-import type { MessageData, StartupState, ThemePreference, Units } from "../protocol";
+import type { ControlButton, MessageData, ParkPosition, StartupState, ThemePreference, Units } from "../protocol";
 import type { ConnectionStatus } from "../socket/client";
 
 export interface Point {
@@ -43,7 +43,13 @@ export interface MachineState {
   controllerMessages: string[];
   /** The uiTheme setting, or null until the server names one. */
   theme: ThemePreference | null;
+  /** The park position in mm, machine coordinates; null while none is set. */
+  park: ParkPosition | null;
+  /** What the control screen's four button slots hold. */
+  controlButtons: ControlButton[];
 }
+
+export const DEFAULT_CONTROL_BUTTONS: ControlButton[] = ["park", "zAxis", "setHome", "setPark"];
 
 /** Server commands the store folds into MachineState. */
 export const STORE_COMMANDS = [
@@ -61,6 +67,9 @@ export const STORE_COMMANDS = [
   "alarm",
   "clearAlarm",
   "theme",
+  "parkPosition",
+  "macros",
+  "controlButtons",
 ] as const;
 export type StoreCommand = (typeof STORE_COMMANDS)[number];
 
@@ -85,7 +94,12 @@ export const pushedFields = (event: MachineMessage): (keyof MachineState)[] => {
     case "hostAddress":
     case "gcodeFile":
     case "theme":
+    case "macros":
       return [event.command];
+    case "parkPosition":
+      return ["park"];
+    case "controlButtons":
+      return ["controlButtons"];
     case "connectionStatus":
       return ["controller"];
     case "homePositionMessage":
@@ -132,6 +146,8 @@ export const initialMachineState: MachineState = {
   alarm: null,
   controllerMessages: [],
   theme: null,
+  park: null,
+  controlButtons: DEFAULT_CONTROL_BUTTONS,
 };
 
 const reportedVersion = (version: number) => (version > 0 ? version : null);
@@ -233,6 +249,12 @@ const applyMessage = (state: MachineState, event: MachineMessage): MachineState 
       return state.alarm === null ? state : { ...state, alarm: null };
     case "theme":
       return { ...state, theme: event.data.theme };
+    case "parkPosition":
+      return { ...state, park: event.data.position };
+    case "macros":
+      return { ...state, macros: event.data.macros };
+    case "controlButtons":
+      return { ...state, controlButtons: event.data.buttons };
   }
 };
 
@@ -262,6 +284,8 @@ export const machineReducer = (state: MachineState, event: MachineEvent): Machin
         commit,
         gcodeFile,
         theme,
+        park,
+        controlButtons,
       } = event.state;
       const kept = Object.fromEntries([...(event.keep ?? [])].map((field) => [field, state[field]]));
       return {
@@ -279,6 +303,8 @@ export const machineReducer = (state: MachineState, event: MachineEvent): Machin
         macros,
         gcodeFile,
         theme: theme ?? state.theme,
+        park: park ?? null,
+        controlButtons: controlButtons ?? state.controlButtons,
         controller:
           connectionStatus && state.controller.status === "unknown" ? controllerOf(connectionStatus) : state.controller,
         ...kept,

@@ -8,8 +8,9 @@ at `/`. The Python backend this grew from was removed; it is in git history up t
 ### Key directories
 
 - `.github/workflows/` — `ci.yml`: the frontend job (format, lint, typecheck, test, build), the holey 51.292 firmware
-  build checked against its pin, and the Rust job (fmt, clippy, tests, 95% per-crate coverage, the deploy and release
-  script tests, the aarch64 cross-build, Playwright against the binary); `release.yml` builds the Pi install assets
+  build checked against its pin, and three parallel Rust jobs: `rust` (fmt, clippy, the tests under 95% per-crate
+  coverage), `pi` (the deploy and release script tests, the aarch64 cross-build) and `e2e` (Playwright against the
+  binary); `release.yml` builds the Pi install assets
   (`rust/scripts/release.sh`) and drafts a GitHub Release for a `v*` tag
 - `contract/` — frozen frontend ↔ backend spec as JSON Schema, generated from `frontend/src/protocol/` (see its
   `README.md`: layout, versioning, plain-WebSocket wire format, known warts)

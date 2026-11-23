@@ -198,6 +198,28 @@ describe("SettingsPage", () => {
     expect(screen.getByLabelText("Bee")).toHaveAccessibleDescription(expect.stringContaining("Needs custom firmware"));
   });
 
+  it("keeps Park for Tool Changes off until both park coordinates are filled in, saying why", async () => {
+    const section = maslowSection({
+      settings: [
+        setting({ key: "parkX", title: "Park X", numeric: true }),
+        setting({ key: "parkY", title: "Park Y", numeric: true }),
+        setting({ key: "parkForToolChange", title: "Park for Tool Changes", type: "bool", value: 0 }),
+      ],
+    });
+    const { user } = renderApp("/settings", { fetch: settingsServer(section).fetch });
+    await form();
+    const toggle = screen.getByLabelText("Park for Tool Changes");
+    expect(toggle).toBeDisabled();
+    expect(toggle).toHaveAccessibleDescription(expect.stringContaining("Set Park Position X and Y first."));
+    await user.type(screen.getByLabelText("Park X"), "-300");
+    expect(toggle).toBeDisabled();
+    await user.type(screen.getByLabelText("Park Y"), "200");
+    expect(toggle).toBeEnabled();
+    await user.click(toggle);
+    await user.clear(screen.getByLabelText("Park Y"));
+    expect(toggle).toBeEnabled();
+  });
+
   it("counts a single locked setting", async () => {
     const locked = maslowSection({ settings: [setting({ key: "a", custom: true }), setting({ key: "b" })] });
     renderApp("/settings", { fetch: settingsServer(locked).fetch });

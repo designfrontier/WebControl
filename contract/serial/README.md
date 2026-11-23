@@ -225,6 +225,9 @@ the backend had been quiet for `quiet` seconds, one line per settle.
 | `holey_calibration_accept_writes_settings` | Calculate sends nothing; Accept writes `$3`, `$2`, `$40`, `$41` |
 | `queue_same_tool_starts_at_once_new_tool_waits` | Tool 1 changed by hand, three queued files: Continue raises Z and runs the first (tool 1); a file with the same tool starts as soon as Z has risen; one with another tool gets `G00 Z…`, `M5`, `T2 M6` and the firmware's prompt first |
 | `queue_override_skips_bit_changes` | A queued file with its bit-change override on starts with no `M5`/`T2 M6` though it names tool 2; its own `T2 M6` is never sent and `T3 M6 G0 X60` goes out as `G0 X60` (Rust-intended deviation 16) |
+| `park_after_a_file_finishes` | With a park position set, a file shifted by home runs to its end; once its last line is answered, units, `G90`, Z to the safe height and a rapid to the park position, unshifted (Rust-intended deviation 17) |
+| `park_at_a_tool_change_then_resume` | Park for Tool Changes on: at a file's `T2 M6` prompt, `~`, then units, `G90`, Z to the safe height and a rapid to the park position with the prompt still up; Resume returns to the file's XY at safe height and streams on, and the file's end parks again (Rust-intended deviation 17) |
+| `park_at_a_tool_change_skipped_with_lines_buffered_behind_it` | Park for Tool Changes on, buffered: a tool change WebControl did not expect reaches the firmware with cutting lines buffered behind it; no `~`, nothing written, an alert that the sled did not park (Rust-intended deviation 17) |
 | `real_*` | the owner's real jobs, with the controller's recorded replies ("Real jobs" below) |
 
 ## Adding or changing a transcript
@@ -660,3 +663,22 @@ Where the Rust backend writes something different from Python by owner decision.
     skipped change is logged (`QUEUE BIT CHANGE SKIPPED file_line=<n> tool=<t>`). The firmware keeps the tool it had;
     the queue follows the tools the file names, so the next file is compared with the file's last tool. Play of the
     same file outside the queue pauses as before. Transcript: `queue_override_skips_bit_changes`.
+17. **The sled parks after a job** (owner decision, 2026-11-22). Python had no park position. With `parkX` and `parkY`
+    set (Maslow Settings, mm, machine coordinates), once a file run from Play, or the queue's last file, has had its
+    last line answered, Rust writes the units WebControl is in (`G21 ` or `G20 `), `G90 `, raises Z as Home does (to
+    max(safe height, the bit's Z), never lower) and rapids to the park position converted to those units
+    (`G00 X-300.0 Y200.5 `). The controller keeps no work offset, since WebControl adds home to each file line
+    itself, so the park move is not shifted and Set Home never moves it. Z stays up. It parks whenever the file reaches its end,
+    resumed or not. Nothing parks between queued files, or when Stop, an alarm, a lost link, a controller reset, a
+    refused or twice-lost line or a failed probe ends the job before its end, or for a queue Pause stopped; Pause, a
+    command sent before the last line is answered, or an `error:` for it, cancels it. The Park action sends the same lines when idle. A park the gates refuse (safe height 0 or less, off
+    the bed, an alarm, a missed restart) writes nothing, logs `PARK SKIPPED` and alerts. Transcript:
+    `park_after_a_file_finishes`. With Park for Tool Changes on (`parkForToolChange`, off by default), a job's tool
+    change, once the firmware has paused for it, gets `~` (as a jog does) and the same park lines, the prompt still up;
+    Resume returns to the line at safe height as after a jog. The queue's bit change between files parks too; Resume
+    first raises Z and rapids back to where the sled was. Touch Z while parked, for a job's tool change or the queue's,
+    raises Z and rapids back over the work instead of probing at the park position; pressed again, it probes. An
+    alarm, a missed restart, no park position, a line Resume could not return to, or anything but the bare M6 waiting
+    in the controller or WebControl's queue (job lines buffered behind it, a queued jog, an M6 line that moves on after
+    its M6), all of which the `~` would run before the park, leaves the prompt where it is, with no `~`, an alert and
+    `PARK SKIPPED trigger=tool_change`. Transcript: `park_at_a_tool_change_skipped_with_lines_buffered_behind_it`. Transcript: `park_at_a_tool_change_then_resume`.

@@ -46,6 +46,49 @@ describe("ActionsPanel", () => {
     expect(notice()).toHaveTextContent("Sent “Sync settings”.");
   });
 
+  it("parks only once a park position is set, and sets one at the sled", async () => {
+    const { user, socket } = renderActions();
+    const setup = group("Calibration and setup");
+    expect(setup.getByRole("button", { name: "Park" })).toBeDisabled();
+    expect(setup.getByRole("button", { name: "Park" })).toHaveAccessibleDescription(/No park position yet/);
+    await user.click(setup.getByRole("button", { name: "Set park here" }));
+    expect(socket.actions()).toEqual([["definePark", "", ""]]);
+    expect(notice()).toHaveTextContent("Sent “Set park here”.");
+
+    socket.serverMessage("parkPosition", { position: { x: -300, y: 200.5 } });
+    expect(await setup.findByText("Parks at X -300, Y 200.5 mm (machine coordinates).")).toBeVisible();
+    await user.click(setup.getByRole("button", { name: "Park" }));
+    expect(socket.actions()).toEqual([
+      ["definePark", "", ""],
+      ["park", "", ""],
+    ]);
+  });
+
+  it("lists all four macros by title, disabling those with no gcode", async () => {
+    const { user, socket } = renderActions();
+    const macros = group("Macros");
+    await waitFor(() => expect(macros.getAllByRole("button").map((b) => b.textContent)).toHaveLength(4));
+    expect(macros.getByRole("button", { name: "Macro 3" })).toBeDisabled();
+    expect(macros.getByRole("button", { name: "Macro 3" })).toHaveAccessibleDescription(/no gcode is disabled/);
+    socket.serverMessage("macros", {
+      macros: [
+        { command: "macro1", title: "Spindle on", empty: false },
+        { command: "macro2", title: " ", empty: false },
+        { command: "macro3", title: "Vacuum", empty: false },
+        { command: "macro4", title: "Macro 4", empty: true },
+      ],
+    });
+    expect(await macros.findByRole("button", { name: "Vacuum" })).toBeEnabled();
+    expect(macros.getByRole("button", { name: "Macro 2" })).toBeEnabled();
+    expect(macros.getByRole("button", { name: "Macro 4" })).toBeDisabled();
+    await user.click(macros.getByRole("button", { name: "Vacuum" }));
+    expect(socket.actions()).toEqual([["macro3", "", ""]]);
+    expect(notice()).toHaveTextContent("Sent “Vacuum”.");
+
+    socket.serverMessage("statusMessage", { uploadFlag: 1, positioningMode: 0, currentTool: 0 });
+    expect(await macros.findByRole("button", { name: "Spindle on" })).toBeDisabled();
+  });
+
   it("asks before destructive actions and sends the wipe extent on confirm", async () => {
     const { user, socket } = renderActions();
     await user.click(screen.getByRole("button", { name: "Wipe controller EEPROM" }));

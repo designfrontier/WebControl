@@ -109,11 +109,17 @@
             "type": "string",
             "enum": [
               "macro1",
-              "macro2"
+              "macro2",
+              "macro3",
+              "macro4"
             ]
           },
           "title": {
             "type": "string"
+          },
+          "empty": {
+            "default": false,
+            "type": "boolean"
           }
         },
         "required": [
@@ -444,6 +450,46 @@
         "dark",
         "system"
       ]
+    },
+    "park": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "controlButtons": {
+      "minItems": 4,
+      "maxItems": 4,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "park",
+          "zAxis",
+          "setHome",
+          "setPark",
+          "macro1",
+          "macro2",
+          "macro3",
+          "macro4"
+        ]
+      }
     }
   },
   "required": [

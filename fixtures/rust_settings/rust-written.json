@@ -1070,6 +1070,69 @@
             "key": "legacyOption",
             "section": "Maslow Settings",
             "value": "kept"
+        },
+        {
+            "default": "",
+            "desc": "User defined gcode bound to the Macro 3 button\ndefault setting: ",
+            "key": "macro3",
+            "section": "Maslow Settings",
+            "title": "Macro 3",
+            "type": "string",
+            "value": ""
+        },
+        {
+            "default": "Macro 3",
+            "desc": "User defined title for the Macro 3 button\ndefault setting: Macro 3",
+            "key": "macro3_title",
+            "section": "Maslow Settings",
+            "title": "Macro 3 Title",
+            "type": "string",
+            "value": "Macro 3"
+        },
+        {
+            "default": "",
+            "desc": "User defined gcode bound to the Macro 4 button\ndefault setting: ",
+            "key": "macro4",
+            "section": "Maslow Settings",
+            "title": "Macro 4",
+            "type": "string",
+            "value": ""
+        },
+        {
+            "default": "Macro 4",
+            "desc": "User defined title for the Macro 4 button\ndefault setting: Macro 4",
+            "key": "macro4_title",
+            "section": "Maslow Settings",
+            "title": "Macro 4 Title",
+            "type": "string",
+            "value": "Macro 4"
+        },
+        {
+            "default": "",
+            "desc": "Where the sled parks after a file, or the last file of a queue, finishes normally, and when Park is pressed: X in mm from the centre of the bed, in machine coordinates, so setting home does not move it. Blank: no park position. Set Park Here fills both.\ndefault setting: ",
+            "key": "parkX",
+            "section": "Maslow Settings",
+            "title": "Park Position X in MM",
+            "type": "string",
+            "value": ""
+        },
+        {
+            "default": "",
+            "desc": "The park position's Y in mm from the centre of the bed, in machine coordinates. Blank: no park position.\ndefault setting: ",
+            "key": "parkY",
+            "section": "Maslow Settings",
+            "title": "Park Position Y in MM",
+            "type": "string",
+            "value": ""
+        },
+        {
+            "default": 0,
+            "desc": "At every tool change (a file's M6, or a bit change between queued files), raise Z and move the sled to the park position for the bit swap. Resume returns to the work at the safe height before the job goes on. Needs a park position.\ndefault setting: 0",
+            "key": "parkForToolChange",
+            "section": "Maslow Settings",
+            "title": "Park for Tool Changes",
+            "type": "bool",
+            "value": 0
         }
     ],
     "Optical Calibration Settings": [
@@ -1404,6 +1467,15 @@
             "title": "Display theme",
             "type": "options",
             "value": "system"
+        },
+        {
+            "default": "park,zAxis,setHome,setPark",
+            "desc": "What the control screen's four button slots hold, top to bottom down the jog pad's right side, then beside the distance: park, zAxis, setHome, setPark or macro1 to macro4, each at most once. Changed in Settings > Display.\ndefault setting: park,zAxis,setHome,setPark",
+            "key": "controlButtons",
+            "section": "WebControl Settings",
+            "title": "Control buttons",
+            "type": "string",
+            "value": "park,zAxis,setHome,setPark"
         }
     ]
 }

@@ -1,0 +1,416 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "park_at_a_tool_change_then_resume",
+    "description": "Park for Tool Changes on, a park position set (-300, 200.5 mm). At the file's T2 M6 the firmware prompts and pauses; WebControl releases it with ~ and parks: units, G90, Z to the safe height, a rapid to the park position. The prompt stays up. Resume sends ~ again, returns to the file's XY at safe height and streams on; the file's end parks again (Rust-intended deviation 17).",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "f4d8dc0"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    },
+    "gcode": {
+      "path": "gcode/tool_change_mm.nc"
+    },
+    "bootBanner": [
+      "PCB v1.1 Detected",
+      "Grbl v1.00",
+      "ready",
+      "ok",
+      "[Forward Calculating Position]",
+      "position loaded at:",
+      "247.79",
+      "-5.88"
+    ],
+    "settings": {
+      "Maslow Settings": {
+        "parkX": "-300",
+        "parkY": "200.5",
+        "parkForToolChange": 1
+      }
+    }
+  },
+  "events": [
+    {
+      "type": "ui",
+      "action": {
+        "command": "startRun",
+        "arg": "",
+        "arg1": ""
+      }
+    },
+    {
+      "type": "tx",
+      "bytes": "G21  \n"
+    },
+    {
+      "type": "rx",
+      "line": "G21"
+    },
+    {
+      "type": "rx",
+      "line": "ok"
+    },
+    {
+      "type": "tx",
+      "bytes": "G90  \n"
+    },
+    {
+      "type": "rx",
+      "line": "G90"
+    },
+    {
+      "type": "rx",
+      "line": "ok"
+    },
+    {
+      "type": "tx",
+      "bytes": "G0 Z5  \n"
+    },
+    {
+      "type": "rx",
+      "line": "G0 Z5"
+    },
+    {
+      "type": "rx",
+      "line": "ok"
+    },
+    {
+      "type": "tx",
+      "bytes": "G0 X10 Y10  \n"
+    },
+    {
+      "type": "rx",
+      "line": "G0 X10 Y10"
+    },
+    {
+      "type": "rx",
+      "line": "ok"
+    },
+    {
+      "type": "tx",
+      "bytes": "G1 Z-3 F100  \n"
+    },
+    {
+      "type": "rx",
+      "line": "G1 Z-3 F100"
+    },
+    {
+      "type": "rx",
+      "line": "ok"
+    },
+    {
+      "type": "tx",
+      "bytes": "G1 X20 F600  \n"
+    },
+    {
+      "type": "rx",
+      "line": "G1 X20 F600"
+    },
+    {
+      "type": "rx",
+      "line": "ok"
+    },
+    {
+      "type": "tx",
+      "bytes": "G0 Z5  \n"
+    },
+    {
+      "type": "rx",
+      "line": "G0 Z5"
+    },
+    {
+      "type": "rx",
+      "line": "ok"
+    },
+    {
+      "type": "tx",
+      "bytes": "T2 M6  \n"
+    },
+    {
+      "type": "rx",
+      "line": "T2 "
+    },
+    {
+      "type": "rx",
+      "line": "Tool change to tool 2"
+    },
+    {
+      "type": "rx",
+      "line": "M6"
+    },
+    {
+      "type": "rx",
+      "line": "Tool Change: Please insert tool 2"
+    },
+    {
+      "type": "rx",
+      "line": "Maslow Paused"
+    },
+    {
+      "type": "tx",
+      "bytes": "~\n",
+      "realtime": true,
+      "comment": "The firmware's tool-change pause is released for the park, as for a jog; streaming stays held."
+    },
+    {
+      "type": "rx",
+      "line": "ok"
+    },
+    {
+      "type": "rx",
+      "line": "ok"
+    },
+    {
+      "type": "tx",
+      "bytes": "G21  \n"
+    },
+    {
+      "type": "rx",
+      "line": "G21"
+    },
+    {
+      "type": "rx",
+      "line": "ok"
+    },
+    {
+      "type": "tx",
+      "bytes": "G90  \n"
+    },
+    {
+      "type": "rx",
+      "line": "G90"
+    },
+    {
+      "type": "rx",
+      "line": "ok"
+    },
+    {
+      "type": "tx",
+      "bytes": "G00 Z5.0 \n"
+    },
+    {
+      "type": "rx",
+      "line": "G00 Z5.0"
+    },
+    {
+      "type": "rx",
+      "line": "ok"
+    },
+    {
+      "type": "tx",
+      "bytes": "G00 X-300.0 Y200.5  \n"
+    },
+    {
+      "type": "rx",
+      "line": "G00 X-300.0 Y200.5"
+    },
+    {
+      "type": "rx",
+      "line": "ok"
+    },
+    {
+      "type": "expect",
+      "state": {
+        "manualZAxisAdjust": true,
+        "uploadFlag": 0,
+        "jobInProgress": true
+      },
+      "emitted": [
+        {
+          "command": "controllerMessage",
+          "data": "PARK START trigger=tool_change x_mm=-300.0 y_mm=200.5 units=MM x=-300.0 y=200.5"
+        }
+      ],
+      "comment": "Parked, the prompt still up: the bit is changed here."
+    },
+    {
+      "type": "ui",
+      "action": {
+        "command": "resumeRun",
+        "arg": "",
+        "arg1": ""
+      },
+      "comment": "Resume returns to the file's XY at safe height, as after a jog, and streams on."
+    },
+    {
+      "type": "tx",
+      "bytes": "~\n",
+      "realtime": true
+    },
+    {
+      "type": "rx",
+      "line": "ok"
+    },
+    {
+      "type": "tx",
+      "bytes": "G21  \n"
+    },
+    {
+      "type": "rx",
+      "line": "G21"
+    },
+    {
+      "type": "rx",
+      "line": "ok"
+    },
+    {
+      "type": "tx",
+      "bytes": "G90  \n"
+    },
+    {
+      "type": "rx",
+      "line": "G90"
+    },
+    {
+      "type": "rx",
+      "line": "ok"
+    },
+    {
+      "type": "tx",
+      "bytes": "G0 Z5.0  \n"
+    },
+    {
+      "type": "rx",
+      "line": "G0 Z5.0"
+    },
+    {
+      "type": "rx",
+      "line": "ok"
+    },
+    {
+      "type": "tx",
+      "bytes": "G0 X20.0 Y10.0  \n"
+    },
+    {
+      "type": "rx",
+      "line": "G0 X20.0 Y10.0"
+    },
+    {
+      "type": "rx",
+      "line": "ok"
+    },
+    {
+      "type": "tx",
+      "bytes": "G0 F600.0  \n"
+    },
+    {
+      "type": "rx",
+      "line": "G0 F600.0"
+    },
+    {
+      "type": "rx",
+      "line": "ok"
+    },
+    {
+      "type": "tx",
+      "bytes": "G90  \n"
+    },
+    {
+      "type": "rx",
+      "line": "G90"
+    },
+    {
+      "type": "rx",
+      "line": "ok"
+    },
+    {
+      "type": "tx",
+      "bytes": "G0 X40 Y40  \n"
+    },
+    {
+      "type": "rx",
+      "line": "G0 X40 Y40"
+    },
+    {
+      "type": "rx",
+      "line": "ok"
+    },
+    {
+      "type": "tx",
+      "bytes": "G1 Z-2 F100  \n"
+    },
+    {
+      "type": "rx",
+      "line": "G1 Z-2 F100"
+    },
+    {
+      "type": "rx",
+      "line": "ok"
+    },
+    {
+      "type": "tx",
+      "bytes": "X50  \n"
+    },
+    {
+      "type": "rx",
+      "line": "X50"
+    },
+    {
+      "type": "rx",
+      "line": "ok"
+    },
+    {
+      "type": "tx",
+      "bytes": "G21  \n",
+      "comment": "The file reached its end, so it parks again."
+    },
+    {
+      "type": "rx",
+      "line": "G21"
+    },
+    {
+      "type": "rx",
+      "line": "ok"
+    },
+    {
+      "type": "tx",
+      "bytes": "G90  \n"
+    },
+    {
+      "type": "rx",
+      "line": "G90"
+    },
+    {
+      "type": "rx",
+      "line": "ok"
+    },
+    {
+      "type": "tx",
+      "bytes": "G00 Z5.0 \n"
+    },
+    {
+      "type": "rx",
+      "line": "G00 Z5.0"
+    },
+    {
+      "type": "rx",
+      "line": "ok"
+    },
+    {
+      "type": "tx",
+      "bytes": "G00 X-300.0 Y200.5  \n"
+    },
+    {
+      "type": "rx",
+      "line": "G00 X-300.0 Y200.5"
+    },
+    {
+      "type": "rx",
+      "line": "ok"
+    },
+    {
+      "type": "expect",
+      "state": {
+        "uploadFlag": 0,
+        "jobInProgress": false
+      }
+    }
+  ]
+}

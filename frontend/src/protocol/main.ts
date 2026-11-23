@@ -68,6 +68,27 @@ export const pacingUpdateSchema = z.object({
 });
 export type PacingUpdate = z.infer<typeof pacingUpdateSchema>;
 
+/** The park position: mm from the bed's centre in machine coordinates, so Set Home never moves it. */
+export const parkPositionSchema = z.object({ x: z.number(), y: z.number() });
+export type ParkPosition = z.infer<typeof parkPositionSchema>;
+
+export const macroCommandSchema = z.enum(["macro1", "macro2", "macro3", "macro4"]);
+export type MacroCommand = z.infer<typeof macroCommandSchema>;
+/** A macro as the menus show it; `empty` (Rust only) when its gcode is blank, so running it would do nothing. */
+export const macroSchema = z.object({
+  command: macroCommandSchema,
+  title: z.string(),
+  empty: z.boolean().default(false),
+});
+
+/** What a control-screen button slot holds: an action, the Z-Axis dialog, or a macro. */
+export const controlButtonSchema = z.enum(["park", "zAxis", "setHome", "setPark", ...macroCommandSchema.options]);
+export type ControlButton = z.infer<typeof controlButtonSchema>;
+/** The four slots, top to bottom down the jog pad's right side, then beside the distance; never one twice. */
+export const controlButtonsSchema = z.array(controlButtonSchema).length(4);
+/** PUT /api/display/controls body and answer; applies at once, also during a job. */
+export const controlButtonsUpdateSchema = z.strictObject({ buttons: controlButtonsSchema });
+
 /** Server -> client commands for the front page and the shared machine state. */
 export const mainMessages = {
   hostAddress: z.object({ hostAddress: z.string() }),
@@ -130,6 +151,12 @@ export const mainMessages = {
   /** Broadcast when the loaded gcode file changes: its path in the gcode library, or null once none is loaded. */
   gcodeFile: z.object({ file: z.string().nullable() }),
   pacingStats: pacingStatsSchema,
+  /** Broadcast when the park position changes; null while none is set. Rust only. */
+  parkPosition: z.object({ position: parkPositionSchema.nullable() }),
+  /** Broadcast when a macro's title or gcode changes. Rust only. */
+  macros: z.object({ macros: z.array(macroSchema) }),
+  /** Broadcast when the control button slots change. Rust only. */
+  controlButtons: z.object({ buttons: controlButtonsSchema }),
 } satisfies MessageSchemas;
 
 /** processAction commands the front page issues. */
@@ -148,8 +175,12 @@ export const mainActions = [
   "defineZ0",
   "touchZ",
   "returnToCenter",
+  "park",
+  "definePark",
   "macro1",
   "macro2",
+  "macro3",
+  "macro4",
   "moveGcodeZ",
   "moveGcodeGoto",
   "moveGcodeIndex",
@@ -184,7 +215,7 @@ export const startupStateSchema = z.object({
   controllerBoard: z.string().nullable().default(null),
   /** The version narrowed by fingerprint: every 51.29x build reports 51.29, so "51.292" or "51.29x"; null if unknown. */
   firmwareBuild: z.string().nullable().default(null),
-  macros: z.array(z.object({ command: z.enum(["macro1", "macro2"]), title: z.string() })),
+  macros: z.array(macroSchema),
   /** Which backend answered; `wc-switch` reads it. Absent from older Python builds. */
   backend: z.enum(["python", "rust"]).optional(),
   /** The webcontrol-rs release, such as "0.2.0". Rust only; Python never sends it. */
@@ -199,6 +230,10 @@ export const startupStateSchema = z.object({
   pacing: pacingStatsSchema.optional(),
   /** The uiTheme setting. Rust only. */
   theme: themeSchema.optional(),
+  /** The park position, or null while none is set. Rust only. */
+  park: parkPositionSchema.nullable().optional(),
+  /** The control button slots. Rust only. */
+  controlButtons: controlButtonsSchema.optional(),
 });
 export type StartupState = z.infer<typeof startupStateSchema>;
 

@@ -51,6 +51,15 @@ and an iPad if you have one. Read the README's safety and "Before a run" first.
       follows, and the desktop does not change.
 - [ ] Start an air cut (`jobs.md` section 2's setup, or any small file with Z raised), Pause it, and change the theme:
       it applies at once. The job lock refuses the other settings, not this one. Stop the job.
+- [ ] The control screen's right column reads Park, Z-Axis, Set Home Here, with Set Park Here beside the distance.
+      Settings ▸ Display ▸ Control buttons shows the same four in its four lists.
+- [ ] In Settings ▸ Maslow give Macro 3 the title `Vacuum` and the gcode `M5`, and save. Put Macro 3 in "Right
+      column, top": the list now reads "Macro 3: Vacuum", the grid shows Vacuum at once on the desktop and the
+      phone, and the grid's size does not change on either. Choose Z-Axis for "Beside the distance": it swaps with the
+      slot that held it. The `controlButtons` value in `webcontrol.json` lists the four.
+- [ ] Actions ▸ Macros lists Macro 1 to Macro 4 by title; those with no gcode are disabled. Press Vacuum: the log
+      shows `Sent: M5`. During a job every macro there and on the grid is disabled.
+- [ ] Put the control buttons back to Park, Z-Axis, Set Home Here, Set Park Here.
 - [ ] Put the theme back the way you like it.
 
 ## 4. The loaded file's name

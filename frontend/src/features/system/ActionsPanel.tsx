@@ -9,6 +9,8 @@ import type { ActionItem } from "./actionsCatalog";
 import { downloadUrl } from "./api";
 import { FakeServoDialog } from "./FakeServoDialog";
 import { FirmwareUpgradeDialog } from "./FirmwareUpgradeDialog";
+import { MacroEntries } from "./MacroEntries";
+import { ParkEntries } from "./ParkEntries";
 import { RestoreDialog } from "./RestoreDialog";
 import { useExperimental } from "../calibration/opticalApi";
 import { listedSetupLinks } from "./setupLinks";
@@ -115,6 +117,12 @@ export const ActionsPanel = ({ info }: { info: SystemInfo | null }) => {
                 </button>
               </>
             )}
+            {group.id === "setup" && (
+              <ParkEntries
+                allowed={isAllowed("noJob", runState, gcodeLocked)}
+                onSent={(label) => setNotice(`Sent “${label}”.`)}
+              />
+            )}
             {group.id === "setup" && setupLinks.map((link) => <SetupEntry key={link.to} link={link} info={info} />)}
             {group.id === "controller" && (
               <>
@@ -128,6 +136,10 @@ export const ActionsPanel = ({ info }: { info: SystemInfo | null }) => {
             )}
           </section>
         ))}
+        <MacroEntries
+          allowed={isAllowed("paused", runState, gcodeLocked)}
+          onSent={(label) => setNotice(`Sent “${label}”.`)}
+        />
       </div>
 
       {open?.kind === "confirm" && open.item.confirm && (

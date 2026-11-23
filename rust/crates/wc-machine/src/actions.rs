@@ -40,7 +40,7 @@ const SAFE_WHILE_PROBING: [&str; 13] = [
     "boardClearBoard",
 ];
 /// Commands that reach the controller, so they need it connected.
-const MACHINE_COMMANDS: [&str; 17] = [
+const MACHINE_COMMANDS: [&str; 21] = [
     "move",
     "moveTo",
     "moveZ",
@@ -52,15 +52,19 @@ const MACHINE_COMMANDS: [&str; 17] = [
     "returnToCenter",
     "macro1",
     "macro2",
+    "macro3",
+    "macro4",
     "setMaxZ",
     "setMinZ",
     "clearZ",
     "getZlimits",
     "cutTriangularCalibrationPattern",
     "cutHoleyCalibrationPattern",
+    "park",
+    "definePark",
 ];
 /// Python's `MACHINE_COMMANDS`: the manual commands a firmware pause refuses or a jog's `~` releases.
-const MANUAL_COMMANDS: usize = 15;
+const MANUAL_COMMANDS: usize = 17;
 
 fn is_blank(value: &Value) -> bool {
     value.as_str() == Some("")
@@ -71,6 +75,9 @@ impl Machine {
         let command = action.command.as_str();
         if self.upgrade.holds_link() && !crate::upgrade::allowed_while_flashing(command) {
             return effects.push(alert("Wait for the firmware upgrade to finish."));
+        }
+        if !SAFE_WHILE_PROBING.contains(&command) && command != "resumeRun" {
+            self.park_cancelled();
         }
         // Resume confirms a Z adjusted by hand, which the scan's raise asks for on a machine without a Z motor.
         let optical_allowed = SAFE_WHILE_PROBING.contains(&command)
@@ -141,12 +148,14 @@ impl Machine {
                 self.queue(["G10 Z0 ".to_string()]);
                 None
             }
-            "touchZ" => self.touch_z(),
+            "touchZ" => self.touch_z_from_park().or_else(|| self.touch_z()),
             "reportSettings" => {
                 self.queue(["$$".to_string()]);
                 None
             }
-            "macro1" | "macro2" => self.run_macro(command),
+            _ if crate::controls::MACROS.contains(&command) => self.run_macro(command),
+            "park" => self.park_action(effects),
+            "definePark" => self.define_park(effects),
             "setMaxZ" => self.set_z_limit(63),
             "setMinZ" => self.set_z_limit(64),
             "clearZ" => self.z_limits(|| {

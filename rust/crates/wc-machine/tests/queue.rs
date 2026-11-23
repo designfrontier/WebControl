@@ -331,6 +331,61 @@ fn a_lost_link_or_a_controller_reset_stops_the_queue() {
     stopped_by(&mut shop, "restarted");
 }
 
+const PARK: [&str; 4] = ["G21", "G90", "G00 Z5.0", "G00 X100.0 Y-50.0"];
+
+fn parking(files: &[(&'static str, &'static str)]) -> Shop {
+    let park = settings(&[("Maslow Settings", "parkX", json!("100")), ("Maslow Settings", "parkY", json!("-50"))]);
+    let mut shop = Shop::with(park, files);
+    shop.fit(1);
+    shop.open(files[0].0);
+    files.iter().for_each(|(name, _)| {
+        shop.add(name);
+    });
+    shop
+}
+
+#[test]
+fn the_queue_parks_after_its_last_file_and_never_between_files() {
+    let mut shop = parking(&[A, SAME]);
+    shop.act("startRun");
+    let sent = shop.run();
+    assert_eq!(sent[..6], ["G0 Z5", "G1 X1 F100", "G0 Z5", SAFE, "T1 M6", "G1 X2"], "no park between files");
+    assert_eq!(sent[6..], PARK);
+    let logged =
+        |label: &str| shop.effects.iter().filter(|e| matches!(e, Effect::Log(t) if t.starts_with(label))).count();
+    assert_eq!((logged("PARK START trigger=queue"), logged("PARK START trigger=file")), (1, 0));
+}
+
+#[test]
+fn a_queue_stopped_at_the_prompt_or_by_a_refused_line_never_parks() {
+    let mut shop = parking(&[A, OTHER]);
+    shop.act("startRun");
+    shop.run();
+    stop(&mut shop);
+    assert!(!shop.run().contains(&PARK[3].to_string()));
+
+    let mut shop = parking(&[("probe.nc", "G1 X1|G38.4 Z-1|G1 X2")]);
+    shop.act("startRun");
+    assert_eq!(shop.run(), ["G1 X1"]);
+}
+
+#[test]
+fn pause_once_the_queues_last_line_is_out_stops_the_queue_and_never_parks() {
+    let mut shop = parking(&[A]);
+    shop.act("startRun");
+    ["G0 Z5", "G1 X1 F100", "G0 Z5"].iter().for_each(|line| {
+        assert_eq!(shop.outbox.pop_front().as_deref(), Some(*line));
+        shop.answer(line);
+        while shop.outbox.is_empty() && shop.queue()["step"] != "finishing" {
+            let effects = shop.rig.advance(10);
+            shop.take(effects);
+        }
+    });
+    shop.act("pauseRun");
+    assert_eq!(shop.run(), Vec::<String>::new(), "no park");
+    assert_eq!(shop.queue()["state"], "stopped");
+}
+
 #[test]
 fn a_refused_line_stops_the_queue() {
     let mut shop = Shop::new(&[("probe.nc", "G1 X1|G38.4 Z-1|G1 X2"), SAME]);
@@ -737,4 +792,79 @@ fn continue_where_stop_left_a_file_with_the_override_restores_no_tool_change() {
     let sent = shop.run();
     assert!(!sent.iter().any(|line| line.contains("M6")), "{sent:?}");
     assert!(sent.ends_with(&["G1 X6".into(), "G1 X7".into()]), "{sent:?}");
+}
+
+/// As `playing`, with a park position and Park for Tool Changes on.
+fn playing_parked(next: (&'static str, &'static str)) -> Shop {
+    let park = [
+        ("Maslow Settings", "parkX", json!("-300")),
+        ("Maslow Settings", "parkY", json!("200.5")),
+        ("Maslow Settings", "parkForToolChange", json!(1)),
+    ];
+    let mut shop = Shop::with(settings(&park), &[A, next]);
+    shop.fit(1);
+    shop.open("a.nc");
+    shop.add("a.nc");
+    shop.add(next.0);
+    shop.act("startRun");
+    shop
+}
+
+const TO_PARK: [&str; 5] = ["~", "G21", "G90", SAFE, "G00 X-300.0 Y200.5"];
+
+#[test]
+fn a_bit_change_between_files_parks_and_resume_returns_before_the_next_file() {
+    let mut shop = playing_parked(OTHER);
+    let sent = shop.run();
+    assert_eq!(sent[..6], ["G0 Z5", "G1 X1 F100", "G0 Z5", SAFE, "M5", "T2 M6"]);
+    assert_eq!(sent[6..], TO_PARK, "parked for the bit swap");
+    assert_eq!(shop.queue()["step"], "toolChange");
+    shop.act("resumeRun");
+    let back = ["~", "G21", "G90", SAFE, "G00 X1.0 Y0.0", "T2 M6", "G1 X3"];
+    let sent = shop.run();
+    assert_eq!(sent[..7], back, "back where the last file ended, at safe height, then the next file");
+    assert_eq!(sent[7..], TO_PARK[1..], "and the queue's end parks");
+}
+
+#[test]
+fn touch_z_at_a_parked_bit_change_goes_back_to_the_work_first() {
+    let mut shop = playing_parked(OTHER);
+    shop.run();
+    shop.act("touchZ");
+    assert_eq!(shop.run(), ["G21", "G90", SAFE, "G00 X1.0 Y0.0"], "no probe at the park position");
+    assert!(shop.effects.iter().any(|effect| format!("{effect:?}").contains("Touch Z again")));
+    shop.act("touchZ");
+    assert_eq!(shop.run(), ["G90 G38.2 Z-10"], "the second Touch Z probes where the sled now is");
+}
+
+#[test]
+fn a_skipped_bit_change_never_parks() {
+    let park = [
+        ("Maslow Settings", "parkX", json!("-300")),
+        ("Maslow Settings", "parkY", json!("200.5")),
+        ("Maslow Settings", "parkForToolChange", json!(1)),
+    ];
+    let mut shop = Shop::with(settings(&park), &[A, OTHER]);
+    shop.fit(1);
+    shop.open("a.nc");
+    shop.add("a.nc");
+    shop.add_with("other.nc", true);
+    shop.act("startRun");
+    let sent = shop.run();
+    let first_park = sent.iter().position(|line| line.contains("X-300"));
+    assert_eq!(first_park, Some(sent.len() - 1), "only the queue's end parks: {sent:?}");
+}
+
+#[test]
+fn stop_at_a_parked_bit_change_stops_the_queue_with_z_up() {
+    let mut shop = playing_parked(OTHER);
+    shop.run();
+    shop.act("stopRun");
+    shop.rig.advance(300);
+    shop.rx("<Idle,MPos:-300.00,200.50,5.00,WPos:0.000,0.000,0.000>");
+    let sent = shop.run();
+    assert!(!sent.iter().any(|line| line.contains(" Z") && !line.contains("Z5")), "{sent:?}");
+    assert_eq!(shop.queue()["state"], "stopped", "{}", shop.queue());
+    shop.act("resumeRun");
+    assert!(!shop.run().iter().any(|line| line.starts_with("G00 X1.0")), "Stop forgot where to go back to");
 }

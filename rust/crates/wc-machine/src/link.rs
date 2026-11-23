@@ -280,7 +280,7 @@ impl Machine {
             Reply::Measured(mm) if self.upgrade.collects_chains() => self.upgrade_measured(mm),
             Reply::Measured(mm) => self.measured(mm, now, effects),
             Reply::FakeServo(on) => self.fake_servo = on,
-            Reply::MaslowPaused => self.firmware_paused(effects),
+            Reply::MaslowPaused => self.firmware_paused(now, effects),
             Reply::ToolChange { tool } => self.tool_change_prompt(line, tool, effects),
             Reply::Message(text) => self.controller_notice(&text, effects),
             Reply::Alarm(text) => {
@@ -305,6 +305,9 @@ impl Machine {
                 }
             }
             Reply::Error(_) | Reply::Other(_) => {
+                if matches!(reply, Reply::Error(_)) {
+                    self.park_cancelled();
+                }
                 self.upgrade_report(line);
                 if !self.pid_line(line, now, effects) && !line.is_empty() {
                     effects.push(controller_message(line));

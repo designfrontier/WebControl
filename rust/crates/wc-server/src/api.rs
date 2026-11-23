@@ -13,7 +13,7 @@ use wc_machine::forms::{self, CUSTOM_FIRMWARE_VERSION};
 use wc_machine::{Request, Response as Answer};
 use wc_protocol::calibration::{HoleyParameters, TriangularParameters};
 use wc_protocol::machine::{MachineSetup, QuickConfigure};
-use wc_protocol::main::{Backend, GcodeLine, Macro, MainScreen, PacingStats, Point, StartupState, Units};
+use wc_protocol::main::{Backend, GcodeLine, MainScreen, PacingStats, Point, StartupState, Units};
 use wc_protocol::system::{BundledFirmware, PidSettings, SystemInfo};
 use wc_protocol::viewer::{MachineFrame, ViewerSnapshot};
 
@@ -44,9 +44,7 @@ pub(crate) async fn state(State(state): State<AppState>) -> Json<StartupState> {
         controller_firmware_version: snapshot.controller_firmware_version,
         controller_board: snapshot.controller_board.clone(),
         firmware_build: snapshot.firmware_build.clone(),
-        macros: (1..=2)
-            .map(|n| Macro::new(n, &settings.text_or_empty("Maslow Settings", &format!("macro{n}_title"))))
-            .collect(),
+        macros: wc_machine::controls::macros(settings),
         backend: Backend::Rust,
         version: crate::VERSION.into(),
         commit: crate::COMMIT.into(),
@@ -54,6 +52,8 @@ pub(crate) async fn state(State(state): State<AppState>) -> Json<StartupState> {
         gcode_file: snapshot.gcode_name.clone(),
         pacing: (*snapshot.pacing).clone(),
         theme: forms::theme(settings),
+        park: wc_machine::park::position(settings),
+        control_buttons: wc_machine::controls::buttons(settings),
     })
 }
 
@@ -70,6 +70,11 @@ pub(crate) async fn update_pacing(State(state): State<AppState>, body: Bytes) ->
 /// `PUT /api/display/theme`.
 pub(crate) async fn update_theme(State(state): State<AppState>, body: Bytes) -> Response {
     answer(&state, Request::Theme(json_body(&body))).await
+}
+
+/// `PUT /api/display/controls`.
+pub(crate) async fn update_controls(State(state): State<AppState>, body: Bytes) -> Response {
+    answer(&state, Request::ControlButtons(json_body(&body))).await
 }
 
 /// `api/main.py`'s `_flag`: a number's truth, else the text `true`.

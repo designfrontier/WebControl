@@ -1,0 +1,81 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "park_after_a_file_finishes",
+    "description": "A park position is set (-300, 200.5 mm, machine coordinates). A short job shifted by home runs to its end; once the controller has answered its last line the sled parks: units and G90 again, Z to the safe height (never lower than the bit), then a rapid to the park position, which home does not shift. Z stays up. The run writes a PARK START line to the log and the console.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.27"
+    },
+    "webcontrolCommit": "3ac808f"
+  },
+  "setup": {
+    "settings": {
+      "Maslow Settings": {
+        "parkX": "-300",
+        "parkY": "200.5"
+      }
+    },
+    "units": "MM",
+    "home": {
+      "x": 12.3456,
+      "y": -7.25
+    },
+    "sled": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "gcode": {
+      "lines": ["G21", "G90", "G0 Z5", "G0 X10 Y10", "G1 Z-1 F127", "G1 X20 F600", "G0 Z3"]
+    },
+    "bootBanner": [
+      "PCB v1.1 Detected",
+      "Grbl v1.00",
+      "ready",
+      "ok",
+      "[Forward Calculating Position]",
+      "position loaded at:",
+      "247.79",
+      "-5.88"
+    ]
+  },
+  "events": [
+    {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "G21"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "G90"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 Z5  \n"},
+    {"type": "rx", "line": "G0 Z5"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 X22.3456 Y2.75  \n"},
+    {"type": "rx", "line": "G0 X22.3456 Y2.75"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 Z-1 F127  \n"},
+    {"type": "rx", "line": "G1 Z-1 F127"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G1 X32.3456 F600  \n"},
+    {"type": "rx", "line": "G1 X32.3456 F600"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G0 Z3  \n"},
+    {"type": "rx", "line": "G0 Z3"},
+    {"type": "expect", "state": {"jobInProgress": true}, "notEmitted": [{"command": "controllerMessage", "data": "PARK"}], "comment": "The last line is still running: nothing parks yet."},
+    {"type": "rx", "line": "ok", "comment": "The file is done once its last line is answered; the park follows."},
+    {"type": "tx", "bytes": "G21  \n"},
+    {"type": "rx", "line": "G21"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G90  \n"},
+    {"type": "rx", "line": "G90"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G00 Z5.0 \n", "comment": "The bit is at 3 mm, under the 5 mm safe height, so it rises to 5."},
+    {"type": "rx", "line": "G00 Z5.0"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "G00 X-300.0 Y200.5  \n"},
+    {"type": "rx", "line": "G00 X-300.0 Y200.5"},
+    {"type": "rx", "line": "ok"},
+    {"type": "expect", "state": {"jobInProgress": false, "uploadFlag": 0, "positioningMode": "G90"}, "emitted": [{"command": "controllerMessage", "data": "PARK START trigger=file x_mm=-300.0 y_mm=200.5 units=MM x=-300.0 y=200.5"}]}
+  ]
+}

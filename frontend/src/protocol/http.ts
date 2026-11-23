@@ -42,7 +42,13 @@ import {
   uploadGcodeFormSchema,
 } from "./files";
 import { machineSetupSchema, quickConfigureSchema } from "./machine";
-import { mainScreenStateSchema, pacingStatsSchema, pacingUpdateSchema, startupStateSchema } from "./main";
+import {
+  controlButtonsUpdateSchema,
+  mainScreenStateSchema,
+  pacingStatsSchema,
+  pacingUpdateSchema,
+  startupStateSchema,
+} from "./main";
 import {
   jobQueueSchema,
   queueAddSchema,
@@ -367,6 +373,16 @@ export const httpEndpoints: HttpEndpoint[] = [
     responses: {
       200: json(themeUpdateSchema, "The stored theme, also broadcast as a theme message"),
       400: error("Not a theme, or other fields beside it"),
+    },
+  }),
+  api({
+    method: "PUT",
+    path: "/api/display/controls",
+    summary: "Choose what the control screen's four button slots hold, for every client, also during a job (Rust only)",
+    body: json(controlButtonsUpdateSchema),
+    responses: {
+      200: json(controlButtonsUpdateSchema, "The stored slots, also broadcast as a controlButtons message"),
+      400: error("Not four known buttons, a button twice, or other fields beside them"),
     },
   }),
   api({

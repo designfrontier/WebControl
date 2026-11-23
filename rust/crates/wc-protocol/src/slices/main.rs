@@ -294,12 +294,45 @@ pub struct Point {
 pub struct Macro {
     pub command: String,
     pub title: String,
+    /// Its gcode is blank, so the menus disable it (Rust only).
+    pub empty: bool,
 }
 
 impl Macro {
-    pub fn new(number: u8, title: &str) -> Macro {
-        Macro { command: format!("macro{number}"), title: title.into() }
+    pub fn new(number: u8, title: &str, empty: bool) -> Macro {
+        Macro { command: format!("macro{number}"), title: title.into(), empty }
     }
+}
+
+/// Broadcast when a macro's title or gcode changes (Rust only).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct MacrosMessage {
+    pub macros: Vec<Macro>,
+}
+
+impl Message for MacrosMessage {
+    const COMMAND: &'static str = "macros";
+}
+
+/// The control screen's four button slots, broadcast when they change and the body of `PUT /api/display/controls`
+/// (Rust only).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ControlButtons {
+    pub buttons: Vec<String>,
+}
+
+impl Message for ControlButtons {
+    const COMMAND: &'static str = "controlButtons";
+}
+
+/// Broadcast when the park position changes (Rust only).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct ParkPositionMessage {
+    pub position: Option<Point>,
+}
+
+impl Message for ParkPositionMessage {
+    const COMMAND: &'static str = "parkPosition";
 }
 
 /// Broadcast when the loaded gcode file changes; `None` once nothing is loaded.
@@ -347,6 +380,10 @@ pub struct StartupState {
     pub pacing: PacingStats,
     /// The `uiTheme` setting (Rust only).
     pub theme: Theme,
+    /// The park position in mm, machine coordinates; `None` while none is set (Rust only).
+    pub park: Option<Point>,
+    /// The control button slots (Rust only).
+    pub control_buttons: Vec<String>,
 }
 
 /// One stretch of a job streamed at one line pacing (`spec/firmware.md` B3), or a whole job's totals.

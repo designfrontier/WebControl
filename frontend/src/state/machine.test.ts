@@ -58,6 +58,35 @@ describe("machineReducer socket and startup", () => {
   });
 });
 
+describe("machineReducer park position", () => {
+  it("takes the park position from /api/state, follows parkPosition pushes and has none from an older server", () => {
+    const loaded = apply([{ type: "startup", state: startupState({ park: { x: 10, y: -20 } }) }]);
+    expect(loaded.park).toEqual({ x: 10, y: -20 });
+    expect(apply([message("parkPosition", { position: null })], loaded).park).toBeNull();
+    expect(apply([{ type: "startup", state: startupState() }], loaded).park).toBeNull();
+  });
+});
+
+describe("machineReducer macros", () => {
+  it("replaces the macros a macros push lists", () => {
+    const macros = [{ command: "macro3" as const, title: "Vacuum", empty: false }];
+    expect(apply([message("macros", { macros })]).macros).toEqual(macros);
+  });
+});
+
+describe("machineReducer control buttons", () => {
+  it("starts with the default slots, takes them from /api/state and follows controlButtons pushes", () => {
+    expect(initialMachineState.controlButtons).toEqual(["park", "zAxis", "setHome", "setPark"]);
+    const loaded = apply([
+      { type: "startup", state: startupState({ controlButtons: ["macro1", "park", "zAxis", "setPark"] }) },
+    ]);
+    expect(loaded.controlButtons).toEqual(["macro1", "park", "zAxis", "setPark"]);
+    expect(apply([{ type: "startup", state: startupState() }], loaded).controlButtons).toEqual(loaded.controlButtons);
+    const pushed = apply([message("controlButtons", { buttons: ["zAxis", "park", "setHome", "macro4"] })], loaded);
+    expect(pushed.controlButtons).toEqual(["zAxis", "park", "setHome", "macro4"]);
+  });
+});
+
 describe("machineReducer link state from /api/state", () => {
   const link = { status: "connected", port: "/dev/ttyACM0", fakeServoStatus: true } as const;
 

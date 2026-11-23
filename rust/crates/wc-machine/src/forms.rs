@@ -39,6 +39,7 @@ const RING_RADIUS: f64 = 138.4;
 /// Python-only settings an older `webcontrol.json` still carries; kept in the file, left off the screens.
 const RETIRED_KEYS: [&str; 1] = ["recordSerial"];
 pub const THEME_SECTION: &str = "WebControl Settings";
+const PARK_KEYS: [&str; 2] = [crate::park::X_KEY, crate::park::Y_KEY];
 /// Changed only through `PUT /api/display/theme`, so it stays off the section forms.
 pub const THEME_KEY: &str = "uiTheme";
 
@@ -93,7 +94,10 @@ fn describe(section: &str, option: &Map<String, Value>) -> SettingField {
     SettingField {
         title: text("title").unwrap_or_else(|| key.clone()),
         desc: description(option),
-        numeric: kind == "int" || kind == "float" || (kind == "string" && is_number(value_or_default)),
+        numeric: kind == "int"
+            || kind == "float"
+            || (kind == "string" && is_number(value_or_default))
+            || PARK_KEYS.contains(&key.as_str()),
         custom: option.get("custom") == Some(&Value::from(1)),
         key,
         kind,
@@ -113,7 +117,10 @@ pub fn section(settings: &Settings, id: &str, firmware_version: f64, ports: &[St
             .section(title)
             .into_iter()
             .map(|option| describe(title, option))
-            .filter(|field| !RETIRED_KEYS.contains(&field.key.as_str()) && field.key != THEME_KEY)
+            .filter(|field| {
+                !RETIRED_KEYS.contains(&field.key.as_str())
+                    && ![THEME_KEY, crate::controls::BUTTONS_KEY].contains(&field.key.as_str())
+            })
             .collect(),
         ports: (id == "maslow").then(|| ports.to_vec()),
     })
@@ -151,13 +158,18 @@ fn setting_error(field: &SettingField, value: &Value, enable_custom: bool, ports
         Some("Must be one of the listed options")
     } else if field.kind == "int" && !is_int(value) {
         Some("Must be a whole number")
-    } else if field.numeric && !is_number(Some(value)) {
+    } else if field.numeric && !is_number(Some(value)) && !blank_park(&field.key, value) {
         Some("Must be a number")
     } else {
         pid_error(&field.key, value)
             .or_else(|| pacing_error(&field.key, value))
             .or_else(|| safe_height_error(&field.key, value))
     }
+}
+
+/// Blank park settings mean no park position.
+fn blank_park(key: &str, value: &Value) -> bool {
+    PARK_KEYS.contains(&key) && value.as_str().is_some_and(|text| text.trim().is_empty())
 }
 
 /// Home, Return to Center, a restart and Accept refuse to raise to a safe height of 0 or less.

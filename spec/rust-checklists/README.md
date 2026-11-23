@@ -21,7 +21,7 @@ numbers, or the transcripts CI replays.
 | `rust/deploy.sh push` and `rollback` from the Mac | [`install-update.md`](install-update.md) 7 | No |
 | Status bar: server, controller, firmware and version chips | [`ui.md`](ui.md) 1 | No |
 | Help pages, About, the log viewer, Clear log files | [`ui.md`](ui.md) 2 | No |
-| Display theme (Settings ▸ Display) | [`ui.md`](ui.md) 3 | No |
+| Display theme, control buttons and macros (Settings ▸ Display, Actions ▸ Macros) | [`ui.md`](ui.md) 3 | No |
 | The loaded file's name | [`ui.md`](ui.md) 4 | No |
 | Phone and iPad layouts | [`ui.md`](ui.md) 5 | No |
 | Connect, the boot handshake, reset on open, unplug and replug | [`connection.md`](connection.md) 1 | No |
@@ -38,6 +38,7 @@ numbers, or the transcripts CI replays.
 | The first real cut | [`jobs.md`](jobs.md) 7 | Yes: router on |
 | Job queue: files back to back, bit checks and the override, stops, Continue, restarts | [`queue.md`](queue.md) | Yes: an air cut |
 | The tool library, a file's tools at a tool change | [`tools.md`](tools.md) | Yes: an air cut |
+| Parking: Set Park Here, Park, the park after a file or a queue, the refusals | [`parking.md`](parking.md) | Yes: an air cut |
 | Lost-line recovery | [`pacing.md`](pacing.md) 1 | Yes: an air cut |
 | Line pacing: presets, custom, mid-job changes, run-panel stats, `PACING` log lines | [`pacing.md`](pacing.md) 2-4 | Yes: an air cut |
 | Holey and triangular calibration, the test pattern, computed sled position | [`calibration.md`](calibration.md) | Yes: the pattern, in the air |

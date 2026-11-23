@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "macros",
+  "type": "object",
+  "properties": {
+    "macros": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "macro1",
+              "macro2",
+              "macro3",
+              "macro4"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "empty": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "command",
+          "title"
+        ]
+      }
+    }
+  },
+  "required": [
+    "macros"
+  ]
+}
