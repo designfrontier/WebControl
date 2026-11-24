@@ -23,3 +23,17 @@ export const fileNameProblem = (name: string) =>
 
 export const describeLocation = (directory: string | null, name: string) =>
   directory === null || directory === LIBRARY_ROOT ? name : `${directory}/${name}`;
+
+/** A file or directory about to be deleted; `files` is set for a directory. */
+export interface Doomed {
+  path: string;
+  label: string;
+  files?: number;
+}
+
+export const deletePrompt = ({ label, files }: Doomed) =>
+  files === undefined
+    ? `Delete ${label}? This cannot be undone.`
+    : files === 0
+      ? `Delete the empty directory ${label}? This cannot be undone.`
+      : `Delete the directory ${label} and the ${files === 1 ? "file" : `${files} files`} in it? This cannot be undone.`;

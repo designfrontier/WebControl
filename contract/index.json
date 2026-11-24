@@ -989,6 +989,37 @@
       }
     },
     {
+      "method": "POST",
+      "path": "/api/files/gcode/delete",
+      "family": "api",
+      "summary": "Delete a gcode file, or a directory and everything in it (Rust only)",
+      "body": {
+        "contentType": "application/json",
+        "schema": "schemas/http/post-api-files-gcode-delete.request.json"
+      },
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/post-api-files-gcode-delete.200.json"
+        },
+        "400": {
+          "contentType": "application/json",
+          "description": "Outside the library, or the top level",
+          "schema": "schemas/http/post-api-files-gcode-delete.400.json"
+        },
+        "404": {
+          "contentType": "application/json",
+          "description": "No such file or directory",
+          "schema": "schemas/http/post-api-files-gcode-delete.404.json"
+        },
+        "409": {
+          "contentType": "application/json",
+          "description": "The loaded file, a queued file, or a directory holding one",
+          "schema": "schemas/http/post-api-files-gcode-delete.409.json"
+        }
+      }
+    },
+    {
       "method": "GET",
       "path": "/api/files/gcode/loaded",
       "family": "api",

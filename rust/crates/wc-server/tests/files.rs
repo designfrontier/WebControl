@@ -97,6 +97,75 @@ async fn a_directory_that_cannot_be_made_is_a_server_error() {
     assert_eq!(reply.status, StatusCode::INTERNAL_SERVER_ERROR);
 }
 
+#[tokio::test]
+async fn a_file_or_a_directory_with_everything_in_it_is_deleted() {
+    let server = Server::new();
+    server.write("gcode/part.nc", "G0 X0\n");
+    server.write("gcode/keep.nc", "G0 X0\n");
+    server.write("gcode/jobs/leg.nc", "G0 X0\n");
+    server.write("gcode/jobs/deeper/arm.nc", "G0 X0\n");
+    let reply = server.post_json("/api/files/gcode/delete", json!({"path": "./part.nc"})).await;
+    assert_eq!(reply.status, StatusCode::OK);
+    assert_eq!(
+        reply.json()["files"],
+        json!([{"directory": ".", "name": "keep.nc"}, {"directory": "jobs", "name": "leg.nc"}])
+    );
+    assert!(!server.dir().join("gcode/part.nc").exists());
+    let reply = server.post_json("/api/files/gcode/delete", json!({"path": "jobs"})).await;
+    assert_eq!(reply.json(), json!({"directories": ["."], "files": [{"directory": ".", "name": "keep.nc"}]}));
+    assert!(!server.dir().join("gcode/jobs").exists());
+}
+
+#[tokio::test]
+async fn the_loaded_file_a_queued_file_and_their_directories_are_kept() {
+    let server = Server::new();
+    server.write("gcode/jobs/leg.nc", SQUARE);
+    server.write("gcode/queued/a.nc", SQUARE);
+    server.write("gcode/jobs2/other.nc", SQUARE);
+    assert_eq!(server.post_form("/openGCode", &[Part::Field("selectedGCode", "jobs/leg.nc")]).await.status, 200);
+    assert_eq!(server.post_json("/api/queue/add", json!({"file": "queued/a.nc"})).await.status, 200);
+    for path in ["jobs/leg.nc", "jobs", "./jobs/", "queued/a.nc", "queued"] {
+        let reply = server.post_json("/api/files/gcode/delete", json!({"path": path})).await;
+        assert_eq!(reply.status, StatusCode::CONFLICT, "{path}");
+        assert!(reply.json()["error"].as_str().unwrap().contains("the loaded gcode or a file in the job queue"));
+    }
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(server.dir().join("gcode/jobs"), server.dir().join("gcode/link")).unwrap();
+        let reply = server.post_json("/api/files/gcode/delete", json!({"path": "link/leg.nc"})).await;
+        assert_eq!(reply.status, StatusCode::CONFLICT);
+    }
+    assert!(server.dir().join("gcode/jobs/leg.nc").is_file() && server.dir().join("gcode/queued/a.nc").is_file());
+    assert_eq!(server.post_json("/api/files/gcode/delete", json!({"path": "jobs2"})).await.status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn a_delete_stays_inside_the_library_and_below_its_top_level() {
+    let server = Server::new();
+    server.write("precious.txt", "keep");
+    for (path, status) in [
+        ("../precious.txt", StatusCode::BAD_REQUEST),
+        ("/etc", StatusCode::BAD_REQUEST),
+        (".", StatusCode::BAD_REQUEST),
+        ("", StatusCode::BAD_REQUEST),
+        ("missing.nc", StatusCode::NOT_FOUND),
+    ] {
+        assert_eq!(server.post_json("/api/files/gcode/delete", json!({"path": path})).await.status, status, "{path}");
+    }
+    assert!(server.dir().join("precious.txt").is_file() && server.dir().join("gcode").is_dir());
+    let reply = server.post_raw("/api/files/gcode/delete", "application/json", br#"{"name": "x"}"#).await;
+    assert_eq!(reply.status, StatusCode::BAD_REQUEST);
+    #[cfg(unix)]
+    {
+        let outside = tempfile::tempdir().unwrap();
+        std::fs::write(outside.path().join("a.nc"), "").unwrap();
+        std::os::unix::fs::symlink(outside.path(), server.dir().join("gcode/out")).unwrap();
+        let reply = server.post_json("/api/files/gcode/delete", json!({"path": "out/a.nc"})).await;
+        assert_eq!(reply.status, StatusCode::BAD_REQUEST);
+        assert!(outside.path().join("a.nc").is_file());
+    }
+}
+
 /// Upstream #51: View/Edit G-code line N, Go to line N (which sends N - 1) and the Line readout are the same line.
 #[tokio::test]
 async fn go_to_line_n_shows_the_editors_line_n() {

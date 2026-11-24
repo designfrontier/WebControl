@@ -1,10 +1,13 @@
 import { useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { CloseButton } from "../../app/CloseButton";
+import { ConfirmDialog } from "../../app/Dialog";
+import { LIBRARY_ROOT } from "../../protocol";
 import type { CreatedDirectory, Library, LibraryFile } from "../../protocol";
 import { useSubmit } from "./hooks";
 import type { SubmitOptions } from "./hooks";
-import { fileNameProblem, filesIn, initialDirectory, initialFile } from "./library";
+import { deletePrompt, fileNameProblem, filesIn, initialDirectory, initialFile, libraryPath } from "./library";
+import type { Doomed } from "./library";
 import type { Listing } from "./library";
 import { FormError, LibraryPicker, NewDirectoryForm } from "./ui";
 
@@ -21,6 +24,8 @@ interface OpenProps {
   enqueue?: (file: LibraryFile) => Promise<number>;
   /** Shown beside Add to queue, such as the file's bit-change override. */
   enqueueOptions?: ReactNode;
+  /** Deletes a file's library path or a directory, resolving to the listing after it. */
+  remove?: (path: string) => Promise<Listing>;
 }
 
 /** Choose a file from a library (gcode or boards) and open it. */
@@ -33,12 +38,16 @@ export const OpenFromLibrary = ({
   submitOptions,
   enqueue,
   enqueueOptions,
+  remove,
 }: OpenProps) => {
+  const [listing, setListing] = useState<Listing>(library);
   const [directory, setDirectory] = useState(() => initialDirectory(library));
   const [selected, setSelected] = useState(() => initialFile(library, initialDirectory(library)));
   const [queued, setQueued] = useState<string | null>(null);
+  const [doomed, setDoomed] = useState<Doomed | null>(null);
   const { busy, error, setError, run } = useSubmit(submitOptions);
   const adding = useSubmit();
+  const deleting = useSubmit();
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -55,10 +64,25 @@ export const OpenFromLibrary = ({
     }, `Could not add ${selected} to the queue.`);
   };
 
+  const askDeleteFile = () =>
+    selected
+      ? setDoomed({ path: libraryPath({ directory, name: selected }), label: selected })
+      : deleting.setError("Choose a file to delete.");
+
+  const confirmDelete = (doom: (path: string) => Promise<Listing>, { path, label }: Doomed) => {
+    setDoomed(null);
+    return deleting.run(async () => {
+      const next = await doom(path);
+      setListing(next);
+      setSelected(null);
+      if (!next.directories.includes(directory)) setDirectory(LIBRARY_ROOT);
+    }, `Could not delete ${label}.`);
+  };
+
   return (
     <form onSubmit={submit} noValidate>
       <LibraryPicker
-        listing={library}
+        listing={listing}
         directory={directory}
         onDirectoryChange={(next) => {
           setDirectory(next);
@@ -68,7 +92,7 @@ export const OpenFromLibrary = ({
         onSelect={setSelected}
         legend={legend}
       />
-      <FormError message={error ?? adding.error} />
+      <FormError message={error ?? adding.error ?? deleting.error} />
       {lockedReason && <p className="muted">{lockedReason}</p>}
       {enqueue && (
         <p className="muted">
@@ -87,9 +111,34 @@ export const OpenFromLibrary = ({
             {adding.busy ? "Adding…" : "Add to queue"}
           </button>
         )}
+        {remove && (
+          <button type="button" disabled={busy || deleting.busy} onClick={askDeleteFile}>
+            Delete file
+          </button>
+        )}
+        {remove && directory !== LIBRARY_ROOT && (
+          <button
+            type="button"
+            disabled={busy || deleting.busy}
+            onClick={() => setDoomed({ path: directory, label: directory, files: filesIn(listing, directory).length })}
+          >
+            Delete directory
+          </button>
+        )}
         <CloseButton>Cancel</CloseButton>
       </div>
       {queued && <p role="status">{queued}</p>}
+      {remove && doomed && (
+        <ConfirmDialog
+          title="Delete from the library"
+          confirmLabel="Delete"
+          danger
+          onConfirm={() => confirmDelete(remove, doomed)}
+          onCancel={() => setDoomed(null)}
+        >
+          <p>{deletePrompt(doomed)}</p>
+        </ConfirmDialog>
+      )}
     </form>
   );
 };

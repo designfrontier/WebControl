@@ -31,6 +31,9 @@ export type GcodeLibrary = z.infer<typeof gcodeLibrarySchema>;
 export const createdDirectorySchema = z.object({ ...listingShape, directory: z.string() });
 export type CreatedDirectory = z.infer<typeof createdDirectorySchema>;
 
+/** POST /api/files/gcode/delete: the listing after the delete. */
+export const libraryListingSchema = z.object(listingShape);
+
 /** GET /api/files/gcode/loaded: directory is null when the file is outside the library. */
 export const loadedGcodeSchema = z.object({
   directory: z.string().nullable(),
@@ -49,6 +52,9 @@ export const gcodeTextSchema = z.object({ text: z.string() });
 export const directoryRequestSchema = z.object({ name: z.string() });
 
 export const libraryPathField = z.string().describe('"<directory>/<file name>"; directory "." is the library root.');
+
+/** POST /api/files/gcode/delete body: a file's library path, or a directory's name to delete it and all it holds. */
+export const gcodeDeleteSchema = z.object({ path: z.string() });
 
 /** Form bodies (multipart/form-data) of the classic gcode and import routes. */
 export const openGcodeFormSchema = z.object({ selectedGCode: libraryPathField });

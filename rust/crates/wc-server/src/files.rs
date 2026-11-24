@@ -12,13 +12,20 @@ use wc_config::Settings;
 use wc_config::library::{LIBRARY_ROOT, Listing, directory_setting, list_library, resolve_inside, secure_filename};
 use wc_machine::files::{GCODE_LOCKED, Gcode, Origin, Problem, Reply, Request as Ask};
 use wc_machine::{Event, MachineHandle};
-use wc_protocol::files::{ApiError, CreatedDirectory, DirectoryRequest, GcodeText, Library, LibraryFile, LoadedGcode};
+use wc_protocol::files::{
+    ApiError, CreatedDirectory, DirectoryRequest, GcodeDelete, GcodeText, Library, LibraryFile, LibraryListing,
+    LoadedGcode,
+};
 
 use crate::AppState;
 use crate::forms::{self, Form};
 
 const NO_NAME: &str = "Enter a directory name using letters, numbers, dashes or underscores.";
 const OUTSIDE: &str = "That directory points outside the library.";
+const NO_PATH: &str = "Send {\"path\": \"<directory>/<file name>\"} or {\"path\": \"<directory>\"}.";
+const DELETE_OUTSIDE: &str = "That path points outside the library.";
+const TOP_LEVEL: &str = "The top level of the library cannot be deleted.";
+const MISSING: &str = "No such file or directory in the gcode library.";
 
 pub(crate) fn files(listing: Listing) -> (Vec<String>, Vec<LibraryFile>) {
     let files = listing.files.into_iter().map(|f| LibraryFile { directory: f.directory, name: f.name }).collect();
@@ -62,6 +69,47 @@ pub(crate) async fn new_directory(State(state): State<AppState>, body: Bytes) ->
         }
         Err(refusal) => refusal,
     }
+}
+
+/// The loaded file and every queued file, as paths under `root`.
+fn in_use(state: &AppState, root: &Path) -> Vec<PathBuf> {
+    let snapshot = state.machine.snapshot();
+    let loaded = snapshot.gcode_file.filter(|_| !snapshot.gcode.is_empty());
+    let queued = snapshot.queue.items.iter().filter_map(|item| resolve_inside(root, &[&item.file]).ok());
+    loaded.into_iter().chain(queued).collect()
+}
+
+/// Symlinks resolved, so two spellings of one file compare equal; a missing path stays as given.
+fn real(path: &Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
+/// Deletes a file, or a directory with everything in it, unless it is or holds a file in use.
+pub(crate) async fn delete(State(state): State<AppState>, body: Bytes) -> Response {
+    let Ok(GcodeDelete { path }) = serde_json::from_slice(&body) else {
+        return api_error(StatusCode::BAD_REQUEST, NO_PATH);
+    };
+    let root = state.paths.gcode_dir();
+    let Ok(target) = resolve_inside(&root, &[&path]) else {
+        return api_error(StatusCode::BAD_REQUEST, DELETE_OUTSIDE);
+    };
+    if real(&target) == real(&root) {
+        return api_error(StatusCode::BAD_REQUEST, TOP_LEVEL);
+    }
+    if in_use(&state, &root).iter().any(|used| real(used).starts_with(real(&target))) {
+        let refusal = format!("{path} is, or holds, the loaded gcode or a file in the job queue, so it stays.");
+        return api_error(StatusCode::CONFLICT, &refusal);
+    }
+    let removed = match tokio::fs::symlink_metadata(&target).await {
+        Ok(found) if found.is_dir() => tokio::fs::remove_dir_all(&target).await,
+        Ok(_) => tokio::fs::remove_file(&target).await,
+        Err(_) => return api_error(StatusCode::NOT_FOUND, MISSING),
+    };
+    if let Err(error) = removed {
+        return api_error(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string());
+    }
+    let (directories, files) = files(list_library(&root));
+    Json(LibraryListing { directories, files }).into_response()
 }
 
 /// `loaded_gcode`: where the loaded file sits in the library; outside it, or nested deeper, has no directory.
