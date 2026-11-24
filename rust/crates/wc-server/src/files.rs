@@ -79,6 +79,11 @@ fn in_use(state: &AppState, root: &Path) -> Vec<PathBuf> {
     loaded.into_iter().chain(queued).collect()
 }
 
+/// Symlinks resolved, so two spellings of one file compare equal; a missing path stays as given.
+fn real(path: &Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
 /// Deletes a file, or a directory with everything in it, unless it is or holds a file in use.
 pub(crate) async fn delete(State(state): State<AppState>, body: Bytes) -> Response {
     let Ok(GcodeDelete { path }) = serde_json::from_slice(&body) else {
@@ -88,10 +93,10 @@ pub(crate) async fn delete(State(state): State<AppState>, body: Bytes) -> Respon
     let Ok(target) = resolve_inside(&root, &[&path]) else {
         return api_error(StatusCode::BAD_REQUEST, DELETE_OUTSIDE);
     };
-    if target == root {
+    if real(&target) == real(&root) {
         return api_error(StatusCode::BAD_REQUEST, TOP_LEVEL);
     }
-    if in_use(&state, &root).iter().any(|used| used.starts_with(&target)) {
+    if in_use(&state, &root).iter().any(|used| real(used).starts_with(real(&target))) {
         let refusal = format!("{path} is, or holds, the loaded gcode or a file in the job queue, so it stays.");
         return api_error(StatusCode::CONFLICT, &refusal);
     }

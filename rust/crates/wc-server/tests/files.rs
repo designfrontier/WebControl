@@ -129,6 +129,12 @@ async fn the_loaded_file_a_queued_file_and_their_directories_are_kept() {
         assert_eq!(reply.status, StatusCode::CONFLICT, "{path}");
         assert!(reply.json()["error"].as_str().unwrap().contains("the loaded gcode or a file in the job queue"));
     }
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(server.dir().join("gcode/jobs"), server.dir().join("gcode/link")).unwrap();
+        let reply = server.post_json("/api/files/gcode/delete", json!({"path": "link/leg.nc"})).await;
+        assert_eq!(reply.status, StatusCode::CONFLICT);
+    }
     assert!(server.dir().join("gcode/jobs/leg.nc").is_file() && server.dir().join("gcode/queued/a.nc").is_file());
     assert_eq!(server.post_json("/api/files/gcode/delete", json!({"path": "jobs2"})).await.status, StatusCode::OK);
 }
