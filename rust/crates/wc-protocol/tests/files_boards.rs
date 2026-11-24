@@ -3,8 +3,8 @@
 use serde_json::{Value, json};
 use wc_protocol::boards::{BoardDataUpdate, BoardUnits, CurrentBoard, Router};
 use wc_protocol::files::{
-    ApiError, ClassicResult, ClassicStatus, CreatedDirectory, DirectoryRequest, GcodeText, Library, LibraryFile,
-    LoadedGcode, UpdateDirectories,
+    ApiError, ClassicResult, ClassicStatus, CreatedDirectory, DirectoryRequest, GcodeDelete, GcodeText, Library,
+    LibraryFile, LibraryListing, LoadedGcode, UpdateDirectories,
 };
 use wc_protocol::main::GcodePositionMessage;
 use wc_protocol::{ClientEvent, Envelope, Frame};
@@ -40,6 +40,15 @@ fn library_listings_fit_their_schemas() {
     check("post-api-files-gcode-directories.201", &created);
     check("post-api-boards-directories.201", &created);
     check("post-api-files-gcode-directories.400", ApiError { error: "nope".into() });
+}
+
+#[test]
+fn a_delete_takes_one_path_and_answers_the_listing() {
+    check("post-api-files-gcode-delete.200", LibraryListing { directories: vec![".".into()], files: files() });
+    check("post-api-files-gcode-delete.409", ApiError { error: "In use".into() });
+    let delete: GcodeDelete = serde_json::from_value(json!({"path": "jobs/leg.nc"})).unwrap();
+    assert_eq!(delete.path, "jobs/leg.nc");
+    assert!(serde_json::from_value::<GcodeDelete>(json!({"path": "jobs", "x": 1})).is_err());
 }
 
 #[test]

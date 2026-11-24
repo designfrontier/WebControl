@@ -1,6 +1,6 @@
 //! The `files` slice: the gcode library, the loaded gcode, and the classic form routes' answers.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::Message;
@@ -39,6 +39,20 @@ pub struct CreatedDirectory {
     pub directory: String,
     pub directories: Vec<String>,
     pub files: Vec<LibraryFile>,
+}
+
+/// `POST /api/files/gcode/delete`: the listing after the delete.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct LibraryListing {
+    pub directories: Vec<String>,
+    pub files: Vec<LibraryFile>,
+}
+
+/// `POST /api/files/gcode/delete` body: a file's library path, or a directory's name.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GcodeDelete {
+    pub path: String,
 }
 
 /// `GET /api/files/gcode/loaded`: `directory` is `None` when the file is outside the library.
