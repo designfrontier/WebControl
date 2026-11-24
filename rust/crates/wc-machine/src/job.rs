@@ -280,7 +280,12 @@ impl Machine {
 
     /// The file and its home in inches, so the next file can be placed beside it.
     fn remember_run(&mut self) {
-        let file = self.gcode_file.as_deref().map(|file| file.to_string_lossy().into_owned()).unwrap_or_default();
+        let file = self
+            .gcode_file
+            .as_deref()
+            .filter(|_| !self.gcode_edited)
+            .map(|file| file.to_string_lossy().into_owned())
+            .unwrap_or_default();
         let scale = if self.units() == Units::Mm { 1.0 / 25.4 } else { 1.0 };
         let home = |key| crate::commands::round4(self.settings.number("Advanced Settings", key) * scale);
         let (x, y) = (home("homeX"), home("homeY"));

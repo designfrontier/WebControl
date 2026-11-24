@@ -324,6 +324,7 @@ impl Machine {
             Origin::Edit => index.min(self.gcode.len().saturating_sub(1)),
             Origin::Open | Origin::Reload | Origin::Queue => 0,
         };
+        self.gcode_edited = origin == Origin::Edit;
         if origin != Origin::Edit {
             self.gcode_file = file;
         }

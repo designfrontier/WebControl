@@ -563,4 +563,10 @@ fn starting_a_run_remembers_the_file_and_its_home_in_inches() {
     unnamed.machine.load_gcode("G0 X1\n");
     unnamed.act("startRun");
     assert_eq!(last(&unnamed, "lastRunFile"), Some(json!("")), "gcode from no file leaves no ghost");
+    rig.act("stopRun");
+    rig.run_to_quiet();
+    let edit = Request::LoadGcode { gcode: Box::new(parse("G0 X1")), file: None, origin: Origin::Edit };
+    assert_eq!(ask(&mut rig, edit).0, Reply::Done);
+    rig.act("startRun");
+    assert_eq!(last(&rig, "lastRunFile"), Some(json!("")), "an edit no longer matches the file on disk");
 }

@@ -380,6 +380,8 @@ pub struct Machine {
     pub(crate) gcode: Arc<Vec<String>>,
     pub(crate) index: usize,
     pub(crate) gcode_file: Option<PathBuf>,
+    /// Edited in the UI since it was read, so `gcode_file` no longer holds what runs.
+    pub(crate) gcode_edited: bool,
     /// The gcode library, which the loaded file's name is relative to.
     pub(crate) library: Option<PathBuf>,
     pub(crate) z_moves: Vec<usize>,
@@ -458,6 +460,7 @@ impl Machine {
             gcode: Arc::new(Vec::new()),
             index: 0,
             gcode_file: None,
+            gcode_edited: false,
             library: None,
             z_moves: vec![0],
             truncate: None,
