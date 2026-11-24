@@ -60,6 +60,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/system/pid-test", post(api::pid_test))
         .route("/api/files/gcode", get(files::library))
         .route("/api/files/gcode/directories", post(files::new_directory))
+        .route("/api/files/gcode/delete", post(files::delete))
         .route("/api/files/gcode/loaded", get(files::loaded_gcode))
         .route("/api/files/gcode/text", get(files::text))
         .route("/api/files/gcode/custom", get(files::custom))
