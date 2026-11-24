@@ -132,6 +132,18 @@ describe("createViewerScene", () => {
     expect(geometry).not.toHaveBeenCalled();
   });
 
+  it("draws the last run's cuts at their own home until cleared", () => {
+    const { scene, get } = setup();
+    expect(get("ghost").visible).toBe(false);
+    scene.setGhost({ cuts: new Float32Array([0, 0, 0, 1, 0, 0]), home: { x: -4, y: 3 } });
+    expect(get("ghost").visible).toBe(true);
+    expect(get("ghost").position.toArray()).toEqual([-4, 3, 0]);
+    scene.setHome({ x: 10, y: -5 });
+    expect(get("ghost").position.toArray()).toEqual([-4, 3, 0]);
+    scene.setGhost(null);
+    expect(get("ghost").visible).toBe(false);
+  });
+
   it("places the toolpath and gcode position relative to home", () => {
     const { scene, get } = setup();
     scene.setHome({ x: 10, y: -5 });

@@ -21,3 +21,12 @@ pub struct ViewerSnapshot {
     pub board: Option<serde_json::Value>,
     pub cut_data: Option<String>,
 }
+
+/// `GET /api/viewer/last-run`: the file last started, as base64 gzip like `gcode` above, and its home in inches.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LastRun {
+    pub gcode: String,
+    pub home_x: f64,
+    pub home_y: f64,
+}

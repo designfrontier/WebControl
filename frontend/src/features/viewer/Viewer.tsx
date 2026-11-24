@@ -11,6 +11,9 @@ import { createViewerEngine } from "./engine";
 import type { ViewerEngine } from "./engine";
 import { segmentCount } from "./gcodeGeometry";
 import { createTextLabel } from "./labels";
+import { addPoints, fitsOnBed, loadGhost, toolpathBounds } from "./placement";
+import type { Ghost } from "./placement";
+import { PlacementBar } from "./PlacementBar";
 import { createViewerScene, readPalette } from "./scene";
 import type { ViewerScene } from "./scene";
 import { ScreenActionDialog } from "./ScreenActionDialog";
@@ -66,9 +69,13 @@ export const Viewer = ({ currentLine = "" }: { currentLine?: string }) => {
   const [cursor, setCursor] = useState<Point | null>(null);
   const [target, setTarget] = useState<Point | null>(null);
   const [webglError, setWebglError] = useState<string | null>(null);
+  /** How far the toolpath has been dragged from home while placing it; null when not placing. */
+  const [placing, setPlacing] = useState<Point | null>(null);
+  const [ghost, setGhost] = useState<Ghost | null>(null);
 
   const viewRef = useRef<View | null>(null);
   const pressRef = useRef<{ timer: number; x: number; y: number } | null>(null);
+  const dragRef = useRef<{ start: Point; from: Point } | null>(null);
   const pointerTypeRef = useRef("mouse");
 
   const attachCanvas = useCallback((host: HTMLDivElement | null) => {
@@ -119,10 +126,14 @@ export const Viewer = ({ currentLine = "" }: { currentLine?: string }) => {
     () => (data.gcode ? [data.gcode.cuts, data.gcode.rapids, data.gcode.plunges] : []),
     [data.gcode],
   );
-  const fitView = () => {
-    const home = { x: toInches(homePosition?.x ?? 0, units), y: toInches(homePosition?.y ?? 0, units) };
-    withView(viewRef.current, (_, engine) => engine.fit(viewFrame(data.machine, toolpath, home)));
-  };
+  const home = useMemo(
+    () => ({ x: toInches(homePosition?.x ?? 0, units), y: toInches(homePosition?.y ?? 0, units) }),
+    [homePosition, units],
+  );
+  const placedHome = useMemo(() => (placing ? addPoints(home, placing) : home), [home, placing]);
+  const bounds = useMemo(() => toolpathBounds(toolpath), [toolpath]);
+  const isPlacing = placing !== null;
+  const fitView = () => withView(viewRef.current, (_, engine) => engine.fit(viewFrame(data.machine, toolpath, home)));
   const fitOnChange = useEffectEvent(fitView);
   const viewKey = useMemo(() => fitKey(data.machine, toolpath), [data.machine, toolpath]);
 
@@ -156,13 +167,18 @@ export const Viewer = ({ currentLine = "" }: { currentLine?: string }) => {
       ),
     [position, units],
   );
-  useEffect(
-    () =>
-      withView(viewRef.current, (scene) =>
-        scene.setHome({ x: toInches(homePosition?.x ?? 0, units), y: toInches(homePosition?.y ?? 0, units) }),
-      ),
-    [homePosition, units],
-  );
+  useEffect(() => withView(viewRef.current, (scene) => scene.setHome(placedHome)), [placedHome]);
+  useEffect(() => withView(viewRef.current, (scene) => scene.setGhost(ghost)), [ghost]);
+  useEffect(() => withView(viewRef.current, (_, engine) => engine.setControlsEnabled(!isPlacing)), [isPlacing]);
+  useEffect(() => {
+    if (!isPlacing) return;
+    let live = true;
+    void loadGhost(fetch).then((next) => live && setGhost(next));
+    return () => {
+      live = false;
+      setGhost(null);
+    };
+  }, [isPlacing, fetch]);
   useEffect(
     () =>
       withView(viewRef.current, (scene) =>
@@ -197,6 +213,11 @@ export const Viewer = ({ currentLine = "" }: { currentLine?: string }) => {
   const onPointerDown = (event: ReactPointerEvent) => {
     pointerTypeRef.current = event.pointerType;
     cancelPress();
+    if (placing) {
+      const start = event.isPrimary ? pick(event.clientX, event.clientY) : null;
+      dragRef.current = start && { start, from: placing };
+      return;
+    }
     if (event.pointerType !== "touch" || !event.isPrimary) return;
     const { clientX, clientY } = event;
     const timer = window.setTimeout(() => {
@@ -210,9 +231,22 @@ export const Viewer = ({ currentLine = "" }: { currentLine?: string }) => {
     const press = pressRef.current;
     if (press && Math.hypot(event.clientX - press.x, event.clientY - press.y) > LONG_PRESS_SLOP_PX) cancelPress();
     if (event.pointerType === "mouse") setCursor(pick(event.clientX, event.clientY));
+    const drag = dragRef.current;
+    const point = drag && pick(event.clientX, event.clientY);
+    if (drag && point) setPlacing(addPoints(drag.from, { x: point.x - drag.start.x, y: point.y - drag.start.y }));
+  };
+
+  const endPointer = () => {
+    cancelPress();
+    dragRef.current = null;
   };
 
   useEffect(() => cancelPress, []);
+
+  const confirmPlacement = () => {
+    setPlacing(null);
+    client.sendAction("defineHome", roundForAction(placedHome.x), roundForAction(placedHome.y));
+  };
 
   const runAction = (action: ScreenAction, point: Point) => {
     setTarget(null);
@@ -253,10 +287,31 @@ export const Viewer = ({ currentLine = "" }: { currentLine?: string }) => {
         <ToggleButton pressed={showLabels} onToggle={() => setShowLabels((on) => !on)}>
           Labels
         </ToggleButton>
+        <button
+          type="button"
+          aria-pressed={isPlacing}
+          disabled={!data.gcode && !isPlacing}
+          onClick={() => setPlacing((offset) => (offset ? null : { x: 0, y: 0 }))}
+        >
+          Position
+        </button>
         <output className="viewer-readout viewer-line" aria-label="Current gcode line">
           <code>{currentLine || "No line"}</code>
         </output>
       </div>
+
+      {isPlacing ? (
+        <PlacementBar
+          home={placedHome}
+          units={units}
+          fits={fitsOnBed(data.machine, bounds, placedHome)}
+          runState={runState}
+          homeLocked={homeLocked}
+          probing={probing}
+          onConfirm={confirmPlacement}
+          onCancel={() => setPlacing(null)}
+        />
+      ) : null}
 
       <div className="viewer-stage">
         {webglError ? (
@@ -264,18 +319,22 @@ export const Viewer = ({ currentLine = "" }: { currentLine?: string }) => {
         ) : (
           <div
             ref={attachCanvas}
-            className="viewer-canvas"
+            className={isPlacing ? "viewer-canvas viewer-canvas-placing" : "viewer-canvas"}
             role="img"
             aria-label="Bed, sled and toolpath. Right-click, or press and hold on a touch screen, for move and home actions."
             onContextMenu={(event) => {
               event.preventDefault();
-              if (pointerTypeRef.current !== "touch" && !view3D) openActions(event.clientX, event.clientY);
+              if (pointerTypeRef.current !== "touch" && !view3D && !isPlacing)
+                openActions(event.clientX, event.clientY);
             }}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
-            onPointerUp={cancelPress}
-            onPointerCancel={cancelPress}
-            onPointerLeave={() => setCursor(null)}
+            onPointerUp={endPointer}
+            onPointerCancel={endPointer}
+            onPointerLeave={() => {
+              setCursor(null);
+              dragRef.current = null;
+            }}
           />
         )}
         <CameraOverlay key={String(data.camera.on)} on={data.camera.on} image={data.camera.image} />

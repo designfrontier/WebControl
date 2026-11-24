@@ -12,6 +12,8 @@ export interface ViewerEngine {
   pick(clientX: number, clientY: number): Point | null;
   setRotate(enabled: boolean): void;
   setPerspective(enabled: boolean): void;
+  /** Off while the toolpath is dragged into place, so the drag does not also pan. */
+  setControlsEnabled(enabled: boolean): void;
   /** Frames this area, undoing any pan, zoom or rotation. */
   fit(frame: ViewFrame): void;
   dispose(): void;
@@ -32,6 +34,7 @@ export const createViewerEngine = (host: HTMLElement, scene: Scene): ViewerEngin
   let camera: OrthographicCamera | PerspectiveCamera = ortho;
   let view = bedViewFrame(DEFAULT_MACHINE);
   let rotate = false;
+  let controlsEnabled = true;
   let frame = 0;
 
   const aspect = () => Math.max(host.clientWidth, 1) / Math.max(host.clientHeight, 1);
@@ -48,6 +51,7 @@ export const createViewerEngine = (host: HTMLElement, scene: Scene): ViewerEngin
     const next = new OrbitControls(camera, renderer.domElement);
     next.screenSpacePanning = true;
     next.enableRotate = rotate;
+    next.enabled = controlsEnabled;
     next.mouseButtons = { LEFT: MOUSE.PAN, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.ROTATE };
     next.touches = { ONE: rotate ? TOUCH.ROTATE : TOUCH.PAN, TWO: TOUCH.DOLLY_PAN };
     next.addEventListener("change", requestRender);
@@ -94,6 +98,10 @@ export const createViewerEngine = (host: HTMLElement, scene: Scene): ViewerEngin
       rotate = enabled;
       controls.enableRotate = enabled;
       controls.touches = { ONE: enabled ? TOUCH.ROTATE : TOUCH.PAN, TWO: TOUCH.DOLLY_PAN };
+    },
+    setControlsEnabled: (enabled) => {
+      controlsEnabled = enabled;
+      controls.enabled = enabled;
     },
     setPerspective: (enabled) => {
       if ((camera === perspective) === enabled) return;

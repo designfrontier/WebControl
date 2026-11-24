@@ -549,3 +549,24 @@ fn a_parsed_file_is_estimated_at_the_machines_feeds() {
     assert!((z - z_seconds).abs() < 0.01, "Z at maxZRPM's default times the pitch");
     assert!(Gcode::empty(Units::Mm).estimate.is_empty());
 }
+
+#[test]
+fn starting_a_run_remembers_the_file_and_its_home_in_inches() {
+    let homes = [("Advanced Settings", "homeX", json!("254.0")), ("Advanced Settings", "homeY", json!("-127.0"))];
+    let mut rig = Rig::connected_with(settings(&homes));
+    open(&mut rig, SQUARE, "/lib/square.nc");
+    rig.act("startRun");
+    let last = |rig: &Rig, key| rig.machine.snapshot().settings.value("Computed Settings", key).cloned();
+    assert_eq!(last(&rig, "lastRunFile"), Some(json!("/lib/square.nc")));
+    assert_eq!((last(&rig, "lastRunHomeX"), last(&rig, "lastRunHomeY")), (Some(json!(10.0)), Some(json!(-5.0))));
+    let mut unnamed = Rig::connected_with(settings(&[("Computed Settings", "lastRunFile", json!("/lib/old.nc"))]));
+    unnamed.machine.load_gcode("G0 X1\n");
+    unnamed.act("startRun");
+    assert_eq!(last(&unnamed, "lastRunFile"), Some(json!("")), "gcode from no file leaves no ghost");
+    rig.act("stopRun");
+    rig.run_to_quiet();
+    let edit = Request::LoadGcode { gcode: Box::new(parse("G0 X1")), file: None, origin: Origin::Edit };
+    assert_eq!(ask(&mut rig, edit).0, Reply::Done);
+    rig.act("startRun");
+    assert_eq!(last(&rig, "lastRunFile"), Some(json!("")), "an edit no longer matches the file on disk");
+}

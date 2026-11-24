@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get-api-viewer-last-run.200",
+  "anyOf": [
+    {
+      "type": "object",
+      "properties": {
+        "gcode": {
+          "type": "string"
+        },
+        "homeX": {
+          "type": "number"
+        },
+        "homeY": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "gcode",
+        "homeX",
+        "homeY"
+      ]
+    },
+    {
+      "type": "null"
+    }
+  ]
+}

@@ -77,7 +77,7 @@ import {
   updatesSchema,
 } from "./system";
 import { fileToolsSchema, toolInputSchema, toolLibrarySchema, toolNumberParamsSchema } from "./tools";
-import { viewerSnapshotSchema } from "./viewer";
+import { lastRunSchema, viewerSnapshotSchema } from "./viewer";
 
 export type BodyType = "json" | "form" | "text" | "html" | "file";
 
@@ -353,6 +353,11 @@ export const httpEndpoints: HttpEndpoint[] = [
   get("/api/state", "What a client needs on (re)connect", startupStateSchema),
   get("/api/main", "Run status and current gcode line for the control screen", mainScreenStateSchema),
   get("/api/viewer", "What the viewer draws", viewerSnapshotSchema),
+  get(
+    "/api/viewer/last-run",
+    "The gcode file last started and its home in inches, to place the next one by",
+    lastRunSchema,
+  ),
   get("/api/run/pacing", "The line pacing and its statistics as last pushed (Rust only)", pacingStatsSchema),
   api({
     method: "PUT",

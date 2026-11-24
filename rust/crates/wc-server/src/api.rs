@@ -105,7 +105,7 @@ fn inches(settings: &Settings, key: &str) -> Option<f64> {
     format!("{:.4}", mm / MM_PER_INCH).parse().ok()
 }
 
-fn base64(bytes: Option<&[u8]>) -> Option<String> {
+pub(crate) fn base64(bytes: Option<&[u8]>) -> Option<String> {
     use base64::Engine;
     bytes.filter(|b| !b.is_empty()).map(|b| base64::engine::general_purpose::STANDARD.encode(b))
 }
