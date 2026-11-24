@@ -1,4 +1,4 @@
-import { act, screen } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { topLayer } from "../../test/dialogPolyfill";
 import { fakeFetch, jsonResponse } from "../../test/fakeFetch";
@@ -173,6 +173,81 @@ describe("Open gcode", () => {
       await act(async () => answer.settle.resolve(jsonResponse({ status: 200 })));
       expect(socket.emittedEvents("checkForGCodeUpdate")).toHaveLength(1);
       expect(currentPath()).toBe("/files/open");
+    });
+  });
+
+  describe("delete", () => {
+    const afterDelete = { directories: [".", "empty"], files: [{ directory: ".", name: "part.nc" }] };
+    const setupDelete = (remove = recorder(200, afterDelete)) => {
+      const fetch = fakeFetch({ "/api/files/gcode": gcodeLibrary(), "POST /api/files/gcode/delete": remove.respond });
+      return { ...renderApp("/files/open", { fetch }), remove };
+    };
+    const sent = (remove: ReturnType<typeof recorder>) => remove.calls.map((init) => JSON.parse(String(init?.body)));
+
+    it("deletes the selected file after confirming", async () => {
+      const { user, remove } = setupDelete(
+        recorder(200, gcodeLibrary({ files: [{ directory: "jobs", name: "arm.nc" }] })),
+      );
+      await user.click(await screen.findByRole("button", { name: "Delete file" }));
+      const confirm = screen.getByRole("dialog", { name: "Delete from the library" });
+      expect(confirm).toHaveTextContent("Delete leg.nc? This cannot be undone.");
+      await user.click(within(confirm).getByRole("button", { name: "Delete" }));
+
+      expect(sent(remove)).toEqual([{ path: "jobs/leg.nc" }]);
+      await waitFor(() => expect(screen.queryByRole("radio", { name: "leg.nc" })).not.toBeInTheDocument());
+      expect(screen.getByRole("radio", { name: "arm.nc" })).not.toBeChecked();
+      expect(currentPath()).toBe("/files/open");
+    });
+
+    it("says how many files go with a directory, then shows the top level", async () => {
+      const { user, remove } = setupDelete();
+      await user.click(await screen.findByRole("button", { name: "Delete directory" }));
+      const confirm = screen.getByRole("dialog", { name: "Delete from the library" });
+      expect(confirm).toHaveTextContent("Delete the directory jobs and the 2 files in it?");
+      await user.click(within(confirm).getByRole("button", { name: "Delete" }));
+
+      expect(sent(remove)).toEqual([{ path: "jobs" }]);
+      expect(await screen.findByRole("radio", { name: "part.nc" })).toBeInTheDocument();
+      expect(screen.getByLabelText("Directory")).toHaveValue(".");
+      expect(screen.queryByRole("option", { name: "jobs" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Delete directory" })).not.toBeInTheDocument();
+    });
+
+    it("deletes nothing when cancelled", async () => {
+      const { user, remove } = setupDelete();
+      await user.click(await screen.findByRole("button", { name: "Delete directory" }));
+      const confirm = screen.getByRole("dialog", { name: "Delete from the library" });
+      await user.click(within(confirm).getByRole("button", { name: "Cancel" }));
+      expect(screen.queryByRole("dialog", { name: "Delete from the library" })).not.toBeInTheDocument();
+      expect(remove.calls).toEqual([]);
+      expect(screen.getByRole("radio", { name: "leg.nc" })).toBeChecked();
+    });
+
+    it("asks for a file first", async () => {
+      const { user, remove } = setupDelete();
+      await screen.findByRole("radio", { name: "leg.nc" });
+      await user.selectOptions(screen.getByLabelText("Directory"), "Top level");
+      await user.click(screen.getByRole("button", { name: "Delete file" }));
+      expect(screen.getByRole("alert")).toHaveTextContent("Choose a file to delete.");
+      expect(remove.calls).toEqual([]);
+    });
+
+    it("shows the server's reason for refusing", async () => {
+      const error = "jobs/leg.nc is, or holds, the loaded gcode or a file in the job queue, so it stays.";
+      const { user } = setupDelete(recorder(409, { error }));
+      await user.click(await screen.findByRole("button", { name: "Delete file" }));
+      await user.click(screen.getByRole("button", { name: "Delete" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent(error);
+      expect(screen.getByRole("radio", { name: "leg.nc" })).toBeChecked();
+    });
+
+    it("falls back to its own message when the request fails", async () => {
+      const { user } = setupDelete({ respond: () => Promise.reject(new TypeError("offline")) } as unknown as ReturnType<
+        typeof recorder
+      >);
+      await user.click(await screen.findByRole("button", { name: "Delete directory" }));
+      await user.click(screen.getByRole("button", { name: "Delete" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent("Could not delete jobs.");
     });
   });
 

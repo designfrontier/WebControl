@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useClient, useFetch, useMachine } from "../../app/context";
 import { useCloseModal } from "../../app/modalHistory";
-import { getGcodeLibrary, openGcode } from "./api";
+import { deleteGcode, getGcodeLibrary, openGcode } from "./api";
 import { GCODE_LOAD, useResource } from "./hooks";
 import { OpenFromLibrary } from "./LibraryForms";
 import { selectGcodeLocked } from "../../state/machine";
@@ -34,6 +34,7 @@ export const OpenGcode = () => {
             enqueue={async ({ directory, name }) =>
               (await queueApi(fetchImpl).add(`${directory}/${name}`, skipBitChanges)).items.length
             }
+            remove={(path) => deleteGcode(fetchImpl, path)}
             enqueueOptions={
               <label className="field-inline">
                 <input

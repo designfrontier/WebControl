@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { gcodeLibrary } from "../../test/filesBoards";
 import {
+  deletePrompt,
   describeLocation,
   directoryLabel,
   fileNameProblem,
@@ -47,5 +48,14 @@ describe("library helpers", () => {
     expect(describeLocation(".", "a.nc")).toBe("a.nc");
     expect(describeLocation(null, "a.nc")).toBe("a.nc");
     expect(describeLocation("jobs", "a.nc")).toBe("jobs/a.nc");
+  });
+
+  it.each([
+    [undefined, "Delete jobs? This cannot be undone."],
+    [0, "Delete the empty directory jobs? This cannot be undone."],
+    [1, "Delete the directory jobs and the file in it? This cannot be undone."],
+    [3, "Delete the directory jobs and the 3 files in it? This cannot be undone."],
+  ])("asks before deleting with %j files", (files, prompt) => {
+    expect(deletePrompt({ path: "jobs", label: "jobs", files })).toBe(prompt);
   });
 });

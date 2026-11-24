@@ -69,6 +69,31 @@ test("uploads, opens, edits, saves and clears gcode from the G-Code menu", async
   await closeServerDialogs(page);
 });
 
+test("refuses to delete the loaded gcode, then deletes its directory once cleared", async ({ page, baseURL }) => {
+  await page.goto("/files/upload");
+  await waitForServer(page);
+  await page.getByLabel("New directory").fill("e2e doomed");
+  await page.getByRole("button", { name: "Create directory" }).click();
+  await page.getByLabel("Gcode files").setInputFiles(gcode(["G21", "G0 X5 Y5"]));
+  await page.getByRole("button", { name: "Upload and open" }).click();
+  await atControl(page);
+
+  await page.goto("/files/open");
+  await page.getByLabel("Directory", { exact: true }).selectOption("e2e_doomed");
+  await page.getByRole("radio", { name: "e2e-part.nc" }).check();
+  await page.getByRole("button", { name: "Delete file" }).click();
+  await page.getByRole("dialog", { name: "Delete from the library" }).getByRole("button", { name: "Delete" }).click();
+  await expect(page.getByRole("alert")).toContainText("the loaded gcode or a file in the job queue");
+
+  await resetMachine(baseURL!);
+  await page.getByRole("button", { name: "Delete directory" }).click();
+  const confirm = page.getByRole("dialog", { name: "Delete from the library" });
+  await expect(confirm).toContainText("Delete the directory e2e_doomed and the file in it?");
+  await confirm.getByRole("button", { name: "Delete" }).click();
+  await expect(page.getByLabel("Directory", { exact: true })).toHaveValue(".");
+  await expect(page.getByRole("option", { name: "e2e_doomed" })).toHaveCount(0);
+});
+
 test("blocks the whole page while gcode loads, through Escape, until the server answers", async ({ page }) => {
   await page.goto("/files/upload");
   await waitForServer(page);

@@ -5,6 +5,7 @@ import {
   formErrorSchema,
   gcodeLibrarySchema,
   gcodeTextSchema,
+  libraryListingSchema,
   loadedGcodeSchema,
   type LibraryFile,
 } from "../../protocol";
@@ -22,6 +23,12 @@ export const getCustomGcode = async (fetchImpl: Fetch) =>
 
 export const createGcodeDirectory = (fetchImpl: Fetch, name: string) =>
   sendJson(fetchImpl, "POST", "/files/gcode/directories", { name }, createdDirectorySchema);
+
+/** Rejects with a `FormRouteError`, so a refusal shows the server's reason. */
+export const deleteGcode = (fetchImpl: Fetch, path: string) =>
+  sendJson(fetchImpl, "POST", "/files/gcode/delete", { path }, libraryListingSchema).catch((caught: unknown) => {
+    throw caught instanceof ApiError ? new FormRouteError(caught.status, caught.message, caught.body) : caught;
+  });
 
 type FormValue = string | Blob | Blob[];
 
