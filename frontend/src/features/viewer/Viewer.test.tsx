@@ -25,6 +25,7 @@ vi.mock("./engine", () => ({
       pick: vi.fn(() => engine.pickResult),
       setRotate: vi.fn(),
       setPerspective: vi.fn(),
+      setControlsEnabled: vi.fn(),
       fit: vi.fn(),
       reset: vi.fn(),
       dispose: vi.fn(),
@@ -523,5 +524,79 @@ describe("Viewer screen actions", () => {
     fireEvent.pointerUp(canvas(), { pointerType: "touch" });
     act(() => vi.advanceTimersByTime(LONG_PRESS_MS));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+});
+
+describe("Viewer placement", () => {
+  const lastRun = {
+    gcode: toBase64(
+      gz([
+        line([
+          [0, 0, 0],
+          [2, 0, -0.1],
+        ]),
+      ]),
+    ),
+    homeX: -10,
+    homeY: 5,
+  };
+  const placing = async (last: typeof lastRun | null = lastRun) => {
+    const result = await loaded({ fetch: fakeFetch({ "/api/viewer": snapshot(), "/api/viewer/last-run": last }) });
+    await result.user.click(screen.getByRole("button", { name: "Position" }));
+    return result;
+  };
+  const drag = (pointerType: string, from: { x: number; y: number }, to: { x: number; y: number }) => {
+    engine.pickResult = from;
+    fireEvent.pointerDown(canvas(), { pointerType, isPrimary: true });
+    engine.pickResult = to;
+    fireEvent.pointerMove(canvas(), { pointerType });
+    fireEvent.pointerUp(canvas(), { pointerType });
+  };
+
+  it("drags the toolpath over the last run, drawn at its own home, then sets home there", async () => {
+    const { user, socket } = await placing();
+    expect(screen.getByRole("button", { name: "Position" })).toHaveAttribute("aria-pressed", "true");
+    expect(current().setControlsEnabled).toHaveBeenLastCalledWith(false);
+    await vi.waitFor(() => expect(object("ghost").visible).toBe(true));
+    expect(object("ghost").position.toArray()).toEqual([-10, 5, 0]);
+
+    drag("touch", { x: 1, y: 1 }, { x: 6, y: -1 });
+    drag("mouse", { x: 0, y: 0 }, { x: 1, y: 0 });
+    expect(object("toolpath").position.toArray()).toEqual([6, -2, 0]);
+    expect(object("home").position.toArray()).toEqual([6, -2, 0]);
+    expect(screen.getByRole("group", { name: "Position gcode" })).toHaveTextContent("Home X 152.4, Y -50.8 mm");
+    fireEvent.pointerMove(canvas(), { pointerType: "mouse" });
+    expect(object("toolpath").position.toArray()).toEqual([6, -2, 0]);
+
+    await user.click(screen.getByRole("button", { name: "Set home here" }));
+    expect(socket.actions()).toContainEqual(["defineHome", 6, -2]);
+    expect(screen.queryByRole("group", { name: "Position gcode" })).not.toBeInTheDocument();
+    expect(object("ghost").visible).toBe(false);
+    expect(current().setControlsEnabled).toHaveBeenLastCalledWith(true);
+  });
+
+  it("warns off the bed, ignores other fingers and menus, and puts the toolpath back on cancel", async () => {
+    const { user } = await placing(null);
+    vi.useFakeTimers();
+    drag("mouse", { x: 0, y: 0 }, { x: 60, y: 0 });
+    expect(screen.getByRole("alert")).toHaveTextContent("Part of the toolpath is off the bed.");
+    fireEvent.pointerDown(canvas(), { pointerType: "touch", isPrimary: false });
+    fireEvent.pointerDown(canvas(), { pointerType: "touch", isPrimary: true });
+    fireEvent.pointerLeave(canvas());
+    fireEvent.pointerMove(canvas(), { pointerType: "touch" });
+    act(() => vi.advanceTimersByTime(LONG_PRESS_MS));
+    fireEvent.contextMenu(canvas());
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(object("ghost").visible).toBe(false);
+    vi.useRealTimers();
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(object("toolpath").position.toArray()).toEqual([0, 0, 0]);
+  });
+
+  it("can only start with gcode loaded", async () => {
+    renderViewer({ viewer: snapshot({ gcode: null }) });
+    await screen.findByText("No file loaded");
+    expect(screen.getByRole("button", { name: "Position" })).toBeDisabled();
   });
 });

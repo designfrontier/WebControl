@@ -141,6 +141,16 @@ describe("createViewerEngine", () => {
     expect(current()).toMatchObject({ enableRotate: false, touches: { ONE: TOUCH.PAN } });
   });
 
+  it("turns the controls off for placing the toolpath, also across a camera switch", () => {
+    const { engine } = setup();
+    engine.setControlsEnabled(false);
+    expect(controls.instances.at(-1)!.enabled).toBe(false);
+    engine.setPerspective(true);
+    expect(controls.instances.at(-1)!.enabled).toBe(false);
+    engine.setControlsEnabled(true);
+    expect(controls.instances.at(-1)!.enabled).toBe(true);
+  });
+
   it("undoes pan and zoom when fitted again", async () => {
     const { engine, flush, lastCamera } = setup();
     const camera = () => lastCamera() as OrthographicCamera;

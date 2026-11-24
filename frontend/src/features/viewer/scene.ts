@@ -16,6 +16,7 @@ import {
 import type { Material, Object3D } from "three";
 import type { BoardInfo } from "../../protocol";
 import type { GcodeGeometry, GcodeLabel } from "./gcodeGeometry";
+import type { Ghost } from "./placement";
 import { bedFrame, chainSegments, crosshair, cutCellTriangles, guideSegments } from "./shapes";
 import type { MachineGeometry, Point, Point3, Segments } from "./shapes";
 
@@ -76,6 +77,8 @@ export interface ViewerScene {
   setHome(position: Point): void;
   setGcodePosition(position: Point3 | null): void;
   setGcode(geometry: GcodeGeometry | null): void;
+  /** The last run's cuts, drawn faintly at its own home. */
+  setGhost(ghost: Ghost | null): void;
   setBoard(board: BoardInfo | null, cells: readonly unknown[] | null): void;
   setBoardVisible(visible: boolean): void;
   setLabelsVisible(visible: boolean): void;
@@ -165,6 +168,11 @@ export const createViewerScene = (makeLabel: MakeLabel): ViewerScene => {
   const rapids = segments([], dashed("rapid", 0.1));
   const plunges = segments([], line("plunge"));
   const events = segments([], line("event"));
+  const ghost = segments(
+    [],
+    track("cut", new LineBasicMaterial({ color: COLORS.cut, transparent: true, opacity: 0.3 })),
+  );
+  ghost.visible = false;
   const labels = new Group();
   const gcodePosition = marker(1, 0.5, "gcodePosition");
   const toolpath = new Group().add(cuts, rapids, plunges, events, labels, gcodePosition);
@@ -179,7 +187,7 @@ export const createViewerScene = (makeLabel: MakeLabel): ViewerScene => {
   const boardLayer = new Group().add(board, cutCells);
   boardLayer.visible = false;
 
-  root.add(boardLayer, outline, grid, guides, chains, toolpath, home, computedSled, sled, cursor);
+  root.add(boardLayer, outline, grid, guides, chains, ghost, toolpath, home, computedSled, sled, cursor);
   Object.entries({
     outline,
     grid,
@@ -193,6 +201,7 @@ export const createViewerScene = (makeLabel: MakeLabel): ViewerScene => {
     rapids,
     plunges,
     events,
+    ghost,
     labels,
     gcodePosition,
     toolpath,
@@ -264,6 +273,11 @@ export const createViewerScene = (makeLabel: MakeLabel): ViewerScene => {
       replaceGeometry(events, geometry?.events ?? []);
       labelData = geometry?.labels ?? [];
       showLabels();
+    },
+    setGhost: (next) => {
+      replaceGeometry(ghost, next?.cuts ?? []);
+      ghost.visible = next !== null;
+      if (next) ghost.position.set(next.home.x, next.home.y, 0);
     },
     setBoard: (info, cells) => {
       hasBoard = info !== null && info.width > 0 && info.height > 0;
