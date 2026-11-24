@@ -22,7 +22,7 @@ fn opened_python_file() -> (tempfile::TempDir, Paths, Settings) {
 }
 
 /// Options added to the defaults since v0.94, in the order opening a v0.94 file appends them to their sections.
-const ADDED_SINCE_V094: [(&str, &str); 16] = [
+const ADDED_SINCE_V094: [(&str, &str); 19] = [
     ("Maslow Settings", "macro3"),
     ("Maslow Settings", "macro3_title"),
     ("Maslow Settings", "macro4"),
@@ -39,6 +39,9 @@ const ADDED_SINCE_V094: [(&str, &str); 16] = [
     ("WebControl Settings", "uiTheme"),
     ("WebControl Settings", "controlButtons"),
     ("Camera Settings", "cameraSource"),
+    ("Computed Settings", "lastRunFile"),
+    ("Computed Settings", "lastRunHomeX"),
+    ("Computed Settings", "lastRunHomeY"),
 ];
 
 /// Python's text with one option appended to the end of its section, laid out as `json.dumps(indent=4)` does.

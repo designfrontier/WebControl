@@ -203,6 +203,25 @@ async fn opening_a_listed_file_loads_it_and_names_where_it_came_from() {
 }
 
 #[tokio::test]
+async fn the_last_run_is_drawn_from_its_file_until_the_file_is_gone() {
+    let server = Server::new();
+    assert_eq!(server.get("/api/viewer/last-run").await.json(), Value::Null);
+    server.write("gcode/square.nc", SQUARE);
+    let file = server.dir().join("gcode/square.nc");
+    let changes = vec![
+        ("Computed Settings".into(), "lastRunFile".into(), json!(file.to_string_lossy())),
+        ("Computed Settings".into(), "lastRunHomeX".into(), json!(10.0)),
+        ("Computed Settings".into(), "lastRunHomeY".into(), json!(-5.0)),
+    ];
+    server.machine.request(wc_machine::files::Request::SetSettings(changes)).await;
+    let last = server.get("/api/viewer/last-run").await.json();
+    assert!(last["gcode"].as_str().is_some_and(|g| g.starts_with("H4sI")));
+    assert_eq!((last["homeX"].clone(), last["homeY"].clone()), (json!(10.0), json!(-5.0)));
+    std::fs::remove_file(file).unwrap();
+    assert_eq!(server.get("/api/viewer/last-run").await.json(), Value::Null);
+}
+
+#[tokio::test]
 async fn every_client_hears_which_file_is_loaded_and_the_state_names_it() {
     let server = Server::new();
     assert_eq!(server.get("/api/state").await.json()["gcodeFile"], Value::Null);

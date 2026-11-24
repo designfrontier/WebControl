@@ -47,6 +47,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/queue/clear", post(queue::clear))
         .route("/api/queue/continue", post(queue::resume))
         .route("/api/viewer", get(api::viewer))
+        .route("/api/viewer/last-run", get(files::last_run))
         .route("/api/settings/{section}", get(api::settings_section).put(api::update_settings))
         .route("/api/machine/setup", get(api::machine_setup))
         .route("/api/machine/quick-configure", get(api::quick_configure).post(api::save_quick_configure))

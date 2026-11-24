@@ -645,6 +645,24 @@
             "key": "lastSelectedBoardDirectory",
             "type": "string",
             "value": "."
+        },
+        {
+            "default": "",
+            "key": "lastRunFile",
+            "type": "string",
+            "value": ""
+        },
+        {
+            "default": 0.0,
+            "key": "lastRunHomeX",
+            "type": "float",
+            "value": 0.0
+        },
+        {
+            "default": 0.0,
+            "key": "lastRunHomeY",
+            "type": "float",
+            "value": 0.0
         }
     ],
     "GPIO Settings": [

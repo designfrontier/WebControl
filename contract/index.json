@@ -631,6 +631,18 @@
     },
     {
       "method": "GET",
+      "path": "/api/viewer/last-run",
+      "family": "api",
+      "summary": "The gcode file last started and its home in inches, to place the next one by",
+      "responses": {
+        "200": {
+          "contentType": "application/json",
+          "schema": "schemas/http/get-api-viewer-last-run.200.json"
+        }
+      }
+    },
+    {
+      "method": "GET",
       "path": "/api/run/pacing",
       "family": "api",
       "summary": "The line pacing and its statistics as last pushed (Rust only)",

@@ -16,6 +16,7 @@ use wc_protocol::files::{
     ApiError, CreatedDirectory, DirectoryRequest, GcodeDelete, GcodeText, Library, LibraryFile, LibraryListing,
     LoadedGcode,
 };
+use wc_protocol::viewer::LastRun;
 
 use crate::AppState;
 use crate::forms::{self, Form};
@@ -171,6 +172,27 @@ async fn parse(text: String, settings: wc_machine::Shared<Settings>) -> Option<G
 
 async fn read(path: PathBuf) -> std::io::Result<String> {
     tokio::fs::read(path).await.map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+}
+
+/// The file the last job started, drawn afresh from disk; `null` when there is none or it no longer reads.
+pub(crate) async fn last_run(State(state): State<AppState>) -> Json<Option<LastRun>> {
+    let settings = state.machine.snapshot().settings;
+    let file = settings.text_or_empty("Computed Settings", "lastRunFile");
+    let text = match file.is_empty() {
+        true => None,
+        false => read(file.into()).await.ok(),
+    };
+    let gcode = match text {
+        Some(text) => parse(text, settings.clone()).await,
+        None => None,
+    };
+    Json(gcode.and_then(|gcode| {
+        Some(LastRun {
+            gcode: crate::api::base64(gcode.preview.compressed.as_deref())?,
+            home_x: settings.number("Computed Settings", "lastRunHomeX"),
+            home_y: settings.number("Computed Settings", "lastRunHomeY"),
+        })
+    }))
 }
 
 /// A load the machine has heard begin (wart 14: Play waits, the spinners start). Dropped unfinished, it ends as

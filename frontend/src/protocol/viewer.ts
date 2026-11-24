@@ -63,3 +63,14 @@ export const viewerSnapshotSchema = z.object({
   cutData: z.string().nullable(),
 });
 export type ViewerSnapshot = z.infer<typeof viewerSnapshotSchema>;
+
+/** GET /api/viewer/last-run: the file last started, drawn at the home it ran with; null when there is none to draw. */
+export const lastRunSchema = z
+  .object({
+    /** Base64 gzip JSON, as /api/viewer's gcode. */
+    gcode: z.string(),
+    homeX: z.number(),
+    homeY: z.number(),
+  })
+  .nullable();
+export type LastRun = z.infer<typeof lastRunSchema>;
