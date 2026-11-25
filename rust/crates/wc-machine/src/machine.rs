@@ -181,6 +181,8 @@ pub(crate) enum Queued {
     Raise(crate::clearance::Raise),
     /// The job queue acts here once every line before it is answered.
     Advance,
+    /// A planner build's job ends here, once its `G4 P0` is answered.
+    FileDone,
 }
 
 /// What readers see; every field is derived from the machine's state, never stored separately.
@@ -196,6 +198,8 @@ pub struct Snapshot {
     pub probing: bool,
     pub pause_button: PauseButton,
     pub controller_firmware_version: f64,
+    /// The controller's B05 reply listed the planner capability.
+    pub planner: bool,
     pub controller_board: Option<String>,
     pub firmware_build: Option<String>,
     pub host_address: String,
@@ -321,6 +325,8 @@ pub(crate) struct Controller {
     pub stop_reload: bool,
     /// Whether the line it waits for ever reached the controller.
     pub watch: crate::lost::Watch,
+    /// A planner build's numbered lines.
+    pub numbered: crate::planner::Numbered,
 }
 
 impl Controller {
@@ -348,6 +354,7 @@ impl Controller {
             raise_deadline: None,
             stop_reload: false,
             watch: crate::lost::Watch::default(),
+            numbered: crate::planner::Numbered::default(),
         }
     }
 }
@@ -635,6 +642,7 @@ impl Machine {
             probing: self.probing,
             pause_button: self.job.pause_button(),
             controller_firmware_version: self.firmware_version,
+            planner: self.planner,
             controller_board: self.board.clone(),
             firmware_build: wc_firmware::boot::firmware_build(self.firmware_version, self.rewrite_notice),
             host_address: self.host_address.clone(),

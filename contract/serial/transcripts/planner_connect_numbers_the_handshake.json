@@ -1,0 +1,45 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "planner_connect_numbers_the_handshake",
+    "description": "A planner build boots. B05 goes un-numbered as on any firmware; its reply lists the planner capability, so every line after it is numbered and checksummed, starting with M110 N1, which turns the firmware's numbered mode on. $$ lists $47 and $48 after $46; both agree with Maslow Settings, so only $13 is written.",
+    "firmware": {
+      "variant": "planner",
+      "version": "51.29",
+      "build": "51.292"
+    },
+    "webcontrolCommit": "planner-streaming"
+  },
+  "setup": {
+    "units": "MM",
+    "start": "boot"
+  },
+  "events": [
+    {"type": "rx", "line": "PCB v1.1 Detected"},
+    {"type": "rx", "line": "Grbl v1.00"},
+    {"type": "rx", "line": "ready"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "B05  \n"},
+    {"type": "rx", "line": "B05"},
+    {"type": "rx", "line": "Firmware Version 51.29"},
+    {"type": "rx", "line": "Capabilities: planner line-numbers accel-settings status-line"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "M110 N1\n"},
+    {"type": "tx", "bytes": "N1 G21*27\n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "G21"},
+    {"type": "rx", "line": "ok N1"},
+    {"type": "tx", "bytes": "N2 G90*18\n"},
+    {"type": "rx", "line": "G90"},
+    {"type": "rx", "line": "ok N2"},
+    {"type": "tx", "bytes": "N3 $$*93\n"},
+    {"type": "rx", "line": "$46=97.90000152 (Sled Weight, N)", "comment": "the dump's keys before $46 are left out"},
+    {"type": "rx", "line": "$47=50.00000000"},
+    {"type": "rx", "line": "$48=0.01000000"},
+    {"type": "rx", "line": "ok N3"},
+    {"type": "tx", "bytes": "N4 $13=63.5*95\n"},
+    {"type": "rx", "line": "Change in setting, rewriting EEPROM"},
+    {"type": "rx", "line": "ok N4"},
+    {"type": "expect", "emitted": [{"command": "controllerMessage", "data": "Capabilities: planner"}]}
+  ]
+}

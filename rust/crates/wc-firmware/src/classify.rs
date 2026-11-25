@@ -33,18 +33,33 @@ pub struct Status {
     pub z: f64,
 }
 
-/// `[PE:lErr,rErr,space]` (stock) or `[PE:lErr,rErr,space,lChain,rChain]` (holey).
+/// `[PE:lErr,rErr,space]` (stock), `[PE:lErr,rErr,space,lChain,rChain]` (holey) or, from a planner build,
+/// `[PE:lErr,rErr,space,lChain,rChain,line,queued]`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PositionError {
     pub left: f64,
     pub right: f64,
     pub space: i64,
     pub chains: Option<(f64, f64)>,
+    pub planner: Option<Planned>,
+}
+
+/// The planner's half of a `[PE:]` report.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Planned {
+    /// The `N` of the line running now, 0 for none.
+    pub line: u64,
+    /// Moves in the planner, 0 to 15.
+    pub queued: u32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Reply {
     Ok,
+    /// A planner build's `ok N<n>`: every line up to `n` is queued.
+    OkLine(u64),
+    /// A planner build's `rs N<n>`: send again from line `n`.
+    Resend(u64),
     /// `error: ...`, the line's ack all the same.
     Error(String),
     Status(Status),
@@ -95,7 +110,9 @@ fn parse_position_error(line: &str) -> Option<PositionError> {
     let fields: Vec<&str> = body.split(',').map(str::trim).collect();
     let number = |i: usize| fields.get(i).and_then(|f| f.parse::<f64>().ok());
     let chains = number(3).zip(number(4)).filter(|_| fields.len() >= 5);
-    Some(PositionError { left: number(0)?, right: number(1)?, space: fields.get(2)?.parse().ok()?, chains })
+    let integer = |i: usize| fields.get(i).and_then(|f| f.parse::<u64>().ok());
+    let planner = integer(5).zip(integer(6)).map(|(line, queued)| Planned { line, queued: queued as u32 });
+    Some(PositionError { left: number(0)?, right: number(1)?, space: fields.get(2)?.parse().ok()?, chains, planner })
 }
 
 /// Python reads `message[9:-3]` of the line with its `\r\n`, which drops the closing bracket.
@@ -118,6 +135,8 @@ fn tool_in(line: &str) -> Option<u32> {
 pub fn classify(line: &str) -> Reply {
     match line {
         "ok" => Reply::Ok,
+        _ if let Some(number) = line.strip_prefix("ok N").and_then(|n| n.parse().ok()) => Reply::OkLine(number),
+        _ if let Some(number) = line.strip_prefix("rs N").and_then(|n| n.parse().ok()) => Reply::Resend(number),
         _ if line.starts_with("error:") => Reply::Error(line["error:".len()..].trim().to_string()),
         _ if line.starts_with('<') => parse_status(line).map_or_else(|| Reply::Misread(line.into()), Reply::Status),
         _ if line.starts_with('$') => match parse_setting_reply(line) {

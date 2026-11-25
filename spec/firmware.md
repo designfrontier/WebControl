@@ -216,6 +216,19 @@ and G90.1 switch G0/G1 to relative and absolute like G91 and G90, and the rest o
 are always offsets from the start (`centerX = X1 + I`), whatever G90.1 asked. VCarve posts write `G91.1` near the
 top of every file, so as written it would run every move after it relative.
 
+## 10. The planner build
+
+A test build (holey 51.292 plus a look-ahead planner) whose protocol is the firmware repo's `PROTOCOL.md` (branch
+`line-numbers`, c77bd97). `B05` adds `Capabilities: planner line-numbers accel-settings status-line` before its
+`ok`. `G0`-`G3` are acked once queued (15 moves at most); `G4`, `G10`, `G38` and every `M`, `S`, `B` and `$` line
+wait for the queue to drain, so `G4 P0`'s `ok` means motion has ended. Numbered lines `N<n> <line>*<sum>` (XOR of
+the bytes before `*`, in decimal) get `ok N<n>`, a duplicate `ok N<n>` without running, and a lost or corrupt one
+`rs N<expected>` once per gap; `M110 N<n>` (un-numbered) sets the next number and turns numbered mode on until a
+boot. `!` and alarms flush the queue and the ring but keep the count. `[PE:]` adds `line` (the `N` running, 0 for
+none) and `queued`. `$47` (acceleration, mm/s², default 50) and `$48` (junction deviation, mm, default 0.01) are
+stored after 51.292's block (settings version still 7, so flashing either way keeps the settings); other builds
+answer them `error: Invalid statement`.
+
 ## Implications
 
 ### A. Current Python backend
@@ -432,3 +445,29 @@ top of every file, so as written it would run every move after it relative.
    flash the pinned 51.27 rebuild (`rust/firmware/docker-build.sh <dir> 51.27`); on the owner's machine that is
    a newer 51.27 than it ran (H27 above), so keep its `rollback.hex` safe.
 9. The parser must tolerate the 51.29x text quirks before any post-flash step runs.
+
+### D. Planner build
+
+Only when `B05` lists `planner` (`crates/wc-machine/src/planner.rs`); every other build gets the bytes it always
+did, which the stock and holey transcripts pin.
+
+1. **Numbering:** every line through the buffer after the `B05` reply goes `N<n> <line>*<sum>`, upper case and
+   trimmed; `M110 N<n>` goes first after a boot, a stop or an alarm and at each job start, `n` being the number of
+   the line about to go. Numbers only count up until the controller boots.
+2. **Window:** a copy of each line is kept with its bytes until a cumulative `ok N<n>` frees it, and the bytes in
+   flight stay under the 126 WebControl counts. Job lines stream whenever the next fits, whatever `bufferOn` says;
+   the v0.94 pacing gap and the lost-line watch (B18) are off.
+3. **`rs N<e>`:** the copies sent before it still count until the next `ok N`; only line `e` goes again until
+   then, the rest after. An `rs` for a line WebControl no longer holds sends `M110` with the oldest line it holds.
+4. **Lost ack:** with lines in flight, no `ok N`, `rs` or write for 1 s, and a `[PE:]` after that with `space` 127
+   and fewer than 15 queued, the lines not acked go again from the oldest; duplicates are only acked. Not while the
+   firmware holds a pause or a tool change, or while the oldest copy is a `G4 P0` with moves still queued.
+5. **Motion ended:** the file's end, and a Pause, send `G4 P0`; the job ends (its time, `PACING JOB END`, the queue's
+   next file and the park after it) only at its `ok`. A tool change needs none: an `M6` drains the queue itself.
+6. **Lines:** the viewer's current line is the `[PE:]` report's `line`. After an alarm or a lost link the job
+   resumes at it; Stop leaves the job's index there, so Play restarts from the line that was running.
+7. **Pacing statistics:** lines count as before; each `rs` and each lost-ack resend is one lost line.
+8. **Settings:** Planner Acceleration (`$47`) and Planner Junction Deviation (`$48`) are in Maslow Settings, synced
+   like every other key, and shown only while the capability is detected; a `$47`/`$48` line is never written to
+   any other build.
+9. **Rollback:** Upgrade Holey Firmware accepts a 51.29 that lists `planner`, so it can put 51.292 back.

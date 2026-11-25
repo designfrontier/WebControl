@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use serde_json::Value;
 use wc_config::python_float;
+use wc_firmware::planner::DRAIN;
 use wc_firmware::settings::reinitialises_axes;
 use wc_gcode::firmware_gcode::{only_pauses, only_selects_tool, pauses_firmware, tool_change_line};
 use wc_gcode::position::{Position, line_target, word};
@@ -179,7 +180,7 @@ impl Machine {
         if !self.job.flow.in_job() {
             return;
         }
-        if let Some(index) = self.controller.accounting.oldest_index() {
+        if let Some(index) = self.running_index() {
             self.index = index;
             self.push_gcode_position(effects);
         }
@@ -272,6 +273,7 @@ impl Machine {
             }
         }
         self.job.flow = flow;
+        self.controller.numbered.renumber();
         self.remember_run();
         self.leds.light(Led::Play);
         self.queue_played();
@@ -295,11 +297,15 @@ impl Machine {
     }
 
     pub(crate) fn pause_run(&mut self, effects: &mut Vec<Effect>) -> Option<String> {
-        if self.job.flow != Flow::Streaming {
+        let streaming = self.job.flow == Flow::Streaming && !self.controller.queue.contains(&Queued::FileDone);
+        if !streaming {
             self.park_cancelled();
             self.queue_paused(effects);
         }
-        if self.job.flow == Flow::Streaming {
+        if streaming {
+            if self.planner {
+                self.queue([DRAIN.to_string()]);
+            }
             self.job.flow = Flow::Paused;
             effects.push(pause_button(PauseButton::Resume));
             self.job.paused_at = Some((self.index, self.job.z_target));
@@ -363,6 +369,7 @@ impl Machine {
 
     /// Stop: `!` at once, the queue dropped, and every pause and the job forgotten.
     pub(crate) fn stopped(&mut self, now: Duration, effects: &mut Vec<Effect>) {
+        let resume_at = self.running_index().filter(|_| self.planner && self.job.flow.in_job());
         self.queue_stop("Stop was pressed.", effects);
         self.stats.stopping();
         self.probing = false;
@@ -376,6 +383,8 @@ impl Machine {
             self.restore_modes();
         }
         self.end_job();
+        // A planner build ran lines it had acked long before, so Play goes on from the one it was running.
+        self.index = resume_at.unwrap_or(self.index);
         let job = &mut self.job;
         job.manual_z = None;
         job.firmware_paused = false;
@@ -406,7 +415,10 @@ impl Machine {
     pub(crate) fn stop_run(&mut self, now: Duration, effects: &mut Vec<Effect>) -> Option<String> {
         self.stopped(now, effects);
         self.alarm = None;
-        self.push_line_position(effects);
+        match self.planner {
+            true => self.push_gcode_position(effects),
+            false => self.push_line_position(effects),
+        }
         effects.push(broadcast(&ClearAlarm::new()));
         self.leds.light(Led::Stop);
         effects.push(pause_button(PauseButton::Pause));
@@ -466,6 +478,9 @@ impl Machine {
     /// Buffered streaming: the next line fits the controller's free bytes, or is refused or skipped without them.
     pub(crate) fn next_line_fits(&self) -> bool {
         match self.next_line_written() {
+            Some(Ok(line)) if self.planner => {
+                self.controller.accounting.space() > self.controller.numbered.framed_len(&line) as i64
+            }
             Some(Ok(line)) => self.controller.accounting.space() > line.len() as i64,
             _ => true,
         }
@@ -528,7 +543,13 @@ impl Machine {
             if !self.queue_ran_out() {
                 self.park_when_finished(crate::park::Trigger::File);
             }
-            self.end_job();
+            match self.planner {
+                true => {
+                    self.queue([DRAIN.to_string()]);
+                    self.controller.queue.push_back(Queued::FileDone);
+                }
+                false => self.end_job(),
+            }
         }
     }
 
@@ -560,6 +581,10 @@ impl Machine {
         let Some(raw) = self.gcode.get(self.index) else { return };
         let Ok(target) = line_target(self.job.streamed, self.positioning, &sanitise(raw)) else { return };
         self.job.streamed = target;
+        // A planner build's status reports name the line it runs (`planner_report`).
+        if self.planner && self.job.flow.in_job() {
+            return;
+        }
         let scale = match (self.preview.file_units, self.units()) {
             (Units::Mm, Units::Inches) => 1.0 / 25.4,
             (Units::Inches, Units::Mm) => 25.4,

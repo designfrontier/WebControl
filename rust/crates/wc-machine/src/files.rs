@@ -268,6 +268,14 @@ impl Machine {
         self.gcode_position(None, effects);
     }
 
+    /// The file line at `index` and where it leads, as the line a planner build runs.
+    pub(crate) fn push_position_of(&mut self, index: usize, effects: &mut Vec<Effect>) {
+        if index < self.gcode.len() {
+            let (gcode, scale) = (self.gcode.clone(), self.gcode_scale());
+            self.compute(Work::GcodePosition { gcode, index, scale, failure: None }, effects);
+        }
+    }
+
     /// The same for one client, outside the lane, since it changes nothing.
     pub(crate) fn push_gcode_position_to(&mut self, sid: &str, effects: &mut Vec<Effect>) {
         if self.index < self.gcode.len() {

@@ -1,7 +1,8 @@
 use wc_firmware::boot::{
     board_banner, ends_boot, firmware_build, is_boot_banner, parse_firmware_version, supports_z_limits,
 };
-use wc_firmware::{Accounting, BUFFER_SIZE, PositionError, Reply, RunMode, Status, classify, split_glued};
+use wc_firmware::planner::{numbered, renumber};
+use wc_firmware::{Accounting, BUFFER_SIZE, Planned, PositionError, Reply, RunMode, Status, classify, split_glued};
 
 #[test]
 fn every_message_kind_is_told_apart() {
@@ -60,11 +61,17 @@ fn a_status_report_ending_in_a_multibyte_character_drops_that_character() {
 fn position_error_reports_are_parsed_by_their_field_count() {
     assert_eq!(
         classify("[PE:0.10,-0.20,120,1650.5,1651.25]"),
-        Reply::PositionError(PositionError { left: 0.1, right: -0.2, space: 120, chains: Some((1650.5, 1651.25)) })
+        Reply::PositionError(PositionError {
+            left: 0.1,
+            right: -0.2,
+            space: 120,
+            chains: Some((1650.5, 1651.25)),
+            planner: None
+        })
     );
     assert_eq!(
         classify("[PE:0.10,-0.20,120]"),
-        Reply::PositionError(PositionError { left: 0.1, right: -0.2, space: 120, chains: None })
+        Reply::PositionError(PositionError { left: 0.1, right: -0.2, space: 120, chains: None, planner: None })
     );
 }
 
@@ -152,4 +159,36 @@ fn accounting_gives_back_the_lines_it_waits_for_oldest_first() {
     assert_eq!(taken.iter().map(|s| s.text.as_deref()).collect::<Vec<_>>(), [Some("G1 X1 \n"), Some("G1 X2 \n")]);
     assert!(accounting.is_empty());
     assert_eq!(accounting.lines(), Some(vec![]));
+}
+
+#[test]
+fn a_planner_build_numbers_its_acks_and_resends_and_reports_its_line() {
+    assert_eq!(classify("ok N12"), Reply::OkLine(12));
+    assert_eq!(classify("rs N8"), Reply::Resend(8));
+    assert_eq!(classify("ok Nx"), Reply::Other("ok Nx".into()));
+    assert_eq!(
+        classify("Capabilities: planner line-numbers"),
+        Reply::Capabilities(vec!["planner".into(), "line-numbers".into()])
+    );
+    let Reply::PositionError(report) = classify("[PE:0.10,-0.20,127,1650.5,1651.25,42,3]") else { panic!() };
+    assert_eq!(report.planner, Some(Planned { line: 42, queued: 3 }));
+}
+
+#[test]
+fn a_numbered_line_carries_the_xor_of_its_upper_cased_trimmed_bytes() {
+    assert_eq!(numbered(5, "G21"), "N5 G21*31", "4E^35^20^47^32^31 = 1F");
+    assert_eq!(numbered(5, " g21  "), "N5 G21*31");
+    assert_eq!(renumber(13), "M110 N13");
+}
+
+#[test]
+fn an_ok_n_frees_every_copy_up_to_its_number() {
+    let mut accounting = Accounting::default();
+    accounting.sent("M110 N5\n", None);
+    accounting.sent_numbered("G1 X1\n", 15, Some(0), 5);
+    accounting.sent_numbered("G1 X2\n", 15, Some(1), 6);
+    assert!(accounting.acked_through(9).is_empty(), "a late duplicate frees nothing");
+    let freed: Vec<Option<u64>> = accounting.acked_through(5).iter().map(|sent| sent.number).collect();
+    assert_eq!(freed, [None, Some(5)]);
+    assert_eq!(accounting.space(), BUFFER_SIZE - 15);
 }

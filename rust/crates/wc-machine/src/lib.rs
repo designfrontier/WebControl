@@ -22,6 +22,7 @@ pub mod optical;
 pub mod pacing;
 pub mod park;
 mod pid;
+mod planner;
 pub mod queue;
 mod setup;
 mod shell;

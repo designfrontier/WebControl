@@ -851,6 +851,26 @@
             "value": 0
         },
         {
+            "default": 50,
+            "desc": "Acceleration ($47) of the planner test firmware, in mm/s^2. Shown, and sent, only when the controller reports the planner capability.\ndefault setting: 50",
+            "firmwareKey": 47,
+            "key": "plannerAcceleration",
+            "section": "Maslow Settings",
+            "title": "Planner Acceleration",
+            "type": "float",
+            "value": 50
+        },
+        {
+            "default": 0.01,
+            "desc": "Junction deviation ($48) of the planner test firmware, in mm: how far it may round a corner to keep its speed through it. Shown, and sent, only when the controller reports the planner capability.\ndefault setting: 0.01",
+            "firmwareKey": 48,
+            "key": "plannerJunctionDeviation",
+            "section": "Maslow Settings",
+            "title": "Planner Junction Deviation",
+            "type": "float",
+            "value": 0.01
+        },
+        {
             "default": 0,
             "desc": "Buffer gcode on arduino to increase execution speed. Requres restart to take effect. Experimental.\ndefault setting: 0",
             "key": "bufferOn",

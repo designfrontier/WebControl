@@ -1,0 +1,47 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "planner_lost_ok_is_sent_again_after_a_quiet_second",
+    "description": "A planner build queues N7 but its ok N7 is lost. A report within the second shows the ring empty and nothing is sent; once a second has passed with no ok N, rs or write, the next report with the ring empty and fewer than 15 queued sends N7 again, from the line after the last ok N. The firmware answers the duplicate with ok N7 without running it, and the job ends through G4 P0. The lost ack counts as one lost line.",
+    "firmware": {
+      "variant": "planner",
+      "version": "51.29",
+      "build": "51.292"
+    },
+    "webcontrolCommit": "planner-streaming"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    },
+    "gcode": {
+      "lines": ["G21", "G1 X5 Y0 F600", "G1 X5 Y5"]
+    }
+  },
+  "events": [
+    {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "M110 N5\n"},
+    {"type": "tx", "bytes": "N5 G21*31\n"},
+    {"type": "tx", "bytes": "N6 G1 X5 Y0 F600*122\n"},
+    {"type": "tx", "bytes": "N7 G1 X5 Y5*46\n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "G21"},
+    {"type": "rx", "line": "ok N5"},
+    {"type": "rx", "line": "G1 X5 Y0 F600"},
+    {"type": "rx", "line": "ok N6"},
+    {"type": "rx", "line": "G1 X5 Y5", "comment": "N7 is queued; its ok N7 never arrives"},
+    {"type": "rx", "line": "<Idle,MPos:2.00,0.00,0.00,WPos:0.000,0.000,0.000>"},
+    {"type": "rx", "line": "[PE:0.01,-0.02,127,1650.50,1651.25,6,2]", "comment": "under a second: nothing goes again"},
+    {"type": "tick", "seconds": 1.0},
+    {"type": "rx", "line": "<Idle,MPos:5.00,5.00,0.00,WPos:0.000,0.000,0.000>"},
+    {"type": "rx", "line": "[PE:0.00,0.00,127,1650.50,1651.25,0,0]"},
+    {"type": "tx", "bytes": "N7 G1 X5 Y5*46\n"},
+    {"type": "rx", "line": "ok N7", "comment": "a duplicate: acked, not run, not echoed"},
+    {"type": "tx", "bytes": "N8 G4 P0*101\n"},
+    {"type": "rx", "line": "G4 P0"},
+    {"type": "rx", "line": "ok N8"},
+    {"type": "expect", "state": {"uploadFlag": 0, "jobInProgress": false, "gcodeIndex": 0}, "emitted": [{"command": "controllerMessage", "data": "lines=3 lost=1 "}]}
+  ]
+}

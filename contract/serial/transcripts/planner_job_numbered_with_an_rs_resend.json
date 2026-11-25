@@ -1,0 +1,55 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "planner_job_numbered_with_an_rs_resend",
+    "description": "A planner build (B05 lists the planner capability): the job starts with M110 and every line goes numbered and checksummed while the copies fit the ring. N8 arrives corrupted, so the firmware answers rs N8 and drops N9 and N10: only N8 goes again until its ok N8 frees every copy, then N9 and N10 follow. The rs counts as one lost line in the job's pacing summary.",
+    "firmware": {
+      "variant": "planner",
+      "version": "51.29",
+      "build": "51.292"
+    },
+    "webcontrolCommit": "planner-streaming"
+  },
+  "setup": {
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    },
+    "gcode": {
+      "lines": ["G21", "G90", "G1 X10 Y0 F800", "G1 X10 Y10", "G1 X0 Y10", "G1 X0 Y0"]
+    }
+  },
+  "events": [
+    {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "M110 N5\n", "comment": "the handshake's G21, G90, $$ and $13 took N1 to N4"},
+    {"type": "tx", "bytes": "N5 G21*31\n"},
+    {"type": "tx", "bytes": "N6 G90*22\n"},
+    {"type": "tx", "bytes": "N7 G1 X10 Y0 F800*65\n"},
+    {"type": "tx", "bytes": "N8 G1 X10 Y10*33\n"},
+    {"type": "tx", "bytes": "N9 G1 X0 Y10*17\n"},
+    {"type": "tx", "bytes": "N10 G1 X0 Y0*24\n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "G21"},
+    {"type": "rx", "line": "ok N5"},
+    {"type": "rx", "line": "G90"},
+    {"type": "rx", "line": "ok N6"},
+    {"type": "rx", "line": "G1 X10 Y0 F800"},
+    {"type": "rx", "line": "ok N7"},
+    {"type": "rx", "line": "rs N8"},
+    {"type": "tx", "bytes": "N8 G1 X10 Y10*33\n"},
+    {"type": "expect", "state": {"uploadFlag": 1, "jobInProgress": true}},
+    {"type": "rx", "line": "G1 X10 Y10"},
+    {"type": "rx", "line": "ok N8"},
+    {"type": "tx", "bytes": "N9 G1 X0 Y10*17\n"},
+    {"type": "tx", "bytes": "N10 G1 X0 Y0*24\n"},
+    {"type": "rx", "line": "G1 X0 Y10"},
+    {"type": "rx", "line": "ok N9"},
+    {"type": "rx", "line": "G1 X0 Y0"},
+    {"type": "rx", "line": "ok N10"},
+    {"type": "tx", "bytes": "N11 G4 P0*93\n"},
+    {"type": "rx", "line": "G4 P0"},
+    {"type": "rx", "line": "ok N11"},
+    {"type": "expect", "state": {"uploadFlag": 0, "jobInProgress": false, "gcodeIndex": 0}, "emitted": [{"command": "controllerMessage", "data": "lines=6 lost=1 "}]}
+  ]
+}

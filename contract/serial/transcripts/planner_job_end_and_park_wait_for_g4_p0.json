@@ -1,0 +1,70 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "planner_job_end_and_park_wait_for_g4_p0",
+    "description": "On a planner build ok means queued, so a job's last ok N says nothing about motion. After the file's last line WebControl sends G4 P0, which the firmware answers only once every queued move has run: until then the job is still running and nothing parks. Its ok N9 ends the job, and the park follows, numbered like every other line.",
+    "firmware": {
+      "variant": "planner",
+      "version": "51.29",
+      "build": "51.292"
+    },
+    "webcontrolCommit": "planner-streaming"
+  },
+  "setup": {
+    "settings": {
+      "Maslow Settings": {
+        "parkX": "-300",
+        "parkY": "200.5"
+      }
+    },
+    "units": "MM",
+    "home": {
+      "x": 0,
+      "y": 0
+    },
+    "sled": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "gcode": {
+      "lines": ["G21", "G90", "G0 Z3", "G1 X10 Y0 F600"]
+    }
+  },
+  "events": [
+    {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "M110 N5\n"},
+    {"type": "tx", "bytes": "N5 G21*31\n"},
+    {"type": "tx", "bytes": "N6 G90*22\n"},
+    {"type": "tx", "bytes": "N7 G0 Z3*103\n"},
+    {"type": "tx", "bytes": "N8 G1 X10 Y0 F600*64\n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "G21"},
+    {"type": "rx", "line": "ok N5"},
+    {"type": "rx", "line": "G90"},
+    {"type": "rx", "line": "ok N6"},
+    {"type": "rx", "line": "G0 Z3"},
+    {"type": "rx", "line": "ok N7"},
+    {"type": "rx", "line": "G1 X10 Y0 F600"},
+    {"type": "rx", "line": "ok N8", "comment": "queued, not run"},
+    {"type": "tx", "bytes": "N9 G4 P0*100\n"},
+    {"type": "rx", "line": "G4 P0"},
+    {"type": "rx", "line": "<Idle,MPos:4.00,0.00,3.00,WPos:0.000,0.000,0.000>"},
+    {"type": "rx", "line": "[PE:0.01,-0.02,127,1650.50,1651.25,8,1]"},
+    {"type": "expect", "state": {"jobInProgress": true, "uploadFlag": 1}, "notEmitted": [{"command": "controllerMessage", "data": "PARK"}, {"command": "controllerMessage", "data": "PACING JOB END"}], "comment": "N8 still moves"},
+    {"type": "rx", "line": "ok N9", "comment": "every move has run"},
+    {"type": "tx", "bytes": "N10 G21*43\n"},
+    {"type": "rx", "line": "G21"},
+    {"type": "rx", "line": "ok N10"},
+    {"type": "tx", "bytes": "N11 G90*32\n"},
+    {"type": "rx", "line": "G90"},
+    {"type": "rx", "line": "ok N11"},
+    {"type": "tx", "bytes": "N12 G00 Z5.0*123\n"},
+    {"type": "rx", "line": "G00 Z5.0"},
+    {"type": "rx", "line": "ok N12"},
+    {"type": "tx", "bytes": "N13 G00 X-300.0 Y200.5*3\n"},
+    {"type": "rx", "line": "G00 X-300.0 Y200.5"},
+    {"type": "rx", "line": "ok N13"},
+    {"type": "expect", "state": {"jobInProgress": false, "uploadFlag": 0}, "emitted": [{"command": "controllerMessage", "data": "PACING JOB END"}, {"command": "controllerMessage", "data": "PARK START trigger=file"}]}
+  ]
+}

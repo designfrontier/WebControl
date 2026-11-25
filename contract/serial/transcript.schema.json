@@ -21,7 +21,7 @@
           "required": ["variant", "version"],
           "additionalProperties": false,
           "properties": {
-            "variant": { "enum": ["holey", "stock", "optical"] },
+            "variant": { "enum": ["holey", "stock", "optical", "planner"] },
             "version": {
               "type": "string",
               "pattern": "^[0-9]+\\.[0-9]+$",

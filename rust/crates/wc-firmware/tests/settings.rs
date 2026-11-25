@@ -144,6 +144,9 @@ fn a_boot_pushes_every_known_setting_in_key_order() {
             "$43=0",
             "$45=0.0000051684986",
             "$46=97.9",
+            // The machine sends these two only to a planner build (`link.rs`, `send_queued`).
+            "$47=50",
+            "$48=0.009999998",
         ]
     );
 }

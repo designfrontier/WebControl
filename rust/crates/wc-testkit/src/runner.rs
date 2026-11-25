@@ -10,6 +10,13 @@ use crate::transcript::{Alert, Emitted, Event, Expect, Start, Transcript, UiActi
 pub const STEP_MS: u64 = 10;
 const IDLE_LIMIT_MS: u64 = 10_000;
 const PRELUDE_ROUNDS: usize = 1_000;
+const PLANNER_CAPABILITIES: &str = "Capabilities: planner line-numbers accel-settings status-line";
+
+/// A planner host's `N<n> <line>*<sum>` as its number and line.
+fn unframed(line: &str) -> Option<(&str, &str)> {
+    let (number, rest) = line.strip_prefix('N')?.split_once(' ')?;
+    Some((number, rest.rsplit_once('*')?.0))
+}
 
 /// What a backend exposes to the runner: a fake serial port, a fake clock, the UI's inputs and its observable state.
 pub trait SerialBackend {
@@ -133,12 +140,17 @@ impl<B: SerialBackend> Replay<'_, B> {
 
     fn prelude_answer(&self, line: &str) -> Vec<String> {
         let firmware = &self.transcript.meta.firmware;
-        let request = line.trim_end();
+        let numbered = unframed(line.trim_end());
+        let request = numbered.map_or(line.trim_end(), |(_, body)| body);
+        let ok = numbered.map_or("ok".into(), |(number, _)| format!("ok N{number}"));
         let rewrites = firmware.build.as_deref() == Some("51.292") && request.starts_with('$') && request.contains('=');
         match request {
-            "B05" => vec![format!("Firmware Version {}", firmware.version), "ok".into()],
-            _ if rewrites => vec!["Change in setting, rewriting EEPROM".into(), "ok".into()],
-            _ => vec!["ok".into()],
+            "B05" => {
+                let capabilities = (firmware.variant == "planner").then(|| PLANNER_CAPABILITIES.to_string());
+                [format!("Firmware Version {}", firmware.version)].into_iter().chain(capabilities).chain([ok]).collect()
+            }
+            _ if rewrites => vec!["Change in setting, rewriting EEPROM".into(), ok],
+            _ => vec![ok],
         }
     }
 

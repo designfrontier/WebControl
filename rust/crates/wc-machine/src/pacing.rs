@@ -459,7 +459,7 @@ impl Machine {
     fn remaining_s(&self, now: Duration) -> Option<f64> {
         let job = self.stats.job.as_ref().filter(|_| self.stats.in_job)?;
         let (total, start) = self.job_estimate()?;
-        let finished = self.stats.estimated_before(self.controller.accounting.oldest_index().unwrap_or(self.index));
+        let finished = self.stats.estimated_before(self.running_index().unwrap_or(self.index));
         let done = finished - start;
         let pace = if done > PACE_TRUSTED * (total - start) { job.elapsed(now).as_secs_f64() / done } else { 1.0 };
         Some(round((total - finished).max(0.0) * pace, 1.0))
@@ -518,6 +518,13 @@ impl Machine {
             tally.lost_twice += u64::from(twice);
             tally.recovery += recovery;
         });
+    }
+
+    /// A planner build asked for lines again, or their ack was lost: one loss each time.
+    pub(crate) fn pacing_resent(&mut self) {
+        if self.stats.in_job {
+            self.stats.tallies().for_each(|tally| tally.lost += 1);
+        }
     }
 
     pub(crate) fn pacing_status(&mut self, status: &Status) {

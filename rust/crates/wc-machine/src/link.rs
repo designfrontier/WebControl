@@ -6,7 +6,8 @@ use std::time::Duration;
 use wc_firmware::boot::{
     BOOT_BANNER_WINDOW_MS, EEPROM_READ_FAIL, EEPROM_REWRITE_NOTICE, board_banner, ends_boot, is_boot_banner,
 };
-use wc_firmware::settings::{Sync, reinitialises_axes, sync_reported};
+use wc_firmware::planner::PLANNER_KEYS;
+use wc_firmware::settings::{Sync, reinitialises_axes, setting_key, sync_reported};
 use wc_firmware::{Reply, classify, split_glued};
 use wc_gcode::firmware_gcode::{only_selects_tool, tool_change_line};
 use wc_gcode::sanitise::{LineProblem, problem_with, sanitise};
@@ -49,6 +50,7 @@ fn controller_message(text: &str) -> Effect {
 impl Machine {
     pub(crate) fn port_opened(&mut self, port: String, now: Duration, effects: &mut Vec<Effect>) {
         self.controller = Controller::new(now);
+        self.planner = false;
         self.controller.boot_deadline = Some(now + BOOT_WAIT);
         self.controller.buffering = self.settings.number("Maslow Settings", "bufferOn") != 0.0;
         self.job.controller_reset();
@@ -141,6 +143,8 @@ impl Machine {
         self.job.paused_at = None;
         let (eeprom_reset, buffering) = (self.controller.eeprom_reset, self.controller.buffering);
         self.controller = Controller { eeprom_reset, buffering, ..Controller::new(now) };
+        // Its B05 says again whether it numbers lines; until then it does not.
+        self.planner = false;
         self.rewrite_notice = false;
         self.job.controller_reset();
         self.bit = BitHeight::new();
@@ -202,7 +206,9 @@ impl Machine {
         }
         let reply = classify(line);
         self.acknowledge(line, &reply, now, effects);
-        self.watch_for_lost_line(&reply, now, effects);
+        if !self.planner {
+            self.watch_for_lost_line(&reply, now, effects);
+        }
         self.react(line, reply, now, effects);
     }
 
@@ -216,21 +222,29 @@ impl Machine {
             }
             return;
         }
-        if controller.boot_in_progress || !matches!(reply, Reply::Ok | Reply::Error(_)) {
+        if controller.boot_in_progress || !matches!(reply, Reply::Ok | Reply::Error(_) | Reply::OkLine(_)) {
             return;
         }
         controller.ready = true;
-        let acked = controller.accounting.acked();
-        controller.watch.acked(acked.as_ref());
+        let acked = match reply {
+            Reply::OkLine(number) => self.numbered_ack(Some(*number), now),
+            Reply::Error(_) if self.controller.numbered.holds() => self.numbered_ack(None, now),
+            _ => Vec::from_iter(self.controller.accounting.acked()),
+        };
+        if matches!(reply, Reply::Error(_)) {
+            self.numbered_freed(acked.last());
+        }
+        let controller = &mut self.controller;
+        controller.watch.acked(acked.last());
         if controller.accounting.is_empty() {
             self.bit.settled();
             self.sled.settled();
         }
-        self.pacing_acked(acked.as_ref(), now);
+        acked.iter().for_each(|sent| self.pacing_acked(Some(sent), now));
         // Identity, not position: a `~` sent mid-probe is acked first with an entry of its own.
-        let answered = self.controller.probe.take_if(|probe| acked.as_ref().is_some_and(|sent| sent.id == probe.id));
+        let answered = self.controller.probe.take_if(|probe| acked.iter().any(|sent| sent.id == probe.id));
         if let Some(probe) = answered {
-            self.probe_answered(probe, matches!(reply, Reply::Ok), effects);
+            self.probe_answered(probe, matches!(reply, Reply::Ok | Reply::OkLine(_)), effects);
         }
     }
 
@@ -274,10 +288,14 @@ impl Machine {
     /// What a line means beyond its ack: the messageProcessor's state changes and the UIProcessor's pushes.
     fn react(&mut self, line: &str, reply: Reply, now: Duration, effects: &mut Vec<Effect>) {
         match reply {
-            Reply::Ok => {}
+            Reply::Ok | Reply::OkLine(_) => {}
+            Reply::Resend(from) => self.resend_requested(from, now),
             Reply::Status(status) => self.status_report(status, now, effects),
             Reply::Misread(text) => tracing::debug!(text, "misread controller report"),
-            Reply::PositionError(error) => self.position_error(error, effects),
+            Reply::PositionError(error) => {
+                self.planner_report(error.planner, error.space, now, effects);
+                self.position_error(error, effects);
+            }
             Reply::Setting { key, value } => self.reported_setting(line, key, value, effects),
             Reply::Measured(mm) if self.upgrade.collects_chains() => self.upgrade_measured(mm),
             Reply::Measured(mm) => self.measured(mm, now, effects),
@@ -377,6 +395,7 @@ impl Machine {
     pub(crate) fn await_resync(&mut self, now: Duration) {
         let controller = &mut self.controller;
         controller.accounting.clear();
+        controller.numbered.flushed();
         controller.watch = Watch::default();
         controller.probe = None;
         controller.ready = false;
@@ -408,7 +427,10 @@ impl Machine {
     pub(crate) fn write(&mut self, text: &str, index: Option<usize>, now: Duration, effects: &mut Vec<Effect>) -> u64 {
         let message = format!("{text}\n");
         let idle = self.controller.accounting.is_empty();
-        let id = self.controller.accounting.sent(&message, index);
+        let id = match self.planner {
+            true => self.write_numbered(text, index, now, effects),
+            false => self.controller.accounting.sent(&message, index),
+        };
         if let Some(index) = index {
             self.pacing_written(id, index, self.controller.last_write, now);
         }
@@ -426,8 +448,10 @@ impl Machine {
         if let Some((key, value)) = setting.and_then(|(key, value)| Some((key.parse().ok()?, value.trim()))) {
             self.kinematics.update_setting(key, value);
         }
-        effects.push(Effect::Write(message.into_bytes()));
-        effects.push(Effect::Log(format!("Sent: {text}")));
+        if !self.planner {
+            effects.push(Effect::Write(message.into_bytes()));
+            effects.push(Effect::Log(format!("Sent: {text}")));
+        }
         id
     }
 
@@ -437,10 +461,14 @@ impl Machine {
         matches!(self.link, Link::Connected { .. })
             && controller.resync_after.is_none()
             && controller.hold_until.is_none_or(|until| now >= until)
+            && !controller.numbered.holds()
     }
 
     /// The `linePacingMode` and `linePacingGapMs` settings decide (`pacing.rs`).
     fn paced(&mut self, now: Duration) -> bool {
+        if self.planner {
+            return true;
+        }
         let controller = &mut self.controller;
         self.stats.pacing().due(controller.last_write, &mut controller.paced_until, now)
     }
@@ -452,7 +480,7 @@ impl Machine {
 
     /// Buffered, a job line goes whenever it fits the controller's free bytes.
     fn can_stream(&self, now: Duration) -> bool {
-        let room = match self.controller.buffering {
+        let room = match self.controller.buffering || self.planner {
             true => self.next_line_fits(),
             false => self.controller.accounting.is_empty() && self.controller.ready,
         };
@@ -468,6 +496,9 @@ impl Machine {
 
     /// Writes whatever the controller has room for: a queued command first, else the job's next line.
     pub(crate) fn pump(&mut self, now: Duration, effects: &mut Vec<Effect>) {
+        if matches!(self.link, Link::Connected { .. }) && self.controller.resync_after.is_none() {
+            self.resend(now, effects);
+        }
         self.take_unwritten();
         while self.can_write(now) {
             if self.restart_due() {
@@ -502,6 +533,10 @@ impl Machine {
                 Queued::Raise(raise) => self.expand_raise(raise, now, effects),
                 Queued::Advance => {
                     self.queue_go(now, effects);
+                    false
+                }
+                Queued::FileDone => {
+                    self.end_job();
                     false
                 }
             };
@@ -555,7 +590,8 @@ impl Machine {
         self.manage_tool_change(&command);
         self.sled.sent(&command);
         let command = to_send;
-        if blank(&command) || only_selects_tool(&command) || !self.may_reinitialise(&command, effects) {
+        let unplanned = !self.planner && setting_key(&command).is_some_and(|key| PLANNER_KEYS.contains(&key));
+        if blank(&command) || only_selects_tool(&command) || unplanned || !self.may_reinitialise(&command, effects) {
             return false;
         }
         let id = self.write(&command, None, now, effects);

@@ -15,8 +15,10 @@ pub struct Sent {
     pub len: i64,
     /// The file line it came from, so a halt can rewind to it.
     pub index: Option<usize>,
-    /// The bytes written, `None` for `~`.
+    /// The bytes written, `None` for `~`; a planner line's without its number and checksum.
     pub text: Option<String>,
+    /// A planner line's `N` number.
+    pub number: Option<u64>,
 }
 
 /// Unacknowledged lines, newest first, and the space they leave in the controller's buffer.
@@ -36,7 +38,7 @@ impl Default for Accounting {
 impl Accounting {
     fn record(&mut self, len: usize, index: Option<usize>, text: Option<String>) -> Sent {
         self.next_id += 1;
-        let sent = Sent { id: self.next_id, len: len as i64, index, text };
+        let sent = Sent { id: self.next_id, len: len as i64, index, text, number: None };
         self.space -= sent.len;
         sent
     }
@@ -47,6 +49,30 @@ impl Accounting {
         let id = sent.id;
         self.unacked.push_front(sent);
         id
+    }
+
+    /// A planner line: `text` without its framing, which made `len` bytes on the wire.
+    pub fn sent_numbered(&mut self, text: &str, len: usize, index: Option<usize>, number: u64) -> u64 {
+        let sent = Sent { number: Some(number), ..self.record(len, index, Some(text.into())) };
+        let id = sent.id;
+        self.unacked.push_front(sent);
+        id
+    }
+
+    /// `ok N<n>` is cumulative: it frees every copy up to the first one numbered `n`, or nothing without one.
+    pub fn acked_through(&mut self, number: u64) -> Vec<Sent> {
+        if !self.unacked.iter().any(|sent| sent.number == Some(number)) {
+            return Vec::new();
+        }
+        let mut freed = Vec::new();
+        while let Some(sent) = self.acked() {
+            let last = sent.number == Some(number);
+            freed.push(sent);
+            if last {
+                break;
+            }
+        }
+        freed
     }
 
     /// `~` is acknowledged at once, ahead of every line still in the buffer.

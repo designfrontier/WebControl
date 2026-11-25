@@ -527,9 +527,12 @@ fn a_planner_test_build_may_go_back_to_51_292() {
     let planner =
         Build { capabilities: Some("planner line-numbers accel-settings status-line".into()), ..Build::holey_51_292() };
     let mut bench = Bench::on(planner.on_board(OWNERS_BOARD));
-    bench.act("check");
-    assert_eq!(bench.settle(&[Stage::Checking], 10_000), Stage::Ready);
-    assert!(bench.view().message.contains("Ready to upgrade"));
+    assert_eq!(bench.upgrade(), Stage::SelfTest, "{:?}", bench.view().log);
+    assert_eq!(bench.sim.build().capabilities, None);
+    assert!(!bench.machine.snapshot().planner);
+    let written = bench.take_written();
+    let flashed = written.iter().rposition(|line| line.trim() == "B05").unwrap();
+    assert!(written[flashed..].iter().all(|line| !line.starts_with('N') && !line.starts_with("$47")), "{written:?}");
 }
 
 #[test]
