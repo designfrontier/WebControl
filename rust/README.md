@@ -44,7 +44,7 @@ recorded outputs.
   `webcontrol.json`, printing the result and the `$` lines Accept would send
 - `cargo run --release -p wc-gcode --example gcode_timing -- <file.nc> [home_x home_y]`: times each step of opening
   a gcode file, for the load time in `spec/rust-checklists/files-boards.md`
-- `bash deploy/test.sh`: `wc-switch`, `deploy.sh` and `install-pi.sh` against stubs
+- `bash deploy/test.sh`: `wc-switch`, `deploy.sh`, `install-pi.sh` and `flash-hex.sh` against stubs
 - `bash deploy/update-test.sh`: `webcontrol-update` against `scripts/release.sh`'s tarballs, a `file://` GitHub API
   and `/api/state`, and stub `sudo`, `systemctl` and binaries (update, version order, backup, checksum, busy, rollback,
   `--status`)
@@ -78,6 +78,13 @@ service run `systemctl poweroff` (the UI's Turn Off Raspberry Pi) and nothing el
 `spec/rust-checklists/`, grouped by feature. The firmware upgrade (Actions → Upgrade holey firmware to 51.292…) runs
 `avrdude`, which `install-pi.sh` installs, and keeps each backup in `~/.WebControl/firmware-backups/<time>/`;
 `firmware-upgrade.md` there walks through the upgrade, the self-test and a rollback.
+
+webcontrol-rs refuses Upgrade Custom Firmware. To try a test build, copy `deploy/flash-hex.sh` and the hex to the
+Pi and run `bash flash-hex.sh <file.hex>` as `pi` (not with `sudo`: it reads `~/.WebControl/webcontrol.json`). It
+refuses a file that is not Intel HEX or does not end below the ATmega2560's bootloader at `0x3E000`, then stops
+`webcontrol-rs`, flashes with the upgrade's avrdude command line on the `COMport` setting's port, and starts
+`webcontrol-rs` again, also when avrdude fails. It needs `python3` and `avrdude`. It makes no backup: to roll back,
+run the UI's Upgrade Holey Firmware (51.292). `spec/rust-checklists/planner.md` uses it.
 
 Behind a reverse proxy (nginx) or HTTPS, the proxy must forward the original `Host` (`proxy_set_header Host $host;`)
 and the WebSocket `Upgrade`/`Connection` headers: `wc-server` refuses a WebSocket or write whose `Origin` does not
