@@ -413,6 +413,19 @@ pub struct PacingSegment {
     pub wall_s: f64,
     /// A running job's estimated time left, scaled by how its estimate compares with its time so far.
     pub remaining_s: Option<f64>,
+    /// `None` until a report comes in while the sled moves.
+    pub position_error: Option<PositionErrorStats>,
+}
+
+/// The `[PE:]` reports taken while the sled moved: the larger of the two chain errors, in mm.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PositionErrorStats {
+    pub samples: u64,
+    pub mean_mm: f64,
+    pub max_mm: f64,
+    #[serde(rename = "over1Mm")]
+    pub over_1mm: u64,
 }
 
 /// The line pacing and its statistics; pushed on every change and every 2 s during a job.

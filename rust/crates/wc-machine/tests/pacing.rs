@@ -442,3 +442,32 @@ fn the_wait_before_a_job_is_not_a_short_line_gap() {
     let job = rig.machine.snapshot().pacing.0.job.clone().unwrap();
     assert_eq!((job.lines, job.median_short_gap_ms), (1, None), "the line followed no write of the job's");
 }
+
+#[test]
+fn position_errors_count_only_in_a_job_while_the_sled_moves() {
+    let mut rig = Rig::connected();
+    rig.machine.load_gcode(&file(&["G1 X1", "G1 X2"]));
+    rig.rx("<Idle,MPos:5.00,0.00,10.00,WPos:0.000,0.000,0.000>");
+    rig.rx("[PE:5.0,0.0,127,1650.0,1651.0]");
+    rig.act("startRun");
+    let reports = [(5.0, 3.0, 0.0), (1.0, 0.2, -1.5), (1.0, 9.0, 0.0), (2.0, -0.4, 0.1)];
+    reports.into_iter().for_each(|(x, left, right)| {
+        rig.rx(&format!("<Idle,MPos:{x:.2},0.00,10.00,WPos:0.000,0.000,0.000>"));
+        rig.rx(&format!("[PE:{left},{right},127,1650.0,1651.0]"));
+    });
+    let effects = [rig.rx("ok"), rig.advance(100), rig.rx("ok"), rig.advance(100)].concat();
+    let line = console(&effects).into_iter().find(|text| text.starts_with("PE JOB")).expect("logged at job end");
+    assert_eq!(line, "PE JOB mean_mm=0.95 max_mm=1.5 over_1mm=1 samples=2 file=none");
+    let stats = rig.machine.snapshot().pacing.0.job.clone().unwrap().position_error.unwrap();
+    assert_eq!((stats.samples, stats.mean_mm, stats.max_mm, stats.over_1mm), (2, 0.95, 1.5, 1));
+}
+
+#[test]
+fn a_job_with_no_moving_reports_logs_none() {
+    let mut rig = Rig::connected();
+    rig.machine.load_gcode(&file(&["G1 X1"]));
+    let effects = [rig.act("startRun"), rig.advance(10), rig.rx("ok"), rig.advance(100)].concat();
+    let line = console(&effects).into_iter().find(|text| text.starts_with("PE JOB")).expect("logged at job end");
+    assert_eq!(line, "PE JOB mean_mm=none max_mm=none over_1mm=0 samples=0 file=none");
+    assert_eq!(rig.machine.snapshot().pacing.0.job.clone().unwrap().position_error, None);
+}

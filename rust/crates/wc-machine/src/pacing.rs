@@ -7,8 +7,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use wc_config::Settings;
-use wc_firmware::Sent;
-use wc_protocol::main::{ControllerMessage, PacingSegment, PacingStats};
+use wc_firmware::{PositionError, Sent, Status};
+use wc_protocol::main::{ControllerMessage, PacingSegment, PacingStats, PositionErrorStats};
 
 use crate::job::Flow;
 use crate::machine::{Effect, Machine, broadcast};
@@ -109,6 +109,40 @@ pub fn stats_shown(settings: &Settings) -> bool {
     matches!(settings.value(SECTION, STATS_KEY), Some(v) if v == 1 || v == true)
 }
 
+/// The larger chain error of each `[PE:]` report taken while the sled moved.
+#[derive(Debug, Clone, Copy, Default)]
+struct ErrorTally {
+    samples: u64,
+    sum_mm: f64,
+    max_mm: f64,
+    over_1mm: u64,
+}
+
+impl ErrorTally {
+    fn add(&mut self, mm: f64) {
+        self.samples += 1;
+        self.sum_mm += mm;
+        self.max_mm = self.max_mm.max(mm);
+        self.over_1mm += u64::from(mm > 1.0);
+    }
+
+    fn report(self) -> Option<PositionErrorStats> {
+        (self.samples > 0).then(|| PositionErrorStats {
+            samples: self.samples,
+            mean_mm: round(self.sum_mm / self.samples as f64, 1000.0),
+            max_mm: round(self.max_mm, 1000.0),
+            over_1mm: self.over_1mm,
+        })
+    }
+
+    /// `mean_mm=0.412 max_mm=1.3 over_1mm=2 samples=180`, `none` for a mean and max with no samples.
+    fn fields(self) -> String {
+        let (mean, max) =
+            self.report().map_or(("none".into(), "none".into()), |r| (r.mean_mm.to_string(), r.max_mm.to_string()));
+        format!("mean_mm={mean} max_mm={max} over_1mm={} samples={}", self.over_1mm, self.samples)
+    }
+}
+
 /// One segment's or one job's counts.
 #[derive(Debug, Clone)]
 struct Tally {
@@ -125,6 +159,7 @@ struct Tally {
     last_line: Option<usize>,
     started: Duration,
     ended: Option<Duration>,
+    errors: ErrorTally,
 }
 
 impl Tally {
@@ -142,6 +177,7 @@ impl Tally {
             last_line: None,
             started: now,
             ended: None,
+            errors: ErrorTally::default(),
         }
     }
 
@@ -202,6 +238,7 @@ impl Tally {
             ended_by: ended_by.map(String::from),
             wall_s: round(self.wall(now).as_secs_f64(), 1000.0),
             remaining_s: remaining,
+            position_error: self.errors.report(),
         }
     }
 
@@ -262,6 +299,9 @@ pub(crate) struct Stats {
     /// Something changed since the last push.
     pub(crate) dirty: bool,
     job_ended_by: &'static str,
+    /// The last status report's MPos, and whether it differed from the one before.
+    mpos: Option<[f64; 3]>,
+    moving: bool,
     /// What the last push said; `GET /api/state` and `GET /api/run/pacing` read it.
     pub shown: Arc<PacingStats>,
     /// The loaded file's estimated seconds through the end of each line.
@@ -282,6 +322,8 @@ impl Stats {
             stopping: false,
             dirty: false,
             job_ended_by: "job end",
+            mpos: None,
+            moving: false,
             shown: Arc::new(PacingStats {
                 mode: pacing.mode.setting().into(),
                 gap_ms: pacing.gap.as_millis() as u64,
@@ -384,6 +426,8 @@ impl Machine {
             let fields =
                 format!("{} ended_by={}{times} estimated_s={estimated} file={file}", pacing.fields(), slug(why));
             announce(format!("PACING JOB END file_line_end={last} {fields}"), effects);
+            let errors = self.stats.job.as_ref().map_or_else(ErrorTally::default, |job| job.errors);
+            announce(format!("PE JOB {} file={file}", errors.fields()), effects);
             self.stats.dirty = true;
         }
     }
@@ -474,6 +518,20 @@ impl Machine {
             tally.lost_twice += u64::from(twice);
             tally.recovery += recovery;
         });
+    }
+
+    pub(crate) fn pacing_status(&mut self, status: &Status) {
+        let mpos = [status.x, status.y, status.z];
+        self.stats.moving = self.stats.mpos.is_some_and(|before| before != mpos);
+        self.stats.mpos = Some(mpos);
+    }
+
+    pub(crate) fn pacing_position_error(&mut self, error: &PositionError) {
+        if !self.stats.in_job || !self.stats.moving {
+            return;
+        }
+        let mm = error.left.abs().max(error.right.abs());
+        self.stats.tallies().for_each(|tally| tally.errors.add(mm));
     }
 
     /// For a client that missed the pushes.

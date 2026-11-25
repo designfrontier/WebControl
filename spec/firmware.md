@@ -285,7 +285,9 @@ top of every file, so as written it would run every move after it relative.
    unknown numbers are `none`), then for a change `PACING CHANGE file_line=N mode=minimum_gap gap_ms=25
    from_mode=v0.94 from_gap_ms=50`. A job writes `PACING JOB START file_line=N mode=... gap_ms=...` and, at its end,
    a `PACING JOB` line with the segment keys (its first pacing) and `PACING JOB END file_line_end=N mode=... gap_ms=...
-   ended_by=...`. Every word after the upper-case label is a `key=value` pair.
+   ended_by=...`, then `PE JOB mean_mm=0.412 max_mm=1.3 over_1mm=2 samples=1350 file=...`: max(|lErr|,|rErr|) of
+   each `[PE:]` report whose MPos report before it differed from the one before that (the sled moving). Segments
+   and jobs carry the same numbers as `positionError`. Every word after the upper-case label is a `key=value` pair.
 4. Realtime: `!` resets accounting (immediate `ok`, no ack for the aborted line); `~` immediate `ok`. A Stop that
    finds WebControl in G91, or a G20/G21/G90/G91 unacknowledged, writes units and `G90` after the resync, since
    the `!` drops a jog's closing `G90` (2026-11-18).

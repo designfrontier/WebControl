@@ -3,7 +3,7 @@ import { ApiError, getJson, sendJson } from "../../api/http";
 import type { Fetch } from "../../api/http";
 import { useFetch, useMachine, useServerMessage } from "../../app/context";
 import { PACING_GAP_MAX_MS, pacingStatsSchema } from "../../protocol";
-import type { PacingMode, PacingSegment, PacingStats } from "../../protocol";
+import type { PacingMode, PacingSegment, PacingStats, PositionErrorStats } from "../../protocol";
 
 export interface Pacing {
   mode: PacingMode;
@@ -34,6 +34,9 @@ export const fixed = (value: number | null, digits: number) => (value === null ?
 const lostShort = ({ lost, lostPercent }: PacingSegment) =>
   lostPercent === null ? `Lost ${lost}` : `Lost ${lost} (${fixed(lostPercent, 2)}%)`;
 
+export const positionErrorText = ({ meanMm, maxMm, over1Mm }: PositionErrorStats) =>
+  `Error mean ${meanMm.toFixed(2)} mm, max ${maxMm.toFixed(2)} mm, ${over1Mm} over 1 mm`;
+
 /** "507 lines/min", "Lost 9 (0.39%)" and the rest, as the run panel shows a segment. */
 export const describe = (segment: PacingSegment) => ({
   rate: segment.linesPerMinute === null ? "No lines yet" : `${fixed(segment.linesPerMinute, 0)} lines/min`,
@@ -44,6 +47,7 @@ export const describe = (segment: PacingSegment) => ({
     ...(segment.lostTwice > 0 ? [`${segment.lostTwice} lost twice`] : []),
     `${fixed(segment.secondsPerLine, 3)} s/line`,
     `${segment.recoveryS.toFixed(1)} s recovering`,
+    ...(segment.positionError ? [positionErrorText(segment.positionError)] : []),
     pacingLabel(segment),
   ].join(" · "),
 });

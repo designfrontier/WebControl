@@ -90,6 +90,36 @@
                 "number",
                 "null"
               ]
+            },
+            "positionError": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "samples": {
+                      "type": "number"
+                    },
+                    "meanMm": {
+                      "type": "number"
+                    },
+                    "maxMm": {
+                      "type": "number"
+                    },
+                    "over1Mm": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "samples",
+                    "meanMm",
+                    "maxMm",
+                    "over1Mm"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "required": [
@@ -189,6 +219,36 @@
                 "number",
                 "null"
               ]
+            },
+            "positionError": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "samples": {
+                      "type": "number"
+                    },
+                    "meanMm": {
+                      "type": "number"
+                    },
+                    "maxMm": {
+                      "type": "number"
+                    },
+                    "over1Mm": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "samples",
+                    "meanMm",
+                    "maxMm",
+                    "over1Mm"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "required": [
@@ -287,6 +347,36 @@
             "type": [
               "number",
               "null"
+            ]
+          },
+          "positionError": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "samples": {
+                    "type": "number"
+                  },
+                  "meanMm": {
+                    "type": "number"
+                  },
+                  "maxMm": {
+                    "type": "number"
+                  },
+                  "over1Mm": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "samples",
+                  "meanMm",
+                  "maxMm",
+                  "over1Mm"
+                ]
+              },
+              {
+                "type": "null"
+              }
             ]
           }
         },

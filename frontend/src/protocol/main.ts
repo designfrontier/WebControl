@@ -23,6 +23,15 @@ export const PACING_GAP_MAX_MS = 500;
 export const pacingModeSchema = z.enum(PACING_MODES);
 export type PacingMode = z.infer<typeof pacingModeSchema>;
 
+/** The `[PE:]` reports taken while the sled moved: the larger of the two chain errors, in mm. */
+export const positionErrorStatsSchema = z.object({
+  samples: z.number(),
+  meanMm: z.number(),
+  maxMm: z.number(),
+  over1Mm: z.number(),
+});
+export type PositionErrorStats = z.infer<typeof positionErrorStatsSchema>;
+
 /** One stretch of a job streamed at one line pacing, or a whole job's totals. */
 export const pacingSegmentSchema = z.object({
   /** For a job's totals, the pacing it started with. */
@@ -48,6 +57,8 @@ export const pacingSegmentSchema = z.object({
   wallS: z.number().optional(),
   /** A running job's estimated time left, scaled by how its estimate compares with its time so far. */
   remainingS: z.number().nullable().optional(),
+  /** Null until a report comes in while the sled moves. */
+  positionError: positionErrorStatsSchema.nullable().optional(),
 });
 export type PacingSegment = z.infer<typeof pacingSegmentSchema>;
 

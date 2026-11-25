@@ -2,7 +2,7 @@ use serde_json::{Value, json};
 use wc_protocol::main::{
     ActivateModal, Alarm, Backend, ClearAlarm, ConnectionStatus, ControllerMessage, ErrorValueMessage, GcodeFile,
     GcodeLine, HealthMessage, HomePositionMessage, HostAddress, Macro, MainScreen, PacingSegment, PacingStats,
-    PauseButton, PositionMessage, RequestedSetting, StartupState, StatusMessage, Units,
+    PauseButton, PositionErrorStats, PositionMessage, RequestedSetting, StartupState, StatusMessage, Units,
 };
 use wc_protocol::settings::{Theme, ThemeChanged, UpdatePorts};
 use wc_protocol::{Action, ClientEvent, Envelope, Frame, Namespace, Push, float};
@@ -74,6 +74,12 @@ fn segment(ended_by: Option<&str>) -> PacingSegment {
         ended_by: ended_by.map(String::from),
         wall_s: 300.5,
         remaining_s: ended_by.is_none().then_some(1200.0),
+        position_error: ended_by.is_none().then_some(PositionErrorStats {
+            samples: 1350,
+            mean_mm: 0.412,
+            max_mm: 1.3,
+            over_1mm: 2,
+        }),
     }
 }
 
