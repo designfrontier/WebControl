@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useClient, useMachine, useServerMessage } from "../../app/context";
+import { Dialog } from "../../app/Dialog";
 import { StopButton } from "../../app/StopButton";
 import { LoadedFile } from "../files/LoadedFile";
 import { QueueSummary } from "../queue";
@@ -28,6 +29,38 @@ const CameraToggle = () => {
   );
 };
 
+const ResumeDialog = ({ stoppedAt, onClose }: { stoppedAt: number; onClose: () => void }) => {
+  const client = useClient();
+  const line = stoppedAt + 1;
+  const choose = (startOver: boolean) => {
+    if (startOver) client.sendAction("moveGcodeGoto", 0);
+    client.sendAction("startRun");
+    onClose();
+  };
+  return (
+    <Dialog
+      title="Resume or start over"
+      onClose={onClose}
+      closeButton={false}
+      actions={
+        <>
+          <button type="button" data-autofocus onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" onClick={() => choose(true)}>
+            Start over
+          </button>
+          <button type="button" className="button-primary" onClick={() => choose(false)}>
+            Resume at line {line}
+          </button>
+        </>
+      }
+    >
+      <p>Stopped at line {line}. Resume there, or start over from line 1?</p>
+    </Dialog>
+  );
+};
+
 interface Props {
   available: ControlAvailability;
   lineIndex: number;
@@ -37,6 +70,8 @@ export const RunPanel = ({ available, lineIndex }: Props) => {
   const client = useClient();
   const pauseButton = useMachine((s) => s.pauseButton);
   const alarm = useMachine((s) => s.alarm);
+  const stoppedAt = useMachine((s) => s.stoppedAt);
+  const [asking, setAsking] = useState(false);
   const [lineText, setLineText] = useDraft(String(lineIndex + 1));
   const target = Number(lineText);
   const validTarget = Number.isInteger(target) && target >= 1;
@@ -62,9 +97,15 @@ export const RunPanel = ({ available, lineIndex }: Props) => {
         <QueueSummary />
         <LoadedFile className="run-file" />
         <div className="run-buttons">
-          <button type="button" className="go" disabled={!available.play} onClick={() => client.sendAction("startRun")}>
+          <button
+            type="button"
+            className="go"
+            disabled={!available.play}
+            onClick={() => (stoppedAt === null ? client.sendAction("startRun") : setAsking(true))}
+          >
             Play
           </button>
+          {asking && stoppedAt !== null && <ResumeDialog stoppedAt={stoppedAt} onClose={() => setAsking(false)} />}
           <button
             type="button"
             className="caution"

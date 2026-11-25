@@ -78,6 +78,8 @@ pub(crate) struct Job {
     pub streamed: Position,
     /// The file's modal G2 or G3 at a restart, until a file line settles the motion the restart left as G0 or G1.
     pub arc_after_restart: Option<u8>,
+    /// The index a planner build's Stop left, so Play can ask whether to resume there.
+    pub stopped_at: Option<usize>,
 }
 
 impl Default for Job {
@@ -95,6 +97,7 @@ impl Default for Job {
             z_target: 0.0,
             streamed: Position { x: 0.0, y: 0.0, z: 0.0, feed_rate: None },
             arc_after_restart: None,
+            stopped_at: None,
         }
     }
 }
@@ -273,6 +276,7 @@ impl Machine {
             }
         }
         self.job.flow = flow;
+        self.job.stopped_at = None;
         self.controller.numbered.renumber();
         self.remember_run();
         self.leds.light(Led::Play);
@@ -386,6 +390,7 @@ impl Machine {
         // A planner build ran lines it had acked long before, so Play goes on from the one it was running.
         self.index = resume_at.unwrap_or(self.index);
         let job = &mut self.job;
+        job.stopped_at = resume_at;
         job.manual_z = None;
         job.firmware_paused = false;
         job.holds_job_lines = false;

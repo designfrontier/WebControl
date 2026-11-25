@@ -117,6 +117,27 @@ describe("MainPage run status", () => {
       ["stopRun", "", ""],
     ]);
   });
+
+  it.each([
+    ["Resume at line 8", [["startRun", "", ""]]],
+    [
+      "Start over",
+      [
+        ["moveGcodeGoto", 0, ""],
+        ["startRun", "", ""],
+      ],
+    ],
+    ["Cancel", []],
+  ])("asks before Play after a Stop left line 8: %s", async (choice, actions) => {
+    const { socket, user } = await renderMain();
+    socket.serverMessage("statusMessage", { uploadFlag: 0, positioningMode: 0, currentTool: 2, stoppedAt: 7 });
+    await user.click(button("Play"));
+    expect(screen.getByRole("dialog")).toHaveTextContent("Stopped at line 8. Resume there, or start over from line 1?");
+    expect(socket.actions()).toEqual([]);
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: choice }));
+    expect(socket.actions()).toEqual(actions);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
 });
 
 describe("MainPage jogging", () => {

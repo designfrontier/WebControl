@@ -140,6 +140,8 @@ export const mainMessages = {
     manualZAxisAdjust: z.boolean().optional(),
     /** A G38.2 probe is queued or descending; only Stop, Pause and actions that move nothing run. Rust only. */
     probing: z.boolean().optional(),
+    /** The 0-based line a planner build's Stop left, which Play asks whether to resume at. Rust only. */
+    stoppedAt: z.number().int().nullable().optional(),
   }),
   positionMessage: z.object({
     xval: z.number(),

@@ -310,6 +310,7 @@ impl Machine {
         self.truncate = gcode.truncate;
         self.stats.estimate = gcode.estimate;
         self.stats.dirty = true;
+        self.job.stopped_at = None;
         if let Some(tolerance) = gcode.tolerance {
             self.set_setting("Computed Settings", "tolerance", Value::from(tolerance));
         }
@@ -363,6 +364,7 @@ impl Machine {
     fn move_gcode_index(&mut self, target: i64, failure: &str, effects: &mut Vec<Effect>) -> bool {
         let Some(last) = self.gcode.len().checked_sub(1) else { return false };
         self.index = usize::try_from(target).unwrap_or(0).min(last);
+        self.job.stopped_at = None;
         self.gcode_position(Some(failure.into()), effects)
     }
 

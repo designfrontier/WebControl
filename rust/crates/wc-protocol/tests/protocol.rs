@@ -338,6 +338,7 @@ fn link_messages_fit_their_schemas() {
         job_in_progress: false,
         manual_z_axis_adjust: false,
         probing: true,
+        stopped_at: Some(4),
     };
     check(Envelope::json(&status));
     check(Envelope::json(&ControllerMessage("Firmware Version 51.27".into())));

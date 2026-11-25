@@ -152,6 +152,8 @@ pub struct StatusMessage {
     pub manual_z_axis_adjust: bool,
     /// A G38.2 probe is queued or descending (Rust only).
     pub probing: bool,
+    /// The 0-based line a planner build's Stop left, which Play asks whether to resume at (Rust only).
+    pub stopped_at: Option<usize>,
 }
 
 impl Message for StatusMessage {

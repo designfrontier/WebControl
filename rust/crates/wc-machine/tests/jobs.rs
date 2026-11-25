@@ -410,6 +410,7 @@ fn stop_forgets_the_pause_the_firmware_and_the_tool_it_never_reached() {
     assert_eq!(pushed(&effects, "requestedSetting"), [json!({"setting": "pauseButtonSetting", "value": "Pause"})]);
     assert!(pushed(&effects, "clearAlarm").len() == 1);
     assert_eq!(rig.machine.snapshot().current_tool, 0, "the ! flushed the M6");
+    assert_eq!(pushed(&effects, "statusMessage")[0]["stoppedAt"], Value::Null, "stock firmware: Play never asks");
     let mut confirmed = Rig::connected();
     confirmed.machine.load_gcode(&file(&["G21", "T2 M6", "G1 X2"]));
     confirmed.act("startRun");

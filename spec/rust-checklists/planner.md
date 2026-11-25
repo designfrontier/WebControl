@@ -68,8 +68,12 @@ max ______.
 
 - [ ] At `$47` = 50, Play, and press **Stop** halfway round the circle. The sled stops within a second, and the
       current line is the quarter circle it was on, not the last line sent. Note it: line ______.
-- [ ] Press **Play**: the log shows `M110 N<n>` then `N<n> ...`. The sled stays at Z 10 (above the safe height),
-      travels to where that quarter circle starts and goes on from there to the end. Nothing before it runs again.
+- [ ] Press **Play**: a dialog reads "Stopped at line N. Resume there, or start over from line 1?" with that line.
+      **Cancel** closes it and nothing moves.
+- [ ] Press **Play**, then **Resume at line N**: the log shows `M110 N<n>` then `N<n> ...`. The sled stays at Z 10
+      (above the safe height), travels to where that quarter circle starts and goes on from there to the end. Nothing
+      before it runs again.
+- [ ] Press **Stop** again partway, then **Play** and **Start over**: the file runs from line 1.
 
 ## 5. Roll back
 

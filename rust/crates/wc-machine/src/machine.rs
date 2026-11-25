@@ -196,6 +196,8 @@ pub struct Snapshot {
     pub manual_z_axis_adjust: bool,
     /// A G38.2 is queued or descending; only Stop and actions that move nothing run.
     pub probing: bool,
+    /// The index a planner build's Stop left, until Play, a file or a line change.
+    pub stopped_at: Option<usize>,
     pub pause_button: PauseButton,
     pub controller_firmware_version: f64,
     /// The controller's B05 reply listed the planner capability.
@@ -247,6 +249,7 @@ impl Snapshot {
             job_in_progress: self.job_in_progress,
             manual_z_axis_adjust: self.manual_z_axis_adjust,
             probing: self.probing,
+            stopped_at: self.stopped_at,
         }
     }
 
@@ -643,6 +646,7 @@ impl Machine {
             job_in_progress: self.job.flow.in_job(),
             manual_z_axis_adjust: self.job.manual_z.is_some(),
             probing: self.probing,
+            stopped_at: self.job.stopped_at.filter(|&index| index == self.index),
             pause_button: self.job.pause_button(),
             controller_firmware_version: self.firmware_version,
             planner: self.planner,

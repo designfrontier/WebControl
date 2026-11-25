@@ -26,6 +26,8 @@ export interface MachineState {
   status: { uploadFlag: number; currentTool: number; positioningMode: number } | null;
   /** Whether a job is running or paused, which uploadFlag alone loses on controller pauses; probing is Rust only. */
   job: { inProgress: boolean; manualZAxisAdjust: boolean; probing: boolean };
+  /** The 0-based line a planner build's Stop left, which Play asks whether to resume at; null otherwise. */
+  stoppedAt: number | null;
   position:
     | (Point & {
         z: number;
@@ -145,6 +147,7 @@ export const initialMachineState: MachineState = {
   software: null,
   status: null,
   job: { inProgress: false, manualZAxisAdjust: false, probing: false },
+  stoppedAt: null,
   position: null,
   positionError: null,
   homePosition: null,
@@ -210,10 +213,12 @@ const applyMessage = (state: MachineState, event: MachineMessage): MachineState 
       };
     }
     case "statusMessage": {
-      const { uploadFlag, positioningMode, currentTool, jobInProgress, manualZAxisAdjust, probing } = event.data;
+      const { uploadFlag, positioningMode, currentTool, stoppedAt, jobInProgress, manualZAxisAdjust, probing } =
+        event.data;
       return {
         ...state,
         status: { uploadFlag, positioningMode, currentTool },
+        stoppedAt: stoppedAt ?? null,
         job: {
           inProgress: jobInProgress ?? state.job.inProgress,
           manualZAxisAdjust: manualZAxisAdjust ?? state.job.manualZAxisAdjust,

@@ -3,8 +3,10 @@
 
 mod rig;
 
-use rig::{Rig, alerts, written};
+use rig::{Rig, alerts, pushed, settings, written};
+use serde_json::json;
 use wc_machine::Event;
+use wc_machine::files::{Gcode, Origin, Request};
 
 const CAPABILITIES: &str = "Capabilities: planner line-numbers accel-settings status-line";
 const STILL: &str = "<Idle,MPos:0.00,0.00,0.00,WPos:0.000,0.000,0.000>";
@@ -197,4 +199,55 @@ fn a_build_without_the_capability_is_not_numbered() {
     assert!(!rig.machine.snapshot().planner);
     rig.rx("rs N3");
     assert_eq!(written(&rig.act_with("move", "up".into(), "1".into())), ["G91"]);
+}
+
+/// Stops a planner job while the report names N6, file line 2.
+fn stopped_at_line_2() -> Rig {
+    let mut rig = planner();
+    start(&mut rig, &["G21", "G1 X1 F600", "G1 X2", "G1 X3"]);
+    ["ok", "ok N5", "ok N6", "ok N7"].iter().for_each(|line| {
+        rig.rx(line);
+    });
+    rig.rx(&report(6, 2, 127));
+    rig.act("stopRun");
+    assert_eq!(rig.machine.snapshot().stopped_at, Some(1));
+    rig
+}
+
+#[test]
+fn stop_tells_play_the_line_it_left() {
+    let mut rig = planner();
+    start(&mut rig, &["G21", "G1 X1 F600", "G1 X2", "G1 X3"]);
+    rig.rx("ok");
+    rig.rx(&report(6, 2, 127));
+    let stop = rig.act("stopRun");
+    assert_eq!(pushed(&stop, "statusMessage")[0]["stoppedAt"], 1);
+    assert_eq!(rig.machine.snapshot().stopped_at, Some(1));
+}
+
+#[test]
+fn play_a_file_or_a_line_change_forgets_the_stopped_line() {
+    let mut played = stopped_at_line_2();
+    played.advance(300);
+    played.rx(STILL);
+    assert!(!written(&played.act("startRun")).is_empty());
+    assert_eq!(played.machine.snapshot().stopped_at, None, "Play");
+
+    let mut moved = stopped_at_line_2();
+    moved.act_with("moveGcodeIndex", json!(1), json!(""));
+    moved.act_with("moveGcodeIndex", json!(-1), json!(""));
+    assert_eq!(moved.machine.snapshot().stopped_at, None, "back at the line, but it moved");
+
+    let mut same = stopped_at_line_2();
+    same.act_with("moveGcodeGoto", json!(1), json!(""));
+    assert_eq!(same.machine.snapshot().stopped_at, None, "Go to line");
+
+    let mut cleared = stopped_at_line_2();
+    cleared.act("clearGCode");
+    assert_eq!(cleared.machine.snapshot().stopped_at, None, "clear");
+
+    let mut loaded = stopped_at_line_2();
+    let gcode = Box::new(Gcode::parse("G0 X9\nG0 X8\n", &settings(&[])).unwrap());
+    loaded.send(Event::Request { id: 2, request: Request::LoadGcode { gcode, file: None, origin: Origin::Edit } });
+    assert_eq!(loaded.machine.snapshot().stopped_at, None, "an edit keeps the index but is another file");
 }
