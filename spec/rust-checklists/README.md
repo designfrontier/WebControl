@@ -46,6 +46,7 @@ numbers, or the transcripts CI replays.
 | Holey and triangular calibration, the test pattern, computed sled position | [`calibration.md`](calibration.md) | Yes: the pattern, in the air |
 | Firmware upgrade to holey 51.292, self-test, chain lengths, rollback | [`firmware-upgrade.md`](firmware-upgrade.md) | Yes: the self-test |
 | Cameras and optical calibration (experimental, for testers) | [`optical.md`](optical.md) | Yes: the scan |
+| Planner test firmware: `flash-hex.sh`, the planner air cut at three `$47`, `PE JOB` errors | [`planner.md`](planner.md) | Yes: an air cut |
 
 ## Which ones a release needs
 
