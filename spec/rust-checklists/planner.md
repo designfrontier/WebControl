@@ -57,9 +57,11 @@ max ______.
 
 ## 3. Roll back
 
-- [ ] Actions ▸ Upgrade Holey Firmware (51.292). The wizard refuses a controller that reports 51.29 ("The controller
-      already runs 51.29x."); then flash `holey-51.292.hex` with `flash-hex.sh` as in section 1 (on the Mac,
-      `bash rust/firmware/docker-build.sh <dir>` builds it).
+- [ ] Actions ▸ Upgrade Holey Firmware (51.292), then Check: the wizard is ready to upgrade the planner build (it
+      refuses only a 51.29 without the planner capability, with "The controller already runs 51.29x."). Upgrade, and
+      it backs up the planner build, flashes 51.292 and pushes the settings back.
+- [ ] If the wizard refuses or fails, flash `holey-51.292.hex` with `flash-hex.sh` as in section 1 instead (on the
+      Mac, `bash rust/firmware/docker-build.sh <dir>` builds it).
 - [ ] The firmware chip reads "Holey 51.29", Z jogs at the old speed, and the chain lengths match the ones noted.
 
 Report as the README says, with the table and the `PE JOB` lines.

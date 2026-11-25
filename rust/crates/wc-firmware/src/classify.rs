@@ -67,6 +67,8 @@ pub enum Reply {
     Alarm(String),
     BufferOverflow,
     FirmwareVersion(Option<f64>),
+    /// The words after `Capabilities:`, which a planner test build prints after its version.
+    Capabilities(Vec<String>),
     Other(String),
 }
 
@@ -134,6 +136,9 @@ pub fn classify(line: &str) -> Reply {
         _ if line.starts_with("ALARM:") => Reply::Alarm(line.into()),
         _ if line.starts_with("Buffer overflow!") => Reply::BufferOverflow,
         _ if line.starts_with("Firmware") => Reply::FirmwareVersion(parse_firmware_version(line)),
+        _ if line.starts_with("Capabilities:") => {
+            Reply::Capabilities(line["Capabilities:".len()..].split_whitespace().map(String::from).collect())
+        }
         _ => Reply::Other(line.into()),
     }
 }

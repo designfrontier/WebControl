@@ -26,6 +26,8 @@ pub struct Build {
     pub banner: String,
     /// The EEPROM layout; a flash to another one boots with `EEPROM read fail` and factory settings.
     pub settings_version: u8,
+    /// The `Capabilities:` line's words after B05's version, if the build prints one.
+    pub capabilities: Option<String>,
 }
 
 impl Build {
@@ -35,6 +37,7 @@ impl Build {
             rewrite_notice: false,
             banner: "PCB v1.6 TLE9201  Detected".into(),
             settings_version: 6,
+            capabilities: None,
         }
     }
 
@@ -384,6 +387,7 @@ impl Sim {
         }
         if text.starts_with("B05") {
             out.push(format!("Firmware Version {}", self.build.version));
+            out.extend(self.build.capabilities.as_ref().map(|words| format!("Capabilities: {words}")));
             return Some(0);
         }
         if text.starts_with("B10") {

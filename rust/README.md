@@ -84,8 +84,9 @@ Pi and run `bash flash-hex.sh <file.hex>` as `pi` (not with `sudo`: it reads `~/
 refuses a file that is not Intel HEX or does not end below the ATmega2560's bootloader at `0x3E000`, then stops
 `webcontrol-rs`, flashes with the upgrade's avrdude command line on the `COMport` setting's port, and starts
 `webcontrol-rs` again, also when avrdude fails. It needs `python3` and `avrdude`. It makes no backup: to roll back,
-run the UI's Upgrade Holey Firmware (51.292), which refuses a controller that reports 51.29; for one that does,
-flash `holey-51.292.hex` (from `firmware/docker-build.sh`) with the same script. `spec/rust-checklists/planner.md`
+run the UI's Upgrade Holey Firmware (51.292), which also flashes 51.292 over a planner test build (its `B05` reply
+lists the `planner` capability) but refuses any other build that reports 51.29; for those, flash `holey-51.292.hex`
+(from `firmware/docker-build.sh`) with the same script. `spec/rust-checklists/planner.md`
 uses it.
 
 Behind a reverse proxy (nginx) or HTTPS, the proxy must forward the original `Host` (`proxy_set_header Host $host;`)

@@ -245,7 +245,7 @@ impl Machine {
         upgrade.z_rpm = upgrade.dump.iter().find_map(|l| l.strip_prefix("$18=")).and_then(|v| v.trim().parse().ok());
         let verdict = (|| {
             check_board(self.board.as_deref())?;
-            check_version(self.firmware_version)?;
+            check_version(self.firmware_version, self.planner)?;
             if upgrade.chains.len() != 2 {
                 return Err("The controller did not report both chain lengths (B10).".to_string());
             }

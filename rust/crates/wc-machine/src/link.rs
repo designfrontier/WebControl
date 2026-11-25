@@ -302,9 +302,14 @@ impl Machine {
                 effects.push(self.alarm_after_boot());
                 effects.push(controller_message(line));
                 self.firmware_version = version.unwrap_or(self.firmware_version);
+                self.planner = false;
                 if let Some(version) = version {
                     self.upgrade_version(version, now, effects);
                 }
+            }
+            Reply::Capabilities(words) => {
+                self.planner = words.iter().any(|word| word == "planner");
+                effects.push(controller_message(line));
             }
             Reply::Error(_) | Reply::Other(_) => {
                 if matches!(reply, Reply::Error(_)) {

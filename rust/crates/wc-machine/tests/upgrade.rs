@@ -43,6 +43,7 @@ fn build_in(image: &Image) -> Option<Build> {
             settings_version: layout.parse().ok()?,
             rewrite_notice: *rewrite == "1",
             banner: banner.to_string(),
+            capabilities: None,
         }),
         _ => None,
     }
@@ -519,6 +520,16 @@ fn hazardous_boards_and_imageless_builds_are_blocked() {
     bench.act("check");
     assert_eq!(bench.settle(&[Stage::Checking], 10_000), Stage::Blocked);
     assert!(bench.view().message.contains("already runs 51.29x"));
+}
+
+#[test]
+fn a_planner_test_build_may_go_back_to_51_292() {
+    let planner =
+        Build { capabilities: Some("planner line-numbers accel-settings status-line".into()), ..Build::holey_51_292() };
+    let mut bench = Bench::on(planner.on_board(OWNERS_BOARD));
+    bench.act("check");
+    assert_eq!(bench.settle(&[Stage::Checking], 10_000), Stage::Ready);
+    assert!(bench.view().message.contains("Ready to upgrade"));
 }
 
 #[test]

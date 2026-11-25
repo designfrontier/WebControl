@@ -36,11 +36,13 @@ fn a_v16_tle9201_board_reads_as_a_different_board_after_51_292() {
 
 #[test]
 fn only_holey_51_27_and_51_28_are_upgraded() {
-    assert_eq!(check_version(51.27), Ok(()));
-    assert_eq!(check_version(51.28), Ok(()));
-    assert!(check_version(51.29).unwrap_err().contains("already"));
-    assert!(check_version(0.0).unwrap_err().contains("B05"));
-    assert!(check_version(1.26).unwrap_err().contains("1.26"));
+    assert_eq!(check_version(51.27, false), Ok(()));
+    assert_eq!(check_version(51.28, false), Ok(()));
+    assert!(check_version(51.29, false).unwrap_err().contains("already"));
+    assert_eq!(check_version(51.29, true), Ok(()), "a planner test build goes back to 51.292");
+    assert!(check_version(51.27, true).is_ok());
+    assert!(check_version(0.0, false).unwrap_err().contains("B05"));
+    assert!(check_version(1.26, false).unwrap_err().contains("1.26"));
     assert!(reports_target(51.29));
     assert!(!reports_target(51.27));
 }

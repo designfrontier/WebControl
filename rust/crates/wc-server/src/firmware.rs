@@ -145,6 +145,7 @@ impl Flasher for SimFlasher {
                 settings_version: layout.parse().unwrap_or_default(),
                 rewrite_notice: rewrite == "1",
                 banner,
+                capabilities: None,
             },
             _ => Build::holey_51_292().on_board(&banner),
         };

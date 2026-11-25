@@ -66,10 +66,12 @@ fn same_version(a: f64, b: f64) -> bool {
     (a - b).abs() < 1e-9
 }
 
-/// Holey 51.27 and 51.28 share settings version 6; the upgrade starts from nothing else.
-pub fn check_version(version: f64) -> Result<(), String> {
+/// Holey 51.27 and 51.28 share settings version 6; the upgrade starts from nothing else, bar a planner test build
+/// going back to 51.292.
+pub fn check_version(version: f64, planner: bool) -> Result<(), String> {
     match version {
         v if [51.27, 51.28].iter().any(|from| same_version(v, *from)) => Ok(()),
+        v if same_version(v, TARGET_REPORTED) && planner => Ok(()),
         v if same_version(v, TARGET_REPORTED) => Err("The controller already runs 51.29x.".into()),
         v if v <= 0.0 => Err("The controller never answered B05, so its firmware is unknown.".into()),
         v => Err(format!("Only holey 51.27 or 51.28 can be upgraded here; the controller reports {v}.")),

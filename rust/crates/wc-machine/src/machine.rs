@@ -363,6 +363,8 @@ pub struct Machine {
     pub(crate) link: Link,
     pub(crate) controller: Controller,
     pub(crate) firmware_version: f64,
+    /// The last B05 reply listed the `planner` capability.
+    pub(crate) planner: bool,
     pub(crate) rewrite_notice: bool,
     pub(crate) board: Option<String>,
     pub(crate) fake_servo: bool,
@@ -447,6 +449,7 @@ impl Machine {
             link: Link::Disconnected { retry_at: Duration::ZERO },
             controller: Controller::new(Duration::ZERO),
             firmware_version: 0.0,
+            planner: false,
             rewrite_notice: false,
             board: None,
             fake_servo: false,
