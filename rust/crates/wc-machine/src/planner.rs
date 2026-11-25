@@ -5,7 +5,7 @@
 use std::collections::VecDeque;
 use std::time::Duration;
 
-use wc_firmware::planner::{DRAIN, PLANNER_DEPTH, numbered, renumber};
+use wc_firmware::planner::{PLANNER_DEPTH, numbered, renumber, waits_for_moves};
 use wc_firmware::{EMPTY_RING, Planned, Sent};
 
 use crate::machine::{Effect, Machine};
@@ -84,6 +84,11 @@ impl Numbered {
     fn reported(&self) -> Option<usize> {
         let line = self.planned.map(|planned| planned.line).filter(|&line| line > 0)?;
         self.history.iter().rev().find(|(number, _)| *number == line).map(|&(_, index)| index)
+    }
+
+    /// The file line the viewer was last shown as running.
+    pub fn shown(&self) -> Option<usize> {
+        self.shown
     }
 
     /// The file line running now, else the oldest the planner has not taken.
@@ -197,7 +202,8 @@ impl Machine {
             tracing::warn!(from, "the controller asked for a line WebControl no longer holds; renumbering");
             numbering.synced = false;
         }
-        numbering.stale = true;
+        // After a flush the lines in flight were never acked, and nothing waits to go again.
+        numbering.stale = !numbering.unacked.is_empty();
         numbering.in_flight = 0;
         numbering.last_heard = now;
         self.pacing_resent();
@@ -229,13 +235,15 @@ impl Machine {
         }
     }
 
-    /// A pause the firmware holds, or a `G4 P0` waiting for the moves before it, is no lost ack.
+    /// A pause the firmware holds, or a line waiting for the moves before it or running (a `$` write, a dwell), is no
+    /// lost ack.
     fn ack_overdue(&self, planned: Planned, space: i64, now: Duration) -> bool {
-        let draining = planned.queued > 0
-            && self.controller.accounting.lines().is_some_and(|lines| {
-                lines.first().and_then(|sent| sent.text.as_deref()).is_some_and(|text| text.trim() == DRAIN)
-            });
-        let waiting = self.job.firmware_paused || self.job.manual_z.is_some() || draining;
+        let manual_z = self.settings.number("Maslow Settings", "zAxis") == 0.0;
+        let busy = self.controller.numbered.unacked.front().is_some_and(|line| {
+            let drains = waits_for_moves(&line.text) || (manual_z && line.text.contains('Z'));
+            drains && (planned.queued > 0 || planned.line == line.number)
+        });
+        let waiting = self.job.firmware_paused || self.job.manual_z.is_some() || busy;
         !self.controller.accounting.is_empty()
             && now.saturating_sub(self.controller.numbered.last_heard) >= ACK_TIMEOUT
             && space == EMPTY_RING

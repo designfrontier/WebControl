@@ -458,13 +458,15 @@ did, which the stock and holey transcripts pin.
    flight stay under the 126 WebControl counts. Job lines stream whenever the next fits, whatever `bufferOn` says;
    the v0.94 pacing gap and the lost-line watch (B18) are off.
 3. **`rs N<e>`:** the copies sent before it still count until the next `ok N`; only line `e` goes again until
-   then, the rest after. An `rs` for a line WebControl no longer holds sends `M110` with the oldest line it holds.
+   then, the rest after. An `rs` for a line WebControl no longer holds sends `M110` with the oldest line it holds;
+   one after a flush, when it holds none, only renumbers the next line.
 4. **Lost ack:** with lines in flight, no `ok N`, `rs` or write for 1 s, and a `[PE:]` after that with `space` 127
    and fewer than 15 queued, the lines not acked go again from the oldest; duplicates are only acked. Not while the
-   firmware holds a pause or a tool change, or while the oldest copy is a `G4 P0` with moves still queued.
+   firmware holds a pause or a tool change, or while the oldest copy waits for the queue (an `M`, `S`, `B` or `$`
+   line, `G4`, `G10`, `G38`, or a Z move without a Z axis) and moves are queued or the report names it as running.
 5. **Motion ended:** the file's end, and a Pause, send `G4 P0`; the job ends (its time, `PACING JOB END`, the queue's
    next file and the park after it) only at its `ok`. A tool change needs none: an `M6` drains the queue itself.
-6. **Lines:** the viewer's current line is the `[PE:]` report's `line`. After an alarm or a lost link the job
+6. **Lines:** the viewer's and the control screen's current line is the `[PE:]` report's `line`. After an alarm or a lost link the job
    resumes at it; Stop leaves the job's index there, so Play restarts from the line that was running.
 7. **Pacing statistics:** lines count as before; each `rs` and each lost-ack resend is one lost line.
 8. **Settings:** Planner Acceleration (`$47`) and Planner Junction Deviation (`$48`) are in Maslow Settings, synced

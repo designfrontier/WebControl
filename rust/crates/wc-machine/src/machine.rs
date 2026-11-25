@@ -632,6 +632,9 @@ impl Machine {
             Link::Connected { port } => (LinkStatus::Connected, port.clone()),
             _ => (LinkStatus::Disconnected, "none".to_string()),
         };
+        let streaming = matches!(self.job.flow, Flow::Streaming | Flow::Draining);
+        let shown = self.controller.numbered.shown().filter(|_| self.planner && streaming);
+        let shown = shown.unwrap_or(self.index);
         Snapshot {
             link,
             port,
@@ -648,8 +651,8 @@ impl Machine {
             host_address: self.host_address.clone(),
             positioning: self.positioning,
             current_tool: u32::try_from(self.job.tool).unwrap_or(0),
-            gcode_index: self.index,
-            gcode_line: self.gcode.get(self.index).cloned().unwrap_or_default(),
+            gcode_index: shown,
+            gcode_line: self.gcode.get(shown).cloned().unwrap_or_default(),
             gcode_count: self.gcode.len(),
             gcode: Shared(self.gcode.clone()),
             gcode_file: self.gcode_file.clone(),

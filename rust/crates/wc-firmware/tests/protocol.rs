@@ -1,7 +1,7 @@
 use wc_firmware::boot::{
     board_banner, ends_boot, firmware_build, is_boot_banner, parse_firmware_version, supports_z_limits,
 };
-use wc_firmware::planner::{numbered, renumber};
+use wc_firmware::planner::{numbered, renumber, waits_for_moves};
 use wc_firmware::{Accounting, BUFFER_SIZE, Planned, PositionError, Reply, RunMode, Status, classify, split_glued};
 
 #[test]
@@ -191,4 +191,14 @@ fn an_ok_n_frees_every_copy_up_to_its_number() {
     let freed: Vec<Option<u64>> = accounting.acked_through(5).iter().map(|sent| sent.number).collect();
     assert_eq!(freed, [None, Some(5)]);
     assert_eq!(accounting.space(), BUFFER_SIZE - 15);
+}
+
+#[test]
+fn a_planner_build_runs_these_lines_only_after_its_queued_moves() {
+    ["M5", "G0 M3", "S5000", "B08", "$47=25", "G4 P0", "g10 l20 p1", "G38.2 Z-10 F100", "G90 G4 P1"]
+        .iter()
+        .for_each(|line| assert!(waits_for_moves(line), "{line}"));
+    ["G1 X1 F600", "G0 Z5", "G2 X1 Y1 I1 J0", "G90", "G21", "G40 G41"]
+        .iter()
+        .for_each(|line| assert!(!waits_for_moves(line), "{line}"));
 }

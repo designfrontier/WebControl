@@ -1,0 +1,31 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "planner_a_running_line_is_not_sent_again",
+    "description": "A $ write on a planner build can run for over a second (51.292 recomputes the sled position and rewrites its EEPROM), with the ring empty and nothing queued. The [PE:] report names N5 as the line running, so it is no lost ack and nothing goes again; its ok N5 comes when it finishes.",
+    "firmware": {
+      "variant": "planner",
+      "version": "51.29",
+      "build": "51.292"
+    },
+    "webcontrolCommit": "planner-streaming"
+  },
+  "setup": {
+    "units": "MM"
+  },
+  "events": [
+    {"type": "http", "method": "PUT", "path": "/api/settings/maslow", "json": {"values": {"plannerAcceleration": "25"}}, "status": 200},
+    {"type": "tx", "bytes": "N5 $47=25*70\n"},
+    {"type": "rx", "line": "the value received: 25.00"},
+    {"type": "rx", "line": "[Forward Calculating Position]"},
+    {"type": "rx", "line": "[PE:0.00,0.00,127,1650.50,1651.25,5,0]"},
+    {"type": "tick", "seconds": 1.2},
+    {"type": "rx", "line": "<Idle,MPos:0.00,0.00,0.00,WPos:0.000,0.000,0.000>"},
+    {"type": "rx", "line": "[PE:0.00,0.00,127,1650.50,1651.25,5,0]", "comment": "N5 still runs: not sent again"},
+    {"type": "tick", "seconds": 1.2},
+    {"type": "rx", "line": "[PE:0.00,0.00,127,1650.50,1651.25,5,0]"},
+    {"type": "rx", "line": "Change in setting, rewriting EEPROM"},
+    {"type": "rx", "line": "ok N5"},
+    {"type": "expect", "settings": [{"section": "Maslow Settings", "key": "plannerAcceleration", "value": "25.0"}]}
+  ]
+}

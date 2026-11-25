@@ -234,6 +234,7 @@ the backend had been quiet for `quiet` seconds, one line per settle.
 | `planner_connect_numbers_the_handshake` | A planner build's `B05` lists the capability: `M110 N1`, then every line numbered and checksummed; `$$` lists `$47` and `$48` |
 | `planner_job_numbered_with_an_rs_resend` | A planner job streams numbered lines while they fit; `rs N8` sends only N8 until its `ok N8`, then the rest; the `rs` is one lost line |
 | `planner_lost_ok_is_sent_again_after_a_quiet_second` | A lost `ok N7`: a second with no ack, then a report with the ring empty, sends N7 again; the duplicate is only acked |
+| `planner_a_running_line_is_not_sent_again` | A `$` write that runs over a second, with the ring empty and the `[PE:]` line naming it, is no lost ack: nothing goes again |
 | `planner_job_end_and_park_wait_for_g4_p0` | After a planner job's last line, `G4 P0`; the job ends and the park goes only at its `ok` |
 | `planner_stop_then_play_resumes_at_the_reported_line` | The viewer follows the `[PE:]` line; Stop leaves the index there and Play restarts from it after `M110` |
 | `planner_settings_written_and_synced` | Planner Acceleration saves as a numbered `$47`; a `$$` reporting another `$48` is written back |

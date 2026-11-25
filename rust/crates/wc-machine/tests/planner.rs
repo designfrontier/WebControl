@@ -95,6 +95,52 @@ fn an_alarm_resumes_at_the_line_the_report_named() {
 }
 
 #[test]
+fn a_line_waiting_for_moves_or_running_is_no_lost_ack() {
+    let mut rig = planner();
+    start(&mut rig, &["G1 X1 F600", "M5", "G1 X3"]);
+    ["ok", "ok N5"].iter().for_each(|line| {
+        rig.rx(line);
+    });
+    rig.advance(1100);
+    assert!(written(&rig.rx(&report(5, 1, 127))).is_empty(), "M5 waits for the move");
+    rig.advance(1100);
+    assert!(written(&rig.rx(&report(6, 0, 127))).is_empty(), "M5 runs");
+    rig.advance(1100);
+    assert_eq!(written(&rig.rx(&report(0, 0, 127))), ["N6 M5*32", "N7 G1 X3*100"], "nothing runs: M5 was lost");
+}
+
+#[test]
+fn the_control_screen_shows_the_line_the_report_names() {
+    let mut rig = planner();
+    start(&mut rig, &["G1 X1 F600", "G1 X2", "G1 X3"]);
+    ["ok", "ok N5", "ok N6"].iter().for_each(|line| {
+        rig.rx(line);
+    });
+    rig.rx(&report(5, 2, 127));
+    assert_eq!(rig.machine.snapshot().gcode_index, 0);
+    assert_eq!(rig.machine.snapshot().gcode_line, "G1 X1 F600 ");
+    rig.rx(&report(6, 1, 127));
+    assert_eq!(rig.machine.snapshot().gcode_index, 1);
+}
+
+#[test]
+fn an_rs_for_lines_an_alarm_flushed_does_not_hold_play() {
+    let mut rig = planner();
+    start(&mut rig, &["G1 X1 F600", "G1 X2", "G1 X3"]);
+    ["ok", "ok N5", "ok N6"].iter().for_each(|line| {
+        rig.rx(line);
+    });
+    rig.rx(&report(6, 2, 100));
+    rig.rx("ALARM: The sled is not keeping up with its expected position and has halted.");
+    rig.rx("rs N8");
+    rig.advance(300);
+    rig.rx(STILL);
+    assert_eq!(written(&rig.act("startRun")), ["~"]);
+    let sent = written(&rig.rx("ok"));
+    assert_eq!(sent.first().map(String::as_str), Some("M110 N8"), "{sent:?}");
+}
+
+#[test]
 fn a_firmware_pause_is_no_lost_ack() {
     let mut rig = planner();
     start(&mut rig, &["G1 X1 F600", "M0", "G1 X3"]);
