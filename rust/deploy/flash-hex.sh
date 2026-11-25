@@ -15,7 +15,9 @@ usage: flash-hex.sh <file.hex>
 Stops webcontrol-rs, flashes <file.hex> to the controller on the COMport setting with the same avrdude command
 line as Actions > Upgrade Holey Firmware, then starts webcontrol-rs again.
 
-To roll back, use the UI's existing Actions > Upgrade Holey Firmware (51.292).
+To roll back, use the UI's existing Actions > Upgrade Holey Firmware (51.292). It refuses a controller that
+answers B05 with 51.29; then flash holey-51.292.hex with this script instead (on the Mac,
+bash rust/firmware/docker-build.sh <dir> builds it).
 EOF
   exit 2
 }
