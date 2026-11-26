@@ -239,6 +239,8 @@ the backend had been quiet for `quiet` seconds, one line per settle.
 | `planner_stop_then_play_resumes_at_the_reported_line` | The viewer follows the `[PE:]` line; Stop leaves the index there and Play restarts from it after `M110` |
 | `planner_settings_written_and_synced` | Planner Acceleration saves as a numbered `$47`; a `$$` reporting another `$48` is written back |
 | `planner_settings_never_reach_a_build_without_the_capability` | Without the capability Maslow Settings refuses Planner Acceleration and a typed `$47` is dropped |
+| `planner_feed_forward_written_to_a_build_that_lists_it` | A `B05` listing `feed-forward`: `$$` lists `$49`, and Planner Feed-Forward saves as a numbered `$49` |
+| `planner_feed_forward_never_reaches_a_build_without_it` | A planner build without `feed-forward` (c77bd97): Maslow Settings refuses Planner Feed-Forward and a typed `$49` is dropped |
 | `real_*` | the owner's real jobs, with the controller's recorded replies ("Real jobs" below) |
 
 ## Adding or changing a transcript

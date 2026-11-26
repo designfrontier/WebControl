@@ -1,0 +1,25 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "planner_feed_forward_never_reaches_a_build_without_it",
+    "description": "On a planner build whose B05 does not list feed-forward (c77bd97), Maslow Settings has no Planner Feed-Forward: a save naming it is refused (400) and a typed $49 line is dropped, while a typed $47 still goes as a numbered line.",
+    "firmware": {
+      "variant": "planner",
+      "version": "51.29",
+      "build": "51.292"
+    },
+    "webcontrolCommit": "planner-streaming"
+  },
+  "setup": {
+    "units": "MM"
+  },
+  "events": [
+    {"type": "http", "method": "PUT", "path": "/api/settings/maslow", "json": {"values": {"plannerFeedForward": "0.5"}}, "status": 400},
+    {"type": "expect", "settings": [{"section": "Maslow Settings", "key": "plannerFeedForward", "value": "0"}]},
+    {"type": "http", "method": "POST", "path": "/sendGCode", "form": {"gcode": "$49=0.5"}, "status": 200},
+    {"type": "http", "method": "POST", "path": "/sendGCode", "form": {"gcode": "$47=25"}, "status": 200},
+    {"type": "tx", "bytes": "N5 $47=25*70\n"},
+    {"type": "rx", "line": "Change in setting, rewriting EEPROM"},
+    {"type": "rx", "line": "ok N5"}
+  ]
+}

@@ -6,7 +6,7 @@ use std::time::Duration;
 use wc_firmware::boot::{
     BOOT_BANNER_WINDOW_MS, EEPROM_READ_FAIL, EEPROM_REWRITE_NOTICE, board_banner, ends_boot, is_boot_banner,
 };
-use wc_firmware::planner::PLANNER_KEYS;
+use wc_firmware::planner::{FEED_FORWARD_KEY, PLANNER_KEYS};
 use wc_firmware::settings::{Sync, reinitialises_axes, setting_key, sync_reported};
 use wc_firmware::{Reply, classify, split_glued};
 use wc_gcode::firmware_gcode::{only_selects_tool, tool_change_line};
@@ -51,6 +51,7 @@ impl Machine {
     pub(crate) fn port_opened(&mut self, port: String, now: Duration, effects: &mut Vec<Effect>) {
         self.controller = Controller::new(now);
         self.planner = false;
+        self.feed_forward = false;
         self.controller.boot_deadline = Some(now + BOOT_WAIT);
         self.controller.buffering = self.settings.number("Maslow Settings", "bufferOn") != 0.0;
         self.job.controller_reset();
@@ -145,6 +146,7 @@ impl Machine {
         self.controller = Controller { eeprom_reset, buffering, ..Controller::new(now) };
         // Its B05 says again whether it numbers lines; until then it does not.
         self.planner = false;
+        self.feed_forward = false;
         self.rewrite_notice = false;
         self.job.controller_reset();
         self.bit = BitHeight::new();
@@ -321,12 +323,14 @@ impl Machine {
                 effects.push(controller_message(line));
                 self.firmware_version = version.unwrap_or(self.firmware_version);
                 self.planner = false;
+                self.feed_forward = false;
                 if let Some(version) = version {
                     self.upgrade_version(version, now, effects);
                 }
             }
             Reply::Capabilities(words) => {
                 self.planner = words.iter().any(|word| word == "planner");
+                self.feed_forward = words.iter().any(|word| word == "feed-forward");
                 effects.push(controller_message(line));
             }
             Reply::Error(_) | Reply::Other(_) => {
@@ -590,7 +594,9 @@ impl Machine {
         self.manage_tool_change(&command);
         self.sled.sent(&command);
         let command = to_send;
-        let unplanned = !self.planner && setting_key(&command).is_some_and(|key| PLANNER_KEYS.contains(&key));
+        let unplanned = setting_key(&command).is_some_and(|key| {
+            (!self.planner && PLANNER_KEYS.contains(&key)) || (!self.feed_forward && key == FEED_FORWARD_KEY)
+        });
         if blank(&command) || only_selects_tool(&command) || unplanned || !self.may_reinitialise(&command, effects) {
             return false;
         }

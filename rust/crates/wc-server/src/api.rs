@@ -135,6 +135,7 @@ pub(crate) async fn settings_section(State(state): State<AppState>, Path(id): Pa
         &id,
         snapshot.controller_firmware_version,
         snapshot.planner,
+        snapshot.feed_forward,
         &snapshot.ports,
     ) {
         Some(section) => Json(section).into_response(),

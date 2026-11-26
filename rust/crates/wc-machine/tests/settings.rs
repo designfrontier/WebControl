@@ -185,7 +185,7 @@ fn only_a_known_theme_alone_is_accepted() {
 fn the_display_theme_is_left_off_the_webcontrol_form() {
     let mut rig = Rig::connected();
     let section = rig.machine.snapshot().settings.clone();
-    let form = wc_machine::forms::section(&section, "webcontrol", 0.0, false, &[]).unwrap();
+    let form = wc_machine::forms::section(&section, "webcontrol", 0.0, false, false, &[]).unwrap();
     assert!(form.settings.iter().all(|field| field.key != "uiTheme"));
     let (response, _) = respond(
         &mut rig,

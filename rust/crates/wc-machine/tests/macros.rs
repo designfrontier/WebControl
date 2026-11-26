@@ -106,6 +106,6 @@ fn a_hand_edited_control_buttons_setting_that_is_not_valid_reads_as_the_defaults
 
 #[test]
 fn the_control_buttons_stay_off_the_webcontrol_settings_form() {
-    let section = wc_machine::forms::section(&settings(&[]), "webcontrol", 51.27, false, &[]).unwrap();
+    let section = wc_machine::forms::section(&settings(&[]), "webcontrol", 51.27, false, false, &[]).unwrap();
     assert!(!section.settings.iter().any(|field| field.key == "controlButtons"));
 }

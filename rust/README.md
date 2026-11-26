@@ -87,8 +87,8 @@ refuses a file that is not Intel HEX or does not end below the ATmega2560's boot
 run the UI's Upgrade Holey Firmware (51.292), which also flashes 51.292 over a planner test build (its `B05` reply
 lists the `planner` capability) but refuses any other build that reports 51.29; for those, flash `holey-51.292.hex`
 (from `firmware/docker-build.sh`) with the same script. `spec/rust-checklists/planner.md` uses it. A planner build
-gets numbered, checksummed lines and the Planner Acceleration and Junction Deviation settings (`spec/firmware.md`
-section D).
+gets numbered, checksummed lines and the Planner Acceleration and Junction Deviation settings, and one that lists
+`feed-forward` the Planner Feed-Forward setting (`spec/firmware.md` section D).
 
 Behind a reverse proxy (nginx) or HTTPS, the proxy must forward the original `Host` (`proxy_set_header Host $host;`)
 and the WebSocket `Upgrade`/`Connection` headers: `wc-server` refuses a WebSocket or write whose `Origin` does not

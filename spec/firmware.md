@@ -229,6 +229,12 @@ none) and `queued`. `$47` (acceleration, mm/s², default 50) and `$48` (junction
 stored after 51.292's block (settings version still 7, so flashing either way keeps the settings); other builds
 answer them `error: Invalid statement`.
 
+The `feed-forward` build (branch `feed-forward`, 0f927ec) adds `feed-forward` to the end of the capabilities line and `$49`,
+the feed-forward gain (0 to 1.5, default 0, off; outside that range `error: Invalid statement`), stored after
+`$48` the same way. Each 10 ms tick of a planned move adds `$49` times the chain setpoint's speed, as motor RPM,
+to the position PID's RPM request on the left and right chains (within its ±20), so the chains lag the path less.
+At 0 the motor commands are c77bd97's; c77bd97 and every other build answer `$49` `error: Invalid statement`.
+
 ## Implications
 
 ### A. Current Python backend
@@ -471,5 +477,6 @@ did, which the stock and holey transcripts pin.
 7. **Pacing statistics:** lines count as before; each `rs` and each lost-ack resend is one lost line.
 8. **Settings:** Planner Acceleration (`$47`) and Planner Junction Deviation (`$48`) are in Maslow Settings, synced
    like every other key, and shown only while the capability is detected; a `$47`/`$48` line is never written to
-   any other build.
+   any other build. Planner Feed-Forward (`$49`) is the same, gated on the `feed-forward` capability, so a planner
+   build without it (c77bd97) never gets `$49`.
 9. **Rollback:** Upgrade Holey Firmware accepts a 51.29 that lists `planner`, so it can put 51.292 back.

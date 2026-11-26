@@ -202,6 +202,8 @@ pub struct Snapshot {
     pub controller_firmware_version: f64,
     /// The controller's B05 reply listed the planner capability.
     pub planner: bool,
+    /// The controller's B05 reply listed the feed-forward capability.
+    pub feed_forward: bool,
     pub controller_board: Option<String>,
     pub firmware_build: Option<String>,
     pub host_address: String,
@@ -375,6 +377,8 @@ pub struct Machine {
     pub(crate) firmware_version: f64,
     /// The last B05 reply listed the `planner` capability.
     pub(crate) planner: bool,
+    /// The last B05 reply listed the `feed-forward` capability.
+    pub(crate) feed_forward: bool,
     pub(crate) rewrite_notice: bool,
     pub(crate) board: Option<String>,
     pub(crate) fake_servo: bool,
@@ -460,6 +464,7 @@ impl Machine {
             controller: Controller::new(Duration::ZERO),
             firmware_version: 0.0,
             planner: false,
+            feed_forward: false,
             rewrite_notice: false,
             board: None,
             fake_servo: false,
@@ -650,6 +655,7 @@ impl Machine {
             pause_button: self.job.pause_button(),
             controller_firmware_version: self.firmware_version,
             planner: self.planner,
+            feed_forward: self.feed_forward,
             controller_board: self.board.clone(),
             firmware_build: wc_firmware::boot::firmware_build(self.firmware_version, self.rewrite_notice),
             host_address: self.host_address.clone(),

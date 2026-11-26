@@ -1,0 +1,50 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "planner_feed_forward_written_to_a_build_that_lists_it",
+    "description": "A planner build whose B05 lists feed-forward boots: $$ lists $49 after $48 and it agrees with Maslow Settings, so only $13 is written. Planner Feed-Forward is then in Maslow Settings, and saving 0.5 writes $49=0.5 as a numbered line.",
+    "firmware": {
+      "variant": "planner",
+      "version": "51.29",
+      "build": "51.292"
+    },
+    "webcontrolCommit": "planner-streaming"
+  },
+  "setup": {
+    "units": "MM",
+    "start": "boot"
+  },
+  "events": [
+    {"type": "rx", "line": "PCB v1.1 Detected"},
+    {"type": "rx", "line": "Grbl v1.00"},
+    {"type": "rx", "line": "ready"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "B05  \n"},
+    {"type": "rx", "line": "B05"},
+    {"type": "rx", "line": "Firmware Version 51.29"},
+    {"type": "rx", "line": "Capabilities: planner line-numbers accel-settings status-line feed-forward"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "M110 N1\n"},
+    {"type": "tx", "bytes": "N1 G21*27\n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "G21"},
+    {"type": "rx", "line": "ok N1"},
+    {"type": "tx", "bytes": "N2 G90*18\n"},
+    {"type": "rx", "line": "G90"},
+    {"type": "rx", "line": "ok N2"},
+    {"type": "tx", "bytes": "N3 $$*93\n"},
+    {"type": "rx", "line": "$46=97.90000152 (Sled Weight, N)", "comment": "the dump's keys before $46 are left out"},
+    {"type": "rx", "line": "$47=50.00000000"},
+    {"type": "rx", "line": "$48=0.01000000"},
+    {"type": "rx", "line": "$49=0.00000000"},
+    {"type": "rx", "line": "ok N3"},
+    {"type": "tx", "bytes": "N4 $13=63.5*95\n"},
+    {"type": "rx", "line": "Change in setting, rewriting EEPROM"},
+    {"type": "rx", "line": "ok N4"},
+    {"type": "http", "method": "PUT", "path": "/api/settings/maslow", "json": {"values": {"plannerFeedForward": "0.5"}}, "status": 200},
+    {"type": "tx", "bytes": "N5 $49=0.5*100\n"},
+    {"type": "rx", "line": "Change in setting, rewriting EEPROM"},
+    {"type": "rx", "line": "ok N5"},
+    {"type": "expect", "settings": [{"section": "Maslow Settings", "key": "plannerFeedForward", "value": "0.5"}]}
+  ]
+}

@@ -1171,6 +1171,16 @@
             "title": "Planner Junction Deviation",
             "type": "float",
             "value": 0.01
+        },
+        {
+            "default": 0,
+            "desc": "Feed-forward gain ($49) of the planner test firmware, 0 to 1.5: how much of the chain speed goes straight to the motors, so the chains lag less behind the planned path. 0 is off. Shown, and sent, only when the controller reports the feed-forward capability.\ndefault setting: 0",
+            "firmwareKey": 49,
+            "key": "plannerFeedForward",
+            "section": "Maslow Settings",
+            "title": "Planner Feed-Forward",
+            "type": "float",
+            "value": 0
         }
     ],
     "Optical Calibration Settings": [

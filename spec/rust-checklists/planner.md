@@ -9,7 +9,7 @@ Safety, for every step below (and the README's):
 
 - An **air cut**: router off at its own switch, bit out, Z zeroed 30 mm above the work as in `jobs.md` section 2.
   The file never goes below Z 10 and never starts the spindle.
-- The planner build keeps 51.292's settings (same EEPROM layout), and `$47`/`$48` start at 50 and 0.01.
+- The planner build keeps 51.292's settings (same EEPROM layout), and `$47`/`$48`/`$49` start at 50, 0.01 and 0.
 - Keep a hand near **Stop**. If Stop does not stop the sled within a second, cut the controller's power.
 
 You need: the release installed, `jobs.md` sections 2 and 3 passed on 51.292, the test firmware's hex, the log
@@ -28,10 +28,10 @@ viewer open, an ssh session on the Pi, and Settings ▸ Display ▸ "Show line p
 ## 2. WebControl detects the build
 
 - [ ] The log shows `B05`, then `Firmware Version 51.29`, `Capabilities: planner line-numbers accel-settings
-      status-line` and `ok`, then `Sent: M110 N1` and `Sent: N1 G21*27`: every line after it goes as
+      status-line feed-forward` (c77bd97 stops before `feed-forward`) and `ok`, then `Sent: M110 N1` and `Sent: N1 G21*27`: every line after it goes as
       `N<n> ...*<sum>` and is answered `ok N<n>`.
-- [ ] Settings ▸ Maslow Settings lists Planner Acceleration (50) and Planner Junction Deviation (0.01). On 51.292
-      they are not there.
+- [ ] Settings ▸ Maslow Settings lists Planner Acceleration (50), Planner Junction Deviation (0.01) and Planner
+      Feed-Forward (0). On 51.292 they are not there, and on c77bd97 Planner Feed-Forward is not.
 - [ ] Jog each way once: the sled moves as before and the log shows no `rs N` lines.
 
 ## 3. The air cut at `$47` = 25, 50 and 100
@@ -64,7 +64,31 @@ For each value, in order:
 Run the same file once on 51.292 as well, for the job time and errors to compare against: ______ s, mean ______,
 max ______.
 
-## 4. Stop and resume mid air cut
+## 4. Feed-forward at `$49` = 0, 0.5, 0.8 and 1.0
+
+On the `feed-forward` build only, at `$47` = 50. `$49` adds that fraction of each chain's planned speed to its motor
+command, so the chains should lag the path less: `PE JOB`'s `mean_mm` should fall as `$49` rises. Too much shows as
+the sled overshooting where it stops.
+
+For each value, in order:
+
+- [ ] Settings ▸ Maslow Settings ▸ Planner Feed-Forward `<value>`, Save: the log shows `Sent: N.. $49=<value>*..`
+      and `ok N..`. `$$` lists `$49=<value>`.
+- [ ] **Play**, and watch the corners and the ends of the rapids: no overshoot past a corner or a stop, no buzz or
+      chatter from the motors, no chain bounce.
+- [ ] Note the job time and the `PE JOB` line as in section 3.
+- [ ] Stop raising `$49` if `max_mm` grows, the sled overshoots or the motors buzz, and set back the last good value.
+
+| `$49` | Job time, s | `mean_mm` | `max_mm` | `over_1mm` | `samples` | Overshoot, buzz or bounce |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0 | | | | | | |
+| 0.5 | | | | | | |
+| 0.8 | | | | | | |
+| 1.0 | | | | | | |
+
+Leave `$49` at the best value for section 5.
+
+## 5. Stop and resume mid air cut
 
 - [ ] At `$47` = 50, Play, and press **Stop** halfway round the circle. The sled stops within a second, and the
       current line is the quarter circle it was on, not the last line sent. Note it: line ______.
@@ -75,12 +99,12 @@ max ______.
       before it runs again.
 - [ ] Press **Stop** again partway, then **Play** and **Start over**: the file runs from line 1.
 
-## 5. Roll back
+## 6. Roll back
 
 - [ ] Actions ▸ Upgrade Holey Firmware (51.292), then Check: the wizard is ready to upgrade the planner build (it
       refuses only a 51.29 without the planner capability, with "The controller already runs 51.29x."). Upgrade, and
-      it backs up the planner build, flashes 51.292 and pushes the settings back. Planner Acceleration leaves
-      Maslow Settings.
+      it backs up the planner build, flashes 51.292 and pushes the settings back. Planner Acceleration and
+      Planner Feed-Forward leave Maslow Settings.
 - [ ] If the wizard refuses or fails, flash `holey-51.292.hex` with `flash-hex.sh` as in section 1 instead (on the
       Mac, `bash rust/firmware/docker-build.sh <dir>` builds it).
 - [ ] The firmware chip reads "Holey 51.29", Z jogs at the old speed, and the chain lengths match the ones noted.
