@@ -140,7 +140,7 @@ push_refuses_during_a_job() {
 
 rollback_swaps_prev_back() {
   reset
-  deploy rollback pi@other.local > /dev/null && grep -q "ssh pi@other.local .*webcontrol-rs.prev" "$work/calls"
+  deploy rollback pi@other.local > /dev/null && grep -q "ssh -t pi@other.local .*webcontrol-rs.prev" "$work/calls"
 }
 
 check "install stages the sudoers rule and the update unit" install_stages_the_sudoers_rule

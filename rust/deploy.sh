@@ -66,7 +66,7 @@ case "$command" in
     refuse_during_a_job
     build
     scp "$binary" "$host:/tmp/webcontrol-rs.new"
-    ssh "$host" "set -e; cd /opt/webcontrol-rs
+    ssh -t "$host" "set -e; cd /opt/webcontrol-rs
       sudo install -m 755 /tmp/webcontrol-rs.new webcontrol-rs.new && rm /tmp/webcontrol-rs.new
       if [ -f webcontrol-rs ]; then sudo mv webcontrol-rs webcontrol-rs.prev; fi
       sudo mv webcontrol-rs.new webcontrol-rs
@@ -76,7 +76,7 @@ case "$command" in
     ;;
   rollback)
     refuse_during_a_job
-    ssh "$host" "set -e; cd /opt/webcontrol-rs; test -f webcontrol-rs.prev
+    ssh -t "$host" "set -e; cd /opt/webcontrol-rs; test -f webcontrol-rs.prev
       sudo mv webcontrol-rs webcontrol-rs.swap && sudo mv webcontrol-rs.prev webcontrol-rs
       sudo mv webcontrol-rs.swap webcontrol-rs.prev
       ./webcontrol-rs --version
