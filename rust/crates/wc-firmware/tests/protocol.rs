@@ -134,6 +134,8 @@ fn the_build_narrows_51_29_by_the_rewrite_notice() {
     assert_eq!(firmware_build(51.29, false).as_deref(), Some("51.29x"));
     assert_eq!(firmware_build(51.29, true).as_deref(), Some("51.292"));
     assert!(supports_z_limits(Some("51.292")) && supports_z_limits(Some("51.3")));
+    assert_eq!(parse_firmware_version("Firmware Version 51.30"), Some(51.3));
+    assert_eq!(firmware_build(51.3, false).as_deref(), Some("51.3"), "51.30 needs no fingerprint");
     [None, Some("51.29x"), Some("51.27"), Some("100"), Some("junk")]
         .iter()
         .for_each(|build| assert!(!supports_z_limits(*build), "{build:?}"));

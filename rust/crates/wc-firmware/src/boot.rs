@@ -62,7 +62,8 @@ pub fn firmware_build(version: f64, rewrite_notice_seen: bool) -> Option<String>
     Some(version_text(version))
 }
 
-/// Only holey 51.292 and later store Z limits (`$63`/`$64`); B17-B19 do nothing or corrupt `$43`/`$44` elsewhere.
+/// Only holey 51.292 and later (the planner's 51.30 too; custom firmware starts at 100) store Z limits (`$63`/`$64`);
+/// B17-B19 do nothing or corrupt `$43`/`$44` elsewhere.
 pub fn supports_z_limits(build: Option<&str>) -> bool {
     match build {
         None | Some("51.29x") => false,

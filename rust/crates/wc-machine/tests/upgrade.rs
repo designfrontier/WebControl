@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 use wc_config::Settings;
+use wc_firmware::boot::supports_z_limits;
 use wc_firmware::image::{Image, application_bytes};
 use wc_machine::{Effect, Event, FirmwareJob, JobResult, Machine, POST_FLASH_WAIT};
 use wc_protocol::system::UpgradeStage as Stage;
@@ -533,6 +534,19 @@ fn a_planner_test_build_may_go_back_to_51_292() {
     let written = bench.take_written();
     let flashed = written.iter().rposition(|line| line.trim() == "B05").unwrap();
     assert!(written[flashed..].iter().all(|line| !line.starts_with('N') && !line.starts_with("$47")), "{written:?}");
+}
+
+#[test]
+fn the_planners_51_30_goes_back_to_51_292_and_keeps_z_limits_until_then() {
+    let capabilities = "planner line-numbers accel-settings status-line feed-forward peak-error";
+    let build = Build { version: "51.30".into(), capabilities: Some(capabilities.into()), ..Build::holey_51_292() };
+    let mut bench = Bench::on(build.on_board(OWNERS_BOARD));
+    let snapshot = bench.machine.snapshot();
+    assert_eq!((snapshot.controller_firmware_version, snapshot.firmware_build.as_deref()), (51.3, Some("51.3")));
+    assert!(supports_z_limits(snapshot.firmware_build.as_deref()));
+    assert_eq!(bench.upgrade(), Stage::SelfTest, "{:?}", bench.view().log);
+    assert_eq!(bench.sim.build().version, "51.29");
+    assert!(!bench.machine.snapshot().planner);
 }
 
 #[test]

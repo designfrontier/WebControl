@@ -27,7 +27,7 @@ viewer open, an ssh session on the Pi, and Settings ▸ Display ▸ "Show line p
 
 ## 2. WebControl detects the build
 
-- [ ] The log shows `B05`, then `Firmware Version 51.29`, `Capabilities:
+- [ ] The log shows `B05`, then `Firmware Version 51.30` (51.29 before the `peak-error` build), `Capabilities:
       planner line-numbers accel-settings status-line feed-forward peak-error` (0f927ec stops before `peak-error`,
       c77bd97 before `feed-forward`) and `ok`, then `Sent: M110 N1` and `Sent: N1 G21*27`: every line after it goes
       as `N<n> ...*<sum>` and is answered `ok N<n>`.
@@ -109,7 +109,8 @@ Leave `$49` at the best value for section 5.
 ## 6. Roll back
 
 - [ ] Actions ▸ Upgrade Holey Firmware (51.292), then Check: the wizard is ready to upgrade the planner build (it
-      refuses only a 51.29 without the planner capability, with "The controller already runs 51.29x."). Upgrade, and
+      refuses only a 51.29 without the planner capability, with "The controller already runs 51.29x."; 51.30 is
+      accepted by its version). Upgrade, and
       it backs up the planner build, flashes 51.292 and pushes the settings back. Planner Acceleration and
       Planner Feed-Forward leave Maslow Settings.
 - [ ] If the wizard refuses or fails, flash `holey-51.292.hex` with `flash-hex.sh` as in section 1 instead (on the

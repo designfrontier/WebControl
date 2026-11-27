@@ -40,6 +40,9 @@ fn only_holey_51_27_and_51_28_are_upgraded() {
     assert_eq!(check_version(51.28, false), Ok(()));
     assert!(check_version(51.29, false).unwrap_err().contains("already"));
     assert_eq!(check_version(51.29, true), Ok(()), "a planner test build goes back to 51.292");
+    assert_eq!(check_version(51.3, true), Ok(()), "so does the planner's 51.30");
+    assert_eq!(check_version(51.3, false), Ok(()), "by its version alone");
+    assert!(check_version(100.0, false).unwrap_err().contains("100"), "custom firmware is not holey");
     assert!(check_version(51.27, true).is_ok());
     assert!(check_version(0.0, false).unwrap_err().contains("B05"));
     assert!(check_version(1.26, false).unwrap_err().contains("1.26"));

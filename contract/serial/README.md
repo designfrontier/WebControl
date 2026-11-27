@@ -241,6 +241,7 @@ the backend had been quiet for `quiet` seconds, one line per settle.
 | `planner_settings_never_reach_a_build_without_the_capability` | Without the capability Maslow Settings refuses Planner Acceleration and a typed `$47` is dropped |
 | `planner_feed_forward_written_to_a_build_that_lists_it` | A `B05` listing `feed-forward`: `$$` lists `$49`, and Planner Feed-Forward saves as a numbered `$49` |
 | `planner_feed_forward_never_reaches_a_build_without_it` | A planner build without `feed-forward` (c77bd97): Maslow Settings refuses Planner Feed-Forward and a typed `$49` is dropped |
+| `planner_51_30_connects_as_a_later_holey_build` | A `B05` of `51.30`: numbered by its capabilities, its build reads `51.3`, and Set Max writes a numbered `$63` |
 | `planner_peak_error_reports_overshoot_in_pe_job` | A `B05` listing `peak-error`: the four peaks after `queued` give the job's max error, and `PE JOB` logs `max_ahead_mm` and `overshoots` |
 | `real_*` | the owner's real jobs, with the controller's recorded replies ("Real jobs" below) |
 

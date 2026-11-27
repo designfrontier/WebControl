@@ -54,11 +54,11 @@ status line with no newline.
 
 ## 3. Version reporting
 
-Never printed at boot. Only `B05` replies `Firmware Version <n>`, with 2 decimals, so every 51.29x build reports
-`51.29` (fingerprint by `$$` contents and message quirks). WebControl queues B05 on connect and parses the reply, but
-sends it only to the console, which is why the classic Controller Messages pane never shows it. A UI should forward
-the raw line, re-send B05 on any boot banner (`PCB v1.`, `Grbl v1.00`, `ready`), and parse
-`^Firmware Version\s+([\d.]+)`.
+Never printed at boot. Only `B05` replies `Firmware Version <n>`, with 2 decimals, so every 51.29x build reports `51.29`
+(fingerprint by `$$` contents and message quirks); the planner build from `peak-error` on reports `51.30` (§10).
+WebControl queues B05 on connect and parses the reply, but sends it only to the console, which is why the classic
+Controller Messages pane never shows it. A UI should forward the raw line, re-send B05 on any boot banner (`PCB v1.`,
+`Grbl v1.00`, `ready`), and parse `^Firmware Version\s+([\d.]+)`.
 
 ## 4. Commands WebControl sends
 
@@ -235,12 +235,15 @@ the feed-forward gain (0 to 1.5, default 0, off; outside that range `error: Inva
 to the position PID's RPM request on the left and right chains (within its ±20), so the chains lag the path less.
 At 0 the motor commands are c77bd97's; c77bd97 and every other build answer `$49` `error: Invalid statement`.
 
-The `peak-error` build (branch `peak-error`, cut from `feed-forward`) adds `peak-error` to the capabilities line and
-four fields after `queued`: `[PE:...,queued,lAhead,lBehind,rAhead,rBehind]`, each chain's largest error since the last
-report, in mm with 2 decimals, both non-negative. Every tick it takes encoder − setpoint along the direction the
-setpoint last moved: ahead is the encoder past the setpoint (overshoot), behind is lag. After a reversal the old
-direction holds until the encoder reaches the setpoint, so lag never reads as ahead. The 200 ms reports miss overshoot
-that comes and goes between them; the peaks do not.
+The `peak-error` build (branch `peak-error`, cut from `feed-forward`) reports `Firmware Version 51.30` and adds
+`peak-error` to the capabilities line and four fields after `queued`: `[PE:...,queued,lAhead,lBehind,rAhead,rBehind]`,
+each chain's largest error since the last report, in mm with 2 decimals, both non-negative. Every tick it takes encoder
+− setpoint along the direction the setpoint last moved: ahead is the encoder past the setpoint (overshoot), behind is
+lag. After a reversal the old direction holds until the encoder reaches the setpoint, so lag never reads as ahead. The
+200 ms reports miss overshoot that comes and goes between them; the peaks do not. 51.30 is 51.292's EEPROM layout and
+settings version (7); the firmware uses the version only in `B05`. WebControl treats it as a holey build past 51.292
+(its build reads `51.3`, Z limits on, no fingerprint needed) and still takes planner features from the capabilities
+alone.
 
 ## Implications
 
@@ -492,4 +495,5 @@ did, which the stock and holey transcripts pin.
    each moving report, and it adds `max_ahead_mm` (the largest ahead, from every report in the job, moving or not,
    so an overshoot after the setpoint stops counts) and `overshoots` (reports over 0.2 mm ahead). The run panel shows
    "overshoot max X mm" after the error figures.
-9. **Rollback:** Upgrade Holey Firmware accepts a 51.29 that lists `planner`, so it can put 51.292 back.
+9. **Rollback:** Upgrade Holey Firmware accepts a 51.29 that lists `planner`, and any holey version above 51.29 and
+   below 100 (51.30), so it can put 51.292 back. A 51.29 without `planner` is refused as already current.
