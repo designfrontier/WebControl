@@ -101,9 +101,14 @@ chmod +x "$work/bin/"*
 release() {
   local v="$1" out="$work/releases/$1"
   [ -d "$out" ] && return 0
-  printf '#!/bin/sh\n# :00000001FF %s\necho "webcontrol-rs %s (abc1234, contract 2)"\n' "${2:-}" "$v" > "$work/stub"
-  chmod +x "$work/stub"
-  env -u GITHUB_REF_TYPE -u GITHUB_REF_NAME -u GITHUB_OUTPUT WC_SKIP_BUILD=1 WC_BINARY="$work/stub" \
+  local arch bin
+  for arch in aarch64 x86_64; do
+    bin="$work/target/$arch-unknown-linux-gnu/release/webcontrol-rs"
+    mkdir -p "$(dirname "$bin")"
+    printf '#!/bin/sh\n# %s :00000001FF %s\necho "webcontrol-rs %s (abc1234, contract 2)"\n' "$arch" "${2:-}" "$v" > "$bin"
+    chmod +x "$bin"
+  done
+  env -u GITHUB_REF_TYPE -u GITHUB_REF_NAME -u GITHUB_OUTPUT WC_SKIP_BUILD=1 CARGO_TARGET_DIR="$work/target" \
     WC_FIRMWARE_HEX="$work/fw.hex" WC_FIRMWARE_PIN="$work/fw.sha256" WC_VERSION="$v" \
     bash "$rust/scripts/release.sh" "$out" > /dev/null
 }
@@ -123,6 +128,8 @@ publish() {
     {"name": "webcontrol-rs-$v-aarch64Xtar.gz", "browser_download_url": "$dl/webcontrol-rs-$v-aarch64Xtar.gz"},
     {"name": "webcontrol-rs-$v-aarch64.tar.gz", "browser_download_url": "$dl/webcontrol-rs-$v-aarch64.tar.gz"},
     {"name": "webcontrol-rs-$v-aarch64", "browser_download_url": "$dl/webcontrol-rs-$v-aarch64"},
+    {"name": "webcontrol-rs-$v-x86_64.tar.gz", "browser_download_url": "$dl/webcontrol-rs-$v-x86_64.tar.gz"},
+    {"name": "webcontrol-rs-$v-x86_64", "browser_download_url": "$dl/webcontrol-rs-$v-x86_64"},
     {"name": "SHA256SUMS", "browser_download_url": "$dl/SHA256SUMS"}
   ]
 }
@@ -134,9 +141,10 @@ latest() { cp "$api/tags/v$1" "$api/latest"; }
 # installed <version>: that release installed by its own install-pi.sh, running, with the owner's settings.
 installed() {
   release "$1"
-  tar -C "$work/x" -xzf "$work/releases/$1/webcontrol-rs-$1-aarch64.tar.gz"
+  local name="webcontrol-rs-$1-$(cat "$work/arch")"
+  tar -C "$work/x" -xzf "$work/releases/$1/$name.tar.gz"
   env PATH="$work/bin:$PATH" WC_ROOT="$work/root" WC_USER=pi WC_APT=true \
-    bash "$work/x/webcontrol-rs-$1-aarch64/install-pi.sh" "$work/x/webcontrol-rs-$1-aarch64" > /dev/null
+    bash "$work/x/$name/install-pi.sh" "$work/x/$name" > /dev/null
   PATH="$work/bin:$PATH" systemctl restart webcontrol-rs
   rm -f "$work/calls"
 }
@@ -431,16 +439,40 @@ drafts_are_invisible() {
     grep -q "Drafts are not visible" "$work/err"
 }
 
-refuses_off_aarch64() {
+refuses_another_architecture() {
   fresh
   installed 1.0
   publish 1.1
   latest 1.1
-  echo x86_64 > "$work/arch"
+  echo armv7l > "$work/arch"
   local before
   before="$(snapshot)"
-  ! update > /dev/null 2> "$work/err" && grep -q "aarch64); this machine is x86_64" "$work/err" &&
+  ! update > /dev/null 2> "$work/err" && grep -q "x86_64 Linux; this machine is armv7l" "$work/err" &&
     no_changes_since "$before" && ! update --rollback > /dev/null 2>&1
+}
+
+installs_the_x86_64_release_on_a_laptop() {
+  fresh
+  echo x86_64 > "$work/arch"
+  installed 1.0
+  publish 1.1
+  latest 1.1
+  update > "$work/out" && [ "$(version_of "$opt/webcontrol-rs")" = 1.1 ] &&
+    grep -q "^# x86_64 " "$opt/webcontrol-rs" && grep -q "webcontrol-rs-1.1-x86_64.tar.gz" "$work/calls" &&
+    ! grep -q "aarch64.tar.gz" "$work/calls" && ! grep -q poweroff "$work/root/etc/sudoers.d/webcontrol-rs"
+}
+
+refuses_a_release_without_this_architecture() {
+  fresh
+  echo x86_64 > "$work/arch"
+  installed 1.0
+  publish 1.1
+  sed -i.orig '/x86_64/d' "$api/tags/v1.1"
+  latest 1.1
+  local before
+  before="$(snapshot)"
+  ! update > /dev/null 2> "$work/err" && grep -q "has no webcontrol-rs-1.1-x86_64.tar.gz asset" "$work/err" &&
+    no_changes_since "$before"
 }
 
 takes_the_repo_and_token() {
@@ -887,7 +919,9 @@ check "--status shows installed, backup and latest" status_shows_versions
 check "--status with nothing installed or published" status_without_releases_or_backup
 check "--version installs that tag" pins_a_version
 check "drafts are invisible: no published release is an error" drafts_are_invisible
-check "refuses a machine that is not aarch64" refuses_off_aarch64
+check "refuses a machine that is neither aarch64 nor x86_64" refuses_another_architecture
+check "installs the x86_64 release on an x86_64 laptop" installs_the_x86_64_release_on_a_laptop
+check "refuses a release without this machine's architecture" refuses_a_release_without_this_architecture
 check "--repo, WEBCONTROL_REPO and GITHUB_TOKEN" takes_the_repo_and_token
 check "--service update: as root, no sudo, progress in the status file" service_update_reports_its_progress
 check "--service update reports an automatic rollback" service_reports_an_automatic_rollback

@@ -157,7 +157,11 @@ printf '#!/bin/sh\necho "webcontrol-rs test"\n' > "$stage/webcontrol-rs"
 printf '#!/bin/sh\necho "apt $*" >> "%s/apt"\n' "$work" > "$work/bin/apt"
 printf '#!/bin/sh\n[ ! -f "%s/visudo-rejects" ]\n' "$work" > "$work/bin/visudo"
 printf '#!/bin/sh\necho "$*" >> "%s/sudo"\nexec "$@"\n' "$work" > "$work/bin/sudo-log"
-chmod +x "$work/bin/apt" "$work/bin/visudo" "$work/bin/sudo-log"
+cat > "$work/bin/uname" <<EOF
+#!/usr/bin/env bash
+if [ "\$1" = -m ]; then cat "$work/arch" 2> /dev/null || echo aarch64; else exec /usr/bin/uname "\$@"; fi
+EOF
+chmod +x "$work/bin/apt" "$work/bin/visudo" "$work/bin/sudo-log" "$work/bin/uname"
 install_pi() {
   PATH="$work/bin:$PATH" WC_ROOT="$work/root" WC_SYSTEMCTL=systemctl WC_SUDO=sudo-log WC_USER=maker WC_APT=apt \
     bash "$here/../install-pi.sh" "$stage"
@@ -266,7 +270,39 @@ EOF
     [ -f "$work/root/etc/systemd/system/webcontrol-update@.service" ]
 }
 
+on_a_laptop() {
+  echo x86_64 > "$work/arch"
+  local result=0
+  "$@" || result=1
+  rm -f "$work/arch"
+  return "$result"
+}
+
+installs_without_power_off() {
+  reset
+  rm -rf "$work/root"
+  install_pi > "$work/out" &&
+    grep -qx "SupplementaryGroups=dialout" "$work/root/etc/systemd/system/webcontrol-rs.service" &&
+    [ "$(grep -v '^#' "$work/root/etc/sudoers.d/webcontrol-rs")" = "$(printf '%s\n' \
+      "maker ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block webcontrol-update@update.service" \
+      "maker ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block webcontrol-update@rollback.service")" ] &&
+    grep -q "starts at boot: http://localhost:5000/" "$work/out"
+}
+
+refuses_another_architecture() {
+  reset
+  rm -rf "$work/root"
+  echo armv7l > "$work/arch"
+  ! install_pi > /dev/null 2> "$work/err" && grep -q "aarch64 (the Pi) and x86_64 Linux; this is armv7l" "$work/err" &&
+    [ ! -e "$work/root" ]
+  local refused=$?
+  rm -f "$work/arch"
+  return "$refused"
+}
+
 check "install-pi.sh installs, enables and starts webcontrol-rs" installs_and_starts_when_nothing_runs
+check "install-pi.sh on x86_64 leaves power-off out of the sudoers rule" on_a_laptop installs_without_power_off
+check "install-pi.sh refuses anything but aarch64 and x86_64" refuses_another_architecture
 check "the sudoers rule allows power-off, update and rollback, exactly" allows_exactly_poweroff_update_and_rollback
 check "the sudoers rule passes the system's visudo -c" the_sudoers_rule_parses
 check "webcontrol-update@.service runs the updater as root, once" the_update_unit_runs_the_updater_as_a_oneshot

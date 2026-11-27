@@ -381,7 +381,7 @@ async fn a_busy_machine_missing_units_or_a_failed_start_refuse() {
     assert_eq!(missing.updates().await["canUpdate"], false);
     let (status, body) = missing.post("install").await;
     assert_eq!(status, StatusCode::CONFLICT);
-    assert!(body["error"].as_str().unwrap().contains("run webcontrol-update on the Pi once"));
+    assert!(body["error"].as_str().unwrap().contains("run webcontrol-update on this computer once"));
 
     let broken =
         Page::new("v999.0.0", Fake { broken: true, ..Fake::default() }, Machine::new("h", Settings::defaults()));

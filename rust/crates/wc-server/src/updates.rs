@@ -40,12 +40,13 @@ impl ReleaseSource for Off {
     }
 }
 
-/// The GitHub REST API, unauthenticated unless given a token.
+/// The GitHub REST API, unauthenticated unless given a token. `arch` is the build `webcontrol-update` would install.
 pub struct GitHub {
     pub api: String,
     pub repo: String,
     pub token: Option<String>,
     pub timeout: Duration,
+    pub arch: String,
 }
 
 fn valid_tag(tag: &str) -> bool {
@@ -96,6 +97,9 @@ impl ReleaseSource for GitHub {
             403 | 429 => return Err(format!("GitHub refused (HTTP {status}), most likely its hourly rate limit")),
             other => return Err(format!("GitHub answered HTTP {other}")),
         };
+        if !has_build(&body, &release.tag, &self.arch) {
+            return Err(format!("The latest release, {}, has no {} build", release.tag, self.arch));
+        }
         Ok(LatestRelease { commit: self.tag_commit(&release.tag), ..release })
     }
 }
@@ -113,6 +117,13 @@ pub fn parse_release(body: &str) -> Result<LatestRelease, String> {
         commit: None,
         tag,
     })
+}
+
+/// The release lists `webcontrol-rs-<version>-<arch>.tar.gz`, the asset `webcontrol-update` downloads.
+pub fn has_build(body: &str, tag: &str, arch: &str) -> bool {
+    let wanted = format!("webcontrol-rs-{}-{arch}.tar.gz", tag.strip_prefix('v').unwrap_or(tag));
+    let json: Value = serde_json::from_str(body).unwrap_or_default();
+    json["assets"].as_array().is_some_and(|assets| assets.iter().any(|asset| asset["name"] == wanted.as_str()))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -309,7 +320,8 @@ impl Updates {
         let env = |key: &str| std::env::var(key).ok().filter(|v| !v.is_empty());
         let (repo, timing) = (repo_from(env("WEBCONTROL_REPO")), Timing::default());
         let api = env("WC_GITHUB_API").unwrap_or_else(|| GITHUB_API.into());
-        let github = GitHub { api, repo: repo.clone(), token: env("GITHUB_TOKEN"), timeout: timing.timeout };
+        let (token, arch) = (env("GITHUB_TOKEN"), std::env::consts::ARCH.into());
+        let github = GitHub { api, repo: repo.clone(), token, timeout: timing.timeout, arch };
         Updates::new(github, &repo, Path::new(BACKUP_DIR), timing)
             .with_installer(installer::Systemd::default(), Path::new(installer::STATUS_FILE))
     }
@@ -409,7 +421,7 @@ impl Updates {
     }
 }
 
-const NOT_INSTALLED: &str = "This install cannot update from the page: run webcontrol-update on the Pi once, \
+const NOT_INSTALLED: &str = "This install cannot update from the page: run webcontrol-update on this computer once, \
     which adds webcontrol-update@.service.";
 const NOTHING_NEWER: &str = "There is no newer published release to update to.";
 

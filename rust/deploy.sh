@@ -4,12 +4,13 @@
 #   rust/deploy.sh install  [host]       first time: binary, systemd unit, drop-in, wc-switch and webcontrol-update; starts it
 #   rust/deploy.sh push     [host]       new binary; restarts webcontrol-rs only if it is running
 #   rust/deploy.sh rollback [host]       swap the previous binary back
+# WC_ARCH=x86_64 builds for, and deploys to, an x86_64 Linux laptop instead.
 set -euo pipefail
 
 rust="$(cd "$(dirname "$0")" && pwd)"
 repo="$(dirname "$rust")"
-target=aarch64-unknown-linux-gnu
-binary="${WC_BINARY:-$rust/target/$target/release/webcontrol-rs}"
+target="${WC_ARCH:-aarch64}-unknown-linux-gnu"
+binary="${WC_BINARY:-${CARGO_TARGET_DIR:-$rust/target}/$target/release/webcontrol-rs}"
 command="${1:-}"
 host="${2:-pi@maslow.local}"
 
@@ -82,7 +83,7 @@ case "$command" in
       sudo systemctl try-restart webcontrol-rs"
     ;;
   *)
-    sed -n '2,6p' "$0" | sed 's/^# \{0,1\}//' >&2
+    sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//' >&2
     exit 2
     ;;
 esac

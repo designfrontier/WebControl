@@ -412,7 +412,7 @@ async fn the_state_follows_the_machine() {
 #[test]
 fn the_platform_is_the_pi_only_on_linux_arm() {
     let platform = Platform::current();
-    assert_eq!(platform.can_turn_off, cfg!(target_os = "linux"));
+    assert_eq!(platform.can_turn_off, cfg!(all(target_os = "linux", target_arch = "aarch64")));
     assert_eq!(platform.name == "RPI", cfg!(all(target_os = "linux", target_arch = "aarch64")));
 }
 
