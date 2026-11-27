@@ -238,11 +238,14 @@ impl Machine {
     }
 
     pub(crate) fn queue_load_failed(&mut self, effects: &mut Vec<Effect>) {
+        let file = self.queue.entries.first().map(|entry| entry.item.file.clone()).unwrap_or_default();
+        self.queue_load_refused(&format!("Could not load {file}."), effects);
+    }
+
+    pub(crate) fn queue_load_refused(&mut self, why: &str, effects: &mut Vec<Effect>) {
         if self.queue.step == Step::Loading {
-            let file = self.queue.entries.first().map(|entry| entry.item.file.clone()).unwrap_or_default();
-            let why = format!("Could not load {file}.");
             effects.push(alert(&format!("{why} The queue stopped; the files after it are still queued.")));
-            self.queue_stop(&why, effects);
+            self.queue_stop(why, effects);
         }
     }
 

@@ -216,6 +216,10 @@ impl Loading {
         self.machine.request(request).await
     }
 
+    async fn refused(self, why: String) -> Reply {
+        self.finish(Ask::LoadRefused(why)).await
+    }
+
     async fn unreadable(self) -> Reply {
         self.finish(Ask::Problem(Problem::GcodeUnreadable)).await;
         Reply::Failed
@@ -264,8 +268,7 @@ pub(crate) async fn load_file(
     let fit = text.as_ref().map_or(Fit::Fine, |text| memory::fit(text.lines().count(), free_memory()));
     if let Fit::Refuse(why) = fit {
         tracing::warn!(file = %file.display(), why, "refused a gcode file too large for the free memory");
-        loading.unreadable().await;
-        return Reply::Refused(why);
+        return loading.refused(why).await;
     }
     let gcode = match text {
         Ok(text) => parse(text, loading.machine.snapshot().settings).await,

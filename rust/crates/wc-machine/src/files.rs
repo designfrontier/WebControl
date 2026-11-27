@@ -178,6 +178,8 @@ pub enum Request {
         origin: Origin,
     },
     Problem(Problem),
+    /// A load ended before parsing, for this reason; what was loaded stays.
+    LoadRefused(String),
     SendGcode(String),
     EditBoard(BoardForm),
     TrimBoard(TrimForm),
@@ -552,6 +554,12 @@ impl Machine {
                 }
                 self.problem(problem, effects);
                 Reply::Done
+            }
+            Request::LoadRefused(why) => {
+                self.loads = self.loads.saturating_sub(1);
+                self.push_gcode(effects);
+                self.queue_load_refused(&why, effects);
+                Reply::Refused(why)
             }
             Request::SendGcode(text) => self.send_gcode(text, effects),
             Request::EditBoard(form) => self.edit_board(&form, effects),

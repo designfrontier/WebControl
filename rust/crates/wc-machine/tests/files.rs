@@ -384,6 +384,26 @@ fn boards_load_save_edit_and_trim_through_requests() {
 }
 
 #[test]
+fn a_load_refused_before_parsing_keeps_the_loaded_file() {
+    let mut rig = Rig::new();
+    open(&mut rig, SQUARE, "square.nc");
+    ask(&mut rig, Request::LoadStarting);
+    let waiting = rig.send(rig::action("startRun", json!(""), json!("")));
+    assert!(alerts(&waiting).iter().any(|alert| alert.contains("still loading")));
+    let (reply, effects) = ask(&mut rig, Request::LoadRefused("Too big.".into()));
+    assert_eq!(reply, Reply::Refused("Too big.".into()));
+    assert!(alerts(&effects).is_empty(), "the route answers why; no one else is alerted");
+    let snapshot = rig.machine.snapshot();
+    assert_eq!(snapshot.gcode_file.as_deref(), Some(std::path::Path::new("square.nc")));
+    assert!(!snapshot.gcode.is_empty());
+    let play = rig.send(rig::action("startRun", json!(""), json!("")));
+    assert!(
+        !alerts(&play).iter().any(|alert| alert.contains("still loading")),
+        "the refused load no longer holds Play"
+    );
+}
+
+#[test]
 fn file_problems_raise_pythons_alerts() {
     let mut rig = Rig::new();
     open(&mut rig, SQUARE, "square.nc");
