@@ -115,13 +115,14 @@
     "event": {
       "type": "object",
       "required": ["type"],
-      "properties": { "type": { "enum": ["ui", "http", "rx", "tx", "tick", "expect"] } },
+      "properties": { "type": { "enum": ["ui", "http", "rx", "tx", "tick", "open", "expect"] } },
       "oneOf": [
         { "$ref": "#/$defs/ui" },
         { "$ref": "#/$defs/http" },
         { "$ref": "#/$defs/rx" },
         { "$ref": "#/$defs/tx" },
         { "$ref": "#/$defs/tick" },
+        { "$ref": "#/$defs/open" },
         { "$ref": "#/$defs/expect" }
       ]
     },
@@ -197,6 +198,17 @@
         "type": { "const": "tick" },
         "comment": { "$ref": "#/$defs/comment" },
         "seconds": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "open": {
+      "type": "object",
+      "required": ["type", "baud"],
+      "additionalProperties": false,
+      "description": "The backend opened the controller's port once since the last open event, or before the events, at this baud.",
+      "properties": {
+        "type": { "const": "open" },
+        "comment": { "$ref": "#/$defs/comment" },
+        "baud": { "enum": [57600, 115200] }
       }
     },
     "emitted": {

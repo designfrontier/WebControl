@@ -213,7 +213,7 @@ impl Bench {
                 let replies = self.sim.receive(&bytes, self.ms());
                 self.controller_says(replies);
             }
-            Effect::OpenPort(port) => {
+            Effect::OpenPort(port, _) => {
                 self.open = true;
                 self.pending.push_back(Event::PortOpened { port });
                 let boot = self.sim.boot(self.ms());

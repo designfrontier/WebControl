@@ -15,6 +15,8 @@ struct Oracle {
     written: Vec<u8>,
     expects: Vec<Expect>,
     current: Option<Expect>,
+    /// The transcript's `open` bauds, last first.
+    opens: Vec<u32>,
 }
 
 fn is_input(event: &Event) -> bool {
@@ -38,6 +40,12 @@ impl Oracle {
             written: Vec::new(),
             expects,
             current: None,
+            opens: transcript
+                .events
+                .iter()
+                .rev()
+                .filter_map(|e| if let Event::Open { baud, .. } = e { Some(*baud) } else { None })
+                .collect(),
         }
     }
 
@@ -121,6 +129,9 @@ impl SerialBackend for Oracle {
     fn setting(&self, section: &str, key: &str) -> Option<String> {
         let settings = self.current.as_ref()?.settings.as_ref()?;
         settings.iter().find(|s| s.section == section && s.key == key).map(|s| s.value.clone())
+    }
+    fn take_opened(&mut self) -> Vec<u32> {
+        self.opens.pop().into_iter().collect()
     }
 }
 
@@ -241,6 +252,13 @@ fn a_different_line_fails() {
     let t = boot(json!([{"type": "rx", "line": "ok"}, {"type": "tx", "bytes": "G21  \n"}]));
     let err = replay(&mut Scripted::default().on("ok", "G20  \n"), &t).unwrap_err();
     assert!(err.contains("event 1") && err.contains("G20"), "{err}");
+}
+
+#[test]
+fn an_open_the_backend_did_not_make_fails() {
+    let t = boot(json!([{"type": "open", "baud": 115200}]));
+    let err = replay(&mut Scripted::default(), &t).unwrap_err();
+    assert!(err.contains("event 0") && err.contains("115200"), "{err}");
 }
 
 #[test]

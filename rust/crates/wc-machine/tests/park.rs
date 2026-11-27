@@ -243,6 +243,7 @@ fn park_waits_for_a_missed_restart() {
     rig.send(Event::Edit { id: 1, request: Request::UpdateSettings { section: "advanced".into(), body } });
     assert_eq!(rig.run_to_quiet(), ["$38=1"]);
     rig.open();
+    rig.rx("<Idle,MPos:0.00,0.00,0.00,WPos:0.000,0.000,0.000>");
     rig.advance(3100);
     rig.answer_until_quiet("51.27");
     assert!(alerts(&rig.act("park"))[0].contains("did not restart"));

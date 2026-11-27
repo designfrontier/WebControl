@@ -6,6 +6,13 @@ pub const EEPROM_READ_FAIL: &str = "EEPROM read fail";
 const BOARD_BANNER: &str = "PCB v1.";
 /// A banner this long after the last one is a new boot, for a boot whose `ready` line was lost.
 pub const BOOT_BANNER_WINDOW_MS: u64 = 10_000;
+/// Every build talks at 57600 baud but the planner's 51.30, which talks at 115200.
+pub const BAUDS: [u32; 2] = [57600, 115200];
+
+/// The rate to try when `baud` brought nothing the firmware prints; anything unknown counts as 57600.
+pub fn other_baud(baud: u32) -> u32 {
+    if baud == BAUDS[1] { BAUDS[0] } else { BAUDS[1] }
+}
 
 fn is_word(c: char) -> bool {
     c.is_alphanumeric() || c == '_'

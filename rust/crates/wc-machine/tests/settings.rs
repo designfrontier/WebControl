@@ -274,7 +274,7 @@ fn a_known_port_name_is_accepted_and_changing_it_reopens_the_link() {
     assert!(effects.contains(&Effect::ClosePort));
     assert_eq!(pushed(&effects, "connectionStatus").last().unwrap()["status"], "disconnected");
     let reopened = rig.advance(20);
-    assert!(reopened.contains(&Effect::OpenPort("/dev/weird port".into())), "{reopened:?}");
+    assert!(reopened.contains(&Effect::OpenPort("/dev/weird port".into(), 57600)), "{reopened:?}");
     let (same, effects) = put(&mut rig, "maslow", json!({"values": {"COMport": "/dev/weird port"}}));
     assert_eq!(same.status, 200);
     assert!(!effects.contains(&Effect::ClosePort));

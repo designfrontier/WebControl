@@ -65,7 +65,7 @@ impl SimRig {
                     pending.extend(replies.into_iter().map(Event::ControllerLine));
                 }
                 // Opening the port resets the board, as `SimOpener` and a real Mega do.
-                Effect::OpenPort(port) => {
+                Effect::OpenPort(port, _) => {
                     pending.push_back(Event::PortOpened { port: port.clone() });
                     pending.extend(self.sim.boot(self.millis()).into_iter().map(Event::ControllerLine));
                 }

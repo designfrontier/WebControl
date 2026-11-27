@@ -59,14 +59,42 @@ fn a_client_that_fell_behind_hears_the_current_state_again_and_no_one_else_does(
 #[test]
 fn the_port_is_opened_from_the_settings_and_retried_every_5_s() {
     let mut idle = Rig::new();
-    assert!(!idle.advance(20).iter().any(|e| matches!(e, Effect::OpenPort(_))), "no COMport, no attempt");
+    assert!(!idle.advance(20).iter().any(|e| matches!(e, Effect::OpenPort(..))), "no COMport, no attempt");
     let mut rig = Rig::with(settings(&[("Maslow Settings", "COMport", json!("/dev/ttyACM0"))]));
     let effects = rig.advance(10);
-    assert!(effects.contains(&Effect::OpenPort("/dev/ttyACM0".into())));
-    assert!(!rig.advance(100).iter().any(|e| matches!(e, Effect::OpenPort(_))), "one attempt at a time");
+    assert!(effects.contains(&Effect::OpenPort("/dev/ttyACM0".into(), 57600)));
+    assert!(!rig.advance(100).iter().any(|e| matches!(e, Effect::OpenPort(..))), "one attempt at a time");
     rig.send(Event::PortFailed { port: "/dev/ttyACM0".into(), error: "busy".into() });
-    assert!(!rig.advance(4900).iter().any(|e| matches!(e, Effect::OpenPort(_))));
-    assert!(rig.advance(200).iter().any(|e| matches!(e, Effect::OpenPort(_))));
+    assert!(!rig.advance(4900).iter().any(|e| matches!(e, Effect::OpenPort(..))));
+    assert!(rig.advance(200).iter().any(|e| matches!(e, Effect::OpenPort(..))));
+}
+
+#[test]
+fn a_silent_controller_is_tried_once_at_the_other_baud_then_handshaken_as_before() {
+    let port = || "/dev/ttyACM0".to_string();
+    let mut rig = Rig::with(settings(&[("Maslow Settings", "COMport", json!("/dev/ttyACM0"))]));
+    assert!(rig.advance(10).contains(&Effect::OpenPort(port(), 57600)));
+    rig.open();
+    rig.rx("\u{fffd}\u{fffd}\u{fffd}");
+    let effects = rig.advance(3000);
+    assert!(effects.contains(&Effect::OpenPort(port(), 115200)) && written(&effects).is_empty(), "{effects:?}");
+    rig.open();
+    assert_eq!(written(&rig.advance(3000)), ["B05"], "silent at both rates: the handshake goes as it always did");
+    let effects = rig.advance(7200);
+    assert!(effects.contains(&Effect::OpenPort(port(), 57600)), "the next attempt starts at the saved rate again");
+}
+
+#[test]
+fn the_baud_that_answers_is_saved_and_tried_first_next_time() {
+    let mut rig = Rig::with(settings(&[("Maslow Settings", "COMport", json!("/dev/ttyACM0"))]));
+    rig.advance(10);
+    rig.open();
+    rig.advance(3000);
+    rig.open();
+    rig.rx("PCB v1.1 Detected");
+    assert_eq!(rig.machine.snapshot().settings.number("Computed Settings", "controllerBaud"), 115200.0);
+    rig.send(Event::PortClosed);
+    assert!(rig.advance(5100).contains(&Effect::OpenPort("/dev/ttyACM0".into(), 115200)));
 }
 
 #[test]
@@ -215,6 +243,7 @@ fn losing_the_port_while_draining_to_an_m0_pauses_at_the_oldest_lost_line() {
     assert_eq!((snapshot.upload_flag, snapshot.job_in_progress, snapshot.gcode_index), (2, true, 0));
     rig.advance(5100);
     rig.open();
+    rig.rx("<Idle,MPos:0.00,0.00,0.00,WPos:0.000,0.000,0.000>");
     rig.advance(3100);
     rig.run_to_quiet();
     rig.rx("<Idle,MPos:0.00,0.00,0.00,WPos:0.000,0.000,0.000>");

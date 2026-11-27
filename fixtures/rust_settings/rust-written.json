@@ -663,6 +663,12 @@
             "key": "lastRunHomeY",
             "type": "float",
             "value": 0.0
+        },
+        {
+            "default": 57600,
+            "key": "controllerBaud",
+            "type": "int",
+            "value": 57600
         }
     ],
     "GPIO Settings": [

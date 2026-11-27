@@ -39,6 +39,10 @@ pub trait SerialBackend {
     fn state(&self) -> Map<String, Value>;
     /// A stored setting as Python's `str()` prints it.
     fn setting(&self, section: &str, key: &str) -> Option<String>;
+    /// The baud of every port open since the last call, the one before the events included.
+    fn take_opened(&mut self) -> Vec<u32> {
+        Vec::new()
+    }
 }
 
 struct Replay<'a, B: SerialBackend> {
@@ -265,6 +269,10 @@ impl<B: SerialBackend> Replay<'_, B> {
                 Ok(())
             }
             Event::Expect(expect) => self.expect(expect),
+            Event::Open { baud, .. } => match self.backend.take_opened() {
+                opened if opened == [*baud] => Ok(()),
+                opened => Err(format!("expected one port open at {baud} baud, got {opened:?}")),
+            },
             Event::Tx { .. } => unreachable!("handled above"),
         }
     }

@@ -105,6 +105,7 @@ Every event has a `type` and may have a `comment`, which runners ignore.
 | `rx`     | `line`                                         | sends `line` followed by `\r\n` from the controller                        |
 | `tx`     | `bytes`, `realtime?`, `timeout?`               | checks that the next line the backend wrote is exactly `bytes`             |
 | `tick`   | `seconds`                                      | advances the clock by at least `seconds`                                   |
+| `open`   | `baud`                                         | checks that the backend opened the port once, at `baud`, since the last `open` (the first counts the open before the events) |
 | `expect` | `state`, `settings`, `emitted`, `notEmitted`, `alerts`, `noAlerts` | checks observable state (below)        |
 
 `tx.bytes` is one line of the byte stream the backend writes, byte for byte, including trailing spaces and the
@@ -172,6 +173,9 @@ the backend had been quiet for `quiet` seconds, one line per settle.
 | `connect_boot_handshake` | the owner's real connect (51.27, PCB v1.1, full `$$`): `B05`, `G21`, `G90`, `$$`, then only `$13`; no `$38`; B05 reply parsed |
 | `connect_settings_sync_adopts_unknown_keys` | `$$` reply: `$18`/`$9`/`$28`/`$36` adopted, a differing `$3` written with `$13`, then `$$` again; `$45` at 8 decimals left alone |
 | `connect_eeprom_read_fail_restores_settings` | `error: EEPROM read fail` at boot → `$$`, every key written back, alert; the factory `$38` differs, so the port is reopened (a reset) and the next boot writes only `$13` |
+| `connect_at_115200_the_baud_that_last_answered` | `controllerBaud` 115200: the port opens at 115200 and a 51.30 boots as at 57600 |
+| `connect_falls_back_from_115200_to_57600` | `controllerBaud` 115200 and a 57600 build (51.27): 3 s of garbage, a reopen at 57600, the usual handshake, `controllerBaud` 57600 |
+| `connect_falls_back_from_57600_to_115200_for_51_30` | the default 57600 and a 51.30: 3 s of garbage, a reopen at 115200, the numbered handshake, `controllerBaud` 115200 |
 | `connect_without_a_reset_handshakes_after_3_s` | no banner and no `ok` 3 s after the port opens → the same handshake: `B05`, units, `G90`, `$$`, `$13` |
 | `connect_chain_over_sprocket_differs_restarts_the_controller` | the owner's `$$` with `$38=1`: `$13` and `$38` written, the port reopened (a reset), and the next boot writes only `$13` |
 | `connect_repairs_a_pid_weight_above_one` | the owner's `$$` with `$24` and `$32` at 1.00000011 (an earlier `$24=1.000000` write): equal at the printed precision but refused by `SetTunings`, so `$13`, `$24=1` and `$32=1` are written, then `$$` is read back |

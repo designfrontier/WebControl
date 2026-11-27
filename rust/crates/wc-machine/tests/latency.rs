@@ -78,7 +78,7 @@ struct Opener {
 }
 
 impl PortOpener for Opener {
-    fn open(&mut self, _: &str) -> std::io::Result<Serial> {
+    fn open(&mut self, _: &str, _: u32) -> std::io::Result<Serial> {
         std::thread::sleep(self.slowness.open);
         let (ours, theirs) = tokio::io::duplex(4096);
         let _ = self.controllers.send(theirs);

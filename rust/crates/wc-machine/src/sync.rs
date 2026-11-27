@@ -117,7 +117,7 @@ impl Machine {
         effects.push(broadcast(&self.connection_status()));
         effects.push(alert(RESTARTING));
         // The same port, whatever `COMport` says now; reopening it is what resets the board.
-        effects.push(Effect::OpenPort(port));
+        effects.push(Effect::OpenPort(port, self.port_baud()));
         self.link = Link::Opening;
     }
 

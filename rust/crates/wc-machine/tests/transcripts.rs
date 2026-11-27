@@ -23,6 +23,7 @@ struct MachineBackend {
     unread: Vec<u8>,
     written: Vec<u8>,
     messages: Vec<(String, Value)>,
+    opened: Vec<u32>,
 }
 
 /// `str()` of a JSON number as the Python runner stores `setup.home`: whole numbers print without `.0`.
@@ -33,7 +34,8 @@ fn home_text(value: f64) -> String {
 impl MachineBackend {
     fn new() -> MachineBackend {
         let machine = Machine::new("127.0.0.1:5000", Settings::defaults());
-        MachineBackend { machine, now: Duration::ZERO, unread: Vec::new(), written: Vec::new(), messages: Vec::new() }
+        let (unread, written, messages, opened) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+        MachineBackend { machine, now: Duration::ZERO, unread, written, messages, opened }
     }
 
     /// The `/sendGCode` form route, answered as wc-server answers it.
@@ -65,7 +67,10 @@ impl MachineBackend {
         effects.into_iter().for_each(|effect| match effect {
             Effect::Write(bytes) | Effect::Realtime(bytes) => self.written.extend(bytes),
             // The shell opens the port at once; the controller's banner then comes as the transcript's rx.
-            Effect::OpenPort(port) => self.apply(Event::PortOpened { port }),
+            Effect::OpenPort(port, baud) => {
+                self.opened.push(baud);
+                self.apply(Event::PortOpened { port })
+            }
             Effect::Vision(request) => self.apply(Event::Seen(camera(&request))),
             // The server loads a queued file from the library, here the transcripts' own directory.
             Effect::Queue(Outbound::Load(file)) => {
@@ -102,7 +107,13 @@ impl SerialBackend for MachineBackend {
         if let Some(lines) = transcript.gcode_lines() {
             self.machine.load_gcode(&(lines.join("\n") + "\n"));
         }
+        // The shell opened the port at the saved baud before the transcript starts.
+        self.opened.push(self.settings().number("Computed Settings", "controllerBaud") as u32);
         self.apply(Event::PortOpened { port: "/dev/ttyACM0".into() });
+    }
+
+    fn take_opened(&mut self) -> Vec<u32> {
+        std::mem::take(&mut self.opened)
     }
 
     fn receive(&mut self, bytes: &[u8]) {

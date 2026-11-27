@@ -102,7 +102,8 @@ pub enum Effect {
     /// `!` or `~`, which the firmware acts on at once.
     Realtime(Vec<u8>),
     Push(Push),
-    OpenPort(String),
+    /// The controller's port, at this baud.
+    OpenPort(String, u32),
     ClosePort,
     ListPorts,
     /// A line for the log viewer: what was sent or read.
@@ -332,6 +333,8 @@ pub(crate) struct Controller {
     pub watch: crate::lost::Watch,
     /// A planner build's numbered lines.
     pub numbered: crate::planner::Numbered,
+    /// A line only the firmware prints came since the port opened, so the baud is right.
+    pub heard: bool,
 }
 
 impl Controller {
@@ -360,6 +363,7 @@ impl Controller {
             stop_reload: false,
             watch: crate::lost::Watch::default(),
             numbered: crate::planner::Numbered::default(),
+            heard: false,
         }
     }
 }
@@ -373,6 +377,8 @@ pub struct Machine {
     /// The settings as last handed to the writer.
     pub(crate) saved: Arc<Settings>,
     pub(crate) link: Link,
+    /// This open is at the other baud than `controllerBaud`, which brought nothing.
+    pub(crate) baud_retry: bool,
     pub(crate) controller: Controller,
     pub(crate) firmware_version: f64,
     /// The last B05 reply listed the `planner` capability.
@@ -463,6 +469,7 @@ impl Machine {
             saved: settings.clone(),
             settings,
             link: Link::Disconnected { retry_at: Duration::ZERO },
+            baud_retry: false,
             controller: Controller::new(Duration::ZERO),
             firmware_version: 0.0,
             planner: false,

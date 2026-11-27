@@ -1,5 +1,5 @@
 use wc_firmware::boot::{
-    board_banner, ends_boot, firmware_build, is_boot_banner, parse_firmware_version, supports_z_limits,
+    board_banner, ends_boot, firmware_build, is_boot_banner, other_baud, parse_firmware_version, supports_z_limits,
 };
 use wc_firmware::planner::{numbered, renumber, waits_for_moves};
 use wc_firmware::{
@@ -114,6 +114,11 @@ fn boots_are_told_by_their_banners() {
     assert!(ends_boot("ready") && !ends_boot("Grbl v1.00") && !ends_boot("already"));
     assert_eq!(board_banner(" prescaler to 1PCB v1.4 Detected  ").as_deref(), Some("PCB v1.4 Detected"));
     assert_eq!(board_banner("Grbl v1.00"), None);
+}
+
+#[test]
+fn the_other_baud_of_an_unknown_rate_is_115200() {
+    assert_eq!([57600, 115200, 9600].map(other_baud), [115200, 57600, 115200]);
 }
 
 #[test]

@@ -4,7 +4,8 @@
 use std::time::Duration;
 
 use wc_firmware::boot::{
-    BOOT_BANNER_WINDOW_MS, EEPROM_READ_FAIL, EEPROM_REWRITE_NOTICE, board_banner, ends_boot, is_boot_banner,
+    BAUDS, BOOT_BANNER_WINDOW_MS, EEPROM_READ_FAIL, EEPROM_REWRITE_NOTICE, board_banner, ends_boot, is_boot_banner,
+    other_baud,
 };
 use wc_firmware::planner::{FEED_FORWARD_KEY, PLANNER_KEYS};
 use wc_firmware::settings::{Sync, reinitialises_axes, setting_key, sync_reported};
@@ -21,6 +22,7 @@ use crate::gpio::Led;
 use crate::job::{Flow, blank, pause_button};
 use crate::lost::Watch;
 use crate::machine::{Controller, Effect, Link, Machine, Probe, Queued, alert, broadcast};
+use serde_json::Value;
 
 /// The 5 s poller Python used to reopen the port.
 pub const RECONNECT: Duration = Duration::from_secs(5);
@@ -93,7 +95,7 @@ impl Machine {
             self.link = match port.is_empty() {
                 true => Link::Disconnected { retry_at: now + RECONNECT },
                 false => {
-                    effects.push(Effect::OpenPort(port));
+                    effects.push(Effect::OpenPort(port, self.port_baud()));
                     Link::Opening
                 }
             };
@@ -106,6 +108,10 @@ impl Machine {
         }
         let controller = &mut self.controller;
         if controller.boot_deadline.is_some_and(|deadline| now >= deadline) {
+            self.baud_retry = !self.controller.heard && !self.baud_retry;
+            if self.baud_retry {
+                return self.reopen_at_the_other_baud(effects);
+            }
             tracing::info!("no boot message from the controller; connecting anyway");
             self.restart_not_seen(effects);
             self.handshake(now);
@@ -118,6 +124,34 @@ impl Machine {
         }
         if controller.resync_after.is_some_and(|after| now >= after) {
             controller.caught_up = true;
+        }
+    }
+
+    /// The `controllerBaud` that last brought an answer, or the other rate while that one is retried.
+    pub(crate) fn port_baud(&self) -> u32 {
+        let saved = self.settings.number("Computed Settings", "controllerBaud") as u32;
+        let saved = if BAUDS.contains(&saved) { saved } else { BAUDS[0] };
+        if self.baud_retry { other_baud(saved) } else { saved }
+    }
+
+    /// Nothing the firmware prints came in `BOOT_WAIT`, so it may talk at the other rate; reopening resets it.
+    fn reopen_at_the_other_baud(&mut self, effects: &mut Vec<Effect>) {
+        let Link::Connected { port } = std::mem::replace(&mut self.link, Link::Opening) else {
+            return;
+        };
+        let baud = self.port_baud();
+        tracing::info!(baud, "nothing from the controller; reopening at the other baud");
+        effects.push(Effect::ClosePort);
+        effects.push(broadcast(&self.connection_status()));
+        effects.push(Effect::OpenPort(port, baud));
+    }
+
+    fn baud_heard(&mut self) {
+        self.controller.heard = true;
+        let baud = self.port_baud();
+        self.baud_retry = false;
+        if self.port_baud() != baud {
+            self.set_setting("Computed Settings", "controllerBaud", Value::from(baud));
         }
     }
 
@@ -209,6 +243,9 @@ impl Machine {
             self.controller.stop_reload = false;
         }
         let reply = classify(line);
+        if !self.controller.heard && (is_boot_banner(line) || !matches!(reply, Reply::Other(_) | Reply::Misread(_))) {
+            self.baud_heard();
+        }
         self.acknowledge(line, &reply, now, effects);
         if !self.planner {
             self.watch_for_lost_line(&reply, now, effects);

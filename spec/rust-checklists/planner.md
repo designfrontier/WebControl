@@ -21,7 +21,11 @@ viewer open, an ssh session on the Pi, and Settings ▸ Display ▸ "Show line p
 - [ ] Copy the script and the hex to the Pi: `scp rust/deploy/flash-hex.sh <planner>.hex pi@maslow.local:`.
 - [ ] On the Pi, as `pi`: `bash flash-hex.sh <planner>.hex`. It stops `webcontrol-rs`, avrdude ends with
       `bytes of flash verified` and `avrdude done.`, and it starts `webcontrol-rs` again.
-- [ ] WebControl reconnects. Jog Z 1 mm: the speed is as before (`$18` is 12.6, not 126).
+- [ ] WebControl reconnects. A 51.30 build from `planner-51.30-<sha>.hex` on talks at 115200 baud: the log shows
+      garbage for 3 s, then `Connected on port` a second time and the boot banner. Restart `webcontrol-rs`
+      (`sudo systemctl restart webcontrol-rs`): it connects at once, with no garbage, as it opens at the rate that last
+      answered.
+- [ ] Jog Z 1 mm: the speed is as before (`$18` is 12.6, not 126).
 - [ ] The `[PE:...]` chain lengths match the ones noted (within 1 mm). If not, do not run the job: put them right as
       in `firmware-upgrade.md` section 5.
 
@@ -116,5 +120,7 @@ Leave `$49` at the best value for section 5.
 - [ ] If the wizard refuses or fails, flash `holey-51.292.hex` with `flash-hex.sh` as in section 1 instead (on the
       Mac, `bash rust/firmware/docker-build.sh <dir>` builds it).
 - [ ] The firmware chip reads "Holey 51.29", Z jogs at the old speed, and the chain lengths match the ones noted.
+- [ ] After a rollback from a 51.30 build, WebControl reconnected at 57600: the log shows 3 s of garbage at 115200,
+      then the 51.292 banner. A restart of `webcontrol-rs` connects at once.
 
 Report as the README says, with the table and the `PE JOB` lines.

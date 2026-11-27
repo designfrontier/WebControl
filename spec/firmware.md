@@ -14,7 +14,11 @@ upgrade flow are built against. Firmware paths are relative to `cnc_ctrl_v1/`.
 
 ## 1. Serial protocol
 
-- **Link:** 57600 baud 8N1 in every version. Lines in end at `\n` (`\r` is stripped); lines out end `\r\n`.
+- **Link:** 57600 baud 8N1 in every version here, and in the planner builds that report 51.29; the planner's 51.30
+  talks at 115200 (its `PROTOCOL.md`). WebControl opens at the rate in `controllerBaud` (Computed Settings), the one
+  that last brought a line the firmware prints (a banner, an `ok`, a status report). With none 3 s after the open, it
+  reopens once at the other rate, which resets the board again, and saves the rate that answers; with none at either,
+  it sends the handshake anyway as before. Lines in end at `\n` (`\r` is stripped); lines out end `\r\n`.
 - **Buffer:** `INCBUFFERLENGTH 128`, a ring buffer holding 127 bytes. WebControl's `bufferSize = 126` is safe; it
   counts the appended space and `\n` exactly as stored. `?` and the realtime characters never enter the ring.
 - **Case:** every version trims each line and upper-cases it before parsing it (`maslowRingBuffer::prettyReadLine`,
@@ -274,7 +278,8 @@ alone.
 
 ### B. Rust backend requirements
 
-1. 57600 8N1; send `\n`, parse `\r\n`; don't gate the first send only on the boot `ok`.
+1. 8N1 at 57600 (115200 for the planner's 51.30); send `\n`, parse `\r\n`; don't gate the first send only on the
+   boot `ok`.
 2. Treat any line containing `PCB v1.`, `Grbl v1.00` or `ready` as a boot. On each boot reset units, G90, tool,
    a manual Z wait and accounting (a paused job rewinds to the oldest unacknowledged line, with an alert), then B05
    → units → G90 → `$$` → write only the keys `$$` shows differ (at the printed precision, B9)

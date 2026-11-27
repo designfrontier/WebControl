@@ -167,7 +167,7 @@ fn the_restart_closes_and_reopens_the_same_port() {
     effects.extend(rig.rx("ok"));
     effects.extend(rig.advance(100));
     let close = effects.iter().position(|e| *e == Effect::ClosePort).expect("closed");
-    let open = effects.iter().position(|e| *e == Effect::OpenPort("/dev/ttyACM0".into())).expect("reopened");
+    let open = effects.iter().position(|e| *e == Effect::OpenPort("/dev/ttyACM0".into(), 57600)).expect("reopened");
     assert!(close < open);
 }
 
@@ -189,6 +189,7 @@ fn a_board_that_does_not_reset_is_reported_and_moves_wait_for_a_banner() {
     rig.boot_reporting("51.27", &report(&[(38, "1")]));
     assert!(restarted(&rig));
     rig.open();
+    rig.rx("<Idle,MPos:0.00,0.00,0.00,WPos:0.000,0.000,0.000>");
     let effects = rig.advance(3100);
     assert!(alerts(&effects).iter().any(|a| a.contains("did not restart")), "{:?}", alerts(&effects));
     let sent = rig.answer_with("51.27", &report(&[]));
@@ -209,6 +210,7 @@ fn calibration_accept_and_an_optical_scan_wait_for_a_missed_restart() {
     let mut rig = Rig::with(settings(&optical_on));
     rig.boot_reporting("51.27", &report(&[(38, "1")]));
     rig.open();
+    rig.rx("<Idle,MPos:0.00,0.00,0.00,WPos:0.000,0.000,0.000>");
     rig.advance(3100);
     rig.answer_with("51.27", &report(&[]));
     let body = json!({"cut12": 1930, "cut34": 1930, "cut5": 300, "bitDiameter": 6.35});
@@ -352,6 +354,7 @@ fn typed_gcode_waits_for_the_board_that_did_not_restart() {
     let mut rig = Rig::new();
     rig.boot_reporting("51.27", &report(&[(38, "1")]));
     rig.open();
+    rig.rx("<Idle,MPos:0.00,0.00,0.00,WPos:0.000,0.000,0.000>");
     rig.advance(3100);
     rig.answer_with("51.27", &report(&[]));
     let effects = rig.send(Event::Request { id: 1, request: wc_machine::files::Request::SendGcode("G0 X10".into()) });
