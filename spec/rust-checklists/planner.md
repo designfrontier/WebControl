@@ -1,6 +1,6 @@
-# Planner test firmware: an air cut at three accelerations
+# Planner firmware 51.30: an air cut at three accelerations
 
-What this must show on the real machine: a test firmware with an acceleration planner runs
+What this must show on the real machine: the planner firmware 51.30, flashed from the upgrade wizard, runs
 [`planner-aircut.nc`](planner-aircut.nc) at `$47` = 25, 50 and 100 without the sled swinging, the chains bouncing or
 the position error coming near the 2 mm alarm, and how long each run takes. **This checklist flashes the controller
 and moves the sled with a job.**
@@ -9,22 +9,29 @@ Safety, for every step below (and the README's):
 
 - An **air cut**: router off at its own switch, bit out, Z zeroed 30 mm above the work as in `jobs.md` section 2.
   The file never goes below Z 10 and never starts the spindle.
-- The planner build keeps 51.292's settings (same EEPROM layout), and `$47`/`$48`/`$49` start at 50, 0.01 and 0.
+- The flash resets the controller's settings, and the wizard pushes them back; `$47`/`$48`/`$49` start at 50, 0.01
+  and 0.
 - Keep a hand near **Stop**. If Stop does not stop the sled within a second, cut the controller's power.
 
-You need: the release installed, `jobs.md` sections 2 and 3 passed on 51.292, the test firmware's hex, the log
-viewer open, an ssh session on the Pi, and Settings ▸ Display ▸ "Show line pacing in the run panel" on.
+You need: the release installed, `jobs.md` sections 2 and 3 passed on 51.292, the log viewer open, an ssh session on
+the Pi, and Settings ▸ Display ▸ "Show line pacing in the run panel" on.
 
-## 1. Flash the test firmware
+## 1. Flash the planner firmware
 
 - [ ] Note the chain lengths: the last `[PE:...]` line's two last numbers in the log viewer: L ______ R ______.
-- [ ] Copy the script and the hex to the Pi: `scp rust/deploy/flash-hex.sh <planner>.hex pi@maslow.local:`.
-- [ ] On the Pi, as `pi`: `bash flash-hex.sh <planner>.hex`. It stops `webcontrol-rs`, avrdude ends with
+- [ ] Actions ▸ Upgrade holey firmware…: the wizard says the planner firmware is experimental and that 51.292 is the
+      way back, with a Help link to the upgrade page. Press **Upgrade to planner firmware 51.30 (experimental)**: it
+      checks the controller and reads "Ready to upgrade ... to 51.30", with the 51.30 image's SHA-256 matching
+      `rust/firmware/holey-51.30.sha256`.
+- [ ] Tick the box and **Upgrade to 51.30**: it backs up, flashes, and the log shows garbage for 3 s, then
+      `Connected on port` a second time at 115200, the boot banner, `Firmware Version 51.30` and the `Capabilities:`
+      line. The wizard pushes the settings back and asks for the motor self-test; run it with the chains slack.
+- [ ] Restart `webcontrol-rs` (`sudo systemctl restart webcontrol-rs`): it connects at once, with no garbage, as it
+      opens at the rate that last answered.
+- [ ] Fallback, if the wizard refuses or fails: copy `rust/deploy/flash-hex.sh` and the hex
+      (`bash rust/firmware/docker-build.sh <dir> 51.30` builds `holey-51.30.hex`) to the Pi and run
+      `bash flash-hex.sh holey-51.30.hex` as `pi`. It stops `webcontrol-rs`, avrdude ends with
       `bytes of flash verified` and `avrdude done.`, and it starts `webcontrol-rs` again.
-- [ ] WebControl reconnects. A 51.30 build from `planner-51.30-<sha>.hex` on talks at 115200 baud: the log shows
-      garbage for 3 s, then `Connected on port` a second time and the boot banner. Restart `webcontrol-rs`
-      (`sudo systemctl restart webcontrol-rs`): it connects at once, with no garbage, as it opens at the rate that last
-      answered.
 - [ ] Jog Z 1 mm: the speed is as before (`$18` is 12.6, not 126).
 - [ ] The `[PE:...]` chain lengths match the ones noted (within 1 mm). If not, do not run the job: put them right as
       in `firmware-upgrade.md` section 5.
@@ -40,6 +47,9 @@ viewer open, an ssh session on the Pi, and Settings ▸ Display ▸ "Show line p
 - [ ] Jog each way once: the sled moves as before and the log shows no `rs N` lines.
 
 ## 3. The air cut at `$47` = 25, 50 and 100
+
+This records the release's validation. To choose values for a machine, follow the in-app help page Tune the Planner
+Firmware (`docs/Actions/Controller/tunePlannerFirmware.md`) instead.
 
 - [ ] Jog to the middle of the bed and Set Home Here. The file stays within 100 mm left and right of home, and from
       100 mm below to 155 mm above it.
@@ -112,9 +122,11 @@ Leave `$49` at the best value for section 5.
 
 ## 6. Roll back
 
-- [ ] Actions ▸ Upgrade Holey Firmware (51.292), then Check: the wizard is ready to upgrade the planner build (it
-      refuses only a 51.29 without the planner capability, with "The controller already runs 51.29x."; 51.30 is
-      accepted by its version). Upgrade, and
+- [ ] Actions ▸ Upgrade holey firmware…, then **Upgrade to planner firmware 51.30 (experimental)** again: it is
+      blocked with "The controller already runs 51.30." **Start over**.
+- [ ] **Upgrade to holey 51.292**: the wizard is ready to upgrade the planner build (it refuses only a 51.29 without
+      the planner capability, with "The controller already runs 51.29x."; 51.30 is accepted by its version).
+      Upgrade, and
       it backs up the planner build, flashes 51.292 and pushes the settings back. Planner Acceleration and
       Planner Feed-Forward leave Maslow Settings.
 - [ ] If the wizard refuses or fails, flash `holey-51.292.hex` with `flash-hex.sh` as in section 1 instead (on the

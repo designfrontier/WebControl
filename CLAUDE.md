@@ -8,10 +8,11 @@ up to `220aa0e`.
 
 ### Key directories
 
-- `.github/workflows/` — `ci.yml`: the frontend job (format, lint, typecheck, test, build), the holey 51.292 firmware
-  build checked against its pin, and three parallel Rust jobs: `rust` (fmt, clippy, the tests under 95% per-crate
-  coverage), `pi` (the deploy and release script tests, the aarch64 and x86_64 cross-builds) and `e2e` (Playwright
-  against the binary); `release.yml` builds the install assets for the Pi (aarch64) and Linux laptops (x86_64)
+- `.github/workflows/` — `ci.yml`: the frontend job (format, lint, typecheck, test, build), the holey 51.292 and
+  planner 51.30 firmware builds checked against their pins, and three parallel Rust jobs: `rust` (fmt, clippy, the
+  tests under 95% per-crate coverage), `pi` (the deploy and release script tests, the aarch64 and x86_64
+  cross-builds) and `e2e` (Playwright against the binary); `release.yml` builds the install assets for the Pi
+  (aarch64) and Linux laptops (x86_64)
   (`rust/scripts/release.sh`) and drafts a GitHub Release for a `v*` tag
 - `contract/` — frozen frontend ↔ backend spec as JSON Schema, generated from `frontend/src/protocol/` (see its
   `README.md`: layout, versioning, plain-WebSocket wire format, known warts)
@@ -34,7 +35,8 @@ up to `220aa0e`.
   `wc-machine`, `wc-optical` (experimental optical calibration), `wc-sim`, `wc-server` (the binary), `wc-testkit`
 - `rust/deploy/` — the systemd units (`webcontrol-rs`, and `webcontrol-update@` for updating from the UI), sudoers
   rule, `wc-switch` and their tests (`test.sh`, `update-test.sh`, `update-docker-test.sh`)
-- `rust/firmware/` — the holey 51.292 build (embedded) and the 51.27 rollback build, each with its SHA-256 pin
+- `rust/firmware/` — the holey 51.292 and planner 51.30 builds (both embedded) and the 51.27 rollback build, each
+  with its SHA-256 pin
 - `spec/` — `RUST-PLAN.md`, `firmware.md` (the firmware's behaviour and requirements), `INSTALL-PI.md`, and
   `rust-checklists/` (hardware checklists by feature for validating a release; its `README.md` maps features to
   sections)

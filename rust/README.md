@@ -14,7 +14,7 @@ recorded outputs.
 | `wc-gcode` | Gcode load, sanitising, home shift, T rule, restart state, the 3D preview payload and boards, as Python does |
 | `wc-kinematics` | The holey firmware's triangular and quadrilateral inverse/forward, float for float with Python |
 | `wc-calibration` | Holey (scipy's trust-region least squares, ported step for step) and triangular calibration, test patterns, Accept's settings and `$` lines |
-| `wc-firmware` | The controller's serial protocol, sans IO: line classifier, flow control, boot facts, `$` lines, the boot push and the lines a settings edit sends; the 51.292 upgrade's board and version gates, avrdude lines, flash images (the pinned one embedded, the rollback one cut from a read-back) and settings migration |
+| `wc-firmware` | The controller's serial protocol, sans IO: line classifier, flow control, boot facts, `$` lines, the boot push and the lines a settings edit sends; the 51.292 and planner 51.30 upgrades' board and version gates, avrdude lines, flash images (the pinned two embedded, the rollback one cut from a read-back) and settings migration |
 | `wc-machine` | The sans-IO core (`Machine::handle(event, now) -> effects`): link, settings, files and the job (Play, Pause, Resume, restart, tool changes, M0, alarms), the run-state gates, GPIO buttons and LEDs; and the tokio shell, where Stop has its own channel, a writer task per port puts `!` and `~` before queued lines, and slow work (the computed position, gcode positions, port open and listing) runs on the blocking pool |
 | `wc-optical` | Experimental optical calibration (`spec/optical-calibration.md`): frames, square detection, the error grid, the synthetic and printable targets, and the cameras (USB over V4L2 on Linux, the Pi camera through `rpicam-vid`); off unless the `opticalCalibrationEnabled` setting is on |
 | `wc-sim` | A simulated controller (ring buffer, `ok` timing, `!`/`~`, M0, tool change and `$16=0` manual-Z pauses, `$$`, boot banners, status reports, alarms, probes that touch, miss or have no Z axis, B04, B10, a flash to another EEPROM layout) |
@@ -48,15 +48,19 @@ recorded outputs.
 - `bash deploy/update-test.sh`: `webcontrol-update` against `scripts/release.sh`'s tarballs, a `file://` GitHub API
   and `/api/state`, and stub `sudo`, `systemctl` and binaries (update, version order, backup, checksum, busy, rollback,
   `--status`)
-- `WC_FIRMWARE_HEX=<hex> bash deploy/update-docker-test.sh 0.9.0=<binary> 0.9.1=<binary> 0.9.2=<binary>`:
-  `webcontrol-update` for real in arm64 Debian trixie with systemd and a password for `sudo`, against three aarch64
-  builds (each made with that `WC_VERSION`) packaged by `scripts/release.sh`; `ARCH=x86_64` runs it in amd64 against
-  x86_64 builds
-- `bash scripts/release-test.sh`: `scripts/release.sh`'s packaging (contents, checksums, version, firmware pin)
+- `WC_FIRMWARE_HEX=<hex> WC_PLANNER_HEX=<hex> bash deploy/update-docker-test.sh 0.9.0=<binary> 0.9.1=<binary>
+  0.9.2=<binary>`: `webcontrol-update` for real in arm64 Debian trixie with systemd and a password for `sudo`,
+  against three aarch64 builds (each made with that `WC_VERSION`) packaged by `scripts/release.sh`; `ARCH=x86_64`
+  runs it in amd64 against x86_64 builds
+- `bash scripts/release-test.sh`: `scripts/release.sh`'s packaging (contents, checksums, version, both firmware pins)
   against stubs
 - `bash firmware/docker-build.sh <dir>`: builds the holey 51.292 hex from the Orob-Maslow/Firmware v51.292 tag in
   arm64 Docker and fails unless it matches `firmware/holey-51.292.sha256`; `WC_FIRMWARE_HEX=<dir>/holey-51.292.hex`
   then embeds it in any build (CI's cross-build and `deploy.sh build` do). Without it the upgrade wizard refuses
+- `bash firmware/docker-build.sh <dir> 51.30`: builds `<dir>/holey-51.30.hex`, the planner firmware, from the
+  designfrontier/Firmware v51.30 tag (3fbb316), and fails unless it matches `firmware/holey-51.30.sha256`;
+  `WC_PLANNER_HEX=<dir>/holey-51.30.hex` embeds it. A build given one of `WC_FIRMWARE_HEX` and `WC_PLANNER_HEX`
+  without the other fails
 - `bash firmware/docker-build.sh <dir> 51.27`: builds `<dir>/holey-51.27.hex`, the holey 51.27 that v0.94 bundled
   (madgrizzle/Firmware @ 950fb23), and fails unless it matches `firmware/holey-51.27.sha256`. It is never embedded;
   it is the last-resort rollback image when no firmware backup is left (`spec/rust-checklists/firmware-upgrade.md`
@@ -75,8 +79,8 @@ only one holds the port, and `wc-switch rust|python|status` picks the one that r
 `webcontrol.service`). `install-pi.sh` also adds `/etc/sudoers.d/webcontrol-rs`, which lets the
 service run `systemctl poweroff` (the UI's Turn Off Raspberry Pi) and nothing else. The serial log is
 `~/.WebControl/webcontrol-rs.log` (rotated at 100 MB to `webcontrol-rs.<date-time>.log`, kept 30 days). The hardware checklists for validating a release are in
-`spec/rust-checklists/`, grouped by feature. The firmware upgrade (Actions → Upgrade holey firmware to 51.292…) runs
-`avrdude`, which `install-pi.sh` installs, and keeps each backup in `~/.WebControl/firmware-backups/<time>/`;
+`spec/rust-checklists/`, grouped by feature. The firmware upgrade (Actions → Upgrade holey firmware…, to 51.292 or
+the experimental planner 51.30) runs `avrdude`, which `install-pi.sh` installs, and keeps each backup in `~/.WebControl/firmware-backups/<time>/`;
 `firmware-upgrade.md` there walks through the upgrade, the self-test and a rollback.
 
 webcontrol-rs refuses Upgrade Custom Firmware. To try a test build, copy `deploy/flash-hex.sh` and the hex to the
@@ -84,9 +88,10 @@ Pi and run `bash flash-hex.sh <file.hex>` as `pi` (not with `sudo`: it reads `~/
 refuses a file that is not Intel HEX or does not end below the ATmega2560's bootloader at `0x3E000`, then stops
 `webcontrol-rs`, flashes with the upgrade's avrdude command line on the `COMport` setting's port, and starts
 `webcontrol-rs` again, also when avrdude fails. It needs `python3` and `avrdude`. It makes no backup: to roll back,
-run the UI's Upgrade Holey Firmware (51.292), which also flashes 51.292 over a planner test build (its `B05` reply
-lists the `planner` capability) but refuses any other build that reports 51.29; for those, flash `holey-51.292.hex`
-(from `firmware/docker-build.sh`) with the same script. `spec/rust-checklists/planner.md` uses it. A planner build
+run the UI's Upgrade Holey Firmware (51.292), which also flashes 51.292 over a planner build (51.30, or a 51.29 whose
+`B05` reply lists the `planner` capability) but refuses any other build that reports 51.29; for those, flash
+`holey-51.292.hex` (from `firmware/docker-build.sh`) with the same script. The planner 51.30 itself is flashed from
+the same wizard; `spec/rust-checklists/planner.md` keeps the script as a fallback. A planner build
 gets numbered, checksummed lines and the Planner Acceleration and Junction Deviation settings, and one that lists
 `feed-forward` the Planner Feed-Forward setting (`spec/firmware.md` section D).
 
@@ -115,11 +120,12 @@ builds and deploys to a laptop from the Mac.
 
 ## Releases
 
-`.github/workflows/release.yml` runs on an arm64 runner. It builds the 51.292 hex with `firmware/docker-build.sh`,
-then `scripts/release.sh` checks the hex against `firmware/holey-51.292.sha256`, builds `frontend/dist` and the
-aarch64 and x86_64 binaries (`cargo zigbuild`, glibc 2.36) with the UI, help pages and that one hex embedded, checks
-that each reports the release version (running the aarch64 one, reading the x86_64 one's version literal) and embeds
-the hex, and writes, for `<arch>` `aarch64` (the Pi) and `x86_64` (a Linux laptop):
+`.github/workflows/release.yml` runs on an arm64 runner. It builds the 51.292 and 51.30 hexes with
+`firmware/docker-build.sh`, then `scripts/release.sh` checks them against `firmware/holey-51.292.sha256` and
+`holey-51.30.sha256`, builds `frontend/dist` and the aarch64 and x86_64 binaries (`cargo zigbuild`, glibc 2.36) with
+the UI, help pages and both hexes embedded, checks that each reports the release version (running the aarch64 one,
+reading the x86_64 one's version literal) and embeds both hexes, and writes, for `<arch>` `aarch64` (the Pi) and
+`x86_64` (a Linux laptop):
 
 - `webcontrol-rs-<version>-<arch>.tar.gz`: one directory with `webcontrol-rs`, `install-pi.sh`,
   `webcontrol-update`, `wc-switch`, the unit, the drop-in, the sudoers rule, this README and `rust-checklists/`
@@ -138,7 +144,8 @@ To cut a release:
    touches (its `README.md` says which), then publish the draft.
 
 Actions → Release → Run workflow builds the same assets from any branch as a workflow artifact, without a release.
-On the Mac, `WC_FIRMWARE_HEX=<dir>/holey-51.292.hex scripts/release.sh [out-dir]` does what CI does (zig from
+On the Mac, `WC_FIRMWARE_HEX=<dir>/holey-51.292.hex WC_PLANNER_HEX=<dir>/holey-51.30.hex scripts/release.sh
+[out-dir]` does what CI does (zig from
 `pip install ziglang`; `WC_VERSION` overrides the version), into `target/release-assets` by default.
 
 Installing a release on the Pi, from the directory holding the tarball and its `.sha256`:

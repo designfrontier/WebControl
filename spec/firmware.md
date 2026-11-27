@@ -249,6 +249,12 @@ settings version (7); the firmware uses the version only in `B05`. WebControl tr
 (its build reads `51.3`, Z limits on, no fingerprint needed) and still takes planner features from the capabilities
 alone.
 
+The released 51.30 is tag `v51.30` of designfrontier/Firmware (3fbb316: the `peak-error` build, faster line parsing
+and 115200 baud). `rust/firmware/build.sh <out> 51.30` builds it and `holey-51.30.sha256` pins the arm64 Docker
+build, which every WebControl build embeds beside 51.292. The compiler's output differs between hosts: the same
+source and packages built natively on macOS give a hex 6 bytes longer (SHA-256 8ffd2624...), the one first flashed on
+the owner's machine.
+
 ## Implications
 
 ### A. Current Python backend
@@ -448,6 +454,10 @@ alone.
 
 ### C. One-click firmware upgrade
 
+The wizard offers two targets: holey 51.292 (`check`), the default and the way back, and the experimental planner
+51.30 (`checkPlanner`), from 51.27, 51.28 and any 51.29x, refused over 51.30 itself. Both images are pinned and
+embedded; a build that embeds one must embed the other. 51.30 connects at 115200 through the baud fallback (section 1).
+
 1. **Pre-flight:** machine idle; capture the boot banner, B05, `$$` and the B10 chain lengths. Block (or require
    explicit acknowledgement) for a `PCB v1.6 TLE9201` banner, TLE5206 or an unknown board; warn about 51.292's
    TLE9201 left-encoder swap.
@@ -455,8 +465,8 @@ alone.
 3. **Artefact:** a pinned, SHA-256-checked application hex (never `with_bootloader`); 51.291's shipped hex; prefer
    the v51.292 tag.
 4. **Flash:** `!`, close the port, block reconnects, run avrdude with verify, retry once on a sync failure.
-5. **Post-flash:** the banner's driver and PCB must match pre-flight (else roll back); B05 must report `51.29`;
-   expect `EEPROM read fail`.
+5. **Post-flash:** the banner's driver and PCB must match pre-flight (else roll back); B05 must report `51.29`
+   (`51.30` then a `Capabilities:` line listing `planner`, for the planner upgrade); expect `EEPROM read fail`.
 6. **Settings migration:** read `$$`, then push the complete set, including `$18` = 12.6 for the stock Z motor,
    `$9`, `$28`, `$36` and an explicit `$17`; set `$63`/`$64` on 51.292+; never send `$60`/`$61` on 51.291; skip a
    `$38` the `$$` shows already held. A `$38` written here (the factory value is 1) restarts the controller as B2
@@ -500,5 +510,6 @@ did, which the stock and holey transcripts pin.
    each moving report, and it adds `max_ahead_mm` (the largest ahead, from every report in the job, moving or not,
    so an overshoot after the setpoint stops counts) and `overshoots` (reports over 0.2 mm ahead). The run panel shows
    "overshoot max X mm" after the error figures.
-9. **Rollback:** Upgrade Holey Firmware accepts a 51.29 that lists `planner`, and any holey version above 51.29 and
-   below 100 (51.30), so it can put 51.292 back. A 51.29 without `planner` is refused as already current.
+9. **Rollback:** Upgrade Holey Firmware's 51.292 target accepts a 51.29 that lists `planner`, and any holey version
+   above 51.29 and below 100 (51.30), so it can put 51.292 back. A 51.29 without `planner` is refused as already
+   current. Its 51.30 target (C) moves a 51.29 planner build on to 51.30.
