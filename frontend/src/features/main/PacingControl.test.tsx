@@ -210,7 +210,7 @@ describe("PacingControl", () => {
     const rows = within(dialog).getAllByRole("row");
     expect(within(rows[1]).getByRole("rowheader")).toHaveTextContent("min gap 25 ms");
     expect(rows[1]).toHaveTextContent("612");
-    expect(rows[1]).toHaveTextContent("0.41 / 1.30");
+    expect(rows[1]).toHaveTextContent("0.41/1.30");
     expect(rows[2]).toHaveTextContent("pacing change");
     const scroller = within(dialog).getByRole("region", { name: "Segment history" });
     expect(scroller).toHaveAttribute("tabindex", "0");

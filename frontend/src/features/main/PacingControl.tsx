@@ -51,7 +51,7 @@ const HistoryTable = ({ history }: { history: PacingSegment[] }) =>
               <abbr title="Minutes">Mins</abbr>
             </th>
             <th scope="col">
-              <abbr title="Position error while moving, mean / max, millimetres">Error mm</abbr>
+              <abbr title="Position error while moving, mean / max, millimetres">Err mm</abbr>
             </th>
             <th scope="col">Ended by</th>
           </tr>
@@ -71,7 +71,7 @@ const HistoryTable = ({ history }: { history: PacingSegment[] }) =>
               <td>{(segment.elapsedS / 60).toFixed(1)}</td>
               <td>
                 {segment.positionError
-                  ? `${segment.positionError.meanMm.toFixed(2)} / ${segment.positionError.maxMm.toFixed(2)}`
+                  ? `${segment.positionError.meanMm.toFixed(2)}/${segment.positionError.maxMm.toFixed(2)}`
                   : "–"}
               </td>
               <td>{segment.endedBy}</td>
