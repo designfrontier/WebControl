@@ -34,7 +34,7 @@ pub struct Status {
 }
 
 /// `[PE:lErr,rErr,space]` (stock), `[PE:lErr,rErr,space,lChain,rChain]` (holey) or, from a planner build,
-/// `[PE:lErr,rErr,space,lChain,rChain,line,queued]`.
+/// `[PE:lErr,rErr,space,lChain,rChain,line,queued]`, with `,lAhead,lBehind,rAhead,rBehind` from one listing `peak-error`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PositionError {
     pub left: f64,
@@ -42,6 +42,26 @@ pub struct PositionError {
     pub space: i64,
     pub chains: Option<(f64, f64)>,
     pub planner: Option<Planned>,
+    pub peaks: Option<Peaks>,
+}
+
+/// The largest error since the last report each way along the setpoint's travel, in mm, both non-negative.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Peaks {
+    pub left_ahead: f64,
+    pub left_behind: f64,
+    pub right_ahead: f64,
+    pub right_behind: f64,
+}
+
+impl Peaks {
+    pub fn ahead(&self) -> f64 {
+        self.left_ahead.max(self.right_ahead)
+    }
+
+    pub fn max(&self) -> f64 {
+        self.ahead().max(self.left_behind).max(self.right_behind)
+    }
 }
 
 /// The planner's half of a `[PE:]` report.
@@ -112,7 +132,16 @@ fn parse_position_error(line: &str) -> Option<PositionError> {
     let chains = number(3).zip(number(4)).filter(|_| fields.len() >= 5);
     let integer = |i: usize| fields.get(i).and_then(|f| f.parse::<u64>().ok());
     let planner = integer(5).zip(integer(6)).map(|(line, queued)| Planned { line, queued: queued as u32 });
-    Some(PositionError { left: number(0)?, right: number(1)?, space: fields.get(2)?.parse().ok()?, chains, planner })
+    let peaks = number(7).zip(number(8)).zip(number(9).zip(number(10))).map(
+        |((left_ahead, left_behind), (right_ahead, right_behind))| Peaks {
+            left_ahead,
+            left_behind,
+            right_ahead,
+            right_behind,
+        },
+    );
+    let space = fields.get(2)?.parse().ok()?;
+    Some(PositionError { left: number(0)?, right: number(1)?, space, chains, planner, peaks })
 }
 
 /// Python reads `message[9:-3]` of the line with its `\r\n`, which drops the closing bracket.

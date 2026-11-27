@@ -235,6 +235,13 @@ the feed-forward gain (0 to 1.5, default 0, off; outside that range `error: Inva
 to the position PID's RPM request on the left and right chains (within its ±20), so the chains lag the path less.
 At 0 the motor commands are c77bd97's; c77bd97 and every other build answer `$49` `error: Invalid statement`.
 
+The `peak-error` build (branch `peak-error`, cut from `feed-forward`) adds `peak-error` to the capabilities line and
+four fields after `queued`: `[PE:...,queued,lAhead,lBehind,rAhead,rBehind]`, each chain's largest error since the last
+report, in mm with 2 decimals, both non-negative. Every tick it takes encoder − setpoint along the direction the
+setpoint last moved: ahead is the encoder past the setpoint (overshoot), behind is lag. After a reversal the old
+direction holds until the encoder reaches the setpoint, so lag never reads as ahead. The 200 ms reports miss overshoot
+that comes and goes between them; the peaks do not.
+
 ## Implications
 
 ### A. Current Python backend
@@ -305,7 +312,8 @@ At 0 the motor commands are c77bd97's; c77bd97 and every other build answer `$49
    from_mode=v0.94 from_gap_ms=50`. A job writes `PACING JOB START file_line=N mode=... gap_ms=...` and, at its end,
    a `PACING JOB` line with the segment keys (its first pacing) and `PACING JOB END file_line_end=N mode=... gap_ms=...
    ended_by=...`, then `PE JOB mean_mm=0.412 max_mm=1.3 over_1mm=2 samples=1350 file=...`: max(|lErr|,|rErr|) of
-   each `[PE:]` report whose MPos report before it differed from the one before that (the sled moving). Segments
+   each `[PE:]` report whose MPos report before it differed from the one before that (the sled moving), with
+   `max_ahead_mm=0.61 overshoots=3` before `file=` from a `peak-error` build (D). Segments
    and jobs carry the same numbers as `positionError`. Every word after the upper-case label is a `key=value` pair.
 4. Realtime: `!` resets accounting (immediate `ok`, no ack for the aborted line); `~` immediate `ok`. A Stop that
    finds WebControl in G91, or a G20/G21/G90/G91 unacknowledged, writes units and `G90` after the resync, since
@@ -479,4 +487,9 @@ did, which the stock and holey transcripts pin.
    like every other key, and shown only while the capability is detected; a `$47`/`$48` line is never written to
    any other build. Planner Feed-Forward (`$49`) is the same, gated on the `feed-forward` capability, so a planner
    build without it (c77bd97) never gets `$49`.
+   With `peak-error` listed, the four peaks in `[PE:]` are read (a report of 7 or 11 fields parses either way, and
+   without the capability the peaks are ignored): `PE JOB`'s `max_mm` and `over_1mm` come from the largest peak of
+   each moving report, and it adds `max_ahead_mm` (the largest ahead, from every report in the job, moving or not,
+   so an overshoot after the setpoint stops counts) and `overshoots` (reports over 0.2 mm ahead). The run panel shows
+   "overshoot max X mm" after the error figures.
 9. **Rollback:** Upgrade Holey Firmware accepts a 51.29 that lists `planner`, so it can put 51.292 back.

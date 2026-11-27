@@ -419,7 +419,8 @@ pub struct PacingSegment {
     pub position_error: Option<PositionErrorStats>,
 }
 
-/// The `[PE:]` reports taken while the sled moved: the larger of the two chain errors, in mm.
+/// The `[PE:]` reports taken while the sled moved: the larger of the two chain errors, in mm. From a firmware
+/// listing `peak-error`, the max comes from the peaks between reports, and the overshoot fields are present.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PositionErrorStats {
@@ -428,6 +429,12 @@ pub struct PositionErrorStats {
     pub max_mm: f64,
     #[serde(rename = "over1Mm")]
     pub over_1mm: u64,
+    /// The largest error ahead of the setpoint's travel in any report of the job, moving or not.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_ahead_mm: Option<f64>,
+    /// Reports with more than 0.2 mm ahead.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub overshoots: Option<u64>,
 }
 
 /// The line pacing and its statistics; pushed on every change and every 2 s during a job.

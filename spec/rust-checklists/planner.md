@@ -27,9 +27,10 @@ viewer open, an ssh session on the Pi, and Settings ▸ Display ▸ "Show line p
 
 ## 2. WebControl detects the build
 
-- [ ] The log shows `B05`, then `Firmware Version 51.29`, `Capabilities: planner line-numbers accel-settings
-      status-line feed-forward` (c77bd97 stops before `feed-forward`) and `ok`, then `Sent: M110 N1` and `Sent: N1 G21*27`: every line after it goes as
-      `N<n> ...*<sum>` and is answered `ok N<n>`.
+- [ ] The log shows `B05`, then `Firmware Version 51.29`, `Capabilities:
+      planner line-numbers accel-settings status-line feed-forward peak-error` (0f927ec stops before `peak-error`,
+      c77bd97 before `feed-forward`) and `ok`, then `Sent: M110 N1` and `Sent: N1 G21*27`: every line after it goes
+      as `N<n> ...*<sum>` and is answered `ok N<n>`.
 - [ ] Settings ▸ Maslow Settings lists Planner Acceleration (50), Planner Junction Deviation (0.01) and Planner
       Feed-Forward (0). On 51.292 they are not there, and on c77bd97 Planner Feed-Forward is not.
 - [ ] Jog each way once: the sled moves as before and the log shows no `rs N` lines.
@@ -77,14 +78,20 @@ For each value, in order:
 - [ ] **Play**, and watch the corners and the ends of the rapids: no overshoot past a corner or a stop, no buzz or
       chatter from the motors, no chain bounce.
 - [ ] Note the job time and the `PE JOB` line as in section 3.
-- [ ] Stop raising `$49` if `max_mm` grows, the sled overshoots or the motors buzz, and set back the last good value.
+- [ ] On the `peak-error` build, `PE JOB` also ends with `max_ahead_mm` (the furthest a chain ran past its setpoint)
+      and `overshoots` (reports more than 0.2 mm past), and the pacing stats show "overshoot max X mm". These catch
+      the overshoot that comes and goes between the 200 ms reports, which before showed only in a measured cut. Cut
+      `planner-testcut.nc` at the chosen value as well, and compare its overrun (each fast slot's length less the
+      F100 slot's) with `max_ahead_mm`.
+- [ ] Stop raising `$49` if `max_mm` grows, `max_ahead_mm` passes 0.2, the sled overshoots or the motors buzz, and
+      set back the last good value.
 
-| `$49` | Job time, s | `mean_mm` | `max_mm` | `over_1mm` | `samples` | Overshoot, buzz or bounce |
-| --- | --- | --- | --- | --- | --- | --- |
-| 0 | | | | | | |
-| 0.5 | | | | | | |
-| 0.8 | | | | | | |
-| 1.0 | | | | | | |
+| `$49` | Job time, s | `mean_mm` | `max_mm` | `over_1mm` | `samples` | `max_ahead_mm` | `overshoots` | Overshoot, buzz or bounce |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0 | | | | | | | | |
+| 0.5 | | | | | | | | |
+| 0.8 | | | | | | | | |
+| 1.0 | | | | | | | | |
 
 Leave `$49` at the best value for section 5.
 

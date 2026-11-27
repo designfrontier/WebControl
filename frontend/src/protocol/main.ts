@@ -23,12 +23,19 @@ export const PACING_GAP_MAX_MS = 500;
 export const pacingModeSchema = z.enum(PACING_MODES);
 export type PacingMode = z.infer<typeof pacingModeSchema>;
 
-/** The `[PE:]` reports taken while the sled moved: the larger of the two chain errors, in mm. */
+/**
+ * The `[PE:]` reports taken while the sled moved: the larger of the two chain errors, in mm. From a firmware listing
+ * `peak-error`, the max comes from the peaks between reports, and the overshoot fields are present.
+ */
 export const positionErrorStatsSchema = z.object({
   samples: z.number(),
   meanMm: z.number(),
   maxMm: z.number(),
   over1Mm: z.number(),
+  /** The largest error ahead of the setpoint's travel in any report of the job, moving or not. */
+  maxAheadMm: z.number().optional(),
+  /** Reports with more than 0.2 mm ahead. */
+  overshoots: z.number().optional(),
 });
 export type PositionErrorStats = z.infer<typeof positionErrorStatsSchema>;
 

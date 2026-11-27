@@ -79,6 +79,8 @@ fn segment(ended_by: Option<&str>) -> PacingSegment {
             mean_mm: 0.412,
             max_mm: 1.3,
             over_1mm: 2,
+            max_ahead_mm: Some(0.61),
+            overshoots: Some(3),
         }),
     }
 }

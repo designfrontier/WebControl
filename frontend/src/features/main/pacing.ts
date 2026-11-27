@@ -34,8 +34,9 @@ export const fixed = (value: number | null, digits: number) => (value === null ?
 const lostShort = ({ lost, lostPercent }: PacingSegment) =>
   lostPercent === null ? `Lost ${lost}` : `Lost ${lost} (${fixed(lostPercent, 2)}%)`;
 
-export const positionErrorText = ({ meanMm, maxMm, over1Mm }: PositionErrorStats) =>
-  `Error mean ${meanMm.toFixed(2)} mm, max ${maxMm.toFixed(2)} mm, ${over1Mm} over 1 mm`;
+export const positionErrorText = ({ meanMm, maxMm, over1Mm, maxAheadMm }: PositionErrorStats) =>
+  `Error mean ${meanMm.toFixed(2)} mm, max ${maxMm.toFixed(2)} mm, ${over1Mm} over 1 mm` +
+  (maxAheadMm === undefined ? "" : `, overshoot max ${maxAheadMm.toFixed(2)} mm`);
 
 /** "507 lines/min", "Lost 9 (0.39%)" and the rest, as the run panel shows a segment. */
 export const describe = (segment: PacingSegment) => ({

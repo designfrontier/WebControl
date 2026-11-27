@@ -462,6 +462,40 @@ fn position_errors_count_only_in_a_job_while_the_sled_moves() {
     assert_eq!((stats.samples, stats.mean_mm, stats.max_mm, stats.over_1mm), (2, 0.95, 1.5, 1));
 }
 
+/// Reports at X = 5, 5 (still), 1 and 2, each with the four peaks after the queue length.
+fn peak_job(capabilities: &str) -> (Vec<Effect>, Rig) {
+    let mut rig = Rig::connected();
+    rig.rx(capabilities);
+    rig.machine.load_gcode(&file(&["G1 X1", "G1 X2"]));
+    rig.rx("<Idle,MPos:5.00,0.00,10.00,WPos:0.000,0.000,0.000>");
+    rig.act("startRun");
+    let reports = [(5.0, "0.61,0.00,0.00,0.10"), (1.0, "0.00,1.40,0.15,0.30"), (2.0, "0.05,0.20,0.25,0.00")];
+    reports.into_iter().for_each(|(x, peaks)| {
+        rig.rx(&format!("<Idle,MPos:{x:.2},0.00,10.00,WPos:0.000,0.000,0.000>"));
+        rig.rx(&format!("[PE:0.2,-0.4,127,1650.0,1651.0,0,1,{peaks}]"));
+    });
+    let effects = [rig.rx("ok"), rig.advance(100), rig.rx("ok"), rig.advance(100)].concat();
+    (effects, rig)
+}
+
+#[test]
+fn a_peak_error_build_gives_the_max_from_its_peaks_and_counts_overshoots_moving_or_not() {
+    let (effects, rig) = peak_job("Capabilities: peak-error");
+    let line = console(&effects).into_iter().find(|text| text.starts_with("PE JOB")).expect("logged at job end");
+    assert_eq!(line, "PE JOB mean_mm=0.4 max_mm=1.4 over_1mm=1 samples=2 max_ahead_mm=0.61 overshoots=2 file=none");
+    let stats = rig.machine.snapshot().pacing.0.job.clone().unwrap().position_error.unwrap();
+    assert_eq!((stats.max_mm, stats.max_ahead_mm, stats.overshoots), (1.4, Some(0.61), Some(2)));
+}
+
+#[test]
+fn peaks_from_a_build_not_listing_peak_error_are_ignored() {
+    let (effects, rig) = peak_job("Capabilities: feed-forward");
+    let line = console(&effects).into_iter().find(|text| text.starts_with("PE JOB")).expect("logged at job end");
+    assert_eq!(line, "PE JOB mean_mm=0.4 max_mm=0.4 over_1mm=0 samples=2 file=none");
+    let stats = rig.machine.snapshot().pacing.0.job.clone().unwrap().position_error.unwrap();
+    assert_eq!((stats.max_ahead_mm, stats.overshoots), (None, None));
+}
+
 #[test]
 fn a_job_with_no_moving_reports_logs_none() {
     let mut rig = Rig::connected();

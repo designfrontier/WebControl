@@ -2,7 +2,9 @@ use wc_firmware::boot::{
     board_banner, ends_boot, firmware_build, is_boot_banner, parse_firmware_version, supports_z_limits,
 };
 use wc_firmware::planner::{numbered, renumber, waits_for_moves};
-use wc_firmware::{Accounting, BUFFER_SIZE, Planned, PositionError, Reply, RunMode, Status, classify, split_glued};
+use wc_firmware::{
+    Accounting, BUFFER_SIZE, Peaks, Planned, PositionError, Reply, RunMode, Status, classify, split_glued,
+};
 
 #[test]
 fn every_message_kind_is_told_apart() {
@@ -66,12 +68,20 @@ fn position_error_reports_are_parsed_by_their_field_count() {
             right: -0.2,
             space: 120,
             chains: Some((1650.5, 1651.25)),
-            planner: None
+            planner: None,
+            peaks: None,
         })
     );
     assert_eq!(
         classify("[PE:0.10,-0.20,120]"),
-        Reply::PositionError(PositionError { left: 0.1, right: -0.2, space: 120, chains: None, planner: None })
+        Reply::PositionError(PositionError {
+            left: 0.1,
+            right: -0.2,
+            space: 120,
+            chains: None,
+            planner: None,
+            peaks: None
+        })
     );
 }
 
@@ -172,6 +182,18 @@ fn a_planner_build_numbers_its_acks_and_resends_and_reports_its_line() {
     );
     let Reply::PositionError(report) = classify("[PE:0.10,-0.20,127,1650.5,1651.25,42,3]") else { panic!() };
     assert_eq!(report.planner, Some(Planned { line: 42, queued: 3 }));
+    assert_eq!(report.peaks, None);
+}
+
+#[test]
+fn a_peak_error_build_adds_the_peaks_after_the_queue_length() {
+    let Reply::PositionError(report) = classify("[PE:0.10,-0.20,127,1650.5,1651.25,42,3,0.61,0.05,0.00,0.84]") else {
+        panic!()
+    };
+    assert_eq!(report.planner, Some(Planned { line: 42, queued: 3 }));
+    let peaks = report.peaks.unwrap();
+    assert_eq!(peaks, Peaks { left_ahead: 0.61, left_behind: 0.05, right_ahead: 0.0, right_behind: 0.84 });
+    assert_eq!((peaks.ahead(), peaks.max()), (0.61, 0.84));
 }
 
 #[test]

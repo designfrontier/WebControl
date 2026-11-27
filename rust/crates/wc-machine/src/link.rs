@@ -52,6 +52,7 @@ impl Machine {
         self.controller = Controller::new(now);
         self.planner = false;
         self.feed_forward = false;
+        self.peak_error = false;
         self.controller.boot_deadline = Some(now + BOOT_WAIT);
         self.controller.buffering = self.settings.number("Maslow Settings", "bufferOn") != 0.0;
         self.job.controller_reset();
@@ -147,6 +148,7 @@ impl Machine {
         // Its B05 says again whether it numbers lines; until then it does not.
         self.planner = false;
         self.feed_forward = false;
+        self.peak_error = false;
         self.rewrite_notice = false;
         self.job.controller_reset();
         self.bit = BitHeight::new();
@@ -324,6 +326,7 @@ impl Machine {
                 self.firmware_version = version.unwrap_or(self.firmware_version);
                 self.planner = false;
                 self.feed_forward = false;
+                self.peak_error = false;
                 if let Some(version) = version {
                     self.upgrade_version(version, now, effects);
                 }
@@ -331,6 +334,7 @@ impl Machine {
             Reply::Capabilities(words) => {
                 self.planner = words.iter().any(|word| word == "planner");
                 self.feed_forward = words.iter().any(|word| word == "feed-forward");
+                self.peak_error = words.iter().any(|word| word == "peak-error");
                 effects.push(controller_message(line));
             }
             Reply::Error(_) | Reply::Other(_) => {

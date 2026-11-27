@@ -10,5 +10,5 @@ pub mod planner;
 pub mod settings;
 pub mod upgrade;
 
-pub use classify::{Planned, PositionError, Reply, RunMode, Status, classify, split_glued};
+pub use classify::{Peaks, Planned, PositionError, Reply, RunMode, Status, classify, split_glued};
 pub use flow::{Accounting, BUFFER_SIZE, EMPTY_RING, Sent};

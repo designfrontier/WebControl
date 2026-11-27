@@ -379,6 +379,8 @@ pub struct Machine {
     pub(crate) planner: bool,
     /// The last B05 reply listed the `feed-forward` capability.
     pub(crate) feed_forward: bool,
+    /// The last B05 reply listed `peak-error`: `[PE:]` carries the peaks since the last report.
+    pub(crate) peak_error: bool,
     pub(crate) rewrite_notice: bool,
     pub(crate) board: Option<String>,
     pub(crate) fake_servo: bool,
@@ -465,6 +467,7 @@ impl Machine {
             firmware_version: 0.0,
             planner: false,
             feed_forward: false,
+            peak_error: false,
             rewrite_notice: false,
             board: None,
             fake_servo: false,

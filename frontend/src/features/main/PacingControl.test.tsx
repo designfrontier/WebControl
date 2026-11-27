@@ -78,6 +78,10 @@ describe("pacing helpers", () => {
     expect(describeSegment(errors).detail).toContain(
       "7.1 s recovering · Error mean 0.41 mm, max 1.30 mm, 2 over 1 mm · v0.94 50 ms",
     );
+    const peaks = segment({
+      positionError: { samples: 900, meanMm: 0.412, maxMm: 1.3, over1Mm: 2, maxAheadMm: 0.614, overshoots: 3 },
+    });
+    expect(describeSegment(peaks).detail).toContain("2 over 1 mm, overshoot max 0.61 mm · v0.94");
   });
 
   it("shows the server's reason for a refusal", () => {

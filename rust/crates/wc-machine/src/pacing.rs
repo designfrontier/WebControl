@@ -109,21 +109,31 @@ pub fn stats_shown(settings: &Settings) -> bool {
     matches!(settings.value(SECTION, STATS_KEY), Some(v) if v == 1 || v == true)
 }
 
-/// The larger chain error of each `[PE:]` report taken while the sled moved.
+/// The larger chain error of each `[PE:]` report taken while the sled moved, and the overshoot the peaks show.
 #[derive(Debug, Clone, Copy, Default)]
 struct ErrorTally {
     samples: u64,
     sum_mm: f64,
     max_mm: f64,
     over_1mm: u64,
+    max_ahead_mm: Option<f64>,
+    overshoots: u64,
 }
 
+/// More than this ahead of the setpoint counts as an overshoot.
+const OVERSHOOT_MM: f64 = 0.2;
+
 impl ErrorTally {
-    fn add(&mut self, mm: f64) {
+    fn add(&mut self, mm: f64, max_mm: f64) {
         self.samples += 1;
         self.sum_mm += mm;
-        self.max_mm = self.max_mm.max(mm);
-        self.over_1mm += u64::from(mm > 1.0);
+        self.max_mm = self.max_mm.max(max_mm);
+        self.over_1mm += u64::from(max_mm > 1.0);
+    }
+
+    fn ahead(&mut self, mm: f64) {
+        self.max_ahead_mm = Some(self.max_ahead_mm.unwrap_or(0.0).max(mm));
+        self.overshoots += u64::from(mm > OVERSHOOT_MM);
     }
 
     fn report(self) -> Option<PositionErrorStats> {
@@ -132,14 +142,20 @@ impl ErrorTally {
             mean_mm: round(self.sum_mm / self.samples as f64, 1000.0),
             max_mm: round(self.max_mm, 1000.0),
             over_1mm: self.over_1mm,
+            max_ahead_mm: self.max_ahead_mm.map(|mm| round(mm, 1000.0)),
+            overshoots: self.max_ahead_mm.map(|_| self.overshoots),
         })
     }
 
-    /// `mean_mm=0.412 max_mm=1.3 over_1mm=2 samples=180`, `none` for a mean and max with no samples.
+    /// `mean_mm=0.412 max_mm=1.3 over_1mm=2 samples=180`, `none` for a mean and max with no samples, then
+    /// `max_ahead_mm=0.61 overshoots=3` from a `peak-error` firmware.
     fn fields(self) -> String {
         let (mean, max) =
             self.report().map_or(("none".into(), "none".into()), |r| (r.mean_mm.to_string(), r.max_mm.to_string()));
-        format!("mean_mm={mean} max_mm={max} over_1mm={} samples={}", self.over_1mm, self.samples)
+        let ahead = self
+            .max_ahead_mm
+            .map_or(String::new(), |mm| format!(" max_ahead_mm={} overshoots={}", round(mm, 1000.0), self.overshoots));
+        format!("mean_mm={mean} max_mm={max} over_1mm={} samples={}{ahead}", self.over_1mm, self.samples)
     }
 }
 
@@ -534,11 +550,19 @@ impl Machine {
     }
 
     pub(crate) fn pacing_position_error(&mut self, error: &PositionError) {
-        if !self.stats.in_job || !self.stats.moving {
+        if !self.stats.in_job {
+            return;
+        }
+        let peaks = error.peaks.filter(|_| self.peak_error);
+        if let Some(peaks) = peaks {
+            self.stats.tallies().for_each(|tally| tally.errors.ahead(peaks.ahead()));
+        }
+        if !self.stats.moving {
             return;
         }
         let mm = error.left.abs().max(error.right.abs());
-        self.stats.tallies().for_each(|tally| tally.errors.add(mm));
+        let max_mm = peaks.map_or(mm, |peaks| peaks.max());
+        self.stats.tallies().for_each(|tally| tally.errors.add(mm, max_mm));
     }
 
     /// For a client that missed the pushes.

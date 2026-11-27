@@ -107,6 +107,12 @@
                     },
                     "over1Mm": {
                       "type": "number"
+                    },
+                    "maxAheadMm": {
+                      "type": "number"
+                    },
+                    "overshoots": {
+                      "type": "number"
                     }
                   },
                   "required": [
@@ -236,6 +242,12 @@
                     },
                     "over1Mm": {
                       "type": "number"
+                    },
+                    "maxAheadMm": {
+                      "type": "number"
+                    },
+                    "overshoots": {
+                      "type": "number"
                     }
                   },
                   "required": [
@@ -364,6 +376,12 @@
                     "type": "number"
                   },
                   "over1Mm": {
+                    "type": "number"
+                  },
+                  "maxAheadMm": {
+                    "type": "number"
+                  },
+                  "overshoots": {
                     "type": "number"
                   }
                 },
