@@ -1,7 +1,8 @@
 # CLAUDE.md
 
-WebControl controls a Maslow CNC router: a Rust backend (`rust/`) on a Raspberry Pi serves a React UI (`frontend/`)
-at `/`. The Python backend this grew from was removed; it is in git history up to `220aa0e`.
+WebControl controls a Maslow CNC router: a Rust backend (`rust/`) on a Raspberry Pi (aarch64) or an x86_64 Linux
+laptop serves a React UI (`frontend/`) at `/`. The Python backend this grew from was removed; it is in git history
+up to `220aa0e`.
 
 ## Project structure
 
@@ -9,8 +10,8 @@ at `/`. The Python backend this grew from was removed; it is in git history up t
 
 - `.github/workflows/` — `ci.yml`: the frontend job (format, lint, typecheck, test, build), the holey 51.292 firmware
   build checked against its pin, and three parallel Rust jobs: `rust` (fmt, clippy, the tests under 95% per-crate
-  coverage), `pi` (the deploy and release script tests, the aarch64 cross-build) and `e2e` (Playwright against the
-  binary); `release.yml` builds the install assets for the Pi (aarch64) and Linux laptops (x86_64)
+  coverage), `pi` (the deploy and release script tests, the aarch64 and x86_64 cross-builds) and `e2e` (Playwright
+  against the binary); `release.yml` builds the install assets for the Pi (aarch64) and Linux laptops (x86_64)
   (`rust/scripts/release.sh`) and drafts a GitHub Release for a `v*` tag
 - `contract/` — frozen frontend ↔ backend spec as JSON Schema, generated from `frontend/src/protocol/` (see its
   `README.md`: layout, versioning, plain-WebSocket wire format, known warts)
@@ -43,8 +44,9 @@ at `/`. The Python backend this grew from was removed; it is in git history up t
 ### Key files
 
 - `defaultwebcontrol.json` — every setting with its default and firmware key; embedded by `wc-config`
-- `rust/install-pi.sh` — runs on the Pi: installs `/opt/webcontrol-rs`, the unit and `avrdude`, then starts it
-- `rust/deploy.sh` — `build|install|push|rollback [host]` from the Mac
+- `rust/install-pi.sh` — runs on the Pi or an x86_64 laptop (by `uname -m`): installs `/opt/webcontrol-rs`, the unit
+  and `avrdude`, then starts it
+- `rust/deploy.sh` — `build|install|push|rollback [host]` from the Mac (`WC_ARCH=x86_64` for a laptop)
 - `rust/scripts/coverage.sh`, `rust/scripts/release.sh` (and `release-test.sh`)
 
 ## Frontend
