@@ -14,8 +14,8 @@ concurrency:
 
 jobs:
   assets:
-    name: Install assets (aarch64 and x86_64, pinned 51.292 firmware)
-    # The pinned firmware digest was made on linux/arm64; one hex built here goes into both binaries.
+    name: Install assets (aarch64 and x86_64, pinned 51.292 and 51.30 firmware)
+    # The pinned firmware digests were made on linux/arm64; each hex built here goes into both binaries.
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 45
     outputs:
@@ -49,13 +49,16 @@ jobs:
         working-directory: rust
       - name: Packaging script tests
         run: bash rust/scripts/release-test.sh
-      - name: Holey 51.292 hex from the v51.292 tag, checked against its pin
-        run: bash rust/firmware/docker-build.sh "$RUNNER_TEMP/firmware"
+      - name: Holey 51.292 and planner 51.30 hexes from their tags, checked against their pins
+        run: |
+          bash rust/firmware/docker-build.sh "$RUNNER_TEMP/firmware"
+          bash rust/firmware/docker-build.sh "$RUNNER_TEMP/firmware" 51.30
       - name: Build and package
         id: assets
         run: bash rust/scripts/release.sh "$RUNNER_TEMP/assets"
         env:
           WC_FIRMWARE_HEX: ${{ runner.temp }}/firmware/holey-51.292.hex
+          WC_PLANNER_HEX: ${{ runner.temp }}/firmware/holey-51.30.hex
       - uses: actions/upload-artifact@v7
         with:
           name: webcontrol-rs-${{ steps.assets.outputs.version }}
@@ -88,7 +91,7 @@ jobs:
             gh release upload "$GITHUB_REF_NAME" --clobber -- *
           else
             gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "webcontrol-rs $VERSION" \
-              --notes "Install assets for webcontrol-rs $VERSION: aarch64 for the Pi and x86_64 for a Linux laptop (glibc 2.36+, holey 51.292 embedded). Install: see rust/README.md, Releases." \
+              --notes "Install assets for webcontrol-rs $VERSION: aarch64 for the Pi and x86_64 for a Linux laptop (glibc 2.36+, holey 51.292 and planner 51.30 embedded). Install: see rust/README.md, Releases." \
               -- *
           fi
         env:

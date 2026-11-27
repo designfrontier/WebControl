@@ -10,15 +10,17 @@ failures=0
 
 printf ':00000001FF\n' > "$work/fw.hex"
 (sha256sum "$work/fw.hex" 2> /dev/null || shasum -a 256 "$work/fw.hex") | cut -d' ' -f1 > "$work/fw.sha256"
+printf ':0100000001FE\n:00000001FF\n' > "$work/planner.hex"
+(sha256sum "$work/planner.hex" 2> /dev/null || shasum -a 256 "$work/planner.hex") | cut -d' ' -f1 > "$work/planner.sha256"
 
 binary() { echo "$work/target/$1-unknown-linux-gnu/release/webcontrol-rs"; }
 
-# Stand-ins for each architecture's binary that print the version line they were given and carry the firmware.
+# Stand-ins for each architecture's binary that print the version line they were given and carry both firmware images.
 stub() {
   local arch
   for arch in aarch64 x86_64; do
     mkdir -p "$(dirname "$(binary "$arch")")"
-    printf '#!/bin/sh\n# %s :00000001FF\necho "%s"\n' "$arch" "$1" > "$(binary "$arch")"
+    printf '#!/bin/sh\n# %s :00000001FF :0100000001FE\necho "%s"\n' "$arch" "$1" > "$(binary "$arch")"
     chmod +x "$(binary "$arch")"
   done
 }
@@ -26,7 +28,7 @@ stub() {
 release() {
   env -u GITHUB_REF_TYPE -u GITHUB_REF_NAME -u GITHUB_OUTPUT -u WC_VERSION \
     WC_SKIP_BUILD=1 CARGO_TARGET_DIR="$work/target" WC_FIRMWARE_HEX="$work/fw.hex" WC_FIRMWARE_PIN="$work/fw.sha256" \
-    "$@" bash "$here/release.sh" "$work/out"
+    WC_PLANNER_HEX="$work/planner.hex" WC_PLANNER_PIN="$work/planner.sha256" "$@" bash "$here/release.sh" "$work/out"
 }
 
 check() {
@@ -103,7 +105,7 @@ refuses_a_binary_reporting_another_version() {
 checks_a_binary_it_cannot_run_by_its_version_literal() {
   reset
   stub "webcontrol-rs 1.2.3 (abc1234, contract 1)"
-  printf '\177ELF\0webcontrol-rs 1.2.3 (abc1234\0:00000001FF\n' > "$(binary x86_64)"
+  printf '\177ELF\0webcontrol-rs 1.2.3 (abc1234\0:00000001FF\n:0100000001FE\n' > "$(binary x86_64)"
   chmod 644 "$(binary x86_64)"
   release WC_VERSION=1.2.3 > /dev/null || return 1
   printf '\177ELF\0webcontrol-rs 0.1.0 (abc1234\0:00000001FF\n' > "$(binary x86_64)"
@@ -136,6 +138,31 @@ needs_both_binaries() {
   ! release WC_VERSION=1.2.3 2> /dev/null && [ ! -e "$work/out" ]
 }
 
+refuses_a_binary_without_the_planner_firmware() {
+  local arch
+  for arch in aarch64 x86_64; do
+    reset
+    stub "webcontrol-rs 1.2.3 (abc1234, contract 1)"
+    printf '#!/bin/sh\n# :00000001FF\necho "webcontrol-rs 1.2.3 (abc1234, contract 1)"\n' > "$(binary "$arch")"
+    ! release WC_VERSION=1.2.3 2> "$work/err" && grep -q "$arch.*does not embed $work/planner.hex" "$work/err" &&
+      [ ! -e "$work/out" ] || return 1
+  done
+}
+
+refuses_planner_firmware_off_its_pin() {
+  reset
+  stub "webcontrol-rs 1.2.3 (abc1234, contract 1)"
+  printf ':00000001FE\n' > "$work/other.hex"
+  ! release WC_VERSION=1.2.3 WC_PLANNER_HEX="$work/other.hex" 2> "$work/err" &&
+    grep -q "planner.sha256 pins" "$work/err" && [ ! -e "$work/out/webcontrol-rs-1.2.3-aarch64.tar.gz" ]
+}
+
+refuses_without_the_planner_firmware() {
+  reset
+  stub "webcontrol-rs 1.2.3 (abc1234, contract 1)"
+  ! release WC_VERSION=1.2.3 WC_PLANNER_HEX= 2> "$work/err" && grep -q "WC_PLANNER_HEX must name the 51.30" "$work/err"
+}
+
 archives_files_as_root() {
   reset
   stub "webcontrol-rs 1.2.3 (abc1234, contract 1)"
@@ -158,6 +185,15 @@ the_real_pin_is_the_default() {
     grep -q "$(cat "$repo/rust/firmware/holey-51.292.sha256")" "$work/err"
 }
 
+the_real_planner_pin_is_the_default() {
+  reset
+  stub "webcontrol-rs 1.2.3 (abc1234, contract 1)"
+  ! env -u WC_PLANNER_PIN WC_SKIP_BUILD=1 CARGO_TARGET_DIR="$work/target" WC_FIRMWARE_HEX="$work/fw.hex" \
+    WC_FIRMWARE_PIN="$work/fw.sha256" WC_PLANNER_HEX="$work/planner.hex" WC_VERSION=1.2.3 \
+    bash "$here/release.sh" "$work/out" 2> "$work/err" &&
+    grep -q "$(cat "$repo/rust/firmware/holey-51.30.sha256")" "$work/err"
+}
+
 refuses_a_version_unfit_for_a_file_name() {
   reset
   stub "webcontrol-rs ../x (abc1234, contract 1)"
@@ -175,8 +211,12 @@ check "refuses a firmware hex off its pinned SHA-256" refuses_firmware_off_its_p
 check "refuses to package without the firmware hex" refuses_without_firmware
 check "refuses either binary when it does not embed the firmware" refuses_a_binary_without_the_firmware
 check "refuses to package without both the aarch64 and x86_64 binaries" needs_both_binaries
+check "refuses either binary when it does not embed the planner firmware" refuses_a_binary_without_the_planner_firmware
+check "refuses a planner hex off its pinned SHA-256" refuses_planner_firmware_off_its_pin
+check "refuses to package without the planner hex" refuses_without_the_planner_firmware
 check "archives every file as root, not the build user" archives_files_as_root
 check "checks the hex against rust/firmware/holey-51.292.sha256 by default" the_real_pin_is_the_default
+check "checks the planner hex against rust/firmware/holey-51.30.sha256 by default" the_real_planner_pin_is_the_default
 check "refuses a version that is not fit for a file name" refuses_a_version_unfit_for_a_file_name
 
 if [ "$failures" != 0 ]; then

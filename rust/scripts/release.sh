@@ -3,7 +3,8 @@
 #   rust/scripts/release.sh [out-dir]    (default rust/target/release-assets)
 # writes webcontrol-rs-<version>-<arch>.tar.gz and the bare binary for aarch64 (the Pi) and x86_64, a .sha256 beside
 # each and one SHA256SUMS.
-# WC_FIRMWARE_HEX names the 51.292 hex (required); WC_VERSION overrides the version from the tag or git describe.
+# WC_FIRMWARE_HEX and WC_PLANNER_HEX name the 51.292 and 51.30 hexes (both required); WC_VERSION overrides the
+# version from the tag or git describe.
 set -euo pipefail
 
 rust="$(cd "$(dirname "$0")/.." && pwd)"
@@ -11,6 +12,7 @@ repo="$(dirname "$rust")"
 arches=(aarch64 x86_64)
 targets="${CARGO_TARGET_DIR:-$rust/target}"
 pin="${WC_FIRMWARE_PIN:-$rust/firmware/holey-51.292.sha256}"
+planner_pin="${WC_PLANNER_PIN:-$rust/firmware/holey-51.30.sha256}"
 out="${1:-$rust/target/release-assets}"
 
 fail() {
@@ -26,14 +28,15 @@ release_version() {
   git -C "$repo" describe --tags --match 'v[0-9]*' --always --dirty | sed 's/^v//'
 }
 
+# check_firmware <variable> <version> <pin>
 check_firmware() {
-  local hex="${WC_FIRMWARE_HEX:-}"
+  local hex="${!1:-}"
   [ -n "$hex" ] && [ -f "$hex" ] ||
-    fail "WC_FIRMWARE_HEX must name the 51.292 hex (bash rust/firmware/docker-build.sh <dir> builds it)"
+    fail "$1 must name the $2 hex (bash rust/firmware/docker-build.sh <dir> $2 builds it)"
   local actual pinned
   actual="$(sha256 "$hex")"
-  pinned="$(tr -d '[:space:]' < "$pin")"
-  [ "$actual" = "$pinned" ] || fail "$hex has SHA-256 $actual, but $pin pins $pinned"
+  pinned="$(tr -d '[:space:]' < "$3")"
+  [ "$actual" = "$pinned" ] || fail "$hex has SHA-256 $actual, but $3 pins $pinned"
 }
 
 build() {
@@ -51,8 +54,10 @@ build() {
 binary_for() { echo "$targets/$1-unknown-linux-gnu/release/webcontrol-rs"; }
 
 check_firmware_embedded() {
-  local binary="$1"
-  LC_ALL=C grep -aqF "$(head -n 1 "$WC_FIRMWARE_HEX")" "$binary" || fail "$binary does not embed $WC_FIRMWARE_HEX"
+  local binary="$1" hex
+  for hex in "$WC_FIRMWARE_HEX" "$WC_PLANNER_HEX"; do
+    LC_ALL=C grep -aqF "$(head -n 1 "$hex")" "$binary" || fail "$binary does not embed $hex"
+  done
 }
 
 # Runs the binary where it can (its own architecture); elsewhere looks for the version literal it carries.
@@ -85,7 +90,8 @@ package() {
 
 version="$(release_version)"
 [[ "$version" =~ ^[0-9A-Za-z][0-9A-Za-z.+_-]*$ ]] || fail "\"$version\" is not a release version"
-check_firmware
+check_firmware WC_FIRMWARE_HEX 51.292 "$pin"
+check_firmware WC_PLANNER_HEX 51.30 "$planner_pin"
 build
 for arch in "${arches[@]}"; do
   check_version "$(binary_for "$arch")"

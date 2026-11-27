@@ -14,18 +14,19 @@ binary="${WC_BINARY:-${CARGO_TARGET_DIR:-$rust/target}/$target/release/webcontro
 command="${1:-}"
 host="${2:-pi@maslow.local}"
 
-# The 51.292 image the upgrade flashes, built from its tag in Docker unless WC_FIRMWARE_HEX names one.
+# The 51.292 and 51.30 images the upgrade flashes, built from their tags in Docker unless WC_FIRMWARE_HEX names one.
 firmware() {
   [ -n "${WC_FIRMWARE_HEX:-}" ] && return 0
-  local out="$rust/target/firmware"
-  if [ ! -f "$out/holey-51.292.hex" ]; then
+  local out="$rust/target/firmware" version
+  for version in 51.292 51.30; do
+    [ -f "$out/holey-$version.hex" ] && continue
     if ! command -v docker > /dev/null; then
-      echo "no docker: building without the 51.292 image, so the upgrade wizard will refuse" >&2
+      echo "no docker: building without the firmware images, so the upgrade wizard will refuse" >&2
       return 0
     fi
-    bash "$rust/firmware/docker-build.sh" "$out"
-  fi
-  export WC_FIRMWARE_HEX="$out/holey-51.292.hex"
+    bash "$rust/firmware/docker-build.sh" "$out" "$version"
+  done
+  export WC_FIRMWARE_HEX="$out/holey-51.292.hex" WC_PLANNER_HEX="$out/holey-51.30.hex"
 }
 
 build() {

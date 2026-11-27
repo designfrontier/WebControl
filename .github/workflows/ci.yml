@@ -35,17 +35,20 @@ jobs:
       - run: npm run build
 
   firmware:
-    name: Holey 51.292 hex from the v51.292 tag, checked against its pin
+    name: Holey 51.292 and planner 51.30 hexes from their tags, checked against their pins
     # The compiler's output differs between build hosts, and the pinned digest was made on linux/arm64.
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - run: bash rust/firmware/docker-build.sh "$RUNNER_TEMP/firmware"
+      - run: bash rust/firmware/docker-build.sh "$RUNNER_TEMP/firmware" 51.30
       - uses: actions/upload-artifact@v7
         with:
-          name: holey-51.292-hex
-          path: ${{ runner.temp }}/firmware/holey-51.292.hex
+          name: firmware-hex
+          path: |
+            ${{ runner.temp }}/firmware/holey-51.292.hex
+            ${{ runner.temp }}/firmware/holey-51.30.hex
           retention-days: 14
 
   rust:
@@ -116,16 +119,18 @@ jobs:
           tool: cargo-zigbuild
       - uses: actions/download-artifact@v8
         with:
-          name: holey-51.292-hex
+          name: firmware-hex
           path: ${{ runner.temp }}/firmware
-      - name: Cross-build for the Pi (aarch64, glibc 2.36), with the pinned firmware embedded
+      - name: Cross-build for the Pi (aarch64, glibc 2.36), with both pinned firmware images embedded
         run: cargo zigbuild --release --target aarch64-unknown-linux-gnu.2.36 -p wc-server
         env:
           WC_FIRMWARE_HEX: ${{ runner.temp }}/firmware/holey-51.292.hex
-      - name: Cross-build for x86_64 Linux laptops (glibc 2.36), with the pinned firmware embedded
+          WC_PLANNER_HEX: ${{ runner.temp }}/firmware/holey-51.30.hex
+      - name: Cross-build for x86_64 Linux laptops (glibc 2.36), with both pinned firmware images embedded
         run: cargo zigbuild --release --target x86_64-unknown-linux-gnu.2.36 -p wc-server
         env:
           WC_FIRMWARE_HEX: ${{ runner.temp }}/firmware/holey-51.292.hex
+          WC_PLANNER_HEX: ${{ runner.temp }}/firmware/holey-51.30.hex
       - uses: actions/upload-artifact@v7
         with:
           name: webcontrol-rs-aarch64
