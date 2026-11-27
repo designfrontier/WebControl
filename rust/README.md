@@ -74,7 +74,7 @@ does, outside a job). On a disk that also has an older WebControl's `webcontrol.
 only one holds the port, and `wc-switch rust|python|status` picks the one that runs and boots (`python` means
 `webcontrol.service`). `install-pi.sh` also adds `/etc/sudoers.d/webcontrol-rs`, which lets the
 service run `systemctl poweroff` (the UI's Turn Off Raspberry Pi) and nothing else. The serial log is
-`~/.WebControl/webcontrol-rs.log` (rotated at 5 MB). The hardware checklists for validating a release are in
+`~/.WebControl/webcontrol-rs.log` (rotated at 100 MB to `webcontrol-rs.<date-time>.log`, kept 30 days). The hardware checklists for validating a release are in
 `spec/rust-checklists/`, grouped by feature. The firmware upgrade (Actions → Upgrade holey firmware to 51.292…) runs
 `avrdude`, which `install-pi.sh` installs, and keeps each backup in `~/.WebControl/firmware-backups/<time>/`;
 `firmware-upgrade.md` there walks through the upgrade, the self-test and a rollback.

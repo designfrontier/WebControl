@@ -86,7 +86,12 @@ pub fn backup(home: &Path) -> zip::result::ZipResult<PathBuf> {
 /// `downloadDiagnostics`: the settings and the logs, zipped into `~/.WebControl`.
 pub fn diagnostics(dir: &Path) -> zip::result::ZipResult<PathBuf> {
     let target = dir.join(format!("wc_diagnostics_{}.zip", now_stamp()));
-    let present: Vec<PathBuf> = DIAGNOSTICS.iter().map(PathBuf::from).filter(|name| dir.join(name).is_file()).collect();
+    let newest_rotated = crate::host::rotated_logs(&dir.join(crate::host::LOG_FILE)).pop();
+    let newest_rotated = newest_rotated
+        .and_then(|file| file.file_name().map(PathBuf::from))
+        .filter(|name| !DIAGNOSTICS.iter().any(|listed| name.as_os_str() == *listed));
+    let present: Vec<PathBuf> =
+        DIAGNOSTICS.iter().map(PathBuf::from).chain(newest_rotated).filter(|name| dir.join(name).is_file()).collect();
     zip_files(&target, dir, &present)?;
     keep_newest(dir, "wc_diagnostics_", ".zip", KEEP_ARCHIVES);
     Ok(target)
