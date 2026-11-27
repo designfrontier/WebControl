@@ -91,9 +91,9 @@ The x86_64 release runs on a Debian or Ubuntu laptop with glibc 2.36 or newer (D
 with the Maslow on a USB port. Install it as yourself, not root, from the directory holding the tarball:
 
 ```sh
-sha256sum -c webcontrol-rs-0.2.0-x86_64.tar.gz.sha256
-tar xzf webcontrol-rs-0.2.0-x86_64.tar.gz
-bash webcontrol-rs-0.2.0-x86_64/install-pi.sh webcontrol-rs-0.2.0-x86_64
+sha256sum -c webcontrol-rs-0.10.0-x86_64.tar.gz.sha256
+tar xzf webcontrol-rs-0.10.0-x86_64.tar.gz
+bash webcontrol-rs-0.10.0-x86_64/install-pi.sh webcontrol-rs-0.10.0-x86_64
 ```
 
 It is the Pi's install with these differences: the service runs as you (with the `dialout` group, so it can open
@@ -120,7 +120,7 @@ The version is the tag without its `v`; otherwise `git describe --tags --match '
 
 To cut a release:
 
-1. On a green `master`: `git tag -a v0.2.0 -m "webcontrol-rs 0.2.0"`, then `git push origin v0.2.0`.
+1. On a green `master`: `git tag -a v0.10.0 -m "webcontrol-rs 0.10.0"`, then `git push origin v0.10.0`.
 2. The Release workflow attaches the assets to a **draft** GitHub Release named after the tag. Rerunning it
    replaces a draft's assets and refuses a published release.
 3. Install the draft's tarball on the Pi (below), run the checklists in `spec/rust-checklists/` that the release
@@ -133,13 +133,13 @@ On the Mac, `WC_FIRMWARE_HEX=<dir>/holey-51.292.hex scripts/release.sh [out-dir]
 Installing a release on the Pi, from the directory holding the tarball and its `.sha256`:
 
 ```sh
-sha256sum -c webcontrol-rs-0.2.0-aarch64.tar.gz.sha256
-tar xzf webcontrol-rs-0.2.0-aarch64.tar.gz
-bash webcontrol-rs-0.2.0-aarch64/install-pi.sh webcontrol-rs-0.2.0-aarch64
+sha256sum -c webcontrol-rs-0.10.0-aarch64.tar.gz.sha256
+tar xzf webcontrol-rs-0.10.0-aarch64.tar.gz
+bash webcontrol-rs-0.10.0-aarch64/install-pi.sh webcontrol-rs-0.10.0-aarch64
 ```
 
 To update from the Mac with a release's binary instead of a local build:
-`WC_SKIP_BUILD=1 WC_BINARY=webcontrol-rs-0.2.0-aarch64 ./deploy.sh push`.
+`WC_SKIP_BUILD=1 WC_BINARY=webcontrol-rs-0.10.0-aarch64 ./deploy.sh push`.
 
 ## Updating on the Pi
 
@@ -158,7 +158,7 @@ updating. Versions compare as `MAJOR.MINOR.PATCH`, each field as a number (a lea
 such as `0.4.0-rc.1` comes before `0.4.0`, and a `git describe` build such as `0.4.0-3-gabc1234` after it. If the
 installed version is newer than the latest release (a build pushed from the Mac, or a release installed with
 `--version`), it changes nothing and says so. An installed version it cannot parse is updated whenever it differs,
-with a warning. `--version v0.2.0` installs that tag instead, older or not (with a warning when it is older);
+with a warning. `--version v0.10.0` installs that tag instead, older or not (with a warning when it is older);
 `--force` reinstalls the installed version but never downgrades; and
 `--repo owner/name` (or `WEBCONTROL_REPO`) reads another fork's releases (default `designfrontier/WebControl`).
 `GITHUB_TOKEN`, if set, is sent to the API (on curl's stdin, not its arguments) to avoid its rate limit.
