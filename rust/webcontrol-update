@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Updates webcontrol-rs on the Pi from a published GitHub Release, keeping one backup and rolling back on failure.
+# Updates webcontrol-rs on the Pi or an x86_64 Linux laptop from a published GitHub Release, keeping one backup and
+# rolling back on failure.
 # Run it as the user the service runs as (pi), which asks for the sudo password once, or as root from
 # webcontrol-update@.service, which the UI starts. See usage() or --help.
 set -euo pipefail
@@ -232,10 +233,14 @@ version_order() {
   case "$order" in -1) echo older ;; 0) echo same ;; *) echo newer ;; esac
 }
 
+# Sets ARCH, which names the release asset to install.
 preflight() {
-  local arch tool
-  arch="$(uname -m)"
-  [ "$arch" = aarch64 ] || fail "webcontrol-rs is built for 64-bit ARM (aarch64); this machine is $arch."
+  local tool
+  ARCH="$(uname -m)"
+  case "$ARCH" in
+    aarch64 | x86_64) ;;
+    *) fail "webcontrol-rs is built for aarch64 (the Pi) and x86_64 Linux; this machine is $ARCH." ;;
+  esac
   for tool in curl sha256sum tar; do
     command -v "$tool" > /dev/null || fail "$tool is needed: sudo apt-get install $tool"
   done
@@ -314,7 +319,7 @@ asset_url() {
 
 # Leaves the checked release unpacked in $STAGE.
 download_and_check() {
-  local name="webcontrol-rs-$VERSION-aarch64" url sums want got listing file
+  local name="webcontrol-rs-$VERSION-$ARCH" url sums want got listing file
   phase downloading
   for file in "$name.tar.gz" SHA256SUMS; do
     url="$(asset_url "$file")"

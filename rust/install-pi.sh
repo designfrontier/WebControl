@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Runs on the Pi: installs webcontrol-rs, enables it and starts it unless it is already running.
+# Runs on the Pi (aarch64) or an x86_64 Linux laptop: installs webcontrol-rs, enables it and starts it unless it is
+# already running.
 #   bash install-pi.sh <dir with webcontrol-rs, the units, the drop-in, wc-switch, webcontrol-update and the sudoers rule>
 # As root (webcontrol-update@update.service runs it) it calls nothing through sudo.
 # A running webcontrol.service (an older WebControl on the same disk) keeps the port; switch with `wc-switch rust`.
@@ -15,10 +16,18 @@ user="${WC_USER:-${SUDO_USER:-$(id -un)}}"
 opt="$root/opt/webcontrol-rs"
 units="$root/etc/systemd/system"
 
+arch="$(uname -m)"
+case "$arch" in
+  aarch64 | x86_64) ;;
+  *) echo "webcontrol-rs is built for aarch64 (the Pi) and x86_64 Linux; this is $arch" >&2; exit 1 ;;
+esac
 if [ -z "$root" ]; then
-  [ "$(uname -m)" = aarch64 ] || { echo "webcontrol-rs is built for 64-bit ARM; this is $(uname -m)" >&2; exit 1; }
-  "$src/webcontrol-rs" --version > /dev/null || { echo "webcontrol-rs does not run here (glibc 2.36+ needed)" >&2; exit 1; }
+  "$src/webcontrol-rs" --version > /dev/null ||
+    { echo "webcontrol-rs does not run here (the $arch release and glibc 2.36+ needed)" >&2; exit 1; }
 fi
+# Only the Pi powers off from the UI; a laptop opens the page on itself.
+pi_only="$([ "$arch" = aarch64 ] || echo /poweroff/d)"
+address="$([ "$arch" = aarch64 ] && echo "$(hostname).local" || echo localhost)"
 
 ${SUDO[@]+"${SUDO[@]}"} install -d "$opt" "$units/webcontrol.service.d" "$root/usr/local/bin" "$root/etc/sudoers.d"
 if [ -f "$opt/webcontrol-rs" ]; then ${SUDO[@]+"${SUDO[@]}"} mv "$opt/webcontrol-rs" "$opt/webcontrol-rs.prev"; fi
@@ -30,7 +39,7 @@ ${SUDO[@]+"${SUDO[@]}"} install -m 755 "$src/wc-switch" "$root/usr/local/bin/wc-
 ${SUDO[@]+"${SUDO[@]}"} install -m 755 "$src/webcontrol-update" "$root/usr/local/bin/webcontrol-update"
 # Power-off and updates from the UI; a sudoers file that fails visudo would lock sudo out, so it is checked first.
 rule="$(mktemp)"
-sed "s/^pi /$user /" "$src/webcontrol-rs.sudoers" > "$rule"
+sed -e "s/^pi /$user /" ${pi_only:+-e "$pi_only"} "$src/webcontrol-rs.sudoers" > "$rule"
 # Through sudo: visudo is in /usr/sbin, which is not on pi's PATH.
 ${SUDO[@]+"${SUDO[@]}"} visudo -cqf "$rule" || { echo "the sudoers rule does not parse" >&2; exit 1; }
 ${SUDO[@]+"${SUDO[@]}"} install -m 440 "$rule" "$root/etc/sudoers.d/webcontrol-rs"
@@ -52,6 +61,6 @@ if "${SYSTEMCTL[@]}" is-active --quiet webcontrol-rs; then
   echo "  sudo systemctl restart webcontrol-rs"
 else
   "${SYSTEMCTL[@]}" enable --now webcontrol-rs
-  echo "webcontrol-rs is running and starts at boot: http://$(hostname).local:5000/"
+  echo "webcontrol-rs is running and starts at boot: http://$address:5000/"
 fi
 echo "Later updates: Help ▸ Update in the UI, or webcontrol-update here (from the latest published GitHub Release)"

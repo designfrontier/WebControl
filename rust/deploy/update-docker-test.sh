@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# Runs webcontrol-update for real in an arm64 Debian container with systemd, against release.sh's tarballs served by
-# a fake GitHub API: install, update, update over a backup, --status, no downgrade, --rollback, and a failed update,
-# then the same from the UI over HTTP: POST /api/system/updates/install and /rollback, through the unit and sudoers.
+# Runs webcontrol-update for real in an arm64 (ARCH=x86_64: amd64) Debian container with systemd, against
+# release.sh's tarballs served by a fake GitHub API: install, update, update over a backup, --status, no downgrade,
+# --rollback, and a failed update, then the same from the UI over HTTP: POST /api/system/updates/install and /rollback, through the unit and sudoers.
 # shellcheck disable=SC2016 # Single-quoted commands expand inside the container.
 set -euo pipefail
 
 usage() {
   cat >&2 <<'EOF'
 usage: WC_FIRMWARE_HEX=<hex> rust/deploy/update-docker-test.sh 0.9.0=<binary> 0.9.1=<binary> 0.9.2=<binary>
-Each binary is an aarch64 webcontrol-rs built with that WC_VERSION. KEEP=1 leaves the container running.
+Each binary is an aarch64 webcontrol-rs (x86_64 with ARCH=x86_64) built with that WC_VERSION.
+KEEP=1 leaves the container running.
 EOF
   exit 2
 }
@@ -16,6 +17,8 @@ EOF
 here="$(cd "$(dirname "$0")" && pwd)"
 rust="$(dirname "$here")"
 distro="${DEBIAN:-trixie}"
+arch="${ARCH:-aarch64}"
+platform="linux/$([ "$arch" = x86_64 ] && echo amd64 || echo arm64)"
 name="webcontrol-update-test-$distro"
 work="$(mktemp -d)"
 failures=0
@@ -70,8 +73,13 @@ finished_run() {
   echo null
 }
 
+# release.sh packages both architectures; only $arch's tarball is installed, so the one binary stands in for both.
 package() {
-  WC_SKIP_BUILD=1 WC_BINARY="$2" WC_VERSION="$1" bash "$rust/scripts/release.sh" "$work/gh/dl/v$1" > /dev/null
+  local target="$work/target/$1" a
+  for a in aarch64 x86_64; do
+    mkdir -p "$target/$a-unknown-linux-gnu/release" && cp "$2" "$target/$a-unknown-linux-gnu/release/webcontrol-rs"
+  done
+  WC_SKIP_BUILD=1 CARGO_TARGET_DIR="$target" WC_VERSION="$1" bash "$rust/scripts/release.sh" "$work/gh/dl/v$1" > /dev/null
 }
 
 # publish <version>: the release JSON GitHub's API would give for it.
@@ -81,8 +89,8 @@ publish() {
   cat > "$api/tags/v$v" <<EOF
 {"tag_name": "v$v", "name": "webcontrol-rs $v", "draft": false, "body": "Release $v",
  "html_url": "https://github.com/designfrontier/WebControl/releases/tag/v$v", "assets": [
-  {"name": "webcontrol-rs-$v-aarch64.tar.gz",
-   "browser_download_url": "http://localhost:8080/dl/v$v/webcontrol-rs-$v-aarch64.tar.gz"},
+  {"name": "webcontrol-rs-$v-$arch.tar.gz",
+   "browser_download_url": "http://localhost:8080/dl/v$v/webcontrol-rs-$v-$arch.tar.gz"},
   {"name": "SHA256SUMS", "browser_download_url": "http://localhost:8080/dl/v$v/SHA256SUMS"}]}
 EOF
   cp "$api/tags/v$v" "$api/latest"
@@ -94,10 +102,10 @@ package "$v0" "$b0"
 package "$v1" "$b1"
 package "$v2" "$b2"
 
-say "Starting Debian $distro arm64 with systemd"
-docker build -q --platform linux/arm64 --build-arg "DEBIAN=$distro" -t "$name" "$here/pi-image" > /dev/null
+say "Starting Debian $distro $platform with systemd"
+docker build -q --platform "$platform" --build-arg "DEBIAN=$distro" -t "$name" "$here/pi-image" > /dev/null
 docker rm -f "$name" > /dev/null 2>&1 || true
-docker run -d --platform linux/arm64 --name "$name" --privileged --cgroupns=host \
+docker run -d --platform "$platform" --name "$name" --privileged --cgroupns=host \
   -v /sys/fs/cgroup:/sys/fs/cgroup:rw --tmpfs /run --tmpfs /run/lock "$name" > /dev/null
 docker exec "$name" systemctl is-system-running --wait > /dev/null || true
 docker exec "$name" bash -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq avrdude > /dev/null'
@@ -105,12 +113,12 @@ docker exec "$name" bash -c 'rm /etc/sudoers.d/010_pi-nopasswd && echo pi:raspbe
   echo "Defaults:pi timestamp_type=global" > /etc/sudoers.d/000_test && chmod 440 /etc/sudoers.d/000_test'
 docker exec "$name" mkdir -p /srv/gh
 docker exec "$name" systemd-run --unit fake-github python3 -m http.server 8080 --bind 127.0.0.1 --directory /srv/gh
-docker cp "$work/gh/dl/v$v0/webcontrol-rs-$v0-aarch64.tar.gz" "$name:/home/pi/"
-docker exec "$name" chown pi:pi "/home/pi/webcontrol-rs-$v0-aarch64.tar.gz"
+docker cp "$work/gh/dl/v$v0/webcontrol-rs-$v0-$arch.tar.gz" "$name:/home/pi/"
+docker exec "$name" chown pi:pi "/home/pi/webcontrol-rs-$v0-$arch.tar.gz"
 
 say "Installing $v0 from its tarball, as the README says"
 sudo_once
-as_pi "tar xzf webcontrol-rs-$v0-aarch64.tar.gz && bash webcontrol-rs-$v0-aarch64/install-pi.sh webcontrol-rs-$v0-aarch64"
+as_pi "tar xzf webcontrol-rs-$v0-$arch.tar.gz && bash webcontrol-rs-$v0-$arch/install-pi.sh webcontrol-rs-$v0-$arch"
 docker exec "$name" bash -c 'mkdir -p /etc/systemd/system/webcontrol-rs.service.d &&
   printf "[Service]\nEnvironment=WC_GITHUB_API=http://localhost:8080\n" > /etc/systemd/system/webcontrol-rs.service.d/github.conf &&
   systemctl daemon-reload'
@@ -168,11 +176,11 @@ expect "the version /api/state reports" "$(answering)" "$v1"
 manifest | grep -qx "version=$v1" || fail "--rollback did not keep the backup"
 
 say "A $v2 whose unit cannot start: the update rolls back to $v1 by itself"
-as_pi "mkdir -p bad && tar -C bad -xzf /srv/gh/dl/v$v2/webcontrol-rs-$v2-aarch64.tar.gz &&
-  sed -i 's|--port 5000|--port 5000 --no-such-flag|' bad/webcontrol-rs-$v2-aarch64/webcontrol-rs.service &&
-  tar -C bad -czf bad.tar.gz webcontrol-rs-$v2-aarch64 && sha256sum bad.tar.gz | cut -d' ' -f1"
-docker exec "$name" bash -c "cp /home/pi/bad.tar.gz /srv/gh/dl/v$v2/webcontrol-rs-$v2-aarch64.tar.gz &&
-  cd /srv/gh/dl/v$v2 && sha256sum webcontrol-rs-$v2-aarch64.tar.gz > SHA256SUMS"
+as_pi "mkdir -p bad && tar -C bad -xzf /srv/gh/dl/v$v2/webcontrol-rs-$v2-$arch.tar.gz &&
+  sed -i 's|--port 5000|--port 5000 --no-such-flag|' bad/webcontrol-rs-$v2-$arch/webcontrol-rs.service &&
+  tar -C bad -czf bad.tar.gz webcontrol-rs-$v2-$arch && sha256sum bad.tar.gz | cut -d' ' -f1"
+docker exec "$name" bash -c "cp /home/pi/bad.tar.gz /srv/gh/dl/v$v2/webcontrol-rs-$v2-$arch.tar.gz &&
+  cd /srv/gh/dl/v$v2 && sha256sum webcontrol-rs-$v2-$arch.tar.gz > SHA256SUMS"
 if WAIT=20 updater | tee "$work/out"; then fail "a broken update reported success"; fi
 grep -q "ROLLED BACK: webcontrol-rs $v1 is running again" "$work/out" || fail "no automatic rollback"
 expect "the installed version" "$(installed)" "$v1"
@@ -226,8 +234,8 @@ expect "webcontrol.json's owner and type" "$(docker exec "$name" stat -c '%U %F'
   "pi regular file"
 
 say "From the UI: a $v2 that cannot start rolls back by itself, and the page is told"
-docker exec "$name" bash -c "cp /home/pi/bad.tar.gz /srv/gh/dl/v$v2/webcontrol-rs-$v2-aarch64.tar.gz &&
-  cd /srv/gh/dl/v$v2 && sha256sum webcontrol-rs-$v2-aarch64.tar.gz > SHA256SUMS"
+docker exec "$name" bash -c "cp /home/pi/bad.tar.gz /srv/gh/dl/v$v2/webcontrol-rs-$v2-$arch.tar.gz &&
+  cd /srv/gh/dl/v$v2 && sha256sum webcontrol-rs-$v2-$arch.tar.gz > SHA256SUMS"
 expect "the install answer" "$(post install)" 202
 run="$(finished_run)"
 expect "the run's action and result" "$(jq -r '"\(.action) \(.result)"' <<< "$run")" "update rolledBack"
@@ -241,4 +249,4 @@ if [ "$failures" != 0 ]; then
   echo "$failures failed"
   exit 1
 fi
-echo "webcontrol-update passed in Debian $distro arm64 with systemd"
+echo "webcontrol-update passed in Debian $distro $platform with systemd"

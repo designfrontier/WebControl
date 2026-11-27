@@ -1,8 +1,8 @@
 # WebControl
 
 A browser-based controller for the [Maslow CNC](https://www.maslowcnc.com/) router. A Rust backend (`webcontrol-rs`)
-runs on a Raspberry Pi beside the machine, talks to the Maslow's Arduino over USB, and serves a React UI to any
-browser on the network.
+runs on a Raspberry Pi (or a Linux laptop) beside the machine, talks to the Maslow's Arduino over USB, and serves a
+React UI to any browser on the network.
 
 It grew out of [WebControl](https://github.com/WebControlCNC/WebControl), the Python/Flask controller by madgrizzle,
 John Boiles, Tinker (gb0101010101) and [the other contributors](https://github.com/WebControlCNC/WebControl/graphs/contributors),
@@ -25,12 +25,13 @@ git history.
   settings, and rolls back to the backup if the new firmware does not answer.
 - **The job lock:** while a job is running or paused, the settings, imports, unit switches and custom G-code are
   refused, so a cut never meets a changed machine or a stray line.
-- In-app help, logs, backup and restore, diagnostics, GPIO buttons and LEDs on the Pi's header, and power-off.
+- In-app help, logs, backup and restore, diagnostics, and on the Pi its GPIO buttons and LEDs and power-off.
 
 ## Supported hardware and firmware
 
 - **Raspberry Pi 3B or newer**, running **Raspberry Pi OS Lite (64-bit)**. Trixie is recommended; bookworm works.
   The binary needs a 64-bit ARM system with glibc 2.36 or newer, so 32-bit images and Buster do not work.
+- **Or an x86_64 Linux laptop or desktop** with glibc 2.36 or newer (Debian 12, Ubuntu 23.04 or later).
 - **Maslow controller with holey firmware 51.27**, the firmware WebControl v0.94 shipped. From there the upgrade wizard
   moves it to **holey 51.292**. Install this WebControl before flashing 51.292, and flash it from WebControl: the
   flash resets the controller's EEPROM, and WebControl then writes your settings back instead of adopting 51.292's
@@ -38,7 +39,16 @@ git history.
 - The upgrade wizard handles holey firmware only, not stock or custom images. The camera and optical calibration are
   not supported.
 
-## Install on a Pi
+## Install
+
+`uname -m` says which build you need: `aarch64` is the Raspberry Pi build, `x86_64` the Linux laptop or desktop build.
+Each [release](https://github.com/designfrontier/WebControl/releases) has `webcontrol-rs-<version>-<arch>.tar.gz` for
+both (from the first release after 0.9.0 on), a `.sha256` beside each, and one `SHA256SUMS`. Below, replace `0.10.0`
+with the release you want. The service runs as the installing user and keeps its settings in `~/.WebControl`, the
+same layout v0.94 used; its serial log is `~/.WebControl/webcontrol-rs.log` and the service log
+`journalctl -u webcontrol-rs`.
+
+### Raspberry Pi (aarch64)
 
 [spec/INSTALL-PI.md](spec/INSTALL-PI.md) is the step-by-step guide: a microSD card or SSD beside an existing install,
 copying an existing `~/.WebControl`, checking the result, and rolling back by swapping the boot disk. In short:
@@ -48,36 +58,57 @@ copying an existing `~/.WebControl`, checking the result, and rolling back by sw
    Older Imager versions cannot set these on a trixie image.
 2. Boot the Pi and copy any existing `~/.WebControl` to it (settings, G-code, boards). Without one, WebControl starts
    from the defaults.
-3. Install WebControl, either way:
-   - **From a release.** Download `webcontrol-rs-<version>-aarch64.tar.gz` and its `.sha256` from
-     [Releases](https://github.com/designfrontier/WebControl/releases) (or from a Release workflow run's artifact in
-     Actions), copy them to the Pi, and on the Pi:
+3. On the Pi, as `pi`:
 
-     ```sh
-     sha256sum -c webcontrol-rs-<version>-aarch64.tar.gz.sha256
-     tar xzf webcontrol-rs-<version>-aarch64.tar.gz
-     bash webcontrol-rs-<version>-aarch64/install-pi.sh webcontrol-rs-<version>-aarch64
-     ```
+   ```sh
+   v=0.10.0 base=https://github.com/designfrontier/WebControl/releases/download/v$v
+   curl -fL -O "$base/webcontrol-rs-$v-aarch64.tar.gz" -O "$base/SHA256SUMS"
+   sha256sum -c --ignore-missing SHA256SUMS
+   tar xzf "webcontrol-rs-$v-aarch64.tar.gz"
+   bash "webcontrol-rs-$v-aarch64/install-pi.sh" "webcontrol-rs-$v-aarch64"
+   ```
 
-   - **From a Mac with this repository**, which builds and copies everything over SSH (prerequisites under
-     Development):
-
-     ```sh
-     rust/deploy.sh install pi@maslow.local
-     ```
-
-   `install-pi.sh` puts the binary in `/opt/webcontrol-rs`, installs `avrdude` and the `webcontrol-rs` systemd service,
-   and starts it.
+   Or, from a Mac with this repository, which builds and copies everything over SSH (prerequisites under
+   Development): `rust/deploy.sh install pi@maslow.local`.
 4. Open `http://maslow.local:5000/`.
 
-The service runs as the installing user and keeps its settings in `~/.WebControl`, the same layout v0.94 used. Its
-serial log is `~/.WebControl/webcontrol-rs.log`; the service log is `journalctl -u webcontrol-rs`.
+`install-pi.sh` puts the binary in `/opt/webcontrol-rs`, installs `avrdude` from apt, adds the `webcontrol-rs` systemd
+service (with the `dialout` group, for the USB port) and a sudoers rule for Turn off Raspberry Pi and updates, and
+starts it.
+
+### Linux laptop or desktop (x86_64)
+
+It needs glibc 2.36 or newer: Debian 12, Ubuntu 23.04 or later. Plug the Maslow into a USB port and, as yourself (not
+root, `sudo` asks for your password):
+
+```sh
+v=0.10.0 base=https://github.com/designfrontier/WebControl/releases/download/v$v
+curl -fL -O "$base/webcontrol-rs-$v-x86_64.tar.gz" -O "$base/SHA256SUMS"
+sha256sum -c --ignore-missing SHA256SUMS
+tar xzf "webcontrol-rs-$v-x86_64.tar.gz"
+bash "webcontrol-rs-$v-x86_64/install-pi.sh" "webcontrol-rs-$v-x86_64"
+```
+
+Then open `http://localhost:5000/`. The same `install-pi.sh` installs `avrdude` from apt and runs the service as you
+with the `dialout` group, so it can open `/dev/ttyUSB*` and `/dev/ttyACM*`. Unlike the Pi, there is no Turn off
+Raspberry Pi (the sudoers rule allows only updates) and no GPIO buttons or LEDs. `rust/README.md`, "A Linux laptop",
+has the details.
 
 ## Updating
 
+With the machine idle, on either build:
+
+- **From the UI:** Help ▸ Update installs the latest published release, or rolls back to the one before.
+- **From a terminal:** `webcontrol-update` does the same (`--status` shows what it would do, `--rollback` restores the
+  backup). Both download the tarball for this machine's architecture and check it against `SHA256SUMS`.
+- **By hand:** run the install commands above with the new version, then `sudo systemctl restart webcontrol-rs`.
+  `install-pi.sh` never restarts a running service, so a job carries on.
+
+`rust/README.md` ("Updating on the Pi") describes the backup, the health check and the automatic rollback.
+
 **Cutting a release.** `.github/workflows/release.yml` builds the 51.292 firmware from its tag, checks it against
-`rust/firmware/holey-51.292.sha256`, and packages the aarch64 binary (UI, help pages and firmware embedded) with its
-install files.
+`rust/firmware/holey-51.292.sha256`, and packages the aarch64 and x86_64 binaries (UI, help pages and that firmware
+embedded) with their install files.
 
 - Actions → Release → Run workflow builds the assets from any branch as a workflow artifact, without a release.
 - A `v*` tag on a green `master` attaches them to a **draft** GitHub Release named after the tag:
@@ -90,13 +121,10 @@ install files.
   Install the draft on the Pi, run the checklists in `spec/rust-checklists/` that the release touches (its README
   says which), then publish it. `rust/README.md` (Releases) has the details.
 
-**Pushing an update to the Pi.** With the machine idle:
-
-- A release: on the Pi, run the same three install commands with the new tarball, then
-  `sudo systemctl restart webcontrol-rs`. `install-pi.sh` never restarts a running service, so a job carries on.
-- From the Mac: `rust/deploy.sh push` builds, copies and restarts it, and refuses while a job is running. To push a
-  release's binary instead of a local build: `WC_SKIP_BUILD=1 WC_BINARY=webcontrol-rs-<version>-aarch64 rust/deploy.sh push`.
-- `rust/deploy.sh rollback` puts the previous binary back.
+**Pushing a build from the Mac.** `rust/deploy.sh push` builds, copies and restarts it, and refuses while a job is
+running (`WC_ARCH=x86_64` for a laptop). To push a release's binary instead of a local build:
+`WC_SKIP_BUILD=1 WC_BINARY=webcontrol-rs-<version>-aarch64 rust/deploy.sh push`. `rust/deploy.sh rollback` puts the
+previous binary back.
 
 ## Development
 
@@ -104,9 +132,9 @@ install files.
 
 - Node 24 or newer (the current LTS) and npm.
 - Rust through [rustup](https://rustup.rs/); `rust/rust-toolchain.toml` picks the toolchain, its components and the
-  aarch64 target.
+  aarch64 and x86_64 Linux targets.
 - For the coverage gate: `cargo install cargo-llvm-cov` and `jq`.
-- For the Pi build: `cargo install --locked cargo-zigbuild` and zig (`pip install ziglang`, in a virtualenv if you
+- For the Linux builds: `cargo install --locked cargo-zigbuild` and zig (`pip install ziglang`, in a virtualenv if you
   like, with its `bin` on `PATH`).
 - For the 51.292 firmware image: Docker (`bash rust/firmware/docker-build.sh <dir>`). Without it, builds leave the
   upgrade wizard disabled.
@@ -140,6 +168,7 @@ scripts/coverage.sh                    # the tests under cargo llvm-cov; fails i
 cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo zigbuild --release --target aarch64-unknown-linux-gnu.2.36 -p wc-server   # the Pi binary
+cargo zigbuild --release --target x86_64-unknown-linux-gnu.2.36 -p wc-server    # the laptop binary
 cargo run -p wc-server -- --home "$(mktemp -d)" --port 5055 --simulate
 bash deploy/test.sh                    # wc-switch, deploy.sh and install-pi.sh against stubs
 bash scripts/release-test.sh           # the release packaging against stubs
@@ -170,8 +199,8 @@ against them. Edit them by hand only for a deliberate behaviour change; each dir
 
 `.github/workflows/ci.yml` runs on every pull request and on `master`: the frontend job (format, lint, typecheck,
 tests, build); the 51.292 firmware build checked against its pin; and the Rust job (fmt, clippy, tests, the coverage
-gate, the deploy and release script tests, the aarch64 cross-build with the firmware embedded, and Playwright against
-the binary). `release.yml` is described under Updating.
+gate, the deploy and release script tests, the aarch64 and x86_64 cross-builds with the firmware embedded, and
+Playwright against the binary). `release.yml` is described under Updating.
 
 ## Docs map
 
@@ -179,7 +208,7 @@ the binary). `release.yml` is described under Updating.
 | --- | --- |
 | [spec/RUST-PLAN.md](spec/RUST-PLAN.md) | How the Rust backend was planned and built, and the owner decisions behind it |
 | [spec/firmware.md](spec/firmware.md) | The Maslow firmware's behaviour (51.27, 51.292), what the backend must do about it, the upgrade flow |
-| [spec/INSTALL-PI.md](spec/INSTALL-PI.md) | Installing on a Pi, step by step, with a way back |
+| [spec/INSTALL-PI.md](spec/INSTALL-PI.md) | Installing on a Pi, step by step, with a way back (a laptop: `rust/README.md`) |
 | [spec/rust-checklists/](spec/rust-checklists/) | Hardware checklists to run on the real machine |
 | [contract/](contract/README.md) | The UI ↔ backend contract |
 | [contract/serial/](contract/serial/README.md) | The backend ↔ controller contract, and the owner's real jobs |

@@ -50,7 +50,8 @@ recorded outputs.
   `--status`)
 - `WC_FIRMWARE_HEX=<hex> bash deploy/update-docker-test.sh 0.9.0=<binary> 0.9.1=<binary> 0.9.2=<binary>`:
   `webcontrol-update` for real in arm64 Debian trixie with systemd and a password for `sudo`, against three aarch64
-  builds (each made with that `WC_VERSION`) packaged by `scripts/release.sh`
+  builds (each made with that `WC_VERSION`) packaged by `scripts/release.sh`; `ARCH=x86_64` runs it in amd64 against
+  x86_64 builds
 - `bash scripts/release-test.sh`: `scripts/release.sh`'s packaging (contents, checksums, version, firmware pin)
   against stubs
 - `bash firmware/docker-build.sh <dir>`: builds the holey 51.292 hex from the Orob-Maslow/Firmware v51.292 tag in
@@ -84,24 +85,42 @@ match `Host`, and any browser request whose `Host` is not a local name (`crates/
 `contract/README.md` "Cross-site requests"). `spec/INSTALL-PI.md` has an nginx example. Direct
 `http://maslow.local:5000` use needs none of this.
 
+## A Linux laptop
+
+The x86_64 release runs on a Debian or Ubuntu laptop with glibc 2.36 or newer (Debian 12, Ubuntu 23.04 and later),
+with the Maslow on a USB port. Install it as yourself, not root, from the directory holding the tarball:
+
+```sh
+sha256sum -c webcontrol-rs-0.10.0-x86_64.tar.gz.sha256
+tar xzf webcontrol-rs-0.10.0-x86_64.tar.gz
+bash webcontrol-rs-0.10.0-x86_64/install-pi.sh webcontrol-rs-0.10.0-x86_64
+```
+
+It is the Pi's install with these differences: the service runs as you (with the `dialout` group, so it can open
+`/dev/ttyUSB*` and `/dev/ttyACM*`), `avrdude` comes from apt, the page is http://localhost:5000/, and the sudoers rule
+allows only updates and rollbacks. There is no Turn Off Raspberry Pi, the platform reads `linux`, and GPIO buttons and
+LEDs do nothing. `webcontrol-update` and Help ▸ Update install the x86_64 asset. `WC_ARCH=x86_64 ./deploy.sh ...`
+builds and deploys to a laptop from the Mac.
+
 ## Releases
 
 `.github/workflows/release.yml` runs on an arm64 runner. It builds the 51.292 hex with `firmware/docker-build.sh`,
 then `scripts/release.sh` checks the hex against `firmware/holey-51.292.sha256`, builds `frontend/dist` and the
-aarch64 binary with the UI, help pages and firmware embedded, checks that `webcontrol-rs --version` reports the
-release version, and writes:
+aarch64 and x86_64 binaries (`cargo zigbuild`, glibc 2.36) with the UI, help pages and that one hex embedded, checks
+that each reports the release version (running the aarch64 one, reading the x86_64 one's version literal) and embeds
+the hex, and writes, for `<arch>` `aarch64` (the Pi) and `x86_64` (a Linux laptop):
 
-- `webcontrol-rs-<version>-aarch64.tar.gz`: one directory with `webcontrol-rs`, `install-pi.sh`,
+- `webcontrol-rs-<version>-<arch>.tar.gz`: one directory with `webcontrol-rs`, `install-pi.sh`,
   `webcontrol-update`, `wc-switch`, the unit, the drop-in, the sudoers rule, this README and `rust-checklists/`
-- `webcontrol-rs-<version>-aarch64`: the bare binary, for `deploy.sh push`
-- a `.sha256` beside each, and `SHA256SUMS` with both
+- `webcontrol-rs-<version>-<arch>`: the bare binary, for `deploy.sh push`
+- a `.sha256` beside each, and one `SHA256SUMS` with all four
 
 The version is the tag without its `v`; otherwise `git describe --tags --match 'v[0-9]*'` (the short SHA until a
 `v*` tag exists).
 
 To cut a release:
 
-1. On a green `master`: `git tag -a v0.2.0 -m "webcontrol-rs 0.2.0"`, then `git push origin v0.2.0`.
+1. On a green `master`: `git tag -a v0.10.0 -m "webcontrol-rs 0.10.0"`, then `git push origin v0.10.0`.
 2. The Release workflow attaches the assets to a **draft** GitHub Release named after the tag. Rerunning it
    replaces a draft's assets and refuses a published release.
 3. Install the draft's tarball on the Pi (below), run the checklists in `spec/rust-checklists/` that the release
@@ -114,13 +133,13 @@ On the Mac, `WC_FIRMWARE_HEX=<dir>/holey-51.292.hex scripts/release.sh [out-dir]
 Installing a release on the Pi, from the directory holding the tarball and its `.sha256`:
 
 ```sh
-sha256sum -c webcontrol-rs-0.2.0-aarch64.tar.gz.sha256
-tar xzf webcontrol-rs-0.2.0-aarch64.tar.gz
-bash webcontrol-rs-0.2.0-aarch64/install-pi.sh webcontrol-rs-0.2.0-aarch64
+sha256sum -c webcontrol-rs-0.10.0-aarch64.tar.gz.sha256
+tar xzf webcontrol-rs-0.10.0-aarch64.tar.gz
+bash webcontrol-rs-0.10.0-aarch64/install-pi.sh webcontrol-rs-0.10.0-aarch64
 ```
 
 To update from the Mac with a release's binary instead of a local build:
-`WC_SKIP_BUILD=1 WC_BINARY=webcontrol-rs-0.2.0-aarch64 ./deploy.sh push`.
+`WC_SKIP_BUILD=1 WC_BINARY=webcontrol-rs-0.10.0-aarch64 ./deploy.sh push`.
 
 ## Updating on the Pi
 
@@ -139,14 +158,14 @@ updating. Versions compare as `MAJOR.MINOR.PATCH`, each field as a number (a lea
 such as `0.4.0-rc.1` comes before `0.4.0`, and a `git describe` build such as `0.4.0-3-gabc1234` after it. If the
 installed version is newer than the latest release (a build pushed from the Mac, or a release installed with
 `--version`), it changes nothing and says so. An installed version it cannot parse is updated whenever it differs,
-with a warning. `--version v0.2.0` installs that tag instead, older or not (with a warning when it is older);
+with a warning. `--version v0.10.0` installs that tag instead, older or not (with a warning when it is older);
 `--force` reinstalls the installed version but never downgrades; and
 `--repo owner/name` (or `WEBCONTROL_REPO`) reads another fork's releases (default `designfrontier/WebControl`).
 `GITHUB_TOKEN`, if set, is sent to the API (on curl's stdin, not its arguments) to avoid its rate limit.
 
 An update:
 
-1. Refuses unless the Pi is aarch64 with `curl`, `sha256sum` and `tar`, and `/api/state` shows no job running or
+1. Refuses unless the machine is aarch64 or x86_64 (it installs that asset) with `curl`, `sha256sum` and `tar`, and `/api/state` shows no job running or
    paused, no tool change or Z adjustment waiting, no probe and no controller firmware upgrade, and the `busy` of
    `GET /api/system/updates` shows no optical scan. If nothing answers it
    carries on only when `webcontrol-rs` is not running; a running service that does not answer may be mid-job, so it

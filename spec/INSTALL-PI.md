@@ -19,8 +19,8 @@ unchanged. The same steps work the other way round (a new SSD, the old system on
   `brew upgrade --cask raspberry-pi-imager` if you have it. Older versions cannot set the user, Wi-Fi or SSH on a
   trixie image, so the Pi would boot with no way to log in.
 - A WebControl release: `webcontrol-rs-<version>-aarch64.tar.gz` and its `.sha256` from the repository's Releases page,
-  or the `webcontrol-rs-<version>-aarch64` artifact of a Release workflow run in Actions (a zip holding the same
-  files). Or this repository on the Mac, to build and deploy with `rust/deploy.sh` (see the README's Development
+  or the `webcontrol-rs-<version>` artifact of a Release workflow run in Actions (a zip holding the same files
+  for both architectures). For an x86_64 Linux laptop instead, see `rust/README.md`, "A Linux laptop". Or this repository on the Mac, to build and deploy with `rust/deploy.sh` (see the README's Development
   prerequisites).
 - The machine idle: no job running or loaded.
 

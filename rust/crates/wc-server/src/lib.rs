@@ -53,21 +53,22 @@ impl Default for PingConfig {
     }
 }
 
+/// The answer to `TurnOffRPI` anywhere but the Pi.
+pub const NO_POWER_OFF: &str = "Only a Raspberry Pi can be turned off from WebControl; this computer stays on.";
+
 /// What `GET /api/system/info` says about the computer the backend runs on.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Platform {
     pub name: String,
-    /// Power-off works here: Linux, where `install-pi.sh` adds the sudoers rule.
+    /// Power-off works here: the Pi, where `install-pi.sh` adds the sudoers rule.
     pub can_turn_off: bool,
 }
 
 impl Platform {
+    /// The Pi is the only aarch64 Linux build; an x86_64 laptop reads as plain `linux`.
     pub fn current() -> Platform {
         let pi = cfg!(all(target_os = "linux", target_arch = "aarch64"));
-        Platform {
-            name: if pi { "RPI".into() } else { std::env::consts::OS.into() },
-            can_turn_off: cfg!(target_os = "linux"),
-        }
+        Platform { name: if pi { "RPI".into() } else { std::env::consts::OS.into() }, can_turn_off: pi }
     }
 }
 

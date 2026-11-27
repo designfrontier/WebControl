@@ -15,7 +15,8 @@ use wc_config::Paths;
 use wc_machine::{Machine, NoHost, NoPort, spawn};
 use wc_protocol::system::{LatestRelease, UpdateBackup, UpdateState};
 use wc_server::updates::{
-    DEFAULT_REPO, GitHub, ReleaseSource, Timing, Updates, Version, compare, parse_manifest, parse_release, repo_from,
+    DEFAULT_REPO, GitHub, ReleaseSource, Timing, Updates, Version, compare, has_build, parse_manifest, parse_release,
+    repo_from,
 };
 use wc_server::{AppState, PingConfig, router};
 use wc_testkit::contract::{Contract, ResponseBody};
@@ -61,6 +62,19 @@ fn a_release_without_a_usable_tag_or_page_is_refused_and_a_missing_name_is_the_t
     assert_eq!(with("html_url", json!("")).unwrap_err(), "The latest release has no web address");
     let bare = with("name", Value::Null).unwrap();
     assert_eq!((bare.name.as_str(), bare.notes.as_str(), bare.published_at), ("v1.0.0", "", None));
+}
+
+#[test]
+fn a_release_has_a_build_for_an_architecture_when_it_lists_that_tarball() {
+    assert!(has_build(FIXTURE, "v0.3.0", "aarch64"));
+    assert!(!has_build(FIXTURE, "v0.3.0", "x86_64"));
+    let assets =
+        json!({"assets": [{"name": "webcontrol-rs-1.0-x86_64.tar.gz"}, {"name": "webcontrol-rs-1.0-aarch64"}]});
+    assert!(has_build(&assets.to_string(), "v1.0", "x86_64"));
+    assert!(has_build(&assets.to_string(), "1.0", "x86_64"));
+    assert!(!has_build(&assets.to_string(), "v1.0", "aarch64"));
+    assert!(!has_build("{}", "v1.0", "x86_64"));
+    assert!(!has_build("<html>", "v1.0", "x86_64"));
 }
 
 #[test]
@@ -175,7 +189,8 @@ async fn fake_github(latest: (StatusCode, String), sha: (StatusCode, String), de
 }
 
 fn github(api: &str, token: Option<&str>, timeout: Duration) -> GitHub {
-    GitHub { api: format!("{api}/"), repo: "o/r".into(), token: token.map(str::to_string), timeout }
+    let (repo, token, arch) = ("o/r".into(), token.map(str::to_string), "aarch64".into());
+    GitHub { api: format!("{api}/"), repo, token, timeout, arch }
 }
 
 async fn latest_from(source: GitHub) -> Result<LatestRelease, String> {
@@ -196,6 +211,14 @@ async fn github_is_asked_for_the_latest_release_and_its_tags_commit() {
     assert_eq!(header(1, "accept").as_deref(), Some("application/vnd.github.sha"));
     assert_eq!(header(0, "authorization").as_deref(), Some("Bearer t0ken"));
     assert!(header(0, "user-agent").unwrap().starts_with("webcontrol-rs/"));
+}
+
+#[tokio::test]
+async fn a_latest_release_without_this_architectures_build_is_an_error() {
+    let fake =
+        fake_github((StatusCode::OK, FIXTURE.into()), (StatusCode::OK, format!("{SHA}\n")), Duration::ZERO).await;
+    let laptop = GitHub { arch: "x86_64".into(), ..github(&fake.url, None, 5 * SECOND) };
+    assert_eq!(latest_from(laptop).await.unwrap_err(), "The latest release, v0.3.0, has no x86_64 build");
 }
 
 #[tokio::test]

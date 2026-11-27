@@ -13,9 +13,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  pi-assets:
-    name: Pi install assets (aarch64, pinned 51.292 firmware)
-    # The pinned firmware digest was made on linux/arm64, and an arm64 runner can run the binary it builds.
+  assets:
+    name: Install assets (aarch64 and x86_64, pinned 51.292 firmware)
+    # The pinned firmware digest was made on linux/arm64; one hex built here goes into both binaries.
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 45
     outputs:
@@ -30,7 +30,7 @@ jobs:
           node-version: lts/*
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      # rust-toolchain.toml names the toolchain, its components and the aarch64 target.
+      # rust-toolchain.toml names the toolchain, its components and the aarch64 and x86_64 targets.
       - name: Install the Rust toolchain
         run: |
           if ! command -v rustup > /dev/null; then
@@ -58,7 +58,7 @@ jobs:
           WC_FIRMWARE_HEX: ${{ runner.temp }}/firmware/holey-51.292.hex
       - uses: actions/upload-artifact@v7
         with:
-          name: webcontrol-rs-${{ steps.assets.outputs.version }}-aarch64
+          name: webcontrol-rs-${{ steps.assets.outputs.version }}
           path: ${{ runner.temp }}/assets/
           if-no-files-found: error
           retention-days: 30
@@ -66,7 +66,7 @@ jobs:
   draft-release:
     name: Draft GitHub Release
     if: github.event_name == 'push' && github.ref_type == 'tag'
-    needs: pi-assets
+    needs: assets
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -74,7 +74,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
-          name: webcontrol-rs-${{ needs.pi-assets.outputs.version }}-aarch64
+          name: webcontrol-rs-${{ needs.assets.outputs.version }}
           path: assets
       - name: Create the draft, or refresh its assets on a rerun
         run: |
@@ -88,10 +88,10 @@ jobs:
             gh release upload "$GITHUB_REF_NAME" --clobber -- *
           else
             gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "webcontrol-rs $VERSION" \
-              --notes "Pi install assets for webcontrol-rs $VERSION (aarch64, glibc 2.36+, holey 51.292 embedded). Install: see rust/README.md, Releases." \
+              --notes "Install assets for webcontrol-rs $VERSION: aarch64 for the Pi and x86_64 for a Linux laptop (glibc 2.36+, holey 51.292 embedded). Install: see rust/README.md, Releases." \
               -- *
           fi
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          VERSION: ${{ needs.pi-assets.outputs.version }}
+          VERSION: ${{ needs.assets.outputs.version }}
