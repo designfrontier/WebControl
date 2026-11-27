@@ -54,6 +54,16 @@ fn target() -> Image {
     Image::new(&hex_of("holey 51.292 stand-in"))
 }
 
+fn planner() -> Image {
+    Image::new(&hex_of("planner 51.30 stand-in"))
+}
+
+const PLANNER_CAPABILITIES: &str = "planner line-numbers accel-settings status-line feed-forward peak-error";
+
+fn planner_51_30(capabilities: Option<&str>) -> Build {
+    Build { version: "51.30".into(), capabilities: capabilities.map(String::from), ..Build::holey_51_292() }
+}
+
 /// How the controller comes back from the flash of the target.
 #[derive(Debug, Clone, Default, PartialEq)]
 enum AfterUpgrade {
@@ -82,6 +92,8 @@ struct Avrdude {
     write_fails: usize,
     after_upgrade: AfterUpgrade,
     save_fails: bool,
+    /// The planner image boots without its `Capabilities:` line.
+    planner_without_capabilities: bool,
     jobs: Vec<String>,
     saved: Vec<String>,
 }
@@ -126,6 +138,11 @@ impl Avrdude {
                         Board::Alive
                     }
                     (None, AfterUpgrade::OldFirmware) => Board::Alive,
+                    (None, _) if image == planner() => {
+                        let words = Some(PLANNER_CAPABILITIES).filter(|_| !self.planner_without_capabilities);
+                        sim.flash(planner_51_30(words).on_board(&banner));
+                        Board::Alive
+                    }
                     (None, after) => {
                         let banner = if let AfterUpgrade::OnBoard(other) = after { other.clone() } else { banner };
                         sim.flash(Build::holey_51_292().on_board(&banner));
@@ -164,7 +181,8 @@ fn settings() -> Settings {
 
 impl Bench {
     fn on(build: Build) -> Bench {
-        Bench::with(Machine::new("h", settings()).on_port("simulator").with_firmware(Some(target())), build)
+        let machine = Machine::new("h", settings()).on_port("simulator").with_firmware(Some(target()));
+        Bench::with(machine.with_planner_firmware(Some(planner())), build)
     }
 
     fn with(machine: Machine, build: Build) -> Bench {
@@ -274,7 +292,11 @@ impl Bench {
     }
 
     fn upgrade(&mut self) -> Stage {
-        self.act("check");
+        self.upgrade_with("check")
+    }
+
+    fn upgrade_with(&mut self, check: &str) -> Stage {
+        self.act(check);
         assert_eq!(
             self.settle(&[Stage::Checking], 10_000),
             Stage::Ready,
@@ -515,7 +537,7 @@ fn hazardous_boards_and_imageless_builds_are_blocked() {
     let mut bench = Bench::with(machine, Build::holey_51_27().on_board(OWNERS_BOARD));
     bench.act("check");
     assert_eq!(bench.settle(&[Stage::Checking], 10_000), Stage::Blocked);
-    assert!(bench.view().message.contains("carries no firmware image"));
+    assert!(bench.view().message.contains("carries no 51.292 image"));
 
     let mut bench = Bench::on(Build::holey_51_292().on_board(OWNERS_BOARD));
     bench.act("check");
@@ -709,4 +731,59 @@ fn a_port_that_opens_after_a_rollback_took_the_link_is_closed_again() {
     bench.apply(Event::PortFailed { port: "simulator".into(), error: "late".into() });
     let stage = bench.settle(&[Stage::RollingBack, Stage::Restarting, Stage::Migrating], 120_000);
     assert_eq!(stage, Stage::RolledBack, "{:?}", bench.view().log);
+}
+
+#[test]
+fn the_planner_upgrade_flashes_51_30_and_waits_for_its_capabilities() {
+    let mut bench = Bench::owners();
+    bench.take_written();
+    assert_eq!(bench.upgrade_with("checkPlanner"), Stage::SelfTest, "{:?}", bench.view().log);
+    let view = bench.view();
+    assert_eq!((view.target.as_str(), view.image_sha256), ("51.30", Some(planner().sha256)));
+    assert!(view.message.contains("51.30 is running"), "{}", view.message);
+    assert_eq!(bench.avrdude.jobs, ["read simulator", "save", "write simulator target"]);
+    assert_eq!(bench.sim.build().version, "51.30");
+    let snapshot = bench.machine.snapshot();
+    assert!(snapshot.planner && snapshot.feed_forward);
+    assert_eq!(snapshot.controller_firmware_version, 51.3);
+    assert!(bench.take_written().iter().any(|line| line.starts_with('N')), "the settings go back numbered");
+}
+
+#[test]
+fn the_planner_upgrade_is_open_to_51_292_and_refused_on_51_30() {
+    let mut bench = Bench::on(Build::holey_51_292().on_board(OWNERS_BOARD));
+    bench.act("checkPlanner");
+    assert_eq!(bench.settle(&[Stage::Checking], 10_000), Stage::Ready, "{}", bench.view().message);
+    assert!(bench.view().message.contains("to 51.30"));
+
+    let mut bench = Bench::on(planner_51_30(Some(PLANNER_CAPABILITIES)).on_board(OWNERS_BOARD));
+    bench.act("checkPlanner");
+    assert_eq!(bench.settle(&[Stage::Checking], 10_000), Stage::Blocked);
+    assert!(bench.view().message.contains("already runs 51.30"));
+    assert_eq!(bench.upgrade(), Stage::SelfTest, "51.292 is still the way back: {:?}", bench.view().log);
+    assert_eq!(bench.sim.build().version, "51.29");
+}
+
+#[test]
+fn a_51_30_without_the_planner_capability_is_rolled_back() {
+    let mut bench = Bench::owners();
+    bench.avrdude.planner_without_capabilities = true;
+    bench.act("checkPlanner");
+    bench.settle(&[Stage::Checking], 10_000);
+    bench.act("upgrade");
+    let busy = [Stage::BackingUp, Stage::Flashing, Stage::Restarting, Stage::Migrating, Stage::RollingBack];
+    assert_eq!(bench.settle(&busy, 120_000), Stage::RolledBack, "{:?}", bench.view().log);
+    assert!(bench.view().log.iter().any(|l| l.contains("without the planner capability")), "{:?}", bench.view().log);
+    assert_eq!(bench.sim.build().version, "51.27");
+}
+
+#[test]
+fn a_build_without_the_planner_image_blocks_only_the_planner_upgrade() {
+    let machine = Machine::new("h", settings()).on_port("simulator").with_firmware(Some(target()));
+    let mut bench = Bench::with(machine, Build::holey_51_27().on_board(OWNERS_BOARD));
+    bench.act("checkPlanner");
+    assert_eq!(bench.settle(&[Stage::Checking], 10_000), Stage::Blocked);
+    assert!(bench.view().message.contains("no 51.30 image"), "{}", bench.view().message);
+    bench.act("check");
+    assert_eq!(bench.settle(&[Stage::Checking], 10_000), Stage::Ready);
 }

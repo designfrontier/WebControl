@@ -15,7 +15,7 @@ use wc_optical::camera::SledPosition;
 use wc_sim::{Build, Sim};
 
 use crate::camera::Cameras;
-use crate::firmware::{SimFlasher, simulated_target};
+use crate::firmware::{SimFlasher, simulated_planner, simulated_target};
 use crate::host::SystemHost;
 use crate::serial::{SerialOpener, SimOpener};
 use crate::{AppState, PingConfig, router};
@@ -122,7 +122,10 @@ pub async fn serve(options: Options, shutdown: impl Future<Output = ()> + Send +
         true => {
             let opener = SimOpener::new(Build::holey_51_27().on_board(SIMULATED_BOARD));
             let host = host.with_flasher(Box::new(SimFlasher { sim: opener.sim() }));
-            let machine = machine.on_port(SIMULATED_PORT).with_firmware(Image::embedded().or(Some(simulated_target())));
+            let machine = machine
+                .on_port(SIMULATED_PORT)
+                .with_firmware(Image::embedded().or(Some(simulated_target())))
+                .with_planner_firmware(Image::embedded_planner().or(Some(simulated_planner())));
             let sim = opener.sim();
             (machine, Box::new(opener), host, Some(sim))
         }

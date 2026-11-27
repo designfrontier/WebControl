@@ -2,7 +2,7 @@
 
 use serde_json::json;
 use wc_config::Settings;
-use wc_firmware::image::{Image, PINNED_SHA256, application_bytes, rollback_image, sha256_hex};
+use wc_firmware::image::{Image, PINNED_SHA256, PLANNER_PINNED_SHA256, application_bytes, rollback_image, sha256_hex};
 use wc_firmware::upgrade::*;
 
 #[test]
@@ -48,6 +48,19 @@ fn only_holey_51_27_and_51_28_are_upgraded() {
     assert!(check_version(1.26, false).unwrap_err().contains("1.26"));
     assert!(reports_target(51.29));
     assert!(!reports_target(51.27));
+}
+
+#[test]
+fn the_planner_51_30_is_reached_from_holey_builds_but_not_from_itself() {
+    [51.27, 51.28, 51.29].iter().for_each(|v| assert_eq!(check_planner_version(*v), Ok(()), "{v}"));
+    assert!(check_planner_version(51.3).unwrap_err().contains("already runs 51.30"));
+    assert!(check_planner_version(0.0).unwrap_err().contains("B05"));
+    assert!(check_planner_version(100.0).unwrap_err().contains("100"));
+    assert_eq!(Target::Planner.check_version(51.29, true), Ok(()), "an older planner build moves on to 51.30");
+    assert_eq!(Target::Holey.check_version(51.3, true), Ok(()), "51.292 is the way back from 51.30");
+    assert!(Target::Planner.reports(51.3) && !Target::Planner.reports(51.29));
+    assert!(Target::Holey.reports(51.29) && !Target::Holey.reports(51.3));
+    assert_eq!((Target::Holey.build(), Target::Planner.build()), ("51.292", "51.30"));
 }
 
 #[test]
@@ -210,6 +223,7 @@ fn an_image_is_pinned_by_its_sha256() {
     let tampered = Image { hex: ":00000001FE\n".into(), ..image };
     assert!(!tampered.intact());
     assert_eq!(PINNED_SHA256.trim().len(), 64, "rust/firmware/holey-51.292.sha256 holds one digest");
+    assert_eq!(PLANNER_PINNED_SHA256.trim().len(), 64, "rust/firmware/holey-51.30.sha256 holds one digest");
 }
 
 #[test]
@@ -218,5 +232,9 @@ fn a_build_without_wc_firmware_hex_carries_no_image() {
         assert_eq!(Image::embedded(), None);
     } else {
         assert_eq!(Image::embedded().unwrap().sha256, PINNED_SHA256.trim());
+    }
+    match std::env::var_os("WC_PLANNER_HEX") {
+        None => assert_eq!(Image::embedded_planner(), None),
+        Some(_) => assert_eq!(Image::embedded_planner().unwrap().sha256, PLANNER_PINNED_SHA256.trim()),
     }
 }

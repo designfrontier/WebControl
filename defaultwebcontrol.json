@@ -858,7 +858,7 @@
         },
         {
             "default": 50,
-            "desc": "Acceleration ($47) of the planner test firmware, in mm/s^2. Shown, and sent, only when the controller reports the planner capability.\ndefault setting: 50",
+            "desc": "Acceleration ($47) of the planner firmware, in mm/s^2. Shown, and sent, only when the controller reports the planner capability. To tune it, see Help ▸ Controller ▸ Tune the Planner Firmware.\ndefault setting: 50",
             "firmwareKey": 47,
             "key": "plannerAcceleration",
             "section": "Maslow Settings",
@@ -868,7 +868,7 @@
         },
         {
             "default": 0.01,
-            "desc": "Junction deviation ($48) of the planner test firmware, in mm: how far it may round a corner to keep its speed through it. Shown, and sent, only when the controller reports the planner capability.\ndefault setting: 0.01",
+            "desc": "Junction deviation ($48) of the planner firmware, in mm: how far it may round a corner to keep its speed through it. Shown, and sent, only when the controller reports the planner capability. To tune it, see Help ▸ Controller ▸ Tune the Planner Firmware.\ndefault setting: 0.01",
             "firmwareKey": 48,
             "key": "plannerJunctionDeviation",
             "section": "Maslow Settings",
@@ -878,7 +878,7 @@
         },
         {
             "default": 0,
-            "desc": "Feed-forward gain ($49) of the planner test firmware, 0 to 1.5: how much of the chain speed goes straight to the motors, so the chains lag less behind the planned path. 0 is off. Shown, and sent, only when the controller reports the feed-forward capability.\ndefault setting: 0",
+            "desc": "Feed-forward gain ($49) of the planner firmware, 0 to 1.5: how much of the chain speed goes straight to the motors, so the chains lag less behind the planned path. 0 is off. Shown, and sent, only when the controller reports the feed-forward capability. To tune it, see Help ▸ Controller ▸ Tune the Planner Firmware.\ndefault setting: 0",
             "firmwareKey": 49,
             "key": "plannerFeedForward",
             "section": "Maslow Settings",

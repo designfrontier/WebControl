@@ -1,5 +1,5 @@
-//! The pure half of the one-click 51.292 upgrade (`spec/firmware.md` C): which boards and builds may be upgraded,
-//! the avrdude command lines and how their output reads, and the settings the new firmware must be given.
+//! The pure half of the one-click 51.292 or planner 51.30 upgrade (`spec/firmware.md` C): which boards and builds
+//! may be upgraded, the avrdude command lines and how their output reads, and the settings the new firmware must be given.
 
 use serde_json::Value;
 use wc_config::Settings;
@@ -9,6 +9,40 @@ use crate::settings::{CUSTOM_FIRMWARE, Push, boot_push, setting_key, setting_lin
 pub const TARGET_BUILD: &str = "51.292";
 /// What B05 prints for every 51.29x build.
 pub const TARGET_REPORTED: f64 = 51.29;
+pub const PLANNER_BUILD: &str = "51.30";
+pub const PLANNER_REPORTED: f64 = 51.3;
+
+/// The build the guided upgrade flashes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Target {
+    Holey,
+    /// The experimental planner firmware; 51.292 is the way back.
+    Planner,
+}
+
+impl Target {
+    pub fn build(self) -> &'static str {
+        match self {
+            Target::Holey => TARGET_BUILD,
+            Target::Planner => PLANNER_BUILD,
+        }
+    }
+
+    pub fn check_version(self, version: f64, planner: bool) -> Result<(), String> {
+        match self {
+            Target::Holey => check_version(version, planner),
+            Target::Planner => check_planner_version(version),
+        }
+    }
+
+    /// What B05 must report once the build boots; the planner's capabilities are checked after it.
+    pub fn reports(self, version: f64) -> bool {
+        match self {
+            Target::Holey => same_version(version, TARGET_REPORTED),
+            Target::Planner => same_version(version, PLANNER_REPORTED),
+        }
+    }
+}
 pub const STOCK_Z_RPM: f64 = 12.6;
 /// 51.292's EEPROM default for `$18`, ten times the stock Z motor's speed.
 pub const FACTORY_Z_RPM_51_292: f64 = 126.0;
@@ -80,7 +114,17 @@ pub fn check_version(version: f64, planner: bool) -> Result<(), String> {
 }
 
 pub fn reports_target(version: f64) -> bool {
-    same_version(version, TARGET_REPORTED)
+    Target::Holey.reports(version)
+}
+
+/// 51.30 is reached from 51.27, 51.28 and any 51.29x, never from itself.
+pub fn check_planner_version(version: f64) -> Result<(), String> {
+    match version {
+        v if [51.27, 51.28, TARGET_REPORTED].iter().any(|from| same_version(v, *from)) => Ok(()),
+        v if same_version(v, PLANNER_REPORTED) => Err("The controller already runs 51.30.".into()),
+        v if v <= 0.0 => Err("The controller never answered B05, so its firmware is unknown.".into()),
+        v => Err(format!("Only holey 51.27, 51.28 or 51.29x can be upgraded to 51.30; the controller reports {v}.")),
+    }
 }
 
 /// `Actions/firmware.py`'s `SERIAL_DEVICE`: avrdude never gets a port that could read as an option or a path.

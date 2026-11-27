@@ -11,7 +11,7 @@
           "const": "upgradeHoleyFirmware"
         },
         "arg": {
-          "description": "Python flashes the bundled hex and ignores it (the UI sends \"\"). webcontrol-rs runs the guided 51.292 upgrade one step per action: \"check\", \"upgrade\", \"selfTest\", \"rollback\" or \"reset\"; \"\" only alerts.",
+          "description": "Python flashes the bundled hex and ignores it (the UI sends \"\"). webcontrol-rs runs the guided upgrade one step per action: \"check\" (for 51.292) or \"checkPlanner\" (for the planner 51.30), then \"upgrade\", \"selfTest\", \"rollback\" or \"reset\"; \"\" only alerts.",
           "type": [
             "string",
             "number"

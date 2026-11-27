@@ -118,7 +118,13 @@ fn simulated_hex(text: &str) -> String {
 
 /// What `--simulate` flashes when the binary carries no real image.
 pub fn simulated_target() -> Image {
-    Image::new(&simulated_hex(&format!("{SIM_MARKER}|51.29|7|1")))
+    Image::new(&simulated_hex(&format!("{SIM_MARKER}|51.29|7|1|")))
+}
+
+/// The planner 51.30 for `--simulate`, with its B05 capabilities.
+pub fn simulated_planner() -> Image {
+    let words = "planner line-numbers accel-settings status-line feed-forward peak-error";
+    Image::new(&simulated_hex(&format!("{SIM_MARKER}|51.30|7|1|{words}")))
 }
 
 /// avrdude for `--simulate`: a read-back names the running build, and a flash loads the build an image names.
@@ -131,7 +137,8 @@ impl Flasher for SimFlasher {
         let sim = self.sim.lock().expect("simulator lock");
         let build = sim.build();
         let rewrite = u8::from(build.rewrite_notice);
-        Ok(simulated_hex(&format!("{SIM_MARKER}|{}|{}|{rewrite}", build.version, build.settings_version)))
+        let words = build.capabilities.clone().unwrap_or_default();
+        Ok(simulated_hex(&format!("{SIM_MARKER}|{}|{}|{rewrite}|{words}", build.version, build.settings_version)))
     }
 
     fn write(&self, _port: &str, image: &Image, _scratch: &Path) -> (bool, String) {
@@ -140,12 +147,12 @@ impl Flasher for SimFlasher {
         let mut sim = self.sim.lock().expect("simulator lock");
         let banner = sim.build().banner.clone();
         let build = match fields.as_slice() {
-            [marker, version, layout, rewrite] if marker == SIM_MARKER => Build {
+            [marker, version, layout, rewrite, words] if marker == SIM_MARKER => Build {
                 version: version.clone(),
                 settings_version: layout.parse().unwrap_or_default(),
                 rewrite_notice: rewrite == "1",
                 banner,
-                capabilities: None,
+                capabilities: Some(words.clone()).filter(|w| !w.is_empty()),
             },
             _ => Build::holey_51_292().on_board(&banner),
         };

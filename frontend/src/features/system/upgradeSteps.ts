@@ -1,7 +1,7 @@
 import type { FirmwareUpgrade, UpgradeStage } from "../../protocol";
 
 /** The upgradeHoleyFirmware arg each wizard button sends. */
-export type UpgradeStep = "check" | "upgrade" | "selfTest" | "rollback" | "reset";
+export type UpgradeStep = "check" | "checkPlanner" | "upgrade" | "selfTest" | "rollback" | "reset";
 
 export interface StepButton {
   step: UpgradeStep;
@@ -25,6 +25,13 @@ const SLACK_CONFIRM = "The chains are slack and the sled is supported, so the mo
 
 const busy = (title: string): StageView => ({ title, busy: true, buttons: [] });
 
+export const PLANNER_TARGET = "51.30";
+
+const checkAgain = (upgrade: FirmwareUpgrade): StepButton => ({
+  step: upgrade.target === PLANNER_TARGET ? "checkPlanner" : "check",
+  label: "Check again",
+});
+
 const rollback = (upgrade: FirmwareUpgrade): StepButton[] =>
   upgrade.canRollback
     ? [{ step: "rollback", label: `Roll back to ${upgrade.rollbackFirmware ?? "the saved firmware"}`, danger: true }]
@@ -32,9 +39,13 @@ const rollback = (upgrade: FirmwareUpgrade): StepButton[] =>
 
 const views: Record<UpgradeStage, (upgrade: FirmwareUpgrade) => StageView> = {
   idle: (upgrade) => ({
-    title: `Upgrade to holey ${upgrade.target}`,
+    title: "Upgrade the controller firmware",
     busy: false,
-    buttons: [{ step: "check", label: "Check the controller" }, ...rollback(upgrade)],
+    buttons: [
+      { step: "check", label: "Upgrade to holey 51.292" },
+      { step: "checkPlanner", label: `Upgrade to planner firmware ${PLANNER_TARGET} (experimental)` },
+      ...rollback(upgrade),
+    ],
   }),
   checking: () => busy("Checking the controller"),
   ready: (upgrade) => ({
@@ -48,7 +59,7 @@ const views: Record<UpgradeStage, (upgrade: FirmwareUpgrade) => StageView> = {
   blocked: (upgrade) => ({
     title: "The upgrade is blocked",
     busy: false,
-    buttons: [{ step: "check", label: "Check again" }, ...rollback(upgrade)],
+    buttons: [checkAgain(upgrade), ...rollback(upgrade), { step: "reset", label: "Start over" }],
   }),
   backingUp: () => busy("Backing up the controller"),
   flashing: () => busy("Flashing the new firmware"),

@@ -373,6 +373,7 @@ impl Machine {
                 self.feed_forward = words.iter().any(|word| word == "feed-forward");
                 self.peak_error = words.iter().any(|word| word == "peak-error");
                 effects.push(controller_message(line));
+                self.upgrade_capabilities(now, effects);
             }
             Reply::Error(_) | Reply::Other(_) => {
                 if matches!(reply, Reply::Error(_)) {

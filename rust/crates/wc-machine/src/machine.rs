@@ -507,7 +507,7 @@ impl Machine {
             pid: Pid::default(),
             calibration: crate::calibration::Results::default(),
             kinematics,
-            upgrade: Upgrade::new(Image::embedded()),
+            upgrade: Upgrade::new(Image::embedded(), Image::embedded_planner()),
             restart: crate::sync::Restart::None,
             lanes: Lanes::default(),
             camera_on: false,
@@ -522,6 +522,11 @@ impl Machine {
     /// Upgrades with `image` in place of the one embedded at build time.
     pub fn with_firmware(mut self, image: Option<Image>) -> Machine {
         self.upgrade.image = image;
+        self
+    }
+
+    pub fn with_planner_firmware(mut self, image: Option<Image>) -> Machine {
+        self.upgrade.planner_image = image;
         self
     }
 
