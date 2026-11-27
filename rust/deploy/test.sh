@@ -140,7 +140,7 @@ push_refuses_during_a_job() {
 
 rollback_swaps_prev_back() {
   reset
-  deploy rollback pi@other.local > /dev/null && grep -q "ssh pi@other.local .*webcontrol-rs.prev" "$work/calls"
+  deploy rollback pi@other.local > /dev/null && grep -q "ssh -t pi@other.local .*webcontrol-rs.prev" "$work/calls"
 }
 
 check "install stages the sudoers rule and the update unit" install_stages_the_sudoers_rule
@@ -315,6 +315,56 @@ check "install-pi.sh checks the sudoers rule with visudo through sudo" checks_th
 check "install-pi.sh refuses a sudoers rule visudo rejects" refuses_a_sudoers_rule_visudo_rejects
 check "install-pi.sh keeps the previous binary as .prev" reinstall_keeps_the_previous_binary
 check "install-pi.sh installs avrdude for the firmware upgrade" installs_avrdude_unless_present
+
+# flash-hex.sh: the avrdude stub records its arguments, and fails while $work/avrdude-fails exists.
+cat > "$work/bin/avrdude" <<EOF
+#!/usr/bin/env bash
+echo "avrdude \$*" >> "$work/calls"
+[ ! -f "$work/avrdude-fails" ]
+EOF
+chmod +x "$work/bin/avrdude"
+mkdir -p "$work/home/.WebControl"
+printf ':0400000001020304F2\n:00000001FF\n' > "$work/good.hex"
+printf ':0400000001020304F3\n:00000001FF\n' > "$work/bad-checksum.hex"
+printf ':020000040004F6\n:0400000001020304F2\n:00000001FF\n' > "$work/too-big.hex"
+port_setting() {
+  printf '{"Maslow Settings": [{"key": "COMport", "value": "%s"}]}' "$1" > "$work/home/.WebControl/webcontrol.json"
+}
+flash() {
+  PATH="$work/bin:$PATH" WC_HOME="$work/home" WC_SYSTEMCTL=systemctl bash "$here/flash-hex.sh" "$@"
+}
+
+flashes_like_the_holey_upgrade() {
+  reset
+  port_setting /dev/ttyACM0
+  flash "$work/good.hex" > /dev/null &&
+    [ "$(cat "$work/calls")" = "$(printf '%s\n' "systemctl stop webcontrol-rs" \
+      "avrdude -patmega2560 -cwiring -P/dev/ttyACM0 -b115200 -D -Uflash:w:$work/good.hex:i" \
+      "systemctl start webcontrol-rs")" ]
+}
+
+restarts_after_a_failed_flash() {
+  reset
+  port_setting /dev/serial/by-id/usb-Arduino_Mega_2560-if00
+  touch "$work/avrdude-fails"
+  local flashed=0
+  flash "$work/good.hex" > /dev/null 2>&1 && flashed=1
+  rm -f "$work/avrdude-fails"
+  [ "$flashed" = 0 ] && [ "$(tail -1 "$work/calls")" = "systemctl start webcontrol-rs" ]
+}
+
+refuses_without_touching_the_service() {
+  reset
+  port_setting /dev/ttyACM0
+  ! flash "$work/bad-checksum.hex" 2> "$work/err" && grep -q "not an Intel HEX record" "$work/err" &&
+    ! flash "$work/too-big.hex" 2> "$work/err" && grep -q "past the ATmega2560" "$work/err" &&
+    ! flash 2> "$work/err" && grep -q "Upgrade Holey Firmware (51.292)" "$work/err" &&
+    port_setting "-Uflash:w:x" && ! flash "$work/good.hex" 2> /dev/null && [ ! -e "$work/calls" ]
+}
+
+check "flash-hex.sh stops, flashes with the upgrade's avrdude line and port, and starts" flashes_like_the_holey_upgrade
+check "flash-hex.sh starts webcontrol-rs again when avrdude fails" restarts_after_a_failed_flash
+check "flash-hex.sh refuses a bad hex, a hex past the bootloader and a bad port" refuses_without_touching_the_service
 
 if [ "$failures" != 0 ]; then
   echo "$failures failed"

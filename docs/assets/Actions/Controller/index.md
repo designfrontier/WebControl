@@ -15,6 +15,8 @@ Release: >0.906
 
 [Upgrade Holey Firmware](Actions/Controller/upgradeHoleyFirmware.md)  
 
+[Tune the Planner Firmware](Actions/Controller/tunePlannerFirmware.md)  
+
 [Upgrade Custom Firmware](Actions/Controller/upgradeCustomFirmware.md)  
 
 [Sync Settings](Actions/Controller/syncSettings.md)  

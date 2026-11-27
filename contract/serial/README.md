@@ -57,7 +57,7 @@ engine). The Rust runner is `rust/crates/wc-testkit/src/runner.rs`.
 ### `meta`
 
 - `name` equals the file name. `description` says what the transcript pins down.
-- `firmware.variant` (`holey`, `stock`, `optical`) and `firmware.version` as `B05` reports it (`"51.27"`; every
+- `firmware.variant` (`holey`, `stock`, `optical`, `planner`) and `firmware.version` as `B05` reports it (`"51.27"`; every
   51.29x build reports `"51.29"`). `firmware.build` narrows it: `"51.292"` means every `$n=` write also prints
   `Change in setting, rewriting EEPROM`, which is how the backend tells 51.292 from 51.291.
 - `webcontrolCommit`: the commit the transcript was recorded from (a Python one) or last edited at.
@@ -85,7 +85,8 @@ Applied before the backend starts, in this order:
    `ok`.
 2. Then, until the backend writes nothing more: answer every written line with `ok`, except that `B05` is answered
    `Firmware Version <meta.firmware.version>` then `ok`, and on a 51.292 build every `$n=` write is answered with the
-   rewrite notice then `ok`. Each answer is delivered with the same settle rule as an `rx` event (below).
+   rewrite notice then `ok`. A `planner` build puts `Capabilities: planner line-numbers accel-settings status-line`
+   before `B05`'s `ok`, and answers a numbered line `N<n> ...*<sum>` with `ok N<n>` in place of `ok`. Each answer is delivered with the same settle rule as an `rx` event (below).
 3. If `setup.sled` `{x, y, z}` is given, rx the status report
    `<Idle,MPos:x,y,z,WPos:0.000,0.000,0.000>` (two decimals).
 4. If `setup.gcodeIndex` is non-zero, send the `moveGcodeGoto` action with that index (the initial job state:
@@ -104,6 +105,7 @@ Every event has a `type` and may have a `comment`, which runners ignore.
 | `rx`     | `line`                                         | sends `line` followed by `\r\n` from the controller                        |
 | `tx`     | `bytes`, `realtime?`, `timeout?`               | checks that the next line the backend wrote is exactly `bytes`             |
 | `tick`   | `seconds`                                      | advances the clock by at least `seconds`                                   |
+| `open`   | `baud`                                         | checks that the backend opened the port once, at `baud`, since the last `open` (the first counts the open before the events) |
 | `expect` | `state`, `settings`, `emitted`, `notEmitted`, `alerts`, `noAlerts` | checks observable state (below)        |
 
 `tx.bytes` is one line of the byte stream the backend writes, byte for byte, including trailing spaces and the
@@ -171,6 +173,9 @@ the backend had been quiet for `quiet` seconds, one line per settle.
 | `connect_boot_handshake` | the owner's real connect (51.27, PCB v1.1, full `$$`): `B05`, `G21`, `G90`, `$$`, then only `$13`; no `$38`; B05 reply parsed |
 | `connect_settings_sync_adopts_unknown_keys` | `$$` reply: `$18`/`$9`/`$28`/`$36` adopted, a differing `$3` written with `$13`, then `$$` again; `$45` at 8 decimals left alone |
 | `connect_eeprom_read_fail_restores_settings` | `error: EEPROM read fail` at boot → `$$`, every key written back, alert; the factory `$38` differs, so the port is reopened (a reset) and the next boot writes only `$13` |
+| `connect_at_115200_the_baud_that_last_answered` | `controllerBaud` 115200: the port opens at 115200 and a 51.30 boots as at 57600 |
+| `connect_falls_back_from_115200_to_57600` | `controllerBaud` 115200 and a 57600 build (51.27): 3 s of garbage, a reopen at 57600, the usual handshake, `controllerBaud` 57600 |
+| `connect_falls_back_from_57600_to_115200_for_51_30` | the default 57600 and a 51.30: 3 s of garbage, a reopen at 115200, the numbered handshake, `controllerBaud` 115200 |
 | `connect_without_a_reset_handshakes_after_3_s` | no banner and no `ok` 3 s after the port opens → the same handshake: `B05`, units, `G90`, `$$`, `$13` |
 | `connect_chain_over_sprocket_differs_restarts_the_controller` | the owner's `$$` with `$38=1`: `$13` and `$38` written, the port reopened (a reset), and the next boot writes only `$13` |
 | `connect_repairs_a_pid_weight_above_one` | the owner's `$$` with `$24` and `$32` at 1.00000011 (an earlier `$24=1.000000` write): equal at the printed precision but refused by `SetTunings`, so `$13`, `$24=1` and `$32=1` are written, then `$$` is read back |
@@ -230,6 +235,18 @@ the backend had been quiet for `quiet` seconds, one line per settle.
 | `park_after_a_file_finishes` | With a park position set, a file shifted by home runs to its end; once its last line is answered, units, `G90`, Z to the safe height and a rapid to the park position, unshifted (Rust-intended deviation 17) |
 | `park_at_a_tool_change_then_resume` | Park for Tool Changes on: at a file's `T2 M6` prompt, `~`, then units, `G90`, Z to the safe height and a rapid to the park position with the prompt still up; Resume returns to the file's XY at safe height and streams on, and the file's end parks again (Rust-intended deviation 17) |
 | `park_at_a_tool_change_skipped_with_lines_buffered_behind_it` | Park for Tool Changes on, buffered: a tool change WebControl did not expect reaches the firmware with cutting lines buffered behind it; no `~`, nothing written, an alert that the sled did not park (Rust-intended deviation 17) |
+| `planner_connect_numbers_the_handshake` | A planner build's `B05` lists the capability: `M110 N1`, then every line numbered and checksummed; `$$` lists `$47` and `$48` |
+| `planner_job_numbered_with_an_rs_resend` | A planner job streams numbered lines while they fit; `rs N8` sends only N8 until its `ok N8`, then the rest; the `rs` is one lost line |
+| `planner_lost_ok_is_sent_again_after_a_quiet_second` | A lost `ok N7`: a second with no ack, then a report with the ring empty, sends N7 again; the duplicate is only acked |
+| `planner_a_running_line_is_not_sent_again` | A `$` write that runs over a second, with the ring empty and the `[PE:]` line naming it, is no lost ack: nothing goes again |
+| `planner_job_end_and_park_wait_for_g4_p0` | After a planner job's last line, `G4 P0`; the job ends and the park goes only at its `ok` |
+| `planner_stop_then_play_resumes_at_the_reported_line` | The viewer follows the `[PE:]` line; Stop leaves the index there and Play restarts from it after `M110` |
+| `planner_settings_written_and_synced` | Planner Acceleration saves as a numbered `$47`; a `$$` reporting another `$48` is written back |
+| `planner_settings_never_reach_a_build_without_the_capability` | Without the capability Maslow Settings refuses Planner Acceleration and a typed `$47` is dropped |
+| `planner_feed_forward_written_to_a_build_that_lists_it` | A `B05` listing `feed-forward`: `$$` lists `$49`, and Planner Feed-Forward saves as a numbered `$49` |
+| `planner_feed_forward_never_reaches_a_build_without_it` | A planner build without `feed-forward` (c77bd97): Maslow Settings refuses Planner Feed-Forward and a typed `$49` is dropped |
+| `planner_51_30_connects_as_a_later_holey_build` | A `B05` of `51.30`: numbered by its capabilities, its build reads `51.30`, and Set Max writes a numbered `$63` |
+| `planner_peak_error_reports_overshoot_in_pe_job` | A `B05` listing `peak-error`: the four peaks after `queued` give the job's max error, and `PE JOB` logs `max_ahead_mm` and `overshoots` |
 | `real_*` | the owner's real jobs, with the controller's recorded replies ("Real jobs" below) |
 
 ## Adding or changing a transcript

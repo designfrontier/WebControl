@@ -20,9 +20,10 @@ git history.
   position at a safe height before it plunges. Play mid-file restores the file's modal state.
 - **Holey calibration:** cut the pattern, enter the twelve measurements, Calculate and Accept. The fit is a port of
   scipy's least-squares solver and gives the same numbers as the original. Triangular calibration is there too.
-- **One-click firmware upgrade to holey 51.292:** Actions → Upgrade holey firmware to 51.292… checks the board and the
-  current firmware, backs up the controller's flash and settings, flashes the pinned image with `avrdude`, migrates the
-  settings, and rolls back to the backup if the new firmware does not answer.
+- **One-click firmware upgrade to holey 51.292, or the experimental planner 51.30:** Actions → Upgrade holey
+  firmware… checks the board and the current firmware, backs up the controller's flash and settings, flashes the
+  pinned image with `avrdude`, migrates the settings, and rolls back to the backup if the new firmware does not
+  answer.
 - **The job lock:** while a job is running or paused, the settings, imports, unit switches and custom G-code are
   refused, so a cut never meets a changed machine or a stray line.
 - In-app help, logs, backup and restore, diagnostics, and on the Pi its GPIO buttons and LEDs and power-off.
@@ -36,6 +37,10 @@ git history.
   moves it to **holey 51.292**. Install this WebControl before flashing 51.292, and flash it from WebControl: the
   flash resets the controller's EEPROM, and WebControl then writes your settings back instead of adopting 51.292's
   defaults (`spec/firmware.md`, A2). The wizard also keeps the backup a rollback to 51.27 needs.
+- **Planner firmware 51.30 (experimental)**, 51.292 with an acceleration planner (designfrontier/Firmware `v51.30`),
+  is the wizard's second choice, from 51.27, 51.28 or 51.29x. It talks at 115200 baud and adds the Planner
+  Acceleration, Junction Deviation and Feed-Forward settings. 51.292 is the way back: the same wizard flashes it over
+  51.30.
 - The upgrade wizard handles holey firmware only, not stock or custom images. The camera and optical calibration are
   not supported.
 
@@ -106,9 +111,9 @@ With the machine idle, on either build:
 
 `rust/README.md` ("Updating on the Pi") describes the backup, the health check and the automatic rollback.
 
-**Cutting a release.** `.github/workflows/release.yml` builds the 51.292 firmware from its tag, checks it against
-`rust/firmware/holey-51.292.sha256`, and packages the aarch64 and x86_64 binaries (UI, help pages and that firmware
-embedded) with their install files.
+**Cutting a release.** `.github/workflows/release.yml` builds the 51.292 and 51.30 firmware from their tags, checks
+them against `rust/firmware/holey-51.292.sha256` and `holey-51.30.sha256`, and packages the aarch64 and x86_64
+binaries (UI, help pages and both firmware images embedded) with their install files.
 
 - Actions → Release → Run workflow builds the assets from any branch as a workflow artifact, without a release.
 - A `v*` tag on a green `master` attaches them to a **draft** GitHub Release named after the tag:
@@ -136,8 +141,8 @@ previous binary back.
 - For the coverage gate: `cargo install cargo-llvm-cov` and `jq`.
 - For the Linux builds: `cargo install --locked cargo-zigbuild` and zig (`pip install ziglang`, in a virtualenv if you
   like, with its `bin` on `PATH`).
-- For the 51.292 firmware image: Docker (`bash rust/firmware/docker-build.sh <dir>`). Without it, builds leave the
-  upgrade wizard disabled.
+- For the 51.292 and 51.30 firmware images: Docker (`bash rust/firmware/docker-build.sh <dir> [51.30]`). Without
+  them, builds leave the upgrade wizard disabled.
 
 ### Frontend (`frontend/`)
 
@@ -198,16 +203,16 @@ against them. Edit them by hand only for a deliberate behaviour change; each dir
 ### CI
 
 `.github/workflows/ci.yml` runs on every pull request and on `master`: the frontend job (format, lint, typecheck,
-tests, build); the 51.292 firmware build checked against its pin; and the Rust job (fmt, clippy, tests, the coverage
-gate, the deploy and release script tests, the aarch64 and x86_64 cross-builds with the firmware embedded, and
-Playwright against the binary). `release.yml` is described under Updating.
+tests, build); the 51.292 and 51.30 firmware builds checked against their pins; and the Rust job (fmt, clippy,
+tests, the coverage gate, the deploy and release script tests, the aarch64 and x86_64 cross-builds with the firmware
+embedded, and Playwright against the binary). `release.yml` is described under Updating.
 
 ## Docs map
 
 | Path | What |
 | --- | --- |
 | [spec/RUST-PLAN.md](spec/RUST-PLAN.md) | How the Rust backend was planned and built, and the owner decisions behind it |
-| [spec/firmware.md](spec/firmware.md) | The Maslow firmware's behaviour (51.27, 51.292), what the backend must do about it, the upgrade flow |
+| [spec/firmware.md](spec/firmware.md) | The Maslow firmware's behaviour (51.27, 51.292, the planner 51.30), what the backend must do about it, the upgrade flow |
 | [spec/INSTALL-PI.md](spec/INSTALL-PI.md) | Installing on a Pi, step by step, with a way back (a laptop: `rust/README.md`) |
 | [spec/rust-checklists/](spec/rust-checklists/) | Hardware checklists to run on the real machine |
 | [contract/](contract/README.md) | The UI ↔ backend contract |

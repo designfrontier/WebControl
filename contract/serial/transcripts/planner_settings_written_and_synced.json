@@ -1,0 +1,33 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "planner_settings_written_and_synced",
+    "description": "On a planner build Planner Acceleration ($47) is in Maslow Settings: saving 25 writes $47=25 as a numbered line, which 51.292 answers with its rewrite notice. A $$ that reports $47=25 agrees; one that reports a $48 other than the stored 0.01 is written back, as every other key is synced.",
+    "firmware": {
+      "variant": "planner",
+      "version": "51.29",
+      "build": "51.292"
+    },
+    "webcontrolCommit": "planner-streaming"
+  },
+  "setup": {
+    "units": "MM"
+  },
+  "events": [
+    {"type": "http", "method": "PUT", "path": "/api/settings/maslow", "json": {"values": {"plannerAcceleration": "25"}}, "status": 200},
+    {"type": "tx", "bytes": "N5 $47=25*70\n"},
+    {"type": "rx", "line": "Change in setting, rewriting EEPROM"},
+    {"type": "rx", "line": "ok N5"},
+    {"type": "expect", "settings": [{"section": "Maslow Settings", "key": "plannerAcceleration", "value": "25.0"}]},
+    {"type": "http", "method": "POST", "path": "/sendGCode", "form": {"gcode": "$$"}, "status": 200},
+    {"type": "tx", "bytes": "N6 $$*88\n"},
+    {"type": "rx", "line": "$46=97.90000000", "comment": "the dump's keys before $46 are left out"},
+    {"type": "rx", "line": "$47=25.00000000"},
+    {"type": "rx", "line": "$48=0.05000000"},
+    {"type": "rx", "line": "ok N6"},
+    {"type": "tx", "bytes": "N7 $48=0.009999998*106\n"},
+    {"type": "rx", "line": "Change in setting, rewriting EEPROM"},
+    {"type": "rx", "line": "ok N7"},
+    {"type": "expect", "emitted": [{"command": "controllerMessage", "data": "Settings sync: $48 (plannerJunctionDeviation) was 0.05 on the controller"}], "settings": [{"section": "Maslow Settings", "key": "plannerJunctionDeviation", "value": "0.01"}]}
+  ]
+}

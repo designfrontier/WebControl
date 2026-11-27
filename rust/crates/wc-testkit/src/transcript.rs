@@ -166,6 +166,12 @@ pub enum Event {
         #[serde(default)]
         comment: Option<String>,
     },
+    /// The port was opened once since the last `open` event (or before the events), at this baud.
+    Open {
+        baud: u32,
+        #[serde(default)]
+        comment: Option<String>,
+    },
     Expect(Box<Expect>),
 }
 

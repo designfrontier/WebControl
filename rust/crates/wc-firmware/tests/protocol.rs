@@ -1,7 +1,10 @@
 use wc_firmware::boot::{
-    board_banner, ends_boot, firmware_build, is_boot_banner, parse_firmware_version, supports_z_limits,
+    board_banner, ends_boot, firmware_build, is_boot_banner, other_baud, parse_firmware_version, supports_z_limits,
 };
-use wc_firmware::{Accounting, BUFFER_SIZE, PositionError, Reply, RunMode, Status, classify, split_glued};
+use wc_firmware::planner::{numbered, renumber, waits_for_moves};
+use wc_firmware::{
+    Accounting, BUFFER_SIZE, Peaks, Planned, PositionError, Reply, RunMode, Status, classify, split_glued,
+};
 
 #[test]
 fn every_message_kind_is_told_apart() {
@@ -60,11 +63,25 @@ fn a_status_report_ending_in_a_multibyte_character_drops_that_character() {
 fn position_error_reports_are_parsed_by_their_field_count() {
     assert_eq!(
         classify("[PE:0.10,-0.20,120,1650.5,1651.25]"),
-        Reply::PositionError(PositionError { left: 0.1, right: -0.2, space: 120, chains: Some((1650.5, 1651.25)) })
+        Reply::PositionError(PositionError {
+            left: 0.1,
+            right: -0.2,
+            space: 120,
+            chains: Some((1650.5, 1651.25)),
+            planner: None,
+            peaks: None,
+        })
     );
     assert_eq!(
         classify("[PE:0.10,-0.20,120]"),
-        Reply::PositionError(PositionError { left: 0.1, right: -0.2, space: 120, chains: None })
+        Reply::PositionError(PositionError {
+            left: 0.1,
+            right: -0.2,
+            space: 120,
+            chains: None,
+            planner: None,
+            peaks: None
+        })
     );
 }
 
@@ -100,6 +117,11 @@ fn boots_are_told_by_their_banners() {
 }
 
 #[test]
+fn the_other_baud_of_an_unknown_rate_is_115200() {
+    assert_eq!([57600, 115200, 9600].map(other_baud), [115200, 57600, 115200]);
+}
+
+#[test]
 fn the_firmware_version_is_read_from_its_b05_reply() {
     assert_eq!(parse_firmware_version("Firmware Version 51.27"), Some(51.27));
     assert_eq!(parse_firmware_version("Firmware Version   1.26 extra"), Some(1.26));
@@ -116,7 +138,11 @@ fn the_build_narrows_51_29_by_the_rewrite_notice() {
     assert_eq!(firmware_build(100.0, false).as_deref(), Some("100"));
     assert_eq!(firmware_build(51.29, false).as_deref(), Some("51.29x"));
     assert_eq!(firmware_build(51.29, true).as_deref(), Some("51.292"));
-    assert!(supports_z_limits(Some("51.292")) && supports_z_limits(Some("51.3")));
+    assert!(supports_z_limits(Some("51.292")) && supports_z_limits(Some("51.30")));
+    assert_eq!(parse_firmware_version("Firmware Version 51.30"), Some(51.3));
+    assert_eq!(firmware_build(51.3, false).as_deref(), Some("51.30"), "51.30 needs no fingerprint, and keeps its 0");
+    assert_eq!(firmware_build(1.26, false).as_deref(), Some("1.26"));
+    assert_eq!(firmware_build(51.2925, false).as_deref(), Some("51.2925"), "more decimals than B05 prints stay");
     [None, Some("51.29x"), Some("51.27"), Some("100"), Some("junk")]
         .iter()
         .for_each(|build| assert!(!supports_z_limits(*build), "{build:?}"));
@@ -152,4 +178,58 @@ fn accounting_gives_back_the_lines_it_waits_for_oldest_first() {
     assert_eq!(taken.iter().map(|s| s.text.as_deref()).collect::<Vec<_>>(), [Some("G1 X1 \n"), Some("G1 X2 \n")]);
     assert!(accounting.is_empty());
     assert_eq!(accounting.lines(), Some(vec![]));
+}
+
+#[test]
+fn a_planner_build_numbers_its_acks_and_resends_and_reports_its_line() {
+    assert_eq!(classify("ok N12"), Reply::OkLine(12));
+    assert_eq!(classify("rs N8"), Reply::Resend(8));
+    assert_eq!(classify("ok Nx"), Reply::Other("ok Nx".into()));
+    assert_eq!(
+        classify("Capabilities: planner line-numbers"),
+        Reply::Capabilities(vec!["planner".into(), "line-numbers".into()])
+    );
+    let Reply::PositionError(report) = classify("[PE:0.10,-0.20,127,1650.5,1651.25,42,3]") else { panic!() };
+    assert_eq!(report.planner, Some(Planned { line: 42, queued: 3 }));
+    assert_eq!(report.peaks, None);
+}
+
+#[test]
+fn a_peak_error_build_adds_the_peaks_after_the_queue_length() {
+    let Reply::PositionError(report) = classify("[PE:0.10,-0.20,127,1650.5,1651.25,42,3,0.61,0.05,0.00,0.84]") else {
+        panic!()
+    };
+    assert_eq!(report.planner, Some(Planned { line: 42, queued: 3 }));
+    let peaks = report.peaks.unwrap();
+    assert_eq!(peaks, Peaks { left_ahead: 0.61, left_behind: 0.05, right_ahead: 0.0, right_behind: 0.84 });
+    assert_eq!((peaks.ahead(), peaks.max()), (0.61, 0.84));
+}
+
+#[test]
+fn a_numbered_line_carries_the_xor_of_its_upper_cased_trimmed_bytes() {
+    assert_eq!(numbered(5, "G21"), "N5 G21*31", "4E^35^20^47^32^31 = 1F");
+    assert_eq!(numbered(5, " g21  "), "N5 G21*31");
+    assert_eq!(renumber(13), "M110 N13");
+}
+
+#[test]
+fn an_ok_n_frees_every_copy_up_to_its_number() {
+    let mut accounting = Accounting::default();
+    accounting.sent("M110 N5\n", None);
+    accounting.sent_numbered("G1 X1\n", 15, Some(0), 5);
+    accounting.sent_numbered("G1 X2\n", 15, Some(1), 6);
+    assert!(accounting.acked_through(9).is_empty(), "a late duplicate frees nothing");
+    let freed: Vec<Option<u64>> = accounting.acked_through(5).iter().map(|sent| sent.number).collect();
+    assert_eq!(freed, [None, Some(5)]);
+    assert_eq!(accounting.space(), BUFFER_SIZE - 15);
+}
+
+#[test]
+fn a_planner_build_runs_these_lines_only_after_its_queued_moves() {
+    ["M5", "G0 M3", "S5000", "B08", "$47=25", "G4 P0", "g10 l20 p1", "G38.2 Z-10 F100", "G90 G4 P1"]
+        .iter()
+        .for_each(|line| assert!(waits_for_moves(line), "{line}"));
+    ["G1 X1 F600", "G0 Z5", "G2 X1 Y1 I1 J0", "G90", "G21", "G40 G41"]
+        .iter()
+        .for_each(|line| assert!(!waits_for_moves(line), "{line}"));
 }

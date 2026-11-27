@@ -207,7 +207,7 @@ impl Machine {
     pub(crate) fn queue_stop(&mut self, why: &str, effects: &mut Vec<Effect>) {
         self.park_cancelled();
         self.park_tool_change_ended();
-        let oldest = self.controller.accounting.oldest_index();
+        let oldest = self.running_index();
         let part_way = self.job.flow.in_job() || (self.queue.step == Step::Finishing && oldest.is_some());
         if let Some(id) = self.head_id().filter(|_| part_way) {
             self.queue.stopped_at = Some((id, oldest.unwrap_or(self.index)));
@@ -238,11 +238,14 @@ impl Machine {
     }
 
     pub(crate) fn queue_load_failed(&mut self, effects: &mut Vec<Effect>) {
+        let file = self.queue.entries.first().map(|entry| entry.item.file.clone()).unwrap_or_default();
+        self.queue_load_refused(&format!("Could not load {file}."), effects);
+    }
+
+    pub(crate) fn queue_load_refused(&mut self, why: &str, effects: &mut Vec<Effect>) {
         if self.queue.step == Step::Loading {
-            let file = self.queue.entries.first().map(|entry| entry.item.file.clone()).unwrap_or_default();
-            let why = format!("Could not load {file}.");
             effects.push(alert(&format!("{why} The queue stopped; the files after it are still queued.")));
-            self.queue_stop(&why, effects);
+            self.queue_stop(why, effects);
         }
     }
 

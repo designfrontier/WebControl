@@ -1,0 +1,53 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "planner_51_30_connects_as_a_later_holey_build",
+    "description": "The planner build reporting Firmware Version 51.30 boots: its capabilities, not its version, turn on numbered lines, so the handshake and $$ go numbered as for a 51.29 planner build. Its build reads 51.3, a holey build past 51.292 with no fingerprint needed, so it keeps Z limits: Set Max writes $63 as a numbered line.",
+    "firmware": {
+      "variant": "planner",
+      "version": "51.30"
+    },
+    "webcontrolCommit": "planner-streaming"
+  },
+  "setup": {
+    "units": "MM",
+    "start": "boot"
+  },
+  "events": [
+    {"type": "rx", "line": "PCB v1.1 Detected"},
+    {"type": "rx", "line": "Grbl v1.00"},
+    {"type": "rx", "line": "ready"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "B05  \n"},
+    {"type": "rx", "line": "B05"},
+    {"type": "rx", "line": "Firmware Version 51.30"},
+    {"type": "rx", "line": "Capabilities: planner line-numbers accel-settings status-line feed-forward peak-error"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "M110 N1\n"},
+    {"type": "tx", "bytes": "N1 G21*27\n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "G21"},
+    {"type": "rx", "line": "ok N1"},
+    {"type": "tx", "bytes": "N2 G90*18\n"},
+    {"type": "rx", "line": "G90"},
+    {"type": "rx", "line": "ok N2"},
+    {"type": "tx", "bytes": "N3 $$*93\n"},
+    {"type": "rx", "line": "$46=97.90000152 (Sled Weight, N)", "comment": "the dump's keys before $46 are left out"},
+    {"type": "rx", "line": "$47=50.00000000"},
+    {"type": "rx", "line": "$48=0.01000000"},
+    {"type": "rx", "line": "$49=0.00000000"},
+    {"type": "rx", "line": "ok N3"},
+    {"type": "tx", "bytes": "N4 $13=63.5*95\n"},
+    {"type": "rx", "line": "Change in setting, rewriting EEPROM"},
+    {"type": "rx", "line": "ok N4"},
+    {"type": "expect", "state": {"controllerFirmwareVersion": 51.3, "firmwareBuild": "51.30"}},
+    {"type": "rx", "line": "<Idle,MPos:0.00,0.00,12.34,WPos:0.000,0.000,0.000>"},
+    {"type": "ui", "action": {"command": "setMaxZ", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "N5 $63=12.340*93\n"},
+    {"type": "rx", "line": "the value received: 12.34"},
+    {"type": "rx", "line": ""},
+    {"type": "rx", "line": "new zaxis upper limit=12.34"},
+    {"type": "rx", "line": "Change in setting, rewriting EEPROM"},
+    {"type": "rx", "line": "ok N5"}
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "connect_falls_back_from_57600_to_115200_for_51_30",
+    "description": "controllerBaud holds its default 57600 but the controller was flashed with the planner's 51.30, which talks at 115200: nothing it prints comes at 57600, so 3 s after the open the port is reopened at 115200, which resets the board. Its boot gets the numbered handshake, and controllerBaud becomes 115200.",
+    "firmware": {
+      "variant": "planner",
+      "version": "51.30"
+    },
+    "webcontrolCommit": "planner-baud"
+  },
+  "setup": {
+    "units": "MM",
+    "start": "boot"
+  },
+  "events": [
+    {"type": "open", "baud": 57600, "comment": "the default rate"},
+    {"type": "rx", "line": "\ufffd\ufffd\ufffd\ufffd", "comment": "the other rate reads as garbage, which is not the firmware"},
+    {"type": "tick", "seconds": 3.0, "comment": "3 s with nothing the firmware prints"},
+    {"type": "open", "baud": 115200, "comment": "reopened at the other rate, which resets the board"},
+    {"type": "rx", "line": "PCB v1.1 Detected"},
+    {"type": "rx", "line": "Grbl v1.00"},
+    {"type": "rx", "line": "ready"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "B05  \n"},
+    {"type": "rx", "line": "B05"},
+    {"type": "rx", "line": "Firmware Version 51.30"},
+    {"type": "rx", "line": "Capabilities: planner line-numbers accel-settings status-line feed-forward peak-error"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "M110 N1\n"},
+    {"type": "tx", "bytes": "N1 G21*27\n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "G21"},
+    {"type": "rx", "line": "ok N1"},
+    {"type": "tx", "bytes": "N2 G90*18\n"},
+    {"type": "rx", "line": "G90"},
+    {"type": "rx", "line": "ok N2"},
+    {"type": "tx", "bytes": "N3 $$*93\n"},
+    {"type": "rx", "line": "$46=97.90000152 (Sled Weight, N)", "comment": "the dump's keys before $46 are left out"},
+    {"type": "rx", "line": "$47=50.00000000"},
+    {"type": "rx", "line": "$48=0.01000000"},
+    {"type": "rx", "line": "$49=0.00000000"},
+    {"type": "rx", "line": "ok N3"},
+    {"type": "tx", "bytes": "N4 $13=63.5*95\n"},
+    {"type": "rx", "line": "Change in setting, rewriting EEPROM"},
+    {"type": "rx", "line": "ok N4"},
+    {"type": "expect", "state": {"controllerFirmwareVersion": 51.3, "firmwareBuild": "51.30"}},
+    {"type": "expect", "settings": [{"section": "Computed Settings", "key": "controllerBaud", "value": "115200"}]}
+  ]
+}

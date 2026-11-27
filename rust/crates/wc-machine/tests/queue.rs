@@ -30,6 +30,7 @@ struct Shop {
     paused: bool,
     /// The next load fails, as an unreadable file does.
     unreadable: bool,
+    refused: Option<String>,
     /// Loads wait in `held` instead of being answered.
     hold: bool,
     held: Vec<String>,
@@ -71,6 +72,7 @@ impl Shop {
             firmware_tool: Some(0),
             paused: false,
             unreadable: false,
+            refused: None,
             hold: false,
             held: Vec::new(),
             probe_misses: false,
@@ -99,9 +101,12 @@ impl Shop {
             return self.held.extend(loads);
         }
         loads.into_iter().for_each(|file| {
-            let request = match std::mem::take(&mut self.unreadable) {
-                true => Ask::Problem(Problem::GcodeUnreadable),
-                false => Ask::LoadGcode { gcode: self.gcode(&file), file: Some(path(&file)), origin: Origin::Queue },
+            let request = match (std::mem::take(&mut self.unreadable), self.refused.take()) {
+                (true, _) => Ask::Problem(Problem::GcodeUnreadable),
+                (false, Some(why)) => Ask::LoadRefused(why),
+                (false, None) => {
+                    Ask::LoadGcode { gcode: self.gcode(&file), file: Some(path(&file)), origin: Origin::Queue }
+                }
             };
             self.event(Event::Request { id: 7, request });
         });
@@ -406,6 +411,18 @@ fn a_file_that_fails_to_load_stops_the_queue_with_an_alert() {
     assert!(alerts(&shop.effects).iter().any(|alert| alert.contains("Could not load same.nc")));
     let queue = shop.queue();
     assert_eq!((queue["state"].as_str(), queue["reason"].as_str()), (Some("stopped"), Some("Could not load same.nc.")));
+    assert_eq!(shop.files(), ["same.nc"], "the file stays queued");
+}
+
+#[test]
+fn a_file_refused_for_its_size_stops_the_queue_with_the_reason() {
+    let mut shop = playing(SAME);
+    shop.refused = Some("This file has 3,000,000 lines and needs about 1002 MB.".into());
+    shop.run();
+    let reason = "This file has 3,000,000 lines and needs about 1002 MB.";
+    assert!(alerts(&shop.effects).iter().any(|alert| alert.starts_with(reason) && alert.contains("The queue stopped")));
+    assert!(!alerts(&shop.effects).iter().any(|alert| alert.contains("Cannot open gcode file")));
+    assert_eq!(shop.queue()["reason"].as_str(), Some(reason));
     assert_eq!(shop.files(), ["same.nc"], "the file stays queued");
 }
 

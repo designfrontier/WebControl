@@ -26,6 +26,8 @@ pub struct Build {
     pub banner: String,
     /// The EEPROM layout; a flash to another one boots with `EEPROM read fail` and factory settings.
     pub settings_version: u8,
+    /// The `Capabilities:` line's words after B05's version, if the build prints one.
+    pub capabilities: Option<String>,
 }
 
 impl Build {
@@ -35,6 +37,7 @@ impl Build {
             rewrite_notice: false,
             banner: "PCB v1.6 TLE9201  Detected".into(),
             settings_version: 6,
+            capabilities: None,
         }
     }
 
@@ -46,6 +49,12 @@ impl Build {
     pub fn on_board(self, banner: &str) -> Build {
         Build { banner: banner.into(), ..self }
     }
+}
+
+/// A planner host's `N<n> <line>*<sum>` as its number and line; the sum is not checked.
+fn unframed(line: &str) -> Option<(Option<u64>, String)> {
+    let (number, rest) = line.strip_prefix('N')?.split_once(' ')?;
+    Some((Some(number.parse().ok()?), rest.rsplit_once('*')?.0.to_string()))
 }
 
 /// A line the firmware holds until `~`.
@@ -66,6 +75,8 @@ pub struct Sim {
     finishes_at: Option<u64>,
     held: Option<Hold>,
     after_realtime: bool,
+    /// The running line's `N`, which a planner build's ack names.
+    acking: Option<u64>,
     mm: bool,
     absolute: bool,
     position: [f64; 3],
@@ -177,6 +188,7 @@ impl Sim {
             finishes_at: None,
             held: None,
             after_realtime: false,
+            acking: None,
             mm: true,
             absolute: true,
             position: [0.0; 3],
@@ -333,7 +345,7 @@ impl Sim {
             match self.finishes_at {
                 Some(at) if at <= now && self.held.is_none() => {
                     self.finishes_at = None;
-                    out.push("ok".into());
+                    out.push(self.acking.take().map_or("ok".into(), |number| format!("ok N{number}")));
                 }
                 Some(_) => return out,
                 None => {}
@@ -344,6 +356,8 @@ impl Sim {
             let Some(line) = self.queue.pop_front() else {
                 return out;
             };
+            let (number, line) = unframed(&line).filter(|_| self.build.capabilities.is_some()).unwrap_or((None, line));
+            self.acking = number;
             if let Some(duration) = self.execute(&line, &mut out) {
                 self.finishes_at = Some(now + duration);
             }
@@ -384,6 +398,7 @@ impl Sim {
         }
         if text.starts_with("B05") {
             out.push(format!("Firmware Version {}", self.build.version));
+            out.extend(self.build.capabilities.as_ref().map(|words| format!("Capabilities: {words}")));
             return Some(0);
         }
         if text.starts_with("B10") {

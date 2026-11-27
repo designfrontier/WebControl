@@ -3,7 +3,6 @@
 
 use std::sync::Arc;
 
-use wc_gcode::position;
 use wc_kinematics::Kinematics;
 use wc_protocol::main::{ErrorValueMessage, GcodePositionMessage};
 use wc_protocol::{Envelope, Push};
@@ -17,10 +16,18 @@ pub(crate) const NO_COMPUTED_POSITION: f64 = -999999.0;
 pub enum Work {
     /// The forward-kinematics solve for an error report's computed X and Y.
     ComputedPosition { model: Box<Kinematics>, chains: (f64, f64), guess: (f64, f64), report: ErrorValueMessage },
-    /// `sendGCodePositionUpdate`: the file read from the top to `index`. `failure` is alerted if that fails.
-    GcodePosition { gcode: Arc<Vec<String>>, index: usize, scale: f64, failure: Option<String> },
-    /// The same for a client that fell behind; nothing waits behind it.
-    GcodePositionFor { sid: String, gcode: Arc<Vec<String>>, index: usize, scale: f64 },
+    /// `sendGCodePositionUpdate`: the position before line `index`, or `after` it. `failure` is alerted if the file
+    /// cannot be read that far.
+    GcodePosition {
+        gcode: Arc<Vec<String>>,
+        positions: Arc<Vec<[f64; 3]>>,
+        index: usize,
+        after: bool,
+        scale: f64,
+        failure: Option<String>,
+    },
+    /// The position before line `index` for a client that fell behind; nothing waits behind it.
+    GcodePositionFor { sid: String, gcode: Arc<Vec<String>>, positions: Arc<Vec<[f64; 3]>>, index: usize, scale: f64 },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -37,12 +44,18 @@ pub enum Done {
     },
 }
 
-fn gcode_position(gcode: &[String], index: usize, scale: f64) -> Option<GcodePositionMessage> {
-    let at = position::find_position_at(gcode, index).ok()?;
+fn gcode_position(
+    gcode: &[String],
+    positions: &[[f64; 3]],
+    index: usize,
+    after: bool,
+    scale: f64,
+) -> Option<GcodePositionMessage> {
+    let [x, y, z] = *positions.get(index + usize::from(after))?;
     Some(GcodePositionMessage {
-        xval: at.x * scale,
-        yval: at.y * scale,
-        zval: at.z * scale,
+        xval: x * scale,
+        yval: y * scale,
+        zval: z * scale,
         gcode_line: gcode.get(index).cloned().unwrap_or_default(),
         gcode_line_index: index,
     })
@@ -57,11 +70,11 @@ impl Work {
                     computed.unwrap_or((NO_COMPUTED_POSITION, NO_COMPUTED_POSITION));
                 Done::ComputedPosition { model, report }
             }
-            Work::GcodePosition { gcode, index, scale, failure } => {
-                Done::GcodePosition(gcode_position(&gcode, index, scale).ok_or(failure))
+            Work::GcodePosition { gcode, positions, index, after, scale, failure } => {
+                Done::GcodePosition(gcode_position(&gcode, &positions, index, after, scale).ok_or(failure))
             }
-            Work::GcodePositionFor { sid, gcode, index, scale } => {
-                Done::GcodePositionFor { sid, message: gcode_position(&gcode, index, scale) }
+            Work::GcodePositionFor { sid, gcode, positions, index, scale } => {
+                Done::GcodePositionFor { sid, message: gcode_position(&gcode, &positions, index, false, scale) }
             }
         })
     }

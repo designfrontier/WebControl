@@ -102,7 +102,8 @@ pub enum Effect {
     /// `!` or `~`, which the firmware acts on at once.
     Realtime(Vec<u8>),
     Push(Push),
-    OpenPort(String),
+    /// The controller's port, at this baud.
+    OpenPort(String, u32),
     ClosePort,
     ListPorts,
     /// A line for the log viewer: what was sent or read.
@@ -181,6 +182,8 @@ pub(crate) enum Queued {
     Raise(crate::clearance::Raise),
     /// The job queue acts here once every line before it is answered.
     Advance,
+    /// A planner build's job ends here, once its `G4 P0` is answered.
+    FileDone,
 }
 
 /// What readers see; every field is derived from the machine's state, never stored separately.
@@ -194,8 +197,14 @@ pub struct Snapshot {
     pub manual_z_axis_adjust: bool,
     /// A G38.2 is queued or descending; only Stop and actions that move nothing run.
     pub probing: bool,
+    /// The index a planner build's Stop left, until Play, a file or a line change.
+    pub stopped_at: Option<usize>,
     pub pause_button: PauseButton,
     pub controller_firmware_version: f64,
+    /// The controller's B05 reply listed the planner capability.
+    pub planner: bool,
+    /// The controller's B05 reply listed the feed-forward capability.
+    pub feed_forward: bool,
     pub controller_board: Option<String>,
     pub firmware_build: Option<String>,
     pub host_address: String,
@@ -243,6 +252,7 @@ impl Snapshot {
             job_in_progress: self.job_in_progress,
             manual_z_axis_adjust: self.manual_z_axis_adjust,
             probing: self.probing,
+            stopped_at: self.stopped_at,
         }
     }
 
@@ -321,6 +331,10 @@ pub(crate) struct Controller {
     pub stop_reload: bool,
     /// Whether the line it waits for ever reached the controller.
     pub watch: crate::lost::Watch,
+    /// A planner build's numbered lines.
+    pub numbered: crate::planner::Numbered,
+    /// A line only the firmware prints came since the port opened, so the baud is right.
+    pub heard: bool,
 }
 
 impl Controller {
@@ -348,6 +362,8 @@ impl Controller {
             raise_deadline: None,
             stop_reload: false,
             watch: crate::lost::Watch::default(),
+            numbered: crate::planner::Numbered::default(),
+            heard: false,
         }
     }
 }
@@ -361,8 +377,16 @@ pub struct Machine {
     /// The settings as last handed to the writer.
     pub(crate) saved: Arc<Settings>,
     pub(crate) link: Link,
+    /// This open is at the other baud than `controllerBaud`, which brought nothing.
+    pub(crate) baud_retry: bool,
     pub(crate) controller: Controller,
     pub(crate) firmware_version: f64,
+    /// The last B05 reply listed the `planner` capability.
+    pub(crate) planner: bool,
+    /// The last B05 reply listed the `feed-forward` capability.
+    pub(crate) feed_forward: bool,
+    /// The last B05 reply listed `peak-error`: `[PE:]` carries the peaks since the last report.
+    pub(crate) peak_error: bool,
     pub(crate) rewrite_notice: bool,
     pub(crate) board: Option<String>,
     pub(crate) fake_servo: bool,
@@ -378,6 +402,7 @@ pub struct Machine {
     /// The LEDs as last handed to the shell.
     pub(crate) leds_shown: Leds,
     pub(crate) gcode: Arc<Vec<String>>,
+    pub(crate) positions: Arc<Vec<[f64; 3]>>,
     pub(crate) index: usize,
     pub(crate) gcode_file: Option<PathBuf>,
     /// Edited in the UI since it was read, so `gcode_file` no longer holds what runs.
@@ -445,8 +470,12 @@ impl Machine {
             saved: settings.clone(),
             settings,
             link: Link::Disconnected { retry_at: Duration::ZERO },
+            baud_retry: false,
             controller: Controller::new(Duration::ZERO),
             firmware_version: 0.0,
+            planner: false,
+            feed_forward: false,
+            peak_error: false,
             rewrite_notice: false,
             board: None,
             fake_servo: false,
@@ -458,6 +487,7 @@ impl Machine {
             leds: Leds::default(),
             leds_shown: Leds::default(),
             gcode: Arc::new(Vec::new()),
+            positions: Arc::new(wc_gcode::position::positions(&[])),
             index: 0,
             gcode_file: None,
             gcode_edited: false,
@@ -477,7 +507,7 @@ impl Machine {
             pid: Pid::default(),
             calibration: crate::calibration::Results::default(),
             kinematics,
-            upgrade: Upgrade::new(Image::embedded()),
+            upgrade: Upgrade::new(Image::embedded(), Image::embedded_planner()),
             restart: crate::sync::Restart::None,
             lanes: Lanes::default(),
             camera_on: false,
@@ -495,6 +525,11 @@ impl Machine {
         self
     }
 
+    pub fn with_planner_firmware(mut self, image: Option<Image>) -> Machine {
+        self.upgrade.planner_image = image;
+        self
+    }
+
     /// Always opens `port`, whatever `COMport` says.
     pub fn on_port(self, port: &str) -> Machine {
         Machine { fixed_port: Some(port.into()), ..self }
@@ -508,6 +543,7 @@ impl Machine {
     /// Loads lines as `/openGCode` would, without the preview; transcripts and tests use it directly.
     pub fn load_gcode(&mut self, text: &str) {
         self.gcode = Arc::new(wc_gcode::load::filter(text, None).unwrap_or_default());
+        self.positions = Arc::new(wc_gcode::position::positions(&self.gcode));
         self.file_tools = Arc::new(wc_gcode::tools::file_tools(text));
         self.stats.estimate = crate::files::estimate(&self.gcode, &self.settings);
         self.index = 0;
@@ -622,6 +658,9 @@ impl Machine {
             Link::Connected { port } => (LinkStatus::Connected, port.clone()),
             _ => (LinkStatus::Disconnected, "none".to_string()),
         };
+        let streaming = matches!(self.job.flow, Flow::Streaming | Flow::Draining);
+        let shown = self.controller.numbered.shown().filter(|_| self.planner && streaming);
+        let shown = shown.unwrap_or(self.index);
         Snapshot {
             link,
             port,
@@ -630,15 +669,18 @@ impl Machine {
             job_in_progress: self.job.flow.in_job(),
             manual_z_axis_adjust: self.job.manual_z.is_some(),
             probing: self.probing,
+            stopped_at: self.job.stopped_at.filter(|&index| index == self.index),
             pause_button: self.job.pause_button(),
             controller_firmware_version: self.firmware_version,
+            planner: self.planner,
+            feed_forward: self.feed_forward,
             controller_board: self.board.clone(),
             firmware_build: wc_firmware::boot::firmware_build(self.firmware_version, self.rewrite_notice),
             host_address: self.host_address.clone(),
             positioning: self.positioning,
             current_tool: u32::try_from(self.job.tool).unwrap_or(0),
-            gcode_index: self.index,
-            gcode_line: self.gcode.get(self.index).cloned().unwrap_or_default(),
+            gcode_index: shown,
+            gcode_line: self.gcode.get(shown).cloned().unwrap_or_default(),
             gcode_count: self.gcode.len(),
             gcode: Shared(self.gcode.clone()),
             gcode_file: self.gcode_file.clone(),

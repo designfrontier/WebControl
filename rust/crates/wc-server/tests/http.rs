@@ -291,7 +291,7 @@ async fn api_main_reports_the_run_status_and_the_touch_plate() {
     assert_eq!(
         reply.json(),
         json!({"status": {"uploadFlag": 0, "positioningMode": 0, "currentTool": 0, "jobInProgress": false,
-            "manualZAxisAdjust": false, "probing": false}, "touchPlate": true, "gcode": {"lineIndex": 0, "line": "", "lineCount": 0}})
+            "manualZAxisAdjust": false, "probing": false, "stoppedAt": null}, "touchPlate": true, "gcode": {"lineIndex": 0, "line": "", "lineCount": 0}})
     );
     let flags =
         [(json!(0), false), (json!(true), true), (json!("True"), true), (json!("2.5"), true), (json!("no"), false)];

@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use tokio::sync::Notify;
 use wc_machine::Host;
-use wc_server::host::{LOG_FILE, LOG_LIMIT, SystemHost, busiest_core, core_times, list_ports};
+use wc_server::host::{LOG_FILE, LOG_LIMIT, SystemHost, busiest_core, core_times, list_ports, rotated_logs};
 
 fn host_in(dir: &Path) -> (SystemHost, Arc<Notify>) {
     let exit = Arc::new(Notify::new());
@@ -62,15 +62,52 @@ fn the_serial_log_appends_rotates_and_clears() {
     host.log("0.20: ok\n");
     host.flush_log();
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "0.10: Sent: G21\n0.20: ok\n");
-    std::fs::write(&path, vec![b'x'; LOG_LIMIT as usize]).unwrap();
+    std::fs::File::options().write(true).open(&path).unwrap().set_len(LOG_LIMIT).unwrap();
     host.log("next\n");
     host.flush_log();
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "next\n");
-    assert_eq!(std::fs::metadata(path.with_extension("log.1")).unwrap().len(), LOG_LIMIT);
+    let rotated = rotated_logs(&path);
+    assert_eq!(rotated.len(), 1);
+    assert_eq!(std::fs::metadata(&rotated[0]).unwrap().len(), LOG_LIMIT);
+    let name = rotated[0].file_name().unwrap().to_str().unwrap().to_string();
+    assert!(
+        name.starts_with("webcontrol-rs.")
+            && name.ends_with(".log")
+            && name.len() == "webcontrol-rs.YYYYMMDD-HHMMSS.log".len()
+    );
     host.clear_logs();
     host.flush_log();
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "");
-    assert!(!path.with_extension("log.1").exists());
+    assert!(rotated_logs(&path).is_empty());
+}
+
+#[test]
+fn rotation_deletes_rotated_logs_older_than_thirty_days() {
+    let dir = tempfile::tempdir().unwrap();
+    let (host, _) = host_in(dir.path());
+    let logs = dir.path().join(".WebControl");
+    let path = logs.join(LOG_FILE);
+    host.log("start\n");
+    host.flush_log();
+    let aged = |name: &str, days: u64| {
+        let file = logs.join(name);
+        std::fs::write(&file, "old\n").unwrap();
+        let at = std::time::SystemTime::now() - std::time::Duration::from_secs(days * 24 * 60 * 60);
+        std::fs::File::options().write(true).open(&file).unwrap().set_modified(at).unwrap();
+        file
+    };
+    let (expired, legacy, kept) = (
+        aged("webcontrol-rs.20261001-000000.log", 31),
+        aged("webcontrol-rs.log.1", 40),
+        aged("webcontrol-rs.20261120-000000.log", 7),
+    );
+    let other = aged("notes.log", 90);
+    std::fs::File::options().write(true).open(&path).unwrap().set_len(LOG_LIMIT).unwrap();
+    host.log("next\n");
+    host.flush_log();
+    assert!(!expired.exists() && !legacy.exists());
+    assert!(kept.exists() && other.exists());
+    assert_eq!(rotated_logs(&path).len(), 2);
 }
 
 #[test]

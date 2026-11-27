@@ -74,6 +74,14 @@ describe("pacing helpers", () => {
       lost: "Lost 0",
       detail: "0 lines sent · Lost 0 · 1 lost twice · – s/line · 0.0 s recovering · min gap 0 ms",
     });
+    const errors = segment({ positionError: { samples: 900, meanMm: 0.412, maxMm: 1.3, over1Mm: 2 } });
+    expect(describeSegment(errors).detail).toContain(
+      "7.1 s recovering · Error mean 0.41 mm, max 1.30 mm, 2 over 1 mm · v0.94 50 ms",
+    );
+    const peaks = segment({
+      positionError: { samples: 900, meanMm: 0.412, maxMm: 1.3, over1Mm: 2, maxAheadMm: 0.614, overshoots: 3 },
+    });
+    expect(describeSegment(peaks).detail).toContain("2 over 1 mm, overshoot max 0.61 mm · v0.94");
   });
 
   it("shows the server's reason for a refusal", () => {
@@ -195,12 +203,14 @@ describe("PacingControl", () => {
       segment({ mode: "minimum gap", gapMs: 25, endedBy: "job end", linesPerMinute: 612 }),
       segment({ endedBy: "pacing change", medianShortGapMs: null }),
     ];
+    history[0].positionError = { samples: 900, meanMm: 0.412, maxMm: 1.3, over1Mm: 2 };
     const { user } = await renderControl(stats({ history }));
     await user.click(screen.getByRole("button", { name: "Pacing stats" }));
     const dialog = screen.getByRole("dialog", { name: "Line pacing" });
     const rows = within(dialog).getAllByRole("row");
     expect(within(rows[1]).getByRole("rowheader")).toHaveTextContent("min gap 25 ms");
     expect(rows[1]).toHaveTextContent("612");
+    expect(rows[1]).toHaveTextContent("0.41/1.30");
     expect(rows[2]).toHaveTextContent("pacing change");
     const scroller = within(dialog).getByRole("region", { name: "Segment history" });
     expect(scroller).toHaveAttribute("tabindex", "0");

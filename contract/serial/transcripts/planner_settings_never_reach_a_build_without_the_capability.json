@@ -1,0 +1,24 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "planner_settings_never_reach_a_build_without_the_capability",
+    "description": "On 51.292 without the planner capability, Maslow Settings has no Planner Acceleration: a save naming it is refused (400), a typed $47 line is dropped, and lines go un-numbered as ever.",
+    "firmware": {
+      "variant": "holey",
+      "version": "51.29",
+      "build": "51.292"
+    },
+    "webcontrolCommit": "planner-streaming"
+  },
+  "setup": {
+    "units": "MM"
+  },
+  "events": [
+    {"type": "http", "method": "PUT", "path": "/api/settings/maslow", "json": {"values": {"plannerAcceleration": "25"}}, "status": 400},
+    {"type": "expect", "settings": [{"section": "Maslow Settings", "key": "plannerAcceleration", "value": "50"}]},
+    {"type": "http", "method": "POST", "path": "/sendGCode", "form": {"gcode": "$47=25"}, "status": 200},
+    {"type": "http", "method": "POST", "path": "/sendGCode", "form": {"gcode": "G90"}, "status": 200},
+    {"type": "tx", "bytes": "G90 \n"},
+    {"type": "rx", "line": "ok"}
+  ]
+}

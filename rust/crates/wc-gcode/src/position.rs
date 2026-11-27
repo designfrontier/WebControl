@@ -16,19 +16,41 @@ pub struct Position {
 /// restart state it ignores home and units.
 pub fn find_position_at(lines: &[String], index: usize) -> Result<Position, GcodeError> {
     let before = lines.get(..index).ok_or(GcodeError::IndexOutOfRange { index, len: lines.len() })?;
-    let mut position = Position { x: 0.0, y: 0.0, z: 0.0, feed_rate: None };
+    let mut position = ORIGIN;
     let mut positioning = Positioning::Absolute;
-    before.iter().enumerate().try_for_each(|(line_index, raw)| {
-        let line = words::code(raw);
-        if py::isspace(&line) {
-            return Ok(());
-        }
-        split_at_g(&line)
-            .iter()
-            .try_for_each(|part| read(part, &mut position, &mut positioning))
-            .map_err(|()| GcodeError::Unreadable { index: line_index })
-    })?;
+    before
+        .iter()
+        .enumerate()
+        .try_for_each(|(line_index, raw)| advance(line_index, raw, &mut position, &mut positioning))?;
     Ok(position)
+}
+
+/// `find_position_at`'s X, Y and Z at every index it can read, from 0 up to the first unreadable line.
+pub fn positions(lines: &[String]) -> Vec<[f64; 3]> {
+    let mut position = ORIGIN;
+    let mut positioning = Positioning::Absolute;
+    let ends = lines.iter().enumerate().map_while(|(line_index, raw)| {
+        advance(line_index, raw, &mut position, &mut positioning).ok().map(|()| [position.x, position.y, position.z])
+    });
+    std::iter::once([0.0; 3]).chain(ends).collect()
+}
+
+const ORIGIN: Position = Position { x: 0.0, y: 0.0, z: 0.0, feed_rate: None };
+
+fn advance(
+    line_index: usize,
+    raw: &str,
+    position: &mut Position,
+    positioning: &mut Positioning,
+) -> Result<(), GcodeError> {
+    let line = words::code(raw);
+    if py::isspace(&line) {
+        return Ok(());
+    }
+    split_at_g(&line)
+        .iter()
+        .try_for_each(|part| read(part, position, positioning))
+        .map_err(|()| GcodeError::Unreadable { index: line_index })
 }
 
 /// Python's `['G' + part for part in filter(None, re.split("(G)", line))]`.
@@ -130,6 +152,36 @@ mod tests {
         assert_eq!(find_position_at(&file(&["G1 X2", "G1 X. Y2"]), 2), Err(GcodeError::Unreadable { index: 1 }));
         assert!(find_position_at(&file(&["G1 F"]), 1).is_err());
         assert_eq!(find_position_at(&file(&["G1"]), 3), Err(GcodeError::IndexOutOfRange { index: 3, len: 1 }));
+    }
+
+    #[test]
+    fn positions_hold_find_position_at_for_every_index_up_to_an_unreadable_line() {
+        let varied = file(&[
+            "(start) G20",
+            "G0 X1 Y2 Z0.5",
+            "",
+            "G21 G1 X10 F300 ; mm now",
+            "G2 X20 Y12 I5 J0",
+            "G91",
+            "G3 X-2 Y2 R2",
+            "G1 Z-1 (plunge)",
+            "G90.1 X99",
+            "G90 G0 X0 Y0 G91 G0 X1",
+            "M3 S1000",
+            "g1 y5",
+        ]);
+        let table = |lines: &[String]| {
+            let table = positions(lines);
+            (0..=lines.len()).map(|i| table.get(i).copied()).collect::<Vec<_>>()
+        };
+        let found = |lines: &[String]| {
+            (0..=lines.len()).map(|i| find_position_at(lines, i).ok().map(|at| [at.x, at.y, at.z])).collect::<Vec<_>>()
+        };
+        assert_eq!(table(&varied), found(&varied));
+        assert_eq!(positions(&varied).len(), varied.len() + 1);
+        let broken = file(&["G0 X1", "G1 X. Y2", "G0 X3"]);
+        assert_eq!(table(&broken), found(&broken));
+        assert_eq!(positions(&broken), [[0.0; 3], [1.0, 0.0, 0.0]]);
     }
 
     #[test]

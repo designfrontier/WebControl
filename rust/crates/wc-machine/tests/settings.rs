@@ -185,7 +185,7 @@ fn only_a_known_theme_alone_is_accepted() {
 fn the_display_theme_is_left_off_the_webcontrol_form() {
     let mut rig = Rig::connected();
     let section = rig.machine.snapshot().settings.clone();
-    let form = wc_machine::forms::section(&section, "webcontrol", 0.0, &[]).unwrap();
+    let form = wc_machine::forms::section(&section, "webcontrol", 0.0, false, false, &[]).unwrap();
     assert!(form.settings.iter().all(|field| field.key != "uiTheme"));
     let (response, _) = respond(
         &mut rig,
@@ -274,7 +274,7 @@ fn a_known_port_name_is_accepted_and_changing_it_reopens_the_link() {
     assert!(effects.contains(&Effect::ClosePort));
     assert_eq!(pushed(&effects, "connectionStatus").last().unwrap()["status"], "disconnected");
     let reopened = rig.advance(20);
-    assert!(reopened.contains(&Effect::OpenPort("/dev/weird port".into())), "{reopened:?}");
+    assert!(reopened.contains(&Effect::OpenPort("/dev/weird port".into(), 57600)), "{reopened:?}");
     let (same, effects) = put(&mut rig, "maslow", json!({"values": {"COMport": "/dev/weird port"}}));
     assert_eq!(same.status, 200);
     assert!(!effects.contains(&Effect::ClosePort));

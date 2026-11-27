@@ -43,12 +43,16 @@
     "sha256": "6600247cdd8d0e30e8c579e7471f0939a2a4339841fba3666cd49e60b4235577",
     "title": "Sync Settings"
   },
+  "Actions/Controller/tunePlannerFirmware.md": {
+    "sha256": "eb96d9290c93c9f4b9ba81093699b57f2172a861fcda67ae04f82788c4f09dd4",
+    "title": "Tune the Planner Firmware"
+  },
   "Actions/Controller/upgradeCustomFirmware.md": {
     "sha256": "523c9801ee44c68ef95b044b920a2730adc717f3d98aa260a64d797c8a5e5cd7",
     "title": "Upgrade Custom Firmware"
   },
   "Actions/Controller/upgradeHoleyFirmware.md": {
-    "sha256": "0ee2b5ce3c97334e34507da8aa17404bf111a7581895aa031b611b71282cd06d",
+    "sha256": "92a091df666869c314e61b92ea1cfcbb27505944c056cbd2f421173d0d8854fb",
     "title": "Upgrade Holey Firmware"
   },
   "Actions/Controller/upgradeStockFirmware.md": {
@@ -116,7 +120,7 @@
     "title": "Calibration / Setup"
   },
   "assets/Actions/Controller/index.md": {
-    "sha256": "ebb6aaf83bfd6e22846c05a9c84ac318fb563a0a88e67b1579bdf59e2fc10552",
+    "sha256": "a3a5a1f0498a644ca7bc115e5d7dad89dfa938d61d4a5bd80587f931f29d2fe3",
     "title": "Controller"
   },
   "assets/Actions/Diagnostics-Maintenance/index.md": {

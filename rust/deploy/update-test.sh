@@ -109,7 +109,8 @@ release() {
     chmod +x "$bin"
   done
   env -u GITHUB_REF_TYPE -u GITHUB_REF_NAME -u GITHUB_OUTPUT WC_SKIP_BUILD=1 CARGO_TARGET_DIR="$work/target" \
-    WC_FIRMWARE_HEX="$work/fw.hex" WC_FIRMWARE_PIN="$work/fw.sha256" WC_VERSION="$v" \
+    WC_FIRMWARE_HEX="$work/fw.hex" WC_FIRMWARE_PIN="$work/fw.sha256" WC_PLANNER_HEX="$work/fw.hex" \
+    WC_PLANNER_PIN="$work/fw.sha256" WC_VERSION="$v" \
     bash "$rust/scripts/release.sh" "$out" > /dev/null
 }
 

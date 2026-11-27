@@ -1,4 +1,5 @@
-//! Opening the controller's port: the real serial device (B1: 57600 8N1), or `wc-sim` behind `--simulate`.
+//! Opening the controller's port: the real serial device (B1: 8N1 at the baud the machine asks for), or `wc-sim`
+//! behind `--simulate`.
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -7,7 +8,6 @@ use tokio_serial::{DataBits, FlowControl, Parity, SerialPort, SerialPortBuilderE
 use wc_machine::{PortOpener, Serial};
 use wc_sim::{Build, Sim};
 
-pub const BAUD: u32 = 57600;
 /// Long enough for the Mega's reset capacitor to see the edge (its RC is about 1 ms).
 const RESET_PULSE: Duration = Duration::from_millis(20);
 
@@ -15,8 +15,8 @@ const RESET_PULSE: Duration = Duration::from_millis(20);
 pub struct SerialOpener;
 
 impl PortOpener for SerialOpener {
-    fn open(&mut self, port: &str) -> std::io::Result<Serial> {
-        let mut stream = tokio_serial::new(port, BAUD)
+    fn open(&mut self, port: &str, baud: u32) -> std::io::Result<Serial> {
+        let mut stream = tokio_serial::new(port, baud)
             .data_bits(DataBits::Eight)
             .parity(Parity::None)
             .stop_bits(StopBits::One)
@@ -50,7 +50,7 @@ impl SimOpener {
 }
 
 impl PortOpener for SimOpener {
-    fn open(&mut self, _port: &str) -> std::io::Result<Serial> {
+    fn open(&mut self, _port: &str, _baud: u32) -> std::io::Result<Serial> {
         let (reader, writer) = tokio::io::split(wc_sim::spawn(self.sim.clone()));
         Ok((Box::new(reader), Box::new(writer)))
     }

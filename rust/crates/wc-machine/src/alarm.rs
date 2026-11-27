@@ -49,7 +49,7 @@ pub(crate) fn survives_alarm(queued: &Queued) -> bool {
     match queued {
         Queued::Line { boot: true, .. } | Queued::SettingsSync | Queued::Mark(_) => true,
         Queued::Line { text, .. } => moves_nothing(text),
-        Queued::Delay(_) | Queued::Raise(_) | Queued::Advance => false,
+        Queued::Delay(_) | Queued::Raise(_) | Queued::Advance | Queued::FileDone => false,
     }
 }
 

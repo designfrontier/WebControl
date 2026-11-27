@@ -77,6 +77,21 @@ fn diagnostics_hold_the_settings_and_whichever_logs_exist() {
     assert!(backup(&dir.path().join("missing")).is_err());
 }
 
+#[test]
+fn diagnostics_add_only_the_newest_rotated_log() {
+    let dir = tempfile::tempdir().unwrap();
+    [
+        "webcontrol-rs.log",
+        "webcontrol-rs.log.1",
+        "webcontrol-rs.20261101-000000.log",
+        "webcontrol-rs.20261126-120000.log",
+    ]
+    .iter()
+    .for_each(|name| std::fs::write(dir.path().join(name), "x").unwrap());
+    let archive = diagnostics(dir.path()).unwrap();
+    assert_eq!(names(&archive), ["webcontrol-rs.20261126-120000.log", "webcontrol-rs.log", "webcontrol-rs.log.1"]);
+}
+
 /// Ported from test_restore, with a backup Python's zipfolder wrote.
 #[test]
 fn a_python_backup_restores_its_files_and_settings() {

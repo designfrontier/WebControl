@@ -1,12 +1,13 @@
-//! `upgradeHoleyFirmware`: the guided 51.27 -> 51.292 upgrade and its rollback (`spec/firmware.md` C1-C9). The
-//! machine hands the port to avrdude through [`FirmwareJob`] effects and reads the results back as events.
+//! `upgradeHoleyFirmware`: the guided upgrade to 51.292 or the planner's 51.30, and its rollback
+//! (`spec/firmware.md` C1-C9). The machine hands the port to avrdude through [`FirmwareJob`] effects and reads the results back as events.
 
 use std::time::Duration;
 
+use wc_firmware::boot::version_text;
 use wc_firmware::image::{Image, rollback_image};
 use wc_firmware::upgrade::{
-    Avrdude, Migration, MotorTest, TARGET_BUILD, avrdude_outcome, check_board, check_version, failed_motors,
-    is_serial_port, motor_test_passed, parse_board, read_motor_test, reports_target,
+    Avrdude, Migration, MotorTest, Target, avrdude_outcome, check_board, failed_motors, is_serial_port,
+    motor_test_passed, parse_board, read_motor_test,
 };
 use wc_protocol::Action;
 use wc_protocol::system::{Chains, FirmwareUpgrade, MotorResult, UpgradeStage as Stage};
@@ -74,6 +75,10 @@ struct Saved {
 #[derive(Debug, Clone)]
 pub(crate) struct Upgrade {
     pub image: Option<Image>,
+    pub planner_image: Option<Image>,
+    target: Target,
+    /// 51.30 booted; its `Capabilities:` line must follow before the settings go back.
+    awaiting_capabilities: bool,
     stage: Stage,
     message: String,
     log: Vec<String>,
@@ -95,9 +100,12 @@ pub(crate) struct Upgrade {
 }
 
 impl Upgrade {
-    pub fn new(image: Option<Image>) -> Upgrade {
+    pub fn new(image: Option<Image>, planner_image: Option<Image>) -> Upgrade {
         Upgrade {
             image,
+            planner_image,
+            target: Target::Holey,
+            awaiting_capabilities: false,
             stage: Stage::Idle,
             message: String::new(),
             log: Vec::new(),
@@ -125,6 +133,13 @@ impl Upgrade {
             self.stage,
             Stage::BackingUp | Stage::Flashing | Stage::Restarting | Stage::Migrating | Stage::RollingBack
         )
+    }
+
+    fn target_image(&self) -> Option<&Image> {
+        match self.target {
+            Target::Holey => self.image.as_ref(),
+            Target::Planner => self.planner_image.as_ref(),
+        }
     }
 
     fn busy(&self) -> bool {
@@ -161,12 +176,12 @@ impl Upgrade {
             _ => None,
         };
         FirmwareUpgrade {
-            target: TARGET_BUILD.into(),
-            image_sha256: self.image.as_ref().map(|i| i.sha256.clone()),
+            target: self.target.build().into(),
+            image_sha256: self.target_image().map(|i| i.sha256.clone()),
             stage: self.stage,
             message: self.message.clone(),
             board: self.board.clone(),
-            firmware: self.firmware.map(|v| format!("{v}")),
+            firmware: self.firmware.map(version_text),
             chains: chains(&self.chains),
             chains_after: chains(&self.chains_after),
             motors: self
@@ -176,7 +191,7 @@ impl Upgrade {
                 .collect(),
             backup: self.backup.clone(),
             can_rollback: self.rollback.is_some() && !self.busy(),
-            rollback_firmware: self.rollback.as_ref().map(|saved| format!("{}", saved.version)),
+            rollback_firmware: self.rollback.as_ref().map(|saved| version_text(saved.version)),
             log: self.log.clone(),
         }
     }
@@ -199,11 +214,19 @@ impl Machine {
             return Some("Wait for the firmware upgrade step in progress to finish.".into());
         }
         match step.as_str() {
-            "check" => self.preflight(),
+            "check" => {
+                self.upgrade.log.clear();
+                self.preflight(Target::Holey)
+            }
+            "checkPlanner" => {
+                self.upgrade.log.clear();
+                self.preflight(Target::Planner)
+            }
             "upgrade" => self.start_upgrade(now, effects),
             "selfTest" => self.self_test(),
             "rollback" => self.start_rollback(now, effects),
             "reset" => {
+                self.upgrade.log.clear();
                 self.upgrade.enter(Stage::Idle, "Ready to check the controller.");
                 None
             }
@@ -224,13 +247,13 @@ impl Machine {
     }
 
     /// C1: banner, B05, `$$` and both chain lengths, collected once everything queued before is answered.
-    fn preflight(&mut self) -> Option<String> {
+    fn preflight(&mut self, target: Target) -> Option<String> {
         let Link::Connected { port } = &self.link else {
             return Some(NOT_CONNECTED.into());
         };
-        let image = self.upgrade.image.clone();
+        let (image, planner_image) = (self.upgrade.image.clone(), self.upgrade.planner_image.clone());
         let kept = (self.upgrade.rollback.take(), self.upgrade.backup.take(), std::mem::take(&mut self.upgrade.log));
-        self.upgrade = Upgrade { port: port.clone(), ..Upgrade::new(image) };
+        self.upgrade = Upgrade { port: port.clone(), target, ..Upgrade::new(image, planner_image) };
         (self.upgrade.rollback, self.upgrade.backup, self.upgrade.log) = kept;
         self.upgrade.enter(Stage::Checking, "Checking the controller: B05, $$ and both chain lengths.");
         self.queue(["B05 ", "$$", "B10 L", "B10 R"].map(String::from));
@@ -245,22 +268,25 @@ impl Machine {
         upgrade.z_rpm = upgrade.dump.iter().find_map(|l| l.strip_prefix("$18=")).and_then(|v| v.trim().parse().ok());
         let verdict = (|| {
             check_board(self.board.as_deref())?;
-            check_version(self.firmware_version)?;
+            upgrade.target.check_version(self.firmware_version, self.planner)?;
             if upgrade.chains.len() != 2 {
                 return Err("The controller did not report both chain lengths (B10).".to_string());
             }
-            match &upgrade.image {
+            match upgrade.target_image() {
                 Some(image) if image.intact() => Ok(()),
-                _ => Err("This build of webcontrol-rs carries no firmware image, so it cannot upgrade. Install a \
-                          build from CI, which embeds the pinned 51.292 image."
-                    .to_string()),
+                _ => Err(format!(
+                    "This build of webcontrol-rs carries no {} image, so it cannot upgrade. Install a build from CI, \
+                     which embeds the pinned 51.292 and 51.30 images.",
+                    upgrade.target.build()
+                )),
             }
         })();
+        let build = upgrade.target.build();
         match verdict {
             Ok(()) => upgrade.enter(
                 Stage::Ready,
                 &format!(
-                    "Ready to upgrade {} to {TARGET_BUILD}. The flash resets the controller's settings; WebControl \
+                    "Ready to upgrade {} to {build}. The flash resets the controller's settings; WebControl \
                      backs them up first and pushes them back afterwards.",
                     self.board.clone().unwrap_or_default()
                 ),
@@ -371,10 +397,11 @@ impl Machine {
     }
 
     fn flash_target(&mut self, now: Duration, effects: &mut Vec<Effect>) {
-        let Some(image) = self.upgrade.image.clone().filter(Image::intact) else {
+        let Some(image) = self.upgrade.target_image().cloned().filter(Image::intact) else {
             return self.fail("The firmware image failed its SHA-256 check. Nothing was written.", now, effects);
         };
-        self.upgrade.enter(Stage::Flashing, &format!("Flashing {TARGET_BUILD} (attempt {}).", self.upgrade.attempt));
+        let build = self.upgrade.target.build();
+        self.upgrade.enter(Stage::Flashing, &format!("Flashing {build} (attempt {}).", self.upgrade.attempt));
         effects.push(Effect::Firmware(FirmwareJob::WriteFlash { port: self.upgrade.port.clone(), image }));
     }
 
@@ -396,11 +423,12 @@ impl Machine {
         let rolling_back = self.upgrade.stage == Stage::RollingBack;
         match (outcome, self.upgrade.attempt) {
             (Avrdude::Done, _) => {
-                let what = if rolling_back { "The saved firmware" } else { TARGET_BUILD };
+                let what = if rolling_back { "The saved firmware" } else { self.upgrade.target.build() };
                 self.upgrade
                     .enter(Stage::Restarting, &format!("{what} is written; waiting for the controller to boot."));
                 self.upgrade.deadline = Some(now + POST_FLASH_WAIT);
                 self.upgrade.banner_seen = false;
+                self.upgrade.awaiting_capabilities = false;
                 self.reconnect(now);
             }
             (Avrdude::SyncFailure, 1) => {
@@ -466,7 +494,7 @@ impl Machine {
             return;
         }
         let expected = match self.upgrade.direction {
-            Direction::Upgrade => reports_target(version),
+            Direction::Upgrade => self.upgrade.target.reports(version),
             Direction::Rollback => {
                 self.upgrade.rollback.as_ref().is_some_and(|saved| (saved.version - version).abs() < 1e-9)
             }
@@ -475,8 +503,29 @@ impl Machine {
             return self.post_flash_failed("The controller booted without a board banner.", now, effects);
         }
         if !expected {
-            return self.post_flash_failed(&format!("The controller reports firmware {version}."), now, effects);
+            let why = format!("The controller reports firmware {}.", version_text(version));
+            return self.post_flash_failed(&why, now, effects);
         }
+        if self.upgrade.direction == Direction::Upgrade && self.upgrade.target == Target::Planner {
+            self.upgrade.awaiting_capabilities = true;
+            return;
+        }
+        self.restore_settings(version);
+    }
+
+    /// The `Capabilities:` line after 51.30's version: it must list `planner`.
+    pub(crate) fn upgrade_capabilities(&mut self, now: Duration, effects: &mut Vec<Effect>) {
+        if self.upgrade.stage != Stage::Restarting || !std::mem::take(&mut self.upgrade.awaiting_capabilities) {
+            return;
+        }
+        match self.planner {
+            true => self.restore_settings(self.firmware_version),
+            false => self.post_flash_failed("51.30 booted without the planner capability.", now, effects),
+        }
+    }
+
+    fn restore_settings(&mut self, version: f64) {
+        let version = version_text(version);
         let message = format!("Firmware {version} booted; pushing every setting back, then verifying with $$.");
         self.upgrade.enter(Stage::Migrating, &message);
         self.upgrade.deadline = None;
@@ -521,7 +570,11 @@ impl Machine {
 
     pub(crate) fn upgrade_tick(&mut self, now: Duration, effects: &mut Vec<Effect>) {
         if self.upgrade.deadline.is_some_and(|deadline| now >= deadline) {
-            self.post_flash_failed("The controller did not answer B05 after the flash.", now, effects);
+            let why = match self.upgrade.awaiting_capabilities {
+                true => "51.30 booted without the planner capability.",
+                false => "The controller did not answer B05 after the flash.",
+            };
+            self.post_flash_failed(why, now, effects);
         }
     }
 
@@ -579,14 +632,15 @@ impl Machine {
         match self.upgrade.direction {
             Direction::Upgrade => {
                 let message = format!(
-                    "{TARGET_BUILD} is running and its settings are pushed; {rewritten} Next, with the chains slack, \
-                     run the motor self-test."
+                    "{} is running and its settings are pushed; {rewritten} Next, with the chains slack, \
+                     run the motor self-test.",
+                    self.upgrade.target.build()
                 );
                 self.upgrade.enter(Stage::SelfTest, &message);
             }
             Direction::Rollback => {
                 let version =
-                    self.upgrade.rollback.as_ref().map(|saved| format!("{}", saved.version)).unwrap_or_default();
+                    self.upgrade.rollback.as_ref().map(|saved| version_text(saved.version)).unwrap_or_default();
                 let message = format!("Rolled back to {version}; {rewritten}");
                 self.upgrade.enter(Stage::RolledBack, &message);
                 effects.push(alert(&message));

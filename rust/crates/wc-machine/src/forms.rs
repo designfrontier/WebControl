@@ -108,8 +108,20 @@ fn describe(section: &str, option: &Map<String, Value>) -> SettingField {
     }
 }
 
+/// Settings only a planner test build takes, so the screens leave them off for any other.
+const PLANNER_SETTINGS: [&str; 2] = ["plannerAcceleration", "plannerJunctionDeviation"];
+/// The planner setting only a build with the `feed-forward` capability takes.
+const FEED_FORWARD_SETTING: &str = "plannerFeedForward";
+
 /// `GET /api/settings/{sectionId}`'s body; `None` for an unknown section.
-pub fn section(settings: &Settings, id: &str, firmware_version: f64, ports: &[String]) -> Option<SettingsSection> {
+pub fn section(
+    settings: &Settings,
+    id: &str,
+    firmware_version: f64,
+    planner: bool,
+    feed_forward: bool,
+    ports: &[String],
+) -> Option<SettingsSection> {
     let title = section_title(id)?;
     Some(SettingsSection {
         id: id.into(),
@@ -123,6 +135,8 @@ pub fn section(settings: &Settings, id: &str, firmware_version: f64, ports: &[St
                 !RETIRED_KEYS.contains(&field.key.as_str())
                     && ![THEME_KEY, crate::controls::BUTTONS_KEY, crate::pacing::STATS_KEY]
                         .contains(&field.key.as_str())
+                    && (planner || !PLANNER_SETTINGS.contains(&field.key.as_str()))
+                    && (feed_forward || field.key != FEED_FORWARD_SETTING)
             })
             .collect(),
         ports: (id == "maslow").then(|| ports.to_vec()),

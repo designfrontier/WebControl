@@ -93,7 +93,9 @@ fn a_goto_reads_the_file_off_the_task() {
         read,
         [Work::GcodePosition {
             gcode: rig.machine.snapshot().gcode.0.clone(),
+            positions: wc_gcode::position::positions(&rig.machine.snapshot().gcode.0).into(),
             index: 2,
+            after: false,
             scale: 1.0,
             failure: Some("Error with moving to Z move".into()),
         }]
@@ -108,8 +110,10 @@ fn a_failed_read_alerts_only_when_asked_to() {
     let failed = |failure: Option<&str>| Event::Computed(Done::GcodePosition(Err(failure.map(String::from))));
     assert_eq!(alerts(&rig.send(failed(Some("Error with moving to index")))), ["Error with moving to index"]);
     assert!(alerts(&rig.send(failed(None))).is_empty());
+    let gcode = vec!["G0 X`1".to_string()];
+    let positions = wc_gcode::position::positions(&gcode).into();
     let unreadable =
-        Work::GcodePosition { gcode: vec!["G0 X`1".to_string()].into(), index: 1, scale: 1.0, failure: None };
+        Work::GcodePosition { gcode: gcode.into(), positions, index: 1, after: false, scale: 1.0, failure: None };
     assert_eq!(unreadable.run(), failed(None));
 }
 
@@ -119,7 +123,17 @@ fn work_is_compared_by_value() {
     let (mut one, mut other) = (computing(), computing());
     let (first, second) = (one.machine.handle(line(), one.now), other.machine.handle(line(), other.now));
     assert_eq!(work(&first), work(&second));
-    assert_ne!(work(&first)[0], Work::GcodePosition { gcode: Vec::new().into(), index: 0, scale: 1.0, failure: None });
+    assert_ne!(
+        work(&first)[0],
+        Work::GcodePosition {
+            gcode: Vec::new().into(),
+            positions: vec![[0.0; 3]].into(),
+            index: 0,
+            after: false,
+            scale: 1.0,
+            failure: None,
+        }
+    );
 }
 
 #[test]

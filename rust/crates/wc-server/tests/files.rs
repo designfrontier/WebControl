@@ -654,3 +654,35 @@ fn the_loaded_file_is_described_relative_to_the_library() {
     assert_eq!(wc_server::files::loaded(0, Some(Path::new("/x.nc")), root).name, None);
     assert_eq!(wc_server::files::loaded(3, None, root).line_count, 3);
 }
+
+/// `SQUARE` is 9 lines, about 3 kB at 350 bytes a line.
+fn tight() -> Option<u64> {
+    Some(5_000)
+}
+
+fn full() -> Option<u64> {
+    Some(3_000)
+}
+
+#[tokio::test]
+async fn a_file_that_strains_free_memory_loads_with_a_warning() {
+    let server = Server::freeing(machine_with(Settings::defaults()), tight);
+    let parts = [Part::Field("selectedDirectory", "."), Part::File("file[]", "square.nc", SQUARE.as_bytes())];
+    let reply = server.post_form("/uploadGCode", &parts).await.json();
+    assert_eq!(reply["status"], 200);
+    let warning = reply["warning"].as_str().unwrap();
+    assert!(warning.starts_with("This file has 9 lines and needs about 1 MB of the 0 MB"), "{warning}");
+    assert!(warning.ends_with("running them one after another with the job queue."), "{warning}");
+    assert_eq!(server.get("/api/files/gcode/loaded").await.json()["lineCount"], 10);
+}
+
+#[tokio::test]
+async fn a_file_too_large_for_free_memory_is_refused() {
+    let server = Server::freeing(machine_with(Settings::defaults()), full);
+    server.write("gcode/square.nc", SQUARE);
+    let reply = server.post_form("/openGCode", &[Part::Field("selectedGCode", "./square.nc")]).await;
+    assert_eq!(reply.status, StatusCode::CONFLICT);
+    let error = reply.json()["error"].as_str().unwrap().to_string();
+    assert!(error.contains("It was not opened. Try splitting it into smaller files"), "{error}");
+    assert_eq!(server.get("/api/files/gcode/loaded").await.json()["lineCount"], 0);
+}

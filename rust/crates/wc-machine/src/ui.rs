@@ -83,6 +83,7 @@ impl Default for ErrorTracker {
 impl Machine {
     /// `setPosOnScreen`: sent only when the sled moved, plus once after it stops.
     pub(crate) fn status_report(&mut self, status: Status, now: std::time::Duration, effects: &mut Vec<Effect>) {
+        self.pacing_status(&status);
         self.bit.reported(status.z);
         self.sled.reported(status.x, status.y);
         let axes = [("x", status.x), ("y", status.y), ("z", status.z)].map(|(axis, value)| {
@@ -131,6 +132,7 @@ impl Machine {
     /// `setErrorOnScreen`: errors as a fraction of the limit, sent when they change by 0.001 or more. The computed
     /// position is solved off the machine task, and only for a report that goes out.
     pub(crate) fn position_error(&mut self, error: PositionError, effects: &mut Vec<Effect>) {
+        self.pacing_position_error(&error);
         let limit = self.settings.number("Advanced Settings", "positionErrorLimit");
         if limit == 0.0 {
             return;
@@ -166,6 +168,7 @@ impl Machine {
             cpu_usage: cpu,
             buffer_size: if buffering { self.reported_buffer } else { -1 },
             controller_firmware_version: self.firmware_version,
+            firmware_build: wc_firmware::boot::firmware_build(self.firmware_version, self.rewrite_notice),
         }));
         self.last_status = None;
     }

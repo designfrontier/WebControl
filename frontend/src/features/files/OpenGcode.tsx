@@ -15,6 +15,7 @@ export const OpenGcode = () => {
   const { resource } = useResource(getGcodeLibrary);
   const locked = useMachine(selectGcodeLocked);
   const [skipBitChanges, setSkipBitChanges] = useState(false);
+  const [warning, setWarning] = useState<string>();
 
   return (
     <SubPage>
@@ -27,8 +28,9 @@ export const OpenGcode = () => {
             busyNote={<GcodeLoadingOverlay title="Opening G-Code…" />}
             submitOptions={GCODE_LOAD}
             open={async (file, signal) => {
-              await openGcode(fetchImpl, file);
+              const warned = await openGcode(fetchImpl, file);
               client.emit("checkForGCodeUpdate", { data: "Please" });
+              if (warned) return setWarning(warned);
               if (!signal.aborted) close();
             }}
             enqueue={async ({ directory, name }) =>
@@ -48,6 +50,11 @@ export const OpenGcode = () => {
           />
         )}
       </Loaded>
+      {warning && (
+        <p className="warning" role="status">
+          {warning}
+        </p>
+      )}
     </SubPage>
   );
 };

@@ -27,13 +27,15 @@ const UploadForm = ({ library }: { library: GcodeLibrary }) => {
   const [files, setFiles] = useState<File[]>([]);
   const { busy, error, setError, run } = useSubmit(GCODE_LOAD);
   const locked = useMachine(selectGcodeLocked);
+  const [warning, setWarning] = useState<string>();
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (files.length === 0) return setError("Choose at least one gcode file to upload.");
     return run(async (signal) => {
-      await uploadGcode(fetchImpl, directory, files);
+      const warned = await uploadGcode(fetchImpl, directory, files);
       client.emit("checkForGCodeUpdate", { data: "Please" });
+      if (warned) return setWarning(warned);
       if (!signal.aborted) close();
     }, "The upload failed, or the first file could not be opened as gcode.");
   };
@@ -64,6 +66,11 @@ const UploadForm = ({ library }: { library: GcodeLibrary }) => {
           </span>
         </div>
         <FormError message={error} />
+        {warning && (
+          <p className="warning" role="status">
+            {warning}
+          </p>
+        )}
         {locked && <p className="muted">{GCODE_LOCKED_NOTE}</p>}
         {busy && <GcodeLoadingOverlay title="Uploading G-Code…" />}
         <div className="actions">

@@ -23,6 +23,22 @@ export const PACING_GAP_MAX_MS = 500;
 export const pacingModeSchema = z.enum(PACING_MODES);
 export type PacingMode = z.infer<typeof pacingModeSchema>;
 
+/**
+ * The `[PE:]` reports taken while the sled moved: the larger of the two chain errors, in mm. From a firmware listing
+ * `peak-error`, the max comes from the peaks between reports, and the overshoot fields are present.
+ */
+export const positionErrorStatsSchema = z.object({
+  samples: z.number(),
+  meanMm: z.number(),
+  maxMm: z.number(),
+  over1Mm: z.number(),
+  /** The largest error ahead of the setpoint's travel in any report of the job, moving or not. */
+  maxAheadMm: z.number().optional(),
+  /** Reports with more than 0.2 mm ahead. */
+  overshoots: z.number().optional(),
+});
+export type PositionErrorStats = z.infer<typeof positionErrorStatsSchema>;
+
 /** One stretch of a job streamed at one line pacing, or a whole job's totals. */
 export const pacingSegmentSchema = z.object({
   /** For a job's totals, the pacing it started with. */
@@ -48,6 +64,8 @@ export const pacingSegmentSchema = z.object({
   wallS: z.number().optional(),
   /** A running job's estimated time left, scaled by how its estimate compares with its time so far. */
   remainingS: z.number().nullable().optional(),
+  /** Null until a report comes in while the sled moves. */
+  positionError: positionErrorStatsSchema.nullable().optional(),
 });
 export type PacingSegment = z.infer<typeof pacingSegmentSchema>;
 
@@ -118,6 +136,8 @@ export const mainMessages = {
     cpuUsage: z.number(),
     bufferSize: z.number(),
     controllerFirmwareVersion: z.number().optional(),
+    /** The build as /api/state's firmwareBuild gives it ("51.292", "51.30"); Rust only. */
+    firmwareBuild: z.string().nullable().optional(),
   }),
   statusMessage: z.object({
     uploadFlag: z.number(),
@@ -129,6 +149,8 @@ export const mainMessages = {
     manualZAxisAdjust: z.boolean().optional(),
     /** A G38.2 probe is queued or descending; only Stop, Pause and actions that move nothing run. Rust only. */
     probing: z.boolean().optional(),
+    /** The 0-based line a planner build's Stop left, which Play asks whether to resume at. Rust only. */
+    stoppedAt: z.number().int().nullable().optional(),
   }),
   positionMessage: z.object({
     xval: z.number(),

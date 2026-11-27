@@ -47,13 +47,33 @@ const renderDialog = (initial: FirmwareUpgrade, fetch = sequence(initial)) =>
   renderWithProviders(<FirmwareUpgradeDialog initial={initial} onClose={() => {}} pollMs={5} />, { fetch });
 
 describe("FirmwareUpgradeDialog", () => {
-  it("starts with a check of the controller and shows the pinned image", async () => {
+  it("starts with a check of the controller for 51.292 or the planner and shows the pinned image", async () => {
     const { user, socket } = renderDialog(upgrade());
-    expect(screen.getByRole("heading", { name: "Upgrade to holey 51.292" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Upgrade the controller firmware" })).toBeInTheDocument();
     expect(screen.getByText(/d7171d97f6ee/)).toBeInTheDocument();
     expect(panel().getByRole("status")).toHaveTextContent("checks the board and firmware before anything is written");
-    await user.click(screen.getByRole("button", { name: "Check the controller" }));
-    expect(socket.actions()).toEqual([["upgradeHoleyFirmware", "check", ""]]);
+    expect(screen.getByText(/planner firmware 51.30 is experimental/)).toHaveTextContent("51.292 is the way back");
+    expect(screen.getByRole("link", { name: "Help" })).toHaveAttribute(
+      "href",
+      "/help/Actions/Controller/upgradeHoleyFirmware.md",
+    );
+    await user.click(screen.getByRole("button", { name: "Upgrade to holey 51.292" }));
+    await user.click(screen.getByRole("button", { name: "Upgrade to planner firmware 51.30 (experimental)" }));
+    expect(socket.actions()).toEqual([
+      ["upgradeHoleyFirmware", "check", ""],
+      ["upgradeHoleyFirmware", "checkPlanner", ""],
+    ]);
+  });
+
+  it("checks the planner again, or starts over to pick 51.292, when it is blocked", async () => {
+    const blocked = upgrade({ target: "51.30", stage: "blocked", message: "The controller already runs 51.30." });
+    const { user, socket } = renderDialog(blocked);
+    await user.click(screen.getByRole("button", { name: "Check again" }));
+    await user.click(screen.getByRole("button", { name: "Start over" }));
+    expect(socket.actions()).toEqual([
+      ["upgradeHoleyFirmware", "checkPlanner", ""],
+      ["upgradeHoleyFirmware", "reset", ""],
+    ]);
   });
 
   it("says when the build carries no image", () => {
@@ -119,6 +139,14 @@ describe("FirmwareUpgradeDialog", () => {
     expect(results.getByText("L: direction 1 passed, direction 2 passed")).toBeInTheDocument();
     expect(results.getByText("Z: direction 1 passed, direction 2 failed")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Upgraded to 51.292" })).toBeInTheDocument();
+  });
+
+  it("offers Start over after an upgrade, so the other firmware can be chosen", async () => {
+    const after = (stage: "selfTest" | "done") => upgrade({ ...ready, stage, firmware: "51.29" });
+    const { user, socket } = renderDialog(after("selfTest"));
+    await user.click(screen.getByRole("button", { name: "Start over" }));
+    expect(socket.actions()).toEqual([["upgradeHoleyFirmware", "reset", ""]]);
+    expect(stageView(after("done")).buttons.map((button) => button.label)).toContain("Start over");
   });
 
   it("reports a progress read that fails and recovers when it answers again", async () => {
@@ -191,7 +219,7 @@ describe("the Actions screen with webcontrol-rs", () => {
   it("opens the guided upgrade in place of the one-click flash", async () => {
     const fetch = systemFetch({ "/api/system/info": systemInfo({ firmwareUpgrade: upgrade() }) });
     const { user, socket } = renderApp("/actions", { fetch });
-    await user.click(await screen.findByRole("button", { name: "Upgrade holey firmware to 51.292…" }));
+    await user.click(await screen.findByRole("button", { name: "Upgrade holey firmware…" }));
     const wizard = topLayer().at(-1) as HTMLElement;
     expect(wizard).toHaveAccessibleName("Upgrade holey firmware");
     expect(socket.actions()).toEqual([]);

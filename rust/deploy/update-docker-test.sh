@@ -7,7 +7,8 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<'EOF'
-usage: WC_FIRMWARE_HEX=<hex> rust/deploy/update-docker-test.sh 0.9.0=<binary> 0.9.1=<binary> 0.9.2=<binary>
+usage: WC_FIRMWARE_HEX=<hex> WC_PLANNER_HEX=<hex> rust/deploy/update-docker-test.sh 0.9.0=<binary> 0.9.1=<binary>
+  0.9.2=<binary>
 Each binary is an aarch64 webcontrol-rs (x86_64 with ARCH=x86_64) built with that WC_VERSION.
 KEEP=1 leaves the container running.
 EOF

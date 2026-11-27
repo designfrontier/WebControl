@@ -14,7 +14,11 @@ upgrade flow are built against. Firmware paths are relative to `cnc_ctrl_v1/`.
 
 ## 1. Serial protocol
 
-- **Link:** 57600 baud 8N1 in every version. Lines in end at `\n` (`\r` is stripped); lines out end `\r\n`.
+- **Link:** 57600 baud 8N1 in every version here, and in the planner builds that report 51.29; the planner's 51.30
+  talks at 115200 (its `PROTOCOL.md`). WebControl opens at the rate in `controllerBaud` (Computed Settings), the one
+  that last brought a line the firmware prints (a banner, an `ok`, a status report). With none 3 s after the open, it
+  reopens once at the other rate, which resets the board again, and saves the rate that answers; with none at either,
+  it sends the handshake anyway as before. Lines in end at `\n` (`\r` is stripped); lines out end `\r\n`.
 - **Buffer:** `INCBUFFERLENGTH 128`, a ring buffer holding 127 bytes. WebControl's `bufferSize = 126` is safe; it
   counts the appended space and `\n` exactly as stored. `?` and the realtime characters never enter the ring.
 - **Case:** every version trims each line and upper-cases it before parsing it (`maslowRingBuffer::prettyReadLine`,
@@ -54,11 +58,11 @@ status line with no newline.
 
 ## 3. Version reporting
 
-Never printed at boot. Only `B05` replies `Firmware Version <n>`, with 2 decimals, so every 51.29x build reports
-`51.29` (fingerprint by `$$` contents and message quirks). WebControl queues B05 on connect and parses the reply, but
-sends it only to the console, which is why the classic Controller Messages pane never shows it. A UI should forward
-the raw line, re-send B05 on any boot banner (`PCB v1.`, `Grbl v1.00`, `ready`), and parse
-`^Firmware Version\s+([\d.]+)`.
+Never printed at boot. Only `B05` replies `Firmware Version <n>`, with 2 decimals, so every 51.29x build reports `51.29`
+(fingerprint by `$$` contents and message quirks); the planner build from `peak-error` on reports `51.30` (§10).
+WebControl queues B05 on connect and parses the reply, but sends it only to the console, which is why the classic
+Controller Messages pane never shows it. A UI should forward the raw line, re-send B05 on any boot banner (`PCB v1.`,
+`Grbl v1.00`, `ready`), and parse `^Firmware Version\s+([\d.]+)`.
 
 ## 4. Commands WebControl sends
 
@@ -216,6 +220,41 @@ and G90.1 switch G0/G1 to relative and absolute like G91 and G90, and the rest o
 are always offsets from the start (`centerX = X1 + I`), whatever G90.1 asked. VCarve posts write `G91.1` near the
 top of every file, so as written it would run every move after it relative.
 
+## 10. The planner build
+
+A test build (holey 51.292 plus a look-ahead planner) whose protocol is the firmware repo's `PROTOCOL.md` (branch
+`line-numbers`, c77bd97). `B05` adds `Capabilities: planner line-numbers accel-settings status-line` before its
+`ok`. `G0`-`G3` are acked once queued (15 moves at most); `G4`, `G10`, `G38` and every `M`, `S`, `B` and `$` line
+wait for the queue to drain, so `G4 P0`'s `ok` means motion has ended. Numbered lines `N<n> <line>*<sum>` (XOR of
+the bytes before `*`, in decimal) get `ok N<n>`, a duplicate `ok N<n>` without running, and a lost or corrupt one
+`rs N<expected>` once per gap; `M110 N<n>` (un-numbered) sets the next number and turns numbered mode on until a
+boot. `!` and alarms flush the queue and the ring but keep the count. `[PE:]` adds `line` (the `N` running, 0 for
+none) and `queued`. `$47` (acceleration, mm/s², default 50) and `$48` (junction deviation, mm, default 0.01) are
+stored after 51.292's block (settings version still 7, so flashing either way keeps the settings); other builds
+answer them `error: Invalid statement`.
+
+The `feed-forward` build (branch `feed-forward`, 0f927ec) adds `feed-forward` to the end of the capabilities line and `$49`,
+the feed-forward gain (0 to 1.5, default 0, off; outside that range `error: Invalid statement`), stored after
+`$48` the same way. Each 10 ms tick of a planned move adds `$49` times the chain setpoint's speed, as motor RPM,
+to the position PID's RPM request on the left and right chains (within its ±20), so the chains lag the path less.
+At 0 the motor commands are c77bd97's; c77bd97 and every other build answer `$49` `error: Invalid statement`.
+
+The `peak-error` build (branch `peak-error`, cut from `feed-forward`) reports `Firmware Version 51.30` and adds
+`peak-error` to the capabilities line and four fields after `queued`: `[PE:...,queued,lAhead,lBehind,rAhead,rBehind]`,
+each chain's largest error since the last report, in mm with 2 decimals, both non-negative. Every tick it takes encoder
+− setpoint along the direction the setpoint last moved: ahead is the encoder past the setpoint (overshoot), behind is
+lag. After a reversal the old direction holds until the encoder reaches the setpoint, so lag never reads as ahead. The
+200 ms reports miss overshoot that comes and goes between them; the peaks do not. 51.30 is 51.292's EEPROM layout and
+settings version (7); the firmware uses the version only in `B05`. WebControl treats it as a holey build past 51.292
+(its build reads `51.30`, Z limits on, no fingerprint needed) and still takes planner features from the capabilities
+alone.
+
+The released 51.30 is tag `v51.30` of designfrontier/Firmware (3fbb316: the `peak-error` build, faster line parsing
+and 115200 baud). `rust/firmware/build.sh <out> 51.30` builds it and `holey-51.30.sha256` pins the arm64 Docker
+build, which every WebControl build embeds beside 51.292. The compiler's output differs between hosts: the same
+source and packages built natively on macOS give a hex 6 bytes longer (SHA-256 8ffd2624...), the one first flashed on
+the owner's machine.
+
 ## Implications
 
 ### A. Current Python backend
@@ -245,7 +284,8 @@ top of every file, so as written it would run every move after it relative.
 
 ### B. Rust backend requirements
 
-1. 57600 8N1; send `\n`, parse `\r\n`; don't gate the first send only on the boot `ok`.
+1. 8N1 at 57600 (115200 for the planner's 51.30); send `\n`, parse `\r\n`; don't gate the first send only on the
+   boot `ok`.
 2. Treat any line containing `PCB v1.`, `Grbl v1.00` or `ready` as a boot. On each boot reset units, G90, tool,
    a manual Z wait and accounting (a paused job rewinds to the oldest unacknowledged line, with an alert), then B05
    → units → G90 → `$$` → write only the keys `$$` shows differ (at the printed precision, B9)
@@ -285,7 +325,10 @@ top of every file, so as written it would run every move after it relative.
    unknown numbers are `none`), then for a change `PACING CHANGE file_line=N mode=minimum_gap gap_ms=25
    from_mode=v0.94 from_gap_ms=50`. A job writes `PACING JOB START file_line=N mode=... gap_ms=...` and, at its end,
    a `PACING JOB` line with the segment keys (its first pacing) and `PACING JOB END file_line_end=N mode=... gap_ms=...
-   ended_by=...`. Every word after the upper-case label is a `key=value` pair.
+   ended_by=...`, then `PE JOB mean_mm=0.412 max_mm=1.3 over_1mm=2 samples=1350 file=...`: max(|lErr|,|rErr|) of
+   each `[PE:]` report whose MPos report before it differed from the one before that (the sled moving), with
+   `max_ahead_mm=0.61 overshoots=3` before `file=` from a `peak-error` build (D). Segments
+   and jobs carry the same numbers as `positionError`. Every word after the upper-case label is a `key=value` pair.
 4. Realtime: `!` resets accounting (immediate `ok`, no ack for the aborted line); `~` immediate `ok`. A Stop that
    finds WebControl in G91, or a G20/G21/G90/G91 unacknowledged, writes units and `G90` after the resync, since
    the `!` drops a jog's closing `G90` (2026-11-18).
@@ -411,6 +454,10 @@ top of every file, so as written it would run every move after it relative.
 
 ### C. One-click firmware upgrade
 
+The wizard offers two targets: holey 51.292 (`check`), the default and the way back, and the experimental planner
+51.30 (`checkPlanner`), from 51.27, 51.28 and any 51.29x, refused over 51.30 itself. Both images are pinned and
+embedded; a build that embeds one must embed the other. 51.30 connects at 115200 through the baud fallback (section 1).
+
 1. **Pre-flight:** machine idle; capture the boot banner, B05, `$$` and the B10 chain lengths. Block (or require
    explicit acknowledgement) for a `PCB v1.6 TLE9201` banner, TLE5206 or an unknown board; warn about 51.292's
    TLE9201 left-encoder swap.
@@ -418,8 +465,8 @@ top of every file, so as written it would run every move after it relative.
 3. **Artefact:** a pinned, SHA-256-checked application hex (never `with_bootloader`); 51.291's shipped hex; prefer
    the v51.292 tag.
 4. **Flash:** `!`, close the port, block reconnects, run avrdude with verify, retry once on a sync failure.
-5. **Post-flash:** the banner's driver and PCB must match pre-flight (else roll back); B05 must report `51.29`;
-   expect `EEPROM read fail`.
+5. **Post-flash:** the banner's driver and PCB must match pre-flight (else roll back); B05 must report `51.29`
+   (`51.30` then a `Capabilities:` line listing `planner`, for the planner upgrade); expect `EEPROM read fail`.
 6. **Settings migration:** read `$$`, then push the complete set, including `$18` = 12.6 for the stock Z motor,
    `$9`, `$28`, `$36` and an explicit `$17`; set `$63`/`$64` on 51.292+; never send `$60`/`$61` on 51.291; skip a
    `$38` the `$$` shows already held. A `$38` written here (the factory value is 1) restarts the controller as B2
@@ -430,3 +477,39 @@ top of every file, so as written it would run every move after it relative.
    flash the pinned 51.27 rebuild (`rust/firmware/docker-build.sh <dir> 51.27`); on the owner's machine that is
    a newer 51.27 than it ran (H27 above), so keep its `rollback.hex` safe.
 9. The parser must tolerate the 51.29x text quirks before any post-flash step runs.
+
+### D. Planner build
+
+Only when `B05` lists `planner` (`crates/wc-machine/src/planner.rs`); every other build gets the bytes it always
+did, which the stock and holey transcripts pin.
+
+1. **Numbering:** every line through the buffer after the `B05` reply goes `N<n> <line>*<sum>`, upper case and
+   trimmed; `M110 N<n>` goes first after a boot, a stop or an alarm and at each job start, `n` being the number of
+   the line about to go. Numbers only count up until the controller boots.
+2. **Window:** a copy of each line is kept with its bytes until a cumulative `ok N<n>` frees it, and the bytes in
+   flight stay under the 126 WebControl counts. Job lines stream whenever the next fits, whatever `bufferOn` says;
+   the v0.94 pacing gap and the lost-line watch (B18) are off.
+3. **`rs N<e>`:** the copies sent before it still count until the next `ok N`; only line `e` goes again until
+   then, the rest after. An `rs` for a line WebControl no longer holds sends `M110` with the oldest line it holds;
+   one after a flush, when it holds none, only renumbers the next line.
+4. **Lost ack:** with lines in flight, no `ok N`, `rs` or write for 1 s, and a `[PE:]` after that with `space` 127
+   and fewer than 15 queued, the lines not acked go again from the oldest; duplicates are only acked. Not while the
+   firmware holds a pause or a tool change, or while the oldest copy waits for the queue (an `M`, `S`, `B` or `$`
+   line, `G4`, `G10`, `G38`, or a Z move without a Z axis) and moves are queued or the report names it as running.
+5. **Motion ended:** the file's end, and a Pause, send `G4 P0`; the job ends (its time, `PACING JOB END`, the queue's
+   next file and the park after it) only at its `ok`. A tool change needs none: an `M6` drains the queue itself.
+6. **Lines:** the viewer's and the control screen's current line is the `[PE:]` report's `line`. After an alarm or a lost link the job
+   resumes at it; Stop leaves the job's index there, so Play restarts from the line that was running.
+7. **Pacing statistics:** lines count as before; each `rs` and each lost-ack resend is one lost line.
+8. **Settings:** Planner Acceleration (`$47`) and Planner Junction Deviation (`$48`) are in Maslow Settings, synced
+   like every other key, and shown only while the capability is detected; a `$47`/`$48` line is never written to
+   any other build. Planner Feed-Forward (`$49`) is the same, gated on the `feed-forward` capability, so a planner
+   build without it (c77bd97) never gets `$49`.
+   With `peak-error` listed, the four peaks in `[PE:]` are read (a report of 7 or 11 fields parses either way, and
+   without the capability the peaks are ignored): `PE JOB`'s `max_mm` and `over_1mm` come from the largest peak of
+   each moving report, and it adds `max_ahead_mm` (the largest ahead, from every report in the job, moving or not,
+   so an overshoot after the setpoint stops counts) and `overshoots` (reports over 0.2 mm ahead). The run panel shows
+   "overshoot max X mm" after the error figures.
+9. **Rollback:** Upgrade Holey Firmware's 51.292 target accepts a 51.29 that lists `planner`, and any holey version
+   above 51.29 and below 100 (51.30), so it can put 51.292 back. A 51.29 without `planner` is refused as already
+   current. Its 51.30 target (C) moves a 51.29 planner build on to 51.30.

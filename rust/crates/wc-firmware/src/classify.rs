@@ -33,18 +33,53 @@ pub struct Status {
     pub z: f64,
 }
 
-/// `[PE:lErr,rErr,space]` (stock) or `[PE:lErr,rErr,space,lChain,rChain]` (holey).
+/// `[PE:lErr,rErr,space]` (stock), `[PE:lErr,rErr,space,lChain,rChain]` (holey) or, from a planner build,
+/// `[PE:lErr,rErr,space,lChain,rChain,line,queued]`, with `,lAhead,lBehind,rAhead,rBehind` from one listing `peak-error`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PositionError {
     pub left: f64,
     pub right: f64,
     pub space: i64,
     pub chains: Option<(f64, f64)>,
+    pub planner: Option<Planned>,
+    pub peaks: Option<Peaks>,
+}
+
+/// The largest error since the last report each way along the setpoint's travel, in mm, both non-negative.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Peaks {
+    pub left_ahead: f64,
+    pub left_behind: f64,
+    pub right_ahead: f64,
+    pub right_behind: f64,
+}
+
+impl Peaks {
+    pub fn ahead(&self) -> f64 {
+        self.left_ahead.max(self.right_ahead)
+    }
+
+    pub fn max(&self) -> f64 {
+        self.ahead().max(self.left_behind).max(self.right_behind)
+    }
+}
+
+/// The planner's half of a `[PE:]` report.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Planned {
+    /// The `N` of the line running now, 0 for none.
+    pub line: u64,
+    /// Moves in the planner, 0 to 15.
+    pub queued: u32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Reply {
     Ok,
+    /// A planner build's `ok N<n>`: every line up to `n` is queued.
+    OkLine(u64),
+    /// A planner build's `rs N<n>`: send again from line `n`.
+    Resend(u64),
     /// `error: ...`, the line's ack all the same.
     Error(String),
     Status(Status),
@@ -67,6 +102,8 @@ pub enum Reply {
     Alarm(String),
     BufferOverflow,
     FirmwareVersion(Option<f64>),
+    /// The words after `Capabilities:`, which a planner test build prints after its version.
+    Capabilities(Vec<String>),
     Other(String),
 }
 
@@ -93,7 +130,18 @@ fn parse_position_error(line: &str) -> Option<PositionError> {
     let fields: Vec<&str> = body.split(',').map(str::trim).collect();
     let number = |i: usize| fields.get(i).and_then(|f| f.parse::<f64>().ok());
     let chains = number(3).zip(number(4)).filter(|_| fields.len() >= 5);
-    Some(PositionError { left: number(0)?, right: number(1)?, space: fields.get(2)?.parse().ok()?, chains })
+    let integer = |i: usize| fields.get(i).and_then(|f| f.parse::<u64>().ok());
+    let planner = integer(5).zip(integer(6)).map(|(line, queued)| Planned { line, queued: queued as u32 });
+    let peaks = number(7).zip(number(8)).zip(number(9).zip(number(10))).map(
+        |((left_ahead, left_behind), (right_ahead, right_behind))| Peaks {
+            left_ahead,
+            left_behind,
+            right_ahead,
+            right_behind,
+        },
+    );
+    let space = fields.get(2)?.parse().ok()?;
+    Some(PositionError { left: number(0)?, right: number(1)?, space, chains, planner, peaks })
 }
 
 /// Python reads `message[9:-3]` of the line with its `\r\n`, which drops the closing bracket.
@@ -116,6 +164,8 @@ fn tool_in(line: &str) -> Option<u32> {
 pub fn classify(line: &str) -> Reply {
     match line {
         "ok" => Reply::Ok,
+        _ if let Some(number) = line.strip_prefix("ok N").and_then(|n| n.parse().ok()) => Reply::OkLine(number),
+        _ if let Some(number) = line.strip_prefix("rs N").and_then(|n| n.parse().ok()) => Reply::Resend(number),
         _ if line.starts_with("error:") => Reply::Error(line["error:".len()..].trim().to_string()),
         _ if line.starts_with('<') => parse_status(line).map_or_else(|| Reply::Misread(line.into()), Reply::Status),
         _ if line.starts_with('$') => match parse_setting_reply(line) {
@@ -134,6 +184,9 @@ pub fn classify(line: &str) -> Reply {
         _ if line.starts_with("ALARM:") => Reply::Alarm(line.into()),
         _ if line.starts_with("Buffer overflow!") => Reply::BufferOverflow,
         _ if line.starts_with("Firmware") => Reply::FirmwareVersion(parse_firmware_version(line)),
+        _ if line.starts_with("Capabilities:") => {
+            Reply::Capabilities(line["Capabilities:".len()..].split_whitespace().map(String::from).collect())
+        }
         _ => Reply::Other(line.into()),
     }
 }

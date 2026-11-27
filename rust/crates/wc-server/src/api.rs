@@ -130,7 +130,14 @@ pub(crate) async fn viewer(State(state): State<AppState>) -> Json<ViewerSnapshot
 /// `GET /api/settings/{sectionId}`; an unknown section is a JSON 404 (wart 9).
 pub(crate) async fn settings_section(State(state): State<AppState>, Path(id): Path<String>) -> Response {
     let snapshot = state.machine.snapshot();
-    match forms::section(&snapshot.settings, &id, snapshot.controller_firmware_version, &snapshot.ports) {
+    match forms::section(
+        &snapshot.settings,
+        &id,
+        snapshot.controller_firmware_version,
+        snapshot.planner,
+        snapshot.feed_forward,
+        &snapshot.ports,
+    ) {
         Some(section) => Json(section).into_response(),
         None => not_found(),
     }

@@ -21,11 +21,15 @@ export interface MachineState {
   health: { cpuUsage: number; bufferSize: number } | null;
   /** The controller's firmware version, or null until it reports one. */
   firmwareVersion: number | null;
+  /** The version as text, narrowed by fingerprint ("51.292") and with B05's decimals ("51.30"); null if unknown. */
+  firmwareBuild: string | null;
   /** This WebControl's release and build commit from /api/state, or null until it loads. */
   software: { version: string; commit: string | null } | null;
   status: { uploadFlag: number; currentTool: number; positioningMode: number } | null;
   /** Whether a job is running or paused, which uploadFlag alone loses on controller pauses; probing is Rust only. */
   job: { inProgress: boolean; manualZAxisAdjust: boolean; probing: boolean };
+  /** The 0-based line a planner build's Stop left, which Play asks whether to resume at; null otherwise. */
+  stoppedAt: number | null;
   position:
     | (Point & {
         z: number;
@@ -118,7 +122,7 @@ export const pushedFields = (event: MachineMessage): (keyof MachineState)[] => {
     case "homePositionMessage":
       return ["homePosition"];
     case "healthMessage":
-      return event.data.controllerFirmwareVersion === undefined ? [] : ["firmwareVersion"];
+      return event.data.controllerFirmwareVersion === undefined ? [] : ["firmwareVersion", "firmwareBuild"];
     case "statusMessage": {
       const { jobInProgress, manualZAxisAdjust, probing } = event.data;
       return [jobInProgress, manualZAxisAdjust, probing].some((flag) => flag !== undefined) ? ["job"] : [];
@@ -142,9 +146,11 @@ export const initialMachineState: MachineState = {
   controller: { status: "unknown", port: null, fakeServo: false },
   health: null,
   firmwareVersion: null,
+  firmwareBuild: null,
   software: null,
   status: null,
   job: { inProgress: false, manualZAxisAdjust: false, probing: false },
+  stoppedAt: null,
   position: null,
   positionError: null,
   homePosition: null,
@@ -201,19 +207,22 @@ const applyMessage = (state: MachineState, event: MachineMessage): MachineState 
     case "connectionStatus":
       return { ...state, controller: controllerOf(event.data) };
     case "healthMessage": {
-      const { cpuUsage, bufferSize, controllerFirmwareVersion } = event.data;
+      const { cpuUsage, bufferSize, controllerFirmwareVersion, firmwareBuild } = event.data;
       return {
         ...state,
         health: { cpuUsage, bufferSize },
         firmwareVersion:
           controllerFirmwareVersion === undefined ? state.firmwareVersion : reportedVersion(controllerFirmwareVersion),
+        firmwareBuild: controllerFirmwareVersion === undefined ? state.firmwareBuild : (firmwareBuild ?? null),
       };
     }
     case "statusMessage": {
-      const { uploadFlag, positioningMode, currentTool, jobInProgress, manualZAxisAdjust, probing } = event.data;
+      const { uploadFlag, positioningMode, currentTool, stoppedAt, jobInProgress, manualZAxisAdjust, probing } =
+        event.data;
       return {
         ...state,
         status: { uploadFlag, positioningMode, currentTool },
+        stoppedAt: stoppedAt ?? null,
         job: {
           inProgress: jobInProgress ?? state.job.inProgress,
           manualZAxisAdjust: manualZAxisAdjust ?? state.job.manualZAxisAdjust,
@@ -293,6 +302,7 @@ export const machineReducer = (state: MachineState, event: MachineEvent): Machin
         macros,
         connectionStatus,
         controllerFirmwareVersion,
+        firmwareBuild,
         jobInProgress,
         manualZAxisAdjust,
         probing,
@@ -309,6 +319,7 @@ export const machineReducer = (state: MachineState, event: MachineEvent): Machin
         ...state,
         job: { inProgress: jobInProgress, manualZAxisAdjust, probing },
         firmwareVersion: reportedVersion(controllerFirmwareVersion),
+        firmwareBuild,
         software: version ? { version, commit: commit ?? null } : null,
         units,
         unitsZ,

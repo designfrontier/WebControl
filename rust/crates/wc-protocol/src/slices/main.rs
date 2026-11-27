@@ -134,6 +134,8 @@ pub struct HealthMessage {
     /// `-1` when buffering is off (wart 6).
     pub buffer_size: i64,
     pub controller_firmware_version: f64,
+    /// The version as text, as `/api/state`'s `firmwareBuild` gives it.
+    pub firmware_build: Option<String>,
 }
 
 impl Message for HealthMessage {
@@ -152,6 +154,8 @@ pub struct StatusMessage {
     pub manual_z_axis_adjust: bool,
     /// A G38.2 probe is queued or descending (Rust only).
     pub probing: bool,
+    /// The 0-based line a planner build's Stop left, which Play asks whether to resume at (Rust only).
+    pub stopped_at: Option<usize>,
 }
 
 impl Message for StatusMessage {
@@ -413,6 +417,26 @@ pub struct PacingSegment {
     pub wall_s: f64,
     /// A running job's estimated time left, scaled by how its estimate compares with its time so far.
     pub remaining_s: Option<f64>,
+    /// `None` until a report comes in while the sled moves.
+    pub position_error: Option<PositionErrorStats>,
+}
+
+/// The `[PE:]` reports taken while the sled moved: the larger of the two chain errors, in mm. From a firmware
+/// listing `peak-error`, the max comes from the peaks between reports, and the overshoot fields are present.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PositionErrorStats {
+    pub samples: u64,
+    pub mean_mm: f64,
+    pub max_mm: f64,
+    #[serde(rename = "over1Mm")]
+    pub over_1mm: u64,
+    /// The largest error ahead of the setpoint's travel in any report of the job, moving or not.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_ahead_mm: Option<f64>,
+    /// Reports with more than 0.2 mm ahead.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub overshoots: Option<u64>,
 }
 
 /// The line pacing and its statistics; pushed on every change and every 2 s during a job.

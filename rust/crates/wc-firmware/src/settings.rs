@@ -17,7 +17,7 @@ pub const WRITE_ONLY_KEY: u32 = 13;
 pub const REINIT_KEYS: [u32; 1] = [38];
 /// Arduino's `Serial.print(float, 8)` resolution, which is all a `$$` reply carries.
 const PRINTED_RESOLUTION: f64 = 1e-8;
-const CUSTOM_FIRMWARE: f64 = 100.0;
+pub(crate) const CUSTOM_FIRMWARE: f64 = 100.0;
 
 fn is_optical(key: u32) -> bool {
     (87..=98).contains(&key)

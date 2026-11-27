@@ -12,6 +12,11 @@ const setup = (upload = recorder(), directories: Parameters<typeof fakeFetch>[0]
   return { ...renderApp("/files/upload", { fetch }), upload, fetch };
 };
 
+const warning =
+  "This file has 1,200,000 lines and needs about 401 MB of the 700 MB this computer has free. Consider splitting it into smaller files and running them one after another with the job queue.";
+const refusal =
+  "This file has 3,000,000 lines and needs about 1002 MB of the 700 MB this computer has free. It was not opened.";
+
 describe("Upload gcode", () => {
   it("accepts the configured extensions into the last directory", async () => {
     setup();
@@ -24,6 +29,21 @@ describe("Upload gcode", () => {
     await user.click(await screen.findByRole("button", { name: "Upload and open" }));
     expect(screen.getByRole("alert")).toHaveTextContent("Choose at least one gcode file to upload.");
     expect(upload.calls).toEqual([]);
+  });
+
+  it("shows the memory warning for a file it opened and stays", async () => {
+    const { user } = setup(recorder(200, { status: 200, warning }));
+    await user.upload(await screen.findByLabelText("Gcode files"), [nc("a.nc")]);
+    await user.click(screen.getByRole("button", { name: "Upload and open" }));
+    expect(await screen.findByText(warning)).toHaveAttribute("role", "status");
+    await expectPath("/files/upload");
+  });
+
+  it("shows why the server refused a file too large for its memory", async () => {
+    const { user } = setup(recorder(409, { status: 409, error: refusal }));
+    await user.upload(await screen.findByLabelText("Gcode files"), [nc("a.nc")]);
+    await user.click(screen.getByRole("button", { name: "Upload and open" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(refusal);
   });
 
   it("uploads every chosen file to the chosen directory and opens the first", async () => {

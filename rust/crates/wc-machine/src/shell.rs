@@ -40,7 +40,7 @@ pub type Serial = (Box<dyn AsyncRead + Send + Unpin>, Box<dyn AsyncWrite + Send 
 
 /// Opens the controller's port: the real serial device, or the simulator. Called on the blocking pool.
 pub trait PortOpener: Send + 'static {
-    fn open(&mut self, port: &str) -> std::io::Result<Serial>;
+    fn open(&mut self, port: &str, baud: u32) -> std::io::Result<Serial>;
 }
 
 /// The machine's reach outside the port: the system it runs on and the log file.
@@ -79,7 +79,7 @@ pub fn unsupported(job: FirmwareJob) -> JobResult {
 pub struct NoPort;
 
 impl PortOpener for NoPort {
-    fn open(&mut self, port: &str) -> std::io::Result<Serial> {
+    fn open(&mut self, port: &str, _baud: u32) -> std::io::Result<Serial> {
         Err(std::io::Error::new(std::io::ErrorKind::NotFound, format!("{port}: no such port")))
     }
 }
@@ -256,7 +256,7 @@ fn next_out(queued: &mut VecDeque<Out>) -> Option<Out> {
 }
 
 /// Writes what the machine sends until the port fails or closes. A `!` cuts short a line still being written.
-/// Never flushes: on a serial port that is `tcdrain`, which blocks until the line has left at 57600 baud.
+/// Never flushes: on a serial port that is `tcdrain`, which blocks until the line has left at the port's baud.
 async fn write_port(
     mut port: Box<dyn AsyncWrite + Send + Unpin>,
     mut outgoing: mpsc::UnboundedReceiver<Out>,
@@ -308,15 +308,16 @@ async fn write_port(
 async fn run_port(
     opener: Arc<Mutex<Box<dyn PortOpener>>>,
     device: PortLock,
-    name: String,
+    (name, baud): (String, u32),
     outgoing: mpsc::UnboundedReceiver<Out>,
     generation: u64,
     reads: mpsc::UnboundedSender<Read>,
 ) {
     let (port, held) = (name.clone(), device.lock_owned().await);
-    let opened =
-        tokio::task::spawn_blocking(move || (opener.lock().unwrap_or_else(PoisonError::into_inner).open(&port), held))
-            .await;
+    let opened = tokio::task::spawn_blocking(move || {
+        (opener.lock().unwrap_or_else(PoisonError::into_inner).open(&port, baud), held)
+    })
+    .await;
     let (opened, _held): (_, Option<OwnedMutexGuard<()>>) = match opened {
         Ok((opened, held)) => (opened, Some(held)),
         Err(panic) => (Err(std::io::Error::other(panic)), None),
@@ -375,11 +376,11 @@ impl<C: Core> Task<C> {
     }
 
     /// Writes made before the port has opened go out once it has.
-    fn open(&mut self, name: String) {
+    fn open(&mut self, name: String, baud: u32) {
         self.close();
         let (out, outgoing) = mpsc::unbounded_channel();
         let (opener, device) = (self.opener.clone(), self.device.clone());
-        let opening = run_port(opener, device, name, outgoing, self.generation, self.reads.clone());
+        let opening = run_port(opener, device, (name, baud), outgoing, self.generation, self.reads.clone());
         self.port = Some(Port { out, task: tokio::spawn(opening) });
     }
 
@@ -403,7 +404,7 @@ impl<C: Core> Task<C> {
             Effect::Write(bytes) => self.write(Out::Line(bytes)),
             Effect::Realtime(bytes) => self.write(Out::Realtime(bytes)),
             Effect::Push(push) => drop(self.pushes.send(push)),
-            Effect::OpenPort(port) => self.open(port),
+            Effect::OpenPort(port, baud) => self.open(port, baud),
             Effect::ClosePort => self.close(),
             Effect::ListPorts => {
                 let host = self.host.clone();

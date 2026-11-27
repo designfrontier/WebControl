@@ -1,5 +1,5 @@
-//! Flash images as Intel HEX: the pinned 51.292 build embedded at compile time, and the rollback image cut from
-//! avrdude's read-back of the controller's flash.
+//! Flash images as Intel HEX: the pinned 51.292 and planner 51.30 builds embedded at compile time, and the
+//! rollback image cut from avrdude's read-back of the controller's flash.
 
 use std::sync::Arc;
 
@@ -11,6 +11,9 @@ const RECORD_BYTES: usize = 16;
 /// `rust/firmware/holey-51.292.sha256`, which `rust/firmware/build.sh` checks the CI build against.
 pub const PINNED_SHA256: &str = include_str!("../../../firmware/holey-51.292.sha256");
 const EMBEDDED: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/holey-51.292.hex"));
+/// `rust/firmware/holey-51.30.sha256`, the planner build's pin.
+pub const PLANNER_PINNED_SHA256: &str = include_str!("../../../firmware/holey-51.30.sha256");
+const EMBEDDED_PLANNER: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/holey-51.30.hex"));
 
 pub fn sha256_hex(bytes: &[u8]) -> String {
     Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
@@ -31,6 +34,11 @@ impl Image {
     /// The image this binary was built with, if `WC_FIRMWARE_HEX` named one; `build.rs` refuses any other digest.
     pub fn embedded() -> Option<Image> {
         Image::pinned(EMBEDDED, PINNED_SHA256)
+    }
+
+    /// The planner 51.30 image, if `WC_PLANNER_HEX` named one.
+    pub fn embedded_planner() -> Option<Image> {
+        Image::pinned(EMBEDDED_PLANNER, PLANNER_PINNED_SHA256)
     }
 
     pub fn pinned(bytes: &[u8], sha256: &str) -> Option<Image> {

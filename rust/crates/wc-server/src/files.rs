@@ -20,6 +20,7 @@ use wc_protocol::viewer::LastRun;
 
 use crate::AppState;
 use crate::forms::{self, Form};
+use crate::memory::{self, Fit};
 
 const NO_NAME: &str = "Enter a directory name using letters, numbers, dashes or underscores.";
 const OUTSIDE: &str = "That directory points outside the library.";
@@ -146,9 +147,11 @@ fn locked(state: &AppState) -> Option<Response> {
     state.machine.snapshot().gcode_locked.then(|| forms::refused(409, GCODE_LOCKED))
 }
 
+/// `Text` is a load that went ahead with a warning.
 fn reply_status(reply: Reply) -> Response {
     match reply {
         Reply::Done => forms::status(200),
+        Reply::Text(warning) => forms::warned(&warning),
         Reply::Refused(error) => forms::refused(409, &error),
         _ => forms::status(500),
     }
@@ -213,6 +216,10 @@ impl Loading {
         self.machine.request(request).await
     }
 
+    async fn refused(self, why: String) -> Reply {
+        self.finish(Ask::LoadRefused(why)).await
+    }
+
     async fn unreadable(self) -> Reply {
         self.finish(Ask::Problem(Problem::GcodeUnreadable)).await;
         Reply::Failed
@@ -247,11 +254,22 @@ where
 }
 
 /// `loadUpdateFile` from disk: the file read and parsed off the machine task, then handed over.
-pub(crate) async fn load_file(loading: Loading, file: PathBuf, text: Option<String>, origin: Origin) -> Reply {
+pub(crate) async fn load_file(
+    loading: Loading,
+    file: PathBuf,
+    text: Option<String>,
+    origin: Origin,
+    free_memory: fn() -> Option<u64>,
+) -> Reply {
     let text = match text {
         Some(text) => Ok(text),
         None => read(file.clone()).await,
     };
+    let fit = text.as_ref().map_or(Fit::Fine, |text| memory::fit(text.lines().count(), free_memory()));
+    if let Fit::Refuse(why) = fit {
+        tracing::warn!(file = %file.display(), why, "refused a gcode file too large for the free memory");
+        return loading.refused(why).await;
+    }
     let gcode = match text {
         Ok(text) => parse(text, loading.machine.snapshot().settings).await,
         Err(error) => {
@@ -259,9 +277,13 @@ pub(crate) async fn load_file(loading: Loading, file: PathBuf, text: Option<Stri
             None
         }
     };
-    match gcode {
+    let reply = match gcode {
         Some(gcode) => loading.finish(Ask::LoadGcode { gcode: Box::new(gcode), file: Some(file), origin }).await,
         None => loading.unreadable().await,
+    };
+    match (reply, fit) {
+        (Reply::Done, Fit::Warn(warning)) => Reply::Text(warning),
+        (reply, _) => reply,
     }
 }
 
@@ -292,7 +314,8 @@ pub(crate) async fn open(State(state): State<AppState>, request: Request) -> Res
     if !named {
         return forms::status(500);
     }
-    reply_status(detached(&state, |loading| load_file(loading, target, None, Origin::Open)).await)
+    let free = state.free_memory;
+    reply_status(detached(&state, move |loading| load_file(loading, target, None, Origin::Open, free)).await)
 }
 
 /// Written to a hidden file beside `target` and renamed over it, so no reader sees half an upload.
@@ -347,7 +370,8 @@ pub(crate) async fn upload(State(state): State<AppState>, request: Request) -> R
         return forms::status(500);
     }
     let (text, target) = (String::from_utf8_lossy(&first.bytes).into_owned(), targets[1].clone());
-    reply_status(detached(&state, |loading| load_file(loading, target, Some(text), Origin::Open)).await)
+    let free = state.free_memory;
+    reply_status(detached(&state, move |loading| load_file(loading, target, Some(text), Origin::Open, free)).await)
 }
 
 /// `GCodeFile.saveFile`: every line followed by a newline.
@@ -392,11 +416,12 @@ pub(crate) async fn edit(State(state): State<AppState>, request: Request) -> Res
         Ok(text) => text.trim_end().to_string(),
         Err(refusal) => return refusal,
     };
-    let reply = detached(&state, |loading| async move {
+    let free = state.free_memory;
+    let reply = detached(&state, move |loading| async move {
         let snapshot = loading.machine.snapshot();
         let edited = |gcode| Ask::LoadGcode { gcode: Box::new(gcode), file: None, origin: Origin::Edit };
         match (text.is_empty(), snapshot.gcode_file.clone()) {
-            (true, Some(file)) => load_file(loading, file, None, Origin::Reload).await,
+            (true, Some(file)) => load_file(loading, file, None, Origin::Reload, free).await,
             (true, None) => loading.finish(edited(Gcode::empty(snapshot.units()))).await,
             (false, _) => match parse(text, snapshot.settings).await {
                 Some(gcode) => loading.finish(edited(gcode)).await,

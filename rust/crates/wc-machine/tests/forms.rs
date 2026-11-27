@@ -56,7 +56,7 @@ fn serial_ports_are_named_like_actions_firmware_says() {
 fn a_setting_with_missing_fields_is_still_described() {
     let settings = loaded(json!({"Maslow Settings": [{"key": "x", "custom": 1}, {"key": "y", "desc": "Y",
         "default": 2.5, "options": [1, "b"]}, {"key": "z", "desc": "Z\ndefault setting: 3", "default": 3}]}));
-    let maslow = section(&settings, "maslow", 0.0, &[]).unwrap();
+    let maslow = section(&settings, "maslow", 0.0, false, false, &[]).unwrap();
     let field = |key: &str| serde_json::to_value(maslow.settings.iter().find(|f| f.key == key).unwrap()).unwrap();
     assert_eq!(
         field("x"),
@@ -65,7 +65,7 @@ fn a_setting_with_missing_fields_is_still_described() {
     assert_eq!(field("y")["desc"], "Y\ndefault setting: 2.5");
     assert_eq!(field("y")["options"], json!(["1", "b"]));
     assert_eq!(field("z")["desc"], "Z\ndefault setting: 3");
-    assert!(section(&settings, "ground-control", 0.0, &[]).is_none());
+    assert!(section(&settings, "ground-control", 0.0, false, false, &[]).is_none());
     assert_eq!(section_title("gpio"), Some("GPIO Settings"));
 }
 
@@ -73,22 +73,36 @@ fn a_setting_with_missing_fields_is_still_described() {
 fn a_retired_python_setting_stays_in_the_file_but_off_the_screen() {
     let settings = loaded(json!({"WebControl Settings": [{"key": "recordSerial", "type": "bool", "value": 1}]}));
     assert_eq!(settings.value("WebControl Settings", "recordSerial"), Some(&json!(1)));
-    let webcontrol = section(&settings, "webcontrol", 0.0, &[]).unwrap();
+    let webcontrol = section(&settings, "webcontrol", 0.0, false, false, &[]).unwrap();
     assert!(webcontrol.settings.iter().all(|field| field.key != "recordSerial"));
     assert!(webcontrol.settings.iter().any(|field| field.key == "webPort"));
 }
 
 #[test]
+fn the_planner_settings_show_only_for_a_planner_build() {
+    let keys = |planner: bool, feed_forward: bool| -> Vec<String> {
+        let maslow = section(&Settings::defaults(), "maslow", 51.29, planner, feed_forward, &[]).unwrap();
+        maslow.settings.into_iter().map(|field| field.key).filter(|key| key.starts_with("planner")).collect()
+    };
+    assert_eq!(keys(true, true), ["plannerAcceleration", "plannerJunctionDeviation", "plannerFeedForward"]);
+    assert_eq!(keys(true, false), ["plannerAcceleration", "plannerJunctionDeviation"]);
+    assert!(keys(false, false).is_empty());
+}
+
+#[test]
 fn custom_settings_follow_the_firmware_version() {
     [(0.0, false), (99.9, false), (100.0, true), (101.5, true)].iter().for_each(|(version, enabled)| {
-        assert_eq!(section(&Settings::defaults(), "maslow", *version, &[]).unwrap().enable_custom, *enabled);
+        assert_eq!(
+            section(&Settings::defaults(), "maslow", *version, false, false, &[]).unwrap().enable_custom,
+            *enabled
+        );
     });
 }
 
 #[test]
 fn numbers_and_whole_numbers_are_checked_like_api_settings() {
-    let advanced = section(&Settings::defaults(), "advanced", 0.0, &[]).unwrap();
-    let webcontrol = section(&Settings::defaults(), "webcontrol", 0.0, &[]).unwrap();
+    let advanced = section(&Settings::defaults(), "advanced", 0.0, false, false, &[]).unwrap();
+    let webcontrol = section(&Settings::defaults(), "webcontrol", 0.0, false, false, &[]).unwrap();
     let ok = |s: &wc_protocol::settings::SettingsSection, key: &str, value: Value| {
         errors(s, &[(key.to_string(), value)].into_iter().collect(), &[]).is_empty()
     };

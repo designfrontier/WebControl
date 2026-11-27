@@ -27,7 +27,7 @@ fn pty() -> (File, OwnedFd, String) {
 #[cfg_attr(target_os = "macos", ignore = "macOS ptys refuse the IOSSIOSPEED baud ioctl serialport uses")]
 async fn the_serial_port_carries_lines_both_ways() {
     let (mut controller, _slave, name) = pty();
-    let (reader, mut writer) = SerialOpener.open(&name).unwrap();
+    let (reader, mut writer) = SerialOpener.open(&name, 115200).unwrap();
     writer.write_all(b"B05 \n").await.unwrap();
     writer.flush().await.unwrap();
     let mut sent = [0u8; 5];
@@ -45,14 +45,14 @@ async fn the_serial_port_carries_lines_both_ways() {
 
 #[tokio::test]
 async fn a_missing_serial_port_fails_to_open() {
-    assert!(SerialOpener.open("/dev/does-not-exist").is_err());
+    assert!(SerialOpener.open("/dev/does-not-exist", 57600).is_err());
 }
 
 #[tokio::test]
 async fn every_simulator_open_boots_the_board() {
     let mut opener = SimOpener::new(Build::holey_51_27());
     for _ in 0..2 {
-        let (reader, _writer) = opener.open("simulator").unwrap();
+        let (reader, _writer) = opener.open("simulator", 57600).unwrap();
         let mut lines = BufReader::new(reader).lines();
         assert_eq!(lines.next_line().await.unwrap().as_deref(), Some("PCB v1.6 TLE9201  Detected"));
     }

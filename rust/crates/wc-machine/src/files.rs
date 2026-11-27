@@ -10,7 +10,7 @@ use wc_gcode::arc::arc_centre_note;
 use wc_gcode::board::{Board, BoardEdit, BoardTrim};
 use wc_gcode::estimate::{Rates, cumulative_seconds};
 use wc_gcode::preview::{self, Move};
-use wc_gcode::{GcodeError, load, py};
+use wc_gcode::{GcodeError, load, position, py};
 use wc_protocol::boards::BoardDataUpdate;
 use wc_protocol::files::UpdateDirectories;
 use wc_protocol::main::{ActivateModal, ControllerMessage, GcodeFile, Units};
@@ -55,6 +55,8 @@ pub struct Gcode {
     pub tools: Vec<FileTool>,
     /// Estimated seconds through the end of each line.
     pub estimate: Vec<f32>,
+    /// `find_position_at` for each index, so a position update reads none of the file.
+    pub positions: Vec<[f64; 3]>,
 }
 
 /// `Advanced Settings.truncate` is on when it equals 1; `digits` is the text Python splices into its pattern.
@@ -98,6 +100,7 @@ impl Gcode {
             arc_centres: arc_centre_note(&lines),
             tools: wc_gcode::tools::file_tools(raw),
             estimate: estimate(&lines, settings),
+            positions: position::positions(&lines),
             lines,
         })
     }
@@ -113,6 +116,7 @@ impl Gcode {
             arc_centres: None,
             tools: Vec::new(),
             estimate: Vec::new(),
+            positions: position::positions(&[]),
         }
     }
 }
@@ -174,6 +178,8 @@ pub enum Request {
         origin: Origin,
     },
     Problem(Problem),
+    /// A load ended before parsing, for this reason; what was loaded stays.
+    LoadRefused(String),
     SendGcode(String),
     EditBoard(BoardForm),
     TrimBoard(TrimForm),
@@ -268,11 +274,20 @@ impl Machine {
         self.gcode_position(None, effects);
     }
 
+    /// The file line at `index` and where it leads, as the line a planner build runs.
+    pub(crate) fn push_position_of(&mut self, index: usize, effects: &mut Vec<Effect>) {
+        if index < self.gcode.len() {
+            let (gcode, positions, scale) = (self.gcode.clone(), self.positions.clone(), self.gcode_scale());
+            self.compute(Work::GcodePosition { gcode, positions, index, after: true, scale, failure: None }, effects);
+        }
+    }
+
     /// The same for one client, outside the lane, since it changes nothing.
     pub(crate) fn push_gcode_position_to(&mut self, sid: &str, effects: &mut Vec<Effect>) {
         if self.index < self.gcode.len() {
-            let (gcode, index, scale) = (self.gcode.clone(), self.index, self.gcode_scale());
-            self.compute(Work::GcodePositionFor { sid: sid.into(), gcode, index, scale }, effects);
+            let (gcode, positions, index, scale) =
+                (self.gcode.clone(), self.positions.clone(), self.index, self.gcode_scale());
+            self.compute(Work::GcodePositionFor { sid: sid.into(), gcode, positions, index, scale }, effects);
         }
     }
 
@@ -281,8 +296,9 @@ impl Machine {
         if self.index >= self.gcode.len() {
             return false;
         }
-        let (gcode, index, scale) = (self.gcode.clone(), self.index, self.gcode_scale());
-        self.compute(Work::GcodePosition { gcode, index, scale, failure }, effects);
+        let (gcode, positions, index, scale) =
+            (self.gcode.clone(), self.positions.clone(), self.index, self.gcode_scale());
+        self.compute(Work::GcodePosition { gcode, positions, index, after: false, scale, failure }, effects);
         true
     }
 
@@ -296,12 +312,14 @@ impl Machine {
 
     fn install(&mut self, gcode: Gcode) {
         self.gcode = Arc::new(gcode.lines);
+        self.positions = Arc::new(gcode.positions);
         self.z_moves = gcode.z_moves;
         self.preview = Arc::new(gcode.preview);
         self.file_tools = Arc::new(gcode.tools);
         self.truncate = gcode.truncate;
         self.stats.estimate = gcode.estimate;
         self.stats.dirty = true;
+        self.job.stopped_at = None;
         if let Some(tolerance) = gcode.tolerance {
             self.set_setting("Computed Settings", "tolerance", Value::from(tolerance));
         }
@@ -355,6 +373,7 @@ impl Machine {
     fn move_gcode_index(&mut self, target: i64, failure: &str, effects: &mut Vec<Effect>) -> bool {
         let Some(last) = self.gcode.len().checked_sub(1) else { return false };
         self.index = usize::try_from(target).unwrap_or(0).min(last);
+        self.job.stopped_at = None;
         self.gcode_position(Some(failure.into()), effects)
     }
 
@@ -535,6 +554,12 @@ impl Machine {
                 }
                 self.problem(problem, effects);
                 Reply::Done
+            }
+            Request::LoadRefused(why) => {
+                self.loads = self.loads.saturating_sub(1);
+                self.push_gcode(effects);
+                self.queue_load_refused(&why, effects);
+                Reply::Refused(why)
             }
             Request::SendGcode(text) => self.send_gcode(text, effects),
             Request::EditBoard(form) => self.edit_board(&form, effects),

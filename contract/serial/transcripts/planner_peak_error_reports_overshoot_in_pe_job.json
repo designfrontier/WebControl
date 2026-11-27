@@ -1,0 +1,66 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "planner_peak_error_reports_overshoot_in_pe_job",
+    "description": "A planner build whose B05 lists peak-error adds lAhead,lBehind,rAhead,rBehind to [PE:]. In a job, the max error comes from those peaks while the sled moves, and every report counts toward the overshoot: max_ahead_mm is the largest ahead, overshoots the reports over 0.2 mm ahead, the still one after the stop included. PE JOB logs both.",
+    "firmware": {
+      "variant": "planner",
+      "version": "51.29",
+      "build": "51.292"
+    },
+    "webcontrolCommit": "planner-streaming"
+  },
+  "setup": {
+    "units": "MM",
+    "start": "boot",
+    "gcode": {
+      "lines": ["G1 X10 F600"]
+    }
+  },
+  "events": [
+    {"type": "rx", "line": "PCB v1.1 Detected"},
+    {"type": "rx", "line": "Grbl v1.00"},
+    {"type": "rx", "line": "ready"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "B05  \n"},
+    {"type": "rx", "line": "B05"},
+    {"type": "rx", "line": "Firmware Version 51.29"},
+    {"type": "rx", "line": "Capabilities: planner line-numbers accel-settings status-line feed-forward peak-error"},
+    {"type": "rx", "line": "ok"},
+    {"type": "tx", "bytes": "M110 N1\n"},
+    {"type": "tx", "bytes": "N1 G21*27\n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "G21"},
+    {"type": "rx", "line": "ok N1"},
+    {"type": "tx", "bytes": "N2 G90*18\n"},
+    {"type": "rx", "line": "G90"},
+    {"type": "rx", "line": "ok N2"},
+    {"type": "tx", "bytes": "N3 $$*93\n"},
+    {"type": "rx", "line": "$46=97.90000152 (Sled Weight, N)", "comment": "the dump's keys before $46 are left out"},
+    {"type": "rx", "line": "$47=50.00000000"},
+    {"type": "rx", "line": "$48=0.01000000"},
+    {"type": "rx", "line": "$49=0.00000000"},
+    {"type": "rx", "line": "ok N3"},
+    {"type": "tx", "bytes": "N4 $13=63.5*95\n"},
+    {"type": "rx", "line": "Change in setting, rewriting EEPROM"},
+    {"type": "rx", "line": "ok N4"},
+    {"type": "rx", "line": "<Idle,MPos:0.00,0.00,0.00,WPos:0.000,0.000,0.000>"},
+    {"type": "rx", "line": "[PE:0.00,0.00,127,1650.50,1651.25,0,0,0.00,0.00,0.00,0.00]"},
+    {"type": "ui", "action": {"command": "startRun", "arg": "", "arg1": ""}},
+    {"type": "tx", "bytes": "M110 N5\n"},
+    {"type": "tx", "bytes": "N5 G1 X10 F600*4\n"},
+    {"type": "rx", "line": "ok"},
+    {"type": "rx", "line": "G1 X10 F600"},
+    {"type": "rx", "line": "ok N5"},
+    {"type": "tx", "bytes": "N6 G4 P0*107\n"},
+    {"type": "rx", "line": "G4 P0"},
+    {"type": "rx", "line": "<Idle,MPos:4.00,0.00,0.00,WPos:0.000,0.000,0.000>"},
+    {"type": "rx", "line": "[PE:0.20,-0.31,127,1648.10,1653.60,5,1,0.00,0.42,0.00,0.35]", "comment": "moving: lagging, max 0.42 from the peaks"},
+    {"type": "rx", "line": "<Idle,MPos:10.00,0.00,0.00,WPos:0.000,0.000,0.000>"},
+    {"type": "rx", "line": "[PE:0.05,-0.02,127,1644.50,1657.20,5,1,0.61,0.10,0.00,0.30]", "comment": "the stop: 0.61 mm past it and back between reports"},
+    {"type": "rx", "line": "<Idle,MPos:10.00,0.00,0.00,WPos:0.000,0.000,0.000>"},
+    {"type": "rx", "line": "[PE:0.01,0.00,127,1644.50,1657.20,5,0,0.25,0.10,0.00,0.02]", "comment": "still: counts toward overshoots, not the mean or max"},
+    {"type": "rx", "line": "ok N6"},
+    {"type": "expect", "state": {"jobInProgress": false}, "emitted": [{"command": "controllerMessage", "data": "PE JOB mean_mm=0.18 max_mm=0.61 over_1mm=0 samples=2 max_ahead_mm=0.61 overshoots=2"}]}
+  ]
+}

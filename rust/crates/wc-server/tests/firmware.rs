@@ -13,7 +13,9 @@ use wc_firmware::image::Image;
 use wc_machine::{Event, FirmwareJob, Host, JobResult, Machine, MachineHandle, spawn};
 use wc_protocol::Action;
 use wc_protocol::system::UpgradeStage as Stage;
-use wc_server::firmware::{Avrdude, BACKUPS, Flasher, SimFlasher, run_job, save_backup, simulated_target};
+use wc_server::firmware::{
+    Avrdude, BACKUPS, Flasher, SimFlasher, run_job, save_backup, simulated_planner, simulated_target,
+};
 use wc_server::host::SystemHost;
 use wc_server::serial::SimOpener;
 use wc_sim::Build;
@@ -154,6 +156,14 @@ fn the_simulators_avrdude_flashes_the_build_an_image_names() {
     assert_eq!(opener.sim().lock().unwrap().build(), &Build::holey_51_27().on_board("PCB v1.1 Detected"));
     flasher.write("simulator", &Image::new(READ_BACK), scratch);
     assert_eq!(opener.sim().lock().unwrap().build().version, "51.29", "a real image is 51.292");
+    flasher.write("simulator", &simulated_planner(), scratch);
+    let planner = opener.sim().lock().unwrap().build().clone();
+    assert_eq!(planner.version, "51.30");
+    assert!(planner.capabilities.as_deref().is_some_and(|words| words.starts_with("planner ")));
+    let read_back = wc_firmware::image::rollback_image(&flasher.read("simulator", scratch).unwrap()).unwrap();
+    flasher.write("simulator", &simulated_target(), scratch);
+    flasher.write("simulator", &read_back, scratch);
+    assert_eq!(opener.sim().lock().unwrap().build(), &planner, "a read-back keeps the capabilities");
 }
 
 fn step(handle: &MachineHandle, step: &str) {
@@ -198,6 +208,38 @@ async fn the_rehearsal_upgrades_the_simulator_and_rolls_back_through_the_shell()
     assert_eq!(until(&handle, |s| matches!(s, Stage::RolledBack | Stage::Failed)).await, Stage::RolledBack);
     assert_eq!(sim.lock().unwrap().build().version, "51.27");
     assert_eq!(handle.snapshot().controller_firmware_version, 51.27);
+    drop(handle);
+    task.await.unwrap();
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn the_rehearsal_upgrades_the_simulator_to_the_planner_and_back_to_51_292() {
+    let home = tempfile::tempdir().unwrap();
+    let opener = SimOpener::new(Build::holey_51_27().on_board("PCB v1.1 Detected"));
+    let sim = opener.sim();
+    let host = SystemHost::new(&home.path().join(".WebControl"), Arc::new(Notify::new()))
+        .with_flasher(Box::new(SimFlasher { sim: sim.clone() }));
+    let machine = Machine::new("h", Settings::defaults())
+        .on_port("simulator")
+        .with_firmware(Some(simulated_target()))
+        .with_planner_firmware(Some(simulated_planner()));
+    let (handle, task) = spawn(machine, Box::new(opener), Arc::new(host));
+    tokio::time::sleep(Duration::from_secs(10)).await;
+    let settled = |s| matches!(s, Stage::SelfTest | Stage::Failed | Stage::RolledBack);
+
+    step(&handle, "checkPlanner");
+    assert_eq!(until(&handle, |s| s != Stage::Idle && s != Stage::Checking).await, Stage::Ready);
+    step(&handle, "upgrade");
+    assert_eq!(until(&handle, settled).await, Stage::SelfTest);
+    let snapshot = handle.snapshot();
+    assert_eq!((snapshot.controller_firmware_version, snapshot.planner), (51.3, true));
+
+    step(&handle, "check");
+    assert_eq!(until(&handle, |s| s == Stage::Ready || s == Stage::Blocked).await, Stage::Ready);
+    step(&handle, "upgrade");
+    assert_eq!(until(&handle, settled).await, Stage::SelfTest);
+    assert_eq!(handle.snapshot().firmware_build.as_deref(), Some("51.292"));
+    assert!(!handle.snapshot().planner);
     drop(handle);
     task.await.unwrap();
 }

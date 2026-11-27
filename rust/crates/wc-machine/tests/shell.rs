@@ -35,7 +35,7 @@ struct Wire {
 }
 
 impl PortOpener for Wire {
-    fn open(&mut self, port: &str) -> std::io::Result<Serial> {
+    fn open(&mut self, port: &str, _baud: u32) -> std::io::Result<Serial> {
         self.opened.lock().unwrap().push(port.into());
         let (ours, theirs) = tokio::io::duplex(4096);
         self.ends.send(theirs).unwrap();
@@ -124,7 +124,7 @@ struct Echo {
 impl Core for Echo {
     fn handle(&mut self, event: Event, _: Duration) -> Vec<Effect> {
         let (label, write) = match &event {
-            Event::Action(a) if a.command == "open" => return vec![Effect::OpenPort("p".into())],
+            Event::Action(a) if a.command == "open" => return vec![Effect::OpenPort("p".into(), 57600)],
             Event::Action(a) if a.command == "close" => return vec![Effect::ClosePort],
             Event::Action(a) if a.command == "handOff" => {
                 return vec![Effect::Write(b"last\n".to_vec()), Effect::Realtime(b"!\n".to_vec()), Effect::ClosePort];
@@ -244,7 +244,7 @@ impl AsyncWrite for Gate {
 struct Gated(Option<Gate>);
 
 impl PortOpener for Gated {
-    fn open(&mut self, _: &str) -> std::io::Result<Serial> {
+    fn open(&mut self, _: &str, _: u32) -> std::io::Result<Serial> {
         let gate = self.0.take().expect("opened once");
         Ok((Box::new(tokio::io::empty()), Box::new(gate)))
     }
@@ -310,14 +310,14 @@ struct Panicky {
 }
 
 impl PortOpener for Panicky {
-    fn open(&mut self, port: &str) -> std::io::Result<Serial> {
+    fn open(&mut self, port: &str, _baud: u32) -> std::io::Result<Serial> {
         let mut opens = self.opens.lock().unwrap();
         *opens += 1;
         if *opens == 1 {
             drop(opens);
             panic!("the driver fell over");
         }
-        NoPort.open(port)
+        NoPort.open(port, 57600)
     }
 }
 
@@ -442,7 +442,7 @@ fn the_null_host_and_port_do_nothing() {
     assert_eq!(host.cpu_load(), 0.0);
     host.save_settings(&Settings::defaults());
     assert!(!host.create_directory("jobs"));
-    assert!(NoPort.open("/dev/ttyACM0").is_err());
+    assert!(NoPort.open("/dev/ttyACM0", 57600).is_err());
 }
 
 /// Keeps every settings save it is handed, slowly, as an SD card might.
@@ -648,7 +648,7 @@ impl Core for Jobs {
             Event::Action(a) if a.command == "save" => FirmwareJob::Save { files: vec![] },
             Event::Action(a) if a.command == "write" => FirmwareJob::WriteFlash { port, image },
             Event::Action(a) if a.command == "openThenRead" => {
-                return vec![Effect::OpenPort(port.clone()), Effect::Firmware(FirmwareJob::ReadFlash { port })];
+                return vec![Effect::OpenPort(port.clone(), 57600), Effect::Firmware(FirmwareJob::ReadFlash { port })];
             }
             Event::PortOpened { .. } => return vec![Effect::ClosePort],
             _ => return Vec::new(),
@@ -736,7 +736,7 @@ impl AsyncWrite for Counted {
 struct SlowOpen(Arc<Mutex<usize>>);
 
 impl PortOpener for SlowOpen {
-    fn open(&mut self, _: &str) -> std::io::Result<Serial> {
+    fn open(&mut self, _: &str, _: u32) -> std::io::Result<Serial> {
         *self.0.lock().unwrap() += 1;
         std::thread::sleep(Duration::from_millis(50));
         Ok((Box::new(tokio::io::empty()), Box::new(Counted(self.0.clone()))))

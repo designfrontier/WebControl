@@ -6,6 +6,13 @@ pub const EEPROM_READ_FAIL: &str = "EEPROM read fail";
 const BOARD_BANNER: &str = "PCB v1.";
 /// A banner this long after the last one is a new boot, for a boot whose `ready` line was lost.
 pub const BOOT_BANNER_WINDOW_MS: u64 = 10_000;
+/// Every build talks at 57600 baud but the planner's 51.30, which talks at 115200.
+pub const BAUDS: [u32; 2] = [57600, 115200];
+
+/// The rate to try when `baud` brought nothing the firmware prints; anything unknown counts as 57600.
+pub fn other_baud(baud: u32) -> u32 {
+    if baud == BAUDS[1] { BAUDS[0] } else { BAUDS[1] }
+}
 
 fn is_word(c: char) -> bool {
     c.is_alphanumeric() || c == '_'
@@ -45,10 +52,13 @@ pub fn parse_firmware_version(line: &str) -> Option<f64> {
     number.parse::<f64>().ok().filter(|v| v.is_finite())
 }
 
-/// The reported version as Python's `format(v, "g")` prints a two-decimal B05 reply.
-fn version_text(version: f64) -> String {
-    let text = format!("{version}");
-    text.strip_suffix(".0").map(String::from).unwrap_or(text)
+/// The version as B05 prints it, with two decimals (51.30, not 51.3); a whole number without any.
+pub fn version_text(version: f64) -> String {
+    let two = format!("{version:.2}");
+    match version.fract() == 0.0 || two.parse::<f64>() != Ok(version) {
+        true => format!("{version}"),
+        false => two,
+    }
 }
 
 /// The version, with 51.29 narrowed to 51.292 when its rewrite notice was seen, else `51.29x`; `None` if unknown.
@@ -62,7 +72,8 @@ pub fn firmware_build(version: f64, rewrite_notice_seen: bool) -> Option<String>
     Some(version_text(version))
 }
 
-/// Only holey 51.292 and later store Z limits (`$63`/`$64`); B17-B19 do nothing or corrupt `$43`/`$44` elsewhere.
+/// Only holey 51.292 and later (the planner's 51.30 too; custom firmware starts at 100) store Z limits (`$63`/`$64`);
+/// B17-B19 do nothing or corrupt `$43`/`$44` elsewhere.
 pub fn supports_z_limits(build: Option<&str>) -> bool {
     match build {
         None | Some("51.29x") => false,

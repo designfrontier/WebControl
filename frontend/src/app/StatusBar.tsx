@@ -24,8 +24,10 @@ const controllerText = ({ status, port, fakeServo }: MachineState["controller"])
       : "Controller: unknown";
 
 /** The backend's firmware ranges: below 50 is stock, 50 up to 100 holey, 100 and above custom. */
-const firmwareText = (version: number | null) =>
-  version === null ? "Firmware: unknown" : `${version < 50 ? "Stock" : version < 100 ? "Holey" : "Custom"} ${version}`;
+const firmwareText = (version: number | null, build: string | null) =>
+  version === null
+    ? "Firmware: unknown"
+    : `${version < 50 ? "Stock" : version < 100 ? "Holey" : "Custom"} ${build ?? version}`;
 
 const softwareText = ({ version, commit }: NonNullable<MachineState["software"]>) =>
   `WebControl ${version}${commit ? ` · ${commit}` : ""}`;
@@ -78,6 +80,7 @@ export const StatusBar = () => {
   const controller = useMachine((s) => s.controller);
   const health = useMachine((s) => s.health);
   const firmware = useMachine((s) => s.firmwareVersion);
+  const build = useMachine((s) => s.firmwareBuild);
   const software = useMachine((s) => s.software);
 
   return (
@@ -98,8 +101,8 @@ export const StatusBar = () => {
         kind="state"
       />
       <Chip
-        text={firmwareText(firmware)}
-        shortest={firmware === null ? undefined : String(firmware)}
+        text={firmwareText(firmware, build)}
+        shortest={firmware === null ? undefined : (build ?? String(firmware))}
         title="Controller firmware"
       />
       {software && (

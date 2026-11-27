@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router";
 import { useClient, useFetch } from "../../app/context";
 import { Dialog } from "../../app/Dialog";
 import type { FirmwareUpgrade } from "../../protocol";
 import { getSystemInfo } from "./api";
 import { errorText } from "./useLoad";
-import { chainsText, motorSummary, stageView } from "./upgradeSteps";
+import { PLANNER_TARGET, chainsText, motorSummary, stageView } from "./upgradeSteps";
 import type { StepButton } from "./upgradeSteps";
 
 interface Props {
@@ -83,6 +84,11 @@ export const FirmwareUpgradeDialog = ({ initial, onClose, pollMs = 1000 }: Props
           {upgrade.message || "WebControl checks the board and firmware before anything is written."}
         </p>
         {view.busy && <p className="system-note">Do not unplug the controller or close WebControl.</p>}
+        <p className="muted">
+          The planner firmware {PLANNER_TARGET} is experimental: it plans each move's acceleration and takes corners
+          without stopping, and talks at 115200 baud. Holey 51.292 is the way back: upgrade to it here at any time.{" "}
+          <Link to="/help/Actions/Controller/upgradeHoleyFirmware.md">Help</Link>
+        </p>
         {error && (
           <p className="system-error" role="alert">
             Could not read the upgrade's progress: {error}

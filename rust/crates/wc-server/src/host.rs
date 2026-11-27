@@ -19,8 +19,10 @@ use crate::firmware::{Avrdude, BACKUPS, Flasher, run_job};
 /// `install-pi.sh` allows exactly this command without a password (`/etc/sudoers.d/webcontrol-rs`).
 pub const POWER_OFF: [&str; 4] = ["sudo", "--non-interactive", "/usr/bin/systemctl", "poweroff"];
 pub const LOG_FILE: &str = "webcontrol-rs.log";
-/// The log rotates to `.1` past this size, so months of status reports cannot fill the card.
-pub const LOG_LIMIT: u64 = 5 * 1024 * 1024;
+/// Past this size the log moves to a timestamped file beside it.
+pub const LOG_LIMIT: u64 = 100 * 1024 * 1024;
+/// Rotated logs older than this are deleted at the next rotation.
+pub const LOG_KEEP: std::time::Duration = std::time::Duration::from_secs(30 * 24 * 60 * 60);
 
 /// `actions.updatePorts`: `/dev/tty[A-Za-z]*` on Linux, `/dev/tty.*` on macOS, sorted.
 pub fn list_ports(dev: &Path, macos: bool) -> Vec<String> {
@@ -70,9 +72,40 @@ enum LogCommand {
     Flush(Sender<()>),
 }
 
+/// The rotated logs beside `path`, oldest first: `webcontrol-rs.<stamp>.log`, and the `.log.1` older builds left.
+pub fn rotated_logs(path: &Path) -> Vec<PathBuf> {
+    let (Some(dir), Some(name)) = (path.parent(), path.file_name().and_then(|n| n.to_str())) else { return vec![] };
+    let stem = name.trim_end_matches(".log");
+    let rotated = |file: &str| {
+        file != name
+            && (file == format!("{name}.1") || (file.starts_with(&format!("{stem}.")) && file.ends_with(".log")))
+    };
+    let mut found: Vec<PathBuf> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|entry| entry.file_name().to_str().is_some_and(rotated))
+        .map(|entry| entry.path())
+        .collect();
+    found.sort_by_key(|file| (file.extension().is_some_and(|e| e == "log"), file.clone()));
+    found
+}
+
+fn rotate(path: &Path, now: std::time::SystemTime) -> std::io::Result<()> {
+    let seconds = now.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs() as i64;
+    std::fs::rename(path, path.with_extension(format!("{}.log", crate::archive::timestamp(seconds))))?;
+    let expired = |file: &PathBuf| {
+        std::fs::metadata(file)
+            .and_then(|m| m.modified())
+            .is_ok_and(|at| now.duration_since(at).is_ok_and(|age| age > LOG_KEEP))
+    };
+    rotated_logs(path).iter().filter(|file| expired(file)).for_each(|file| drop(std::fs::remove_file(file)));
+    Ok(())
+}
+
 fn append(path: &Path, text: &str) -> std::io::Result<()> {
     if std::fs::metadata(path).is_ok_and(|m| m.len() >= LOG_LIMIT) {
-        std::fs::rename(path, path.with_extension("log.1"))?;
+        rotate(path, std::time::SystemTime::now())?;
     }
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
@@ -81,7 +114,7 @@ fn append(path: &Path, text: &str) -> std::io::Result<()> {
 }
 
 fn clear(path: &Path) -> std::io::Result<()> {
-    let _ = std::fs::remove_file(path.with_extension("log.1"));
+    rotated_logs(path).iter().for_each(|file| drop(std::fs::remove_file(file)));
     File::create(path).map(drop)
 }
 

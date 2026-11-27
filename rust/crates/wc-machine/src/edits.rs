@@ -126,7 +126,7 @@ impl Machine {
     }
 
     fn section_now(&self, id: &str) -> Option<wc_protocol::settings::SettingsSection> {
-        forms::section(&self.settings, id, self.firmware_version, &self.ports)
+        forms::section(&self.settings, id, self.firmware_version, self.planner, self.feed_forward, &self.ports)
     }
 
     /// `PUT /api/settings/{id}`: all or nothing. Settings not posted are left as stored, where Python rewrote them

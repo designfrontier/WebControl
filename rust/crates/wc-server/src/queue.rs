@@ -144,7 +144,8 @@ async fn load(state: &AppState, file: String) {
         state.machine.submit(Ask::Problem(Problem::GcodeUnreadable));
         return;
     };
-    let reply = detached(state, move |loading| load_file(loading, target, None, Origin::Queue)).await;
+    let free = state.free_memory;
+    let reply = detached(state, move |loading| load_file(loading, target, None, Origin::Queue, free)).await;
     tracing::info!(file, ?reply, "queued file loaded");
 }
 
