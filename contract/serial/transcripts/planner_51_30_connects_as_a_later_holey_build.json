@@ -40,7 +40,7 @@
     {"type": "tx", "bytes": "N4 $13=63.5*95\n"},
     {"type": "rx", "line": "Change in setting, rewriting EEPROM"},
     {"type": "rx", "line": "ok N4"},
-    {"type": "expect", "state": {"controllerFirmwareVersion": 51.3, "firmwareBuild": "51.3"}},
+    {"type": "expect", "state": {"controllerFirmwareVersion": 51.3, "firmwareBuild": "51.30"}},
     {"type": "rx", "line": "<Idle,MPos:0.00,0.00,12.34,WPos:0.000,0.000,0.000>"},
     {"type": "ui", "action": {"command": "setMaxZ", "arg": "", "arg1": ""}},
     {"type": "tx", "bytes": "N5 $63=12.340*93\n"},

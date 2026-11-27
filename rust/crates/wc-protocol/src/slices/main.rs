@@ -134,6 +134,8 @@ pub struct HealthMessage {
     /// `-1` when buffering is off (wart 6).
     pub buffer_size: i64,
     pub controller_firmware_version: f64,
+    /// The version as text, as `/api/state`'s `firmwareBuild` gives it.
+    pub firmware_build: Option<String>,
 }
 
 impl Message for HealthMessage {

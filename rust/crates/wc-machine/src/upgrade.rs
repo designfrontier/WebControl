@@ -3,6 +3,7 @@
 
 use std::time::Duration;
 
+use wc_firmware::boot::version_text;
 use wc_firmware::image::{Image, rollback_image};
 use wc_firmware::upgrade::{
     Avrdude, Migration, MotorTest, Target, avrdude_outcome, check_board, failed_motors, is_serial_port,
@@ -180,7 +181,7 @@ impl Upgrade {
             stage: self.stage,
             message: self.message.clone(),
             board: self.board.clone(),
-            firmware: self.firmware.map(|v| format!("{v}")),
+            firmware: self.firmware.map(version_text),
             chains: chains(&self.chains),
             chains_after: chains(&self.chains_after),
             motors: self
@@ -190,7 +191,7 @@ impl Upgrade {
                 .collect(),
             backup: self.backup.clone(),
             can_rollback: self.rollback.is_some() && !self.busy(),
-            rollback_firmware: self.rollback.as_ref().map(|saved| format!("{}", saved.version)),
+            rollback_firmware: self.rollback.as_ref().map(|saved| version_text(saved.version)),
             log: self.log.clone(),
         }
     }
@@ -495,7 +496,8 @@ impl Machine {
             return self.post_flash_failed("The controller booted without a board banner.", now, effects);
         }
         if !expected {
-            return self.post_flash_failed(&format!("The controller reports firmware {version}."), now, effects);
+            let why = format!("The controller reports firmware {}.", version_text(version));
+            return self.post_flash_failed(&why, now, effects);
         }
         if self.upgrade.direction == Direction::Upgrade && self.upgrade.target == Target::Planner {
             self.upgrade.awaiting_capabilities = true;
@@ -516,6 +518,7 @@ impl Machine {
     }
 
     fn restore_settings(&mut self, version: f64) {
+        let version = version_text(version);
         let message = format!("Firmware {version} booted; pushing every setting back, then verifying with $$.");
         self.upgrade.enter(Stage::Migrating, &message);
         self.upgrade.deadline = None;
@@ -630,7 +633,7 @@ impl Machine {
             }
             Direction::Rollback => {
                 let version =
-                    self.upgrade.rollback.as_ref().map(|saved| format!("{}", saved.version)).unwrap_or_default();
+                    self.upgrade.rollback.as_ref().map(|saved| version_text(saved.version)).unwrap_or_default();
                 let message = format!("Rolled back to {version}; {rewritten}");
                 self.upgrade.enter(Stage::RolledBack, &message);
                 effects.push(alert(&message));

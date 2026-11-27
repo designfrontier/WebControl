@@ -136,6 +136,8 @@ export const mainMessages = {
     cpuUsage: z.number(),
     bufferSize: z.number(),
     controllerFirmwareVersion: z.number().optional(),
+    /** The build as /api/state's firmwareBuild gives it ("51.292", "51.30"); Rust only. */
+    firmwareBuild: z.string().nullable().optional(),
   }),
   statusMessage: z.object({
     uploadFlag: z.number(),

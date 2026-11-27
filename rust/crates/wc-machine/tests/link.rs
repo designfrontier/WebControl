@@ -471,7 +471,7 @@ fn health_reports_the_buffer_only_when_buffering_and_resends_the_status() {
     assert_eq!(
         pushed(&effects, "healthMessage"),
         [json!({"cpuUsage": 12.5, "bufferSize": 98,
-        "controllerFirmwareVersion": 51.27})]
+        "controllerFirmwareVersion": 51.27, "firmwareBuild": "51.27"})]
     );
     assert_eq!(commands(&effects), ["healthMessage", "statusMessage"]);
     let mut plain = Rig::connected();

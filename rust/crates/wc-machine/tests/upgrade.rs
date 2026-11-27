@@ -564,7 +564,7 @@ fn the_planners_51_30_goes_back_to_51_292_and_keeps_z_limits_until_then() {
     let build = Build { version: "51.30".into(), capabilities: Some(capabilities.into()), ..Build::holey_51_292() };
     let mut bench = Bench::on(build.on_board(OWNERS_BOARD));
     let snapshot = bench.machine.snapshot();
-    assert_eq!((snapshot.controller_firmware_version, snapshot.firmware_build.as_deref()), (51.3, Some("51.3")));
+    assert_eq!((snapshot.controller_firmware_version, snapshot.firmware_build.as_deref()), (51.3, Some("51.30")));
     assert!(supports_z_limits(snapshot.firmware_build.as_deref()));
     assert_eq!(bench.upgrade(), Stage::SelfTest, "{:?}", bench.view().log);
     assert_eq!(bench.sim.build().version, "51.29");

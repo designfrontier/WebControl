@@ -168,6 +168,7 @@ impl Machine {
             cpu_usage: cpu,
             buffer_size: if buffering { self.reported_buffer } else { -1 },
             controller_firmware_version: self.firmware_version,
+            firmware_build: wc_firmware::boot::firmware_build(self.firmware_version, self.rewrite_notice),
         }));
         self.last_status = None;
     }

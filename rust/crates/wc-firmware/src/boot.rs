@@ -52,10 +52,13 @@ pub fn parse_firmware_version(line: &str) -> Option<f64> {
     number.parse::<f64>().ok().filter(|v| v.is_finite())
 }
 
-/// The reported version as Python's `format(v, "g")` prints a two-decimal B05 reply.
-fn version_text(version: f64) -> String {
-    let text = format!("{version}");
-    text.strip_suffix(".0").map(String::from).unwrap_or(text)
+/// The version as B05 prints it, with two decimals (51.30, not 51.3); a whole number without any.
+pub fn version_text(version: f64) -> String {
+    let two = format!("{version:.2}");
+    match version.fract() == 0.0 || two.parse::<f64>() != Ok(version) {
+        true => format!("{version}"),
+        false => two,
+    }
 }
 
 /// The version, with 51.29 narrowed to 51.292 when its rewrite notice was seen, else `51.29x`; `None` if unknown.

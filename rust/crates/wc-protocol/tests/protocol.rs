@@ -332,7 +332,12 @@ fn link_messages_fit_their_schemas() {
         computed_y: -999999.0,
         computed_enabled: 0,
     }));
-    check(Envelope::json(&HealthMessage { cpu_usage: 12.5, buffer_size: -1, controller_firmware_version: 51.27 }));
+    check(Envelope::json(&HealthMessage {
+        cpu_usage: 12.5,
+        buffer_size: -1,
+        controller_firmware_version: 51.3,
+        firmware_build: Some("51.30".into()),
+    }));
     let status = StatusMessage {
         upload_flag: 0,
         positioning_mode: 0,

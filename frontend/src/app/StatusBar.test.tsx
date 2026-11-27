@@ -92,6 +92,17 @@ describe("firmware chip", () => {
     renderApp("/", { fetch: fakeFetch({ "GET /api/state": startupState({ controllerFirmwareVersion: 51.27 }) }) });
     expect(await status().findByText("Holey 51.27")).toBeInTheDocument();
   });
+
+  it("shows the build text, so 51.30 does not read as 51.3", async () => {
+    const state = startupState({ controllerFirmwareVersion: 51.29, firmwareBuild: "51.292" });
+    const { socket } = renderApp("/", { fetch: fakeFetch({ "GET /api/state": state }) });
+    expect(await status().findByText("Holey 51.292")).toBeInTheDocument();
+    const health = { cpuUsage: 1, bufferSize: -1, controllerFirmwareVersion: 51.3, firmwareBuild: "51.30" };
+    socket.serverMessage("healthMessage", health);
+    expect(status().getByText("Holey 51.30")).toBeInTheDocument();
+    socket.serverMessage("healthMessage", { cpuUsage: 1, bufferSize: -1 });
+    expect(status().getByText("Holey 51.30")).toBeInTheDocument();
+  });
 });
 
 describe("software chip", () => {

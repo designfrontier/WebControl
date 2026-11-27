@@ -44,7 +44,7 @@
     {"type": "tx", "bytes": "N4 $13=63.5*95\n"},
     {"type": "rx", "line": "Change in setting, rewriting EEPROM"},
     {"type": "rx", "line": "ok N4"},
-    {"type": "expect", "state": {"controllerFirmwareVersion": 51.3, "firmwareBuild": "51.3"}},
+    {"type": "expect", "state": {"controllerFirmwareVersion": 51.3, "firmwareBuild": "51.30"}},
     {"type": "expect", "settings": [{"section": "Computed Settings", "key": "controllerBaud", "value": "115200"}]}
   ]
 }

@@ -246,7 +246,7 @@ each chain's largest error since the last report, in mm with 2 decimals, both no
 lag. After a reversal the old direction holds until the encoder reaches the setpoint, so lag never reads as ahead. The
 200 ms reports miss overshoot that comes and goes between them; the peaks do not. 51.30 is 51.292's EEPROM layout and
 settings version (7); the firmware uses the version only in `B05`. WebControl treats it as a holey build past 51.292
-(its build reads `51.3`, Z limits on, no fingerprint needed) and still takes planner features from the capabilities
+(its build reads `51.30`, Z limits on, no fingerprint needed) and still takes planner features from the capabilities
 alone.
 
 The released 51.30 is tag `v51.30` of designfrontier/Firmware (3fbb316: the `peak-error` build, faster line parsing
