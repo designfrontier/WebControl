@@ -546,6 +546,20 @@ fn hazardous_boards_and_imageless_builds_are_blocked() {
 }
 
 #[test]
+fn start_over_and_each_new_check_begin_a_fresh_step_list() {
+    let mut bench = Bench::owners();
+    assert_eq!(bench.upgrade(), Stage::SelfTest);
+    assert!(bench.view().log.iter().any(|l| l.starts_with("Flashing 51.292")));
+    bench.act("reset");
+    assert_eq!(bench.view().log, ["Ready to check the controller."]);
+    bench.act("checkPlanner");
+    bench.settle(&[Stage::Checking], 10_000);
+    let log = bench.view().log;
+    assert_eq!(log.first().map(String::as_str), Some("Checking the controller: B05, $$ and both chain lengths."));
+    assert!(!log.iter().any(|l| l.contains("51.292") && l.starts_with("Flashing")), "{log:?}");
+}
+
+#[test]
 fn a_planner_test_build_may_go_back_to_51_292() {
     let planner =
         Build { capabilities: Some("planner line-numbers accel-settings status-line".into()), ..Build::holey_51_292() };

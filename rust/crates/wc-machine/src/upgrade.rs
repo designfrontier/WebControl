@@ -214,12 +214,19 @@ impl Machine {
             return Some("Wait for the firmware upgrade step in progress to finish.".into());
         }
         match step.as_str() {
-            "check" => self.preflight(Target::Holey),
-            "checkPlanner" => self.preflight(Target::Planner),
+            "check" => {
+                self.upgrade.log.clear();
+                self.preflight(Target::Holey)
+            }
+            "checkPlanner" => {
+                self.upgrade.log.clear();
+                self.preflight(Target::Planner)
+            }
             "upgrade" => self.start_upgrade(now, effects),
             "selfTest" => self.self_test(),
             "rollback" => self.start_rollback(now, effects),
             "reset" => {
+                self.upgrade.log.clear();
                 self.upgrade.enter(Stage::Idle, "Ready to check the controller.");
                 None
             }
