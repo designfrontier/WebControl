@@ -12,7 +12,8 @@ use tokio::sync::Notify;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::time::{Instant, interval_at, sleep_until};
 use wc_machine::Event;
-use wc_protocol::{ClientEvent, Frame, Namespace, Push};
+use wc_protocol::main::ActivateModal;
+use wc_protocol::{ClientEvent, Envelope, Frame, Namespace, Push};
 
 use crate::AppState;
 
@@ -35,11 +36,16 @@ pub(crate) async fn upgrade(
     }
 }
 
-fn received(state: &AppState, ns: Namespace, text: &str) {
+fn received(state: &AppState, ns: Namespace, sid: &str, text: &str) {
     let Some(frame) = Frame::decode(text).filter(|f| f.ns == ns.path()) else {
         return;
     };
     match ClientEvent::from_frame(&frame) {
+        Some(ClientEvent::Action(action)) if action.command == "TurnOffRPI" && !state.platform.can_turn_off => {
+            tracing::warn!(sid, "refused TurnOffRPI: this computer is not a Raspberry Pi");
+            let alert = Push::message(Envelope::json(&ActivateModal::alert(crate::NO_POWER_OFF)));
+            state.machine.broadcast(alert.to_client(sid));
+        }
         Some(ClientEvent::Action(action)) => state.machine.send(Event::Action(action)),
         Some(ClientEvent::SettingRequest { section, setting }) => {
             state.machine.send(Event::SettingRequest { section, setting })
@@ -79,7 +85,7 @@ async fn session(socket: WebSocket, ns: Namespace, state: AppState) {
     let reader = async {
         while let Some(Ok(message)) = rx.next().await {
             match message {
-                Message::Text(text) => received(&state, ns, text.as_str()),
+                Message::Text(text) => received(&state, ns, &sid, text.as_str()),
                 Message::Pong(_) => pongs.notify_one(),
                 Message::Close(_) => break,
                 _ => {}

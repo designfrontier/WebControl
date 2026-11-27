@@ -53,6 +53,9 @@ impl Default for PingConfig {
     }
 }
 
+/// The answer to `TurnOffRPI` anywhere but the Pi.
+pub const NO_POWER_OFF: &str = "Only a Raspberry Pi can be turned off from WebControl; this computer stays on.";
+
 /// What `GET /api/system/info` says about the computer the backend runs on.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Platform {

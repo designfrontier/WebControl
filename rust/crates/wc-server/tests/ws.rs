@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
@@ -8,11 +9,11 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
 use wc_config::Settings;
-use wc_machine::{Core, Effect, Event, Machine, MachineHandle, NoHost, NoPort, Snapshot, spawn};
+use wc_machine::{Core, Effect, Event, Host, Machine, MachineHandle, NoHost, NoPort, Snapshot, spawn};
 use wc_protocol::main::LinkStatus;
 use wc_protocol::{Envelope, Push};
 use wc_server::serial::SimOpener;
-use wc_server::{AppState, PingConfig, router};
+use wc_server::{AppState, NO_POWER_OFF, PingConfig, Platform, router};
 use wc_sim::Build;
 use wc_testkit::contract::Contract;
 
@@ -449,4 +450,61 @@ async fn update_requests_resend_the_preview_and_the_board_to_everyone() {
     let (_, board) = decoded(&next_message(&mut other, "boardDataUpdate").await);
     assert_eq!(board["boardID"], "-");
     assert_eq!(next_message(&mut other, "boardCutDataUpdateCompressed").await["data"]["dataFormat"], "base64");
+}
+
+/// Counts power-offs; everything else does nothing.
+#[derive(Default)]
+struct PowerHost(AtomicUsize);
+
+impl Host for PowerHost {
+    fn list_ports(&self) -> Vec<String> {
+        Vec::new()
+    }
+    fn log(&self, _: &str) {}
+    fn clear_logs(&self) {}
+    fn power_off(&self) {
+        self.0.fetch_add(1, Ordering::SeqCst);
+    }
+    fn exit(&self) {}
+    fn cpu_load(&self) -> f64 {
+        0.0
+    }
+    fn create_directory(&self, _: &str) -> bool {
+        false
+    }
+}
+
+async fn turn_off_on(name: &str, can_turn_off: bool) -> (Client, Arc<PowerHost>) {
+    let host = Arc::new(PowerHost::default());
+    let (machine, _task) = spawn(Machine::new("10.0.0.5:5000", Settings::defaults()), Box::new(NoPort), host.clone());
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap().to_string();
+    let home = wc_config::Paths::new(std::path::Path::new("/nonexistent-home"));
+    let platform = Platform { name: name.into(), can_turn_off };
+    let app = router(AppState::new(machine, PingConfig::default(), home).on(platform));
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let mut client = open(&address, "/MaslowCNC").await;
+    for _ in 0..3 {
+        next_frame(&mut client).await;
+    }
+    send(&mut client, action("TurnOffRPI", "")).await;
+    (client, host)
+}
+
+#[tokio::test]
+async fn turn_off_is_refused_with_a_reason_on_a_computer_that_is_not_the_pi() {
+    let (mut client, host) = turn_off_on("linux", false).await;
+    let (_, alert) = decoded(&next_message(&mut client, "activateModal").await);
+    assert_eq!(alert["message"], NO_POWER_OFF);
+    assert_eq!(host.0.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn turn_off_powers_the_pi_off() {
+    let (_client, host) = turn_off_on("RPI", true).await;
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    while host.0.load(Ordering::SeqCst) == 0 && tokio::time::Instant::now() < deadline {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert_eq!(host.0.load(Ordering::SeqCst), 1);
 }
