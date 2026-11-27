@@ -1,6 +1,7 @@
 import { ApiError, getJson, sendJson } from "../../api/http";
 import type { Fetch } from "../../api/http";
 import {
+  classicStatusSchema,
   createdDirectorySchema,
   formErrorSchema,
   gcodeLibrarySchema,
@@ -50,16 +51,20 @@ export const postForm = async (fetchImpl: Fetch, path: string, fields: Record<st
     (Array.isArray(value) ? value : [value]).forEach((item) => body.append(key, item)),
   );
   const response = await fetchImpl(path, { method: "POST", body });
-  if (response.ok) return;
+  if (response.ok) return response;
   const errorBody: unknown = await response.json().catch(() => undefined);
   throw new FormRouteError(response.status, `POST ${path} failed with ${response.status}`, errorBody);
 };
 
-export const openGcode = (fetchImpl: Fetch, file: LibraryFile) =>
-  postForm(fetchImpl, "/openGCode", { selectedGCode: libraryPath(file) });
+/** The memory warning a gcode load that went ahead may carry. */
+const loadWarning = async (response: Response) =>
+  classicStatusSchema.safeParse(await response.json().catch(() => undefined)).data?.warning;
 
-export const uploadGcode = (fetchImpl: Fetch, directory: string, files: File[]) =>
-  postForm(fetchImpl, "/uploadGCode", { selectedDirectory: directory, "file[]": files });
+export const openGcode = async (fetchImpl: Fetch, file: LibraryFile) =>
+  loadWarning(await postForm(fetchImpl, "/openGCode", { selectedGCode: libraryPath(file) }));
+
+export const uploadGcode = async (fetchImpl: Fetch, directory: string, files: File[]) =>
+  loadWarning(await postForm(fetchImpl, "/uploadGCode", { selectedDirectory: directory, "file[]": files }));
 
 export const saveGcode = (fetchImpl: Fetch, directory: string, fileName: string) =>
   postForm(fetchImpl, "/saveGCode", { selectedDirectory: directory, fileName });

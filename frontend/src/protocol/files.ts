@@ -63,8 +63,9 @@ export const saveGcodeFormSchema = z.object({ selectedDirectory: z.string(), fil
 export const gcodeFormSchema = z.object({ gcode: z.string() });
 export const importFormSchema = z.object({ file: binaryField });
 
-/** What most classic form routes answer, with the HTTP status repeated in the body. */
-export const classicStatusSchema = z.object({ status: z.number().int() });
+/** What most classic form routes answer, with the HTTP status repeated in the body; `warning` on a gcode load that
+ * went ahead but may strain the host's memory. */
+export const classicStatusSchema = z.object({ status: z.number().int(), warning: z.string().optional() });
 /** A classic route's refusal: 409 while a job runs, 400 for a path outside the library. */
 export const classicErrorSchema = z.object({ status: z.number().int(), error: z.string() });
 /** /editGCode, /sendGCode, /editBoard and /trimBoard answer a bare JSON string. */

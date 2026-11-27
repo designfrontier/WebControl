@@ -96,21 +96,28 @@ impl DirectoryRequest {
     }
 }
 
-/// What most classic form routes answer, the HTTP status repeated in the body (wart 8); `error` on a refusal.
+/// What most classic form routes answer, the HTTP status repeated in the body (wart 8); `error` on a refusal, and
+/// `warning` on a gcode load that went ahead but may strain the host's memory.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ClassicStatus {
     pub status: u16,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub warning: Option<String>,
 }
 
 impl ClassicStatus {
     pub fn new(status: u16) -> ClassicStatus {
-        ClassicStatus { status, error: None }
+        ClassicStatus { status, error: None, warning: None }
     }
 
     pub fn refused(status: u16, error: &str) -> ClassicStatus {
-        ClassicStatus { status, error: Some(error.into()) }
+        ClassicStatus { status, error: Some(error.into()), warning: None }
+    }
+
+    pub fn warned(status: u16, warning: &str) -> ClassicStatus {
+        ClassicStatus { status, error: None, warning: Some(warning.into()) }
     }
 }
 

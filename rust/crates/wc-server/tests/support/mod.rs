@@ -105,6 +105,11 @@ impl Server {
     }
 
     pub fn with(machine: Machine) -> Server {
+        Server::freeing(machine, wc_server::memory::host_available)
+    }
+
+    /// A server whose host has `free_memory` free for a gcode load.
+    pub fn freeing(machine: Machine, free_memory: fn() -> Option<u64>) -> Server {
         let home = tempfile::tempdir().unwrap();
         let paths = Paths::new(home.path());
         [paths.gcode_dir(), paths.boards_dir(), paths.imports_dir()]
@@ -114,7 +119,7 @@ impl Server {
         let host = Arc::new(SystemHost::new(&paths.dir(), Arc::new(Notify::new())).saving_to(paths.clone()));
         let machine = machine.with_library(paths.gcode_dir());
         let (machine, _task) = spawn(machine, Box::new(NoPort), host.clone());
-        let state = AppState::new(machine.clone(), PingConfig::default(), paths);
+        let state = AppState::new(machine.clone(), PingConfig::default(), paths).with_free_memory(free_memory);
         wc_server::queue::serve(&state);
         let app = router(state);
         Server { app, home, machine, host }

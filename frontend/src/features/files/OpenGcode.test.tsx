@@ -11,6 +11,11 @@ const setup = (open = recorder(), library = gcodeLibrary()) => {
   return { ...renderApp("/files/open", { fetch }), open };
 };
 
+const warning =
+  "This file has 1,200,000 lines and needs about 401 MB of the 700 MB this computer has free. Consider splitting it into smaller files and running them one after another with the job queue.";
+const refusal =
+  "This file has 3,000,000 lines and needs about 1002 MB of the 700 MB this computer has free. It was not opened.";
+
 describe("Open gcode", () => {
   it("starts in the last directory with the last file selected", async () => {
     setup();
@@ -73,6 +78,20 @@ describe("Open gcode", () => {
     await user.click(await screen.findByRole("button", { name: "Open" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(error);
     await expectPath("/files/open");
+  });
+
+  it("opens a file that strains the host's memory but stays to show why", async () => {
+    const { user, socket } = setup(recorder(200, { status: 200, warning }));
+    await user.click(await screen.findByRole("button", { name: "Open" }));
+    expect(await screen.findByText(warning)).toHaveAttribute("role", "status");
+    await expectPath("/files/open");
+    expect(socket.emittedEvents("checkForGCodeUpdate")).toEqual([{ data: "Please" }]);
+  });
+
+  it("shows why the server refused a file too large for its memory", async () => {
+    const { user } = setup(recorder(409, { status: 409, error: refusal }));
+    await user.click(await screen.findByRole("button", { name: "Open" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(refusal);
   });
 
   it("covers the whole page with a loading overlay until the server answers", async () => {

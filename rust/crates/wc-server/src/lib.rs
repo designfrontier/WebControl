@@ -16,6 +16,7 @@ mod guard;
 pub mod help;
 pub mod host;
 pub mod installer;
+pub mod memory;
 mod optical;
 pub mod queue;
 mod routes;
@@ -85,6 +86,8 @@ pub struct AppState {
     loads: Arc<tokio::sync::Mutex<()>>,
     /// Tool library edits run one at a time.
     tools: Arc<std::sync::Mutex<()>>,
+    /// The host's free memory, which a gcode load is checked against.
+    free_memory: fn() -> Option<u64>,
 }
 
 impl AppState {
@@ -94,7 +97,23 @@ impl AppState {
         let cameras = camera::Cameras::default();
         let updates = updates::Updates::off();
         let (loads, tools) = (Arc::default(), Arc::default());
-        AppState { machine, paths, ping, platform: Platform::current(), closing, cameras, updates, loads, tools }
+        let free_memory = memory::host_available;
+        AppState {
+            machine,
+            paths,
+            ping,
+            platform: Platform::current(),
+            closing,
+            cameras,
+            updates,
+            loads,
+            tools,
+            free_memory,
+        }
+    }
+
+    pub fn with_free_memory(self, free_memory: fn() -> Option<u64>) -> AppState {
+        AppState { free_memory, ..self }
     }
 
     pub fn with_updates(self, updates: updates::Updates) -> AppState {

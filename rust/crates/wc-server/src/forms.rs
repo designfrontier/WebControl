@@ -91,6 +91,11 @@ pub fn refused(code: u16, error: &str) -> Response {
     (status, Json(ClassicStatus::refused(code, error))).into_response()
 }
 
+/// A 200 whose load went ahead, with what the user should know about it.
+pub fn warned(warning: &str) -> Response {
+    Json(ClassicStatus::warned(200, warning)).into_response()
+}
+
 pub fn outside_library() -> Response {
     refused(400, OUTSIDE)
 }
