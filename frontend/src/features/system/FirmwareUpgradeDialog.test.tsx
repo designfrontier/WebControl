@@ -141,6 +141,14 @@ describe("FirmwareUpgradeDialog", () => {
     expect(screen.getByRole("heading", { name: "Upgraded to 51.292" })).toBeInTheDocument();
   });
 
+  it("offers Start over after an upgrade, so the other firmware can be chosen", async () => {
+    const after = (stage: "selfTest" | "done") => upgrade({ ...ready, stage, firmware: "51.29" });
+    const { user, socket } = renderDialog(after("selfTest"));
+    await user.click(screen.getByRole("button", { name: "Start over" }));
+    expect(socket.actions()).toEqual([["upgradeHoleyFirmware", "reset", ""]]);
+    expect(stageView(after("done")).buttons.map((button) => button.label)).toContain("Start over");
+  });
+
   it("reports a progress read that fails and recovers when it answers again", async () => {
     let calls = 0;
     const fetch = systemFetch({

@@ -68,13 +68,21 @@ const views: Record<UpgradeStage, (upgrade: FirmwareUpgrade) => StageView> = {
   selfTest: (upgrade) => ({
     title: "Motor self-test",
     busy: false,
-    buttons: [{ step: "selfTest", label: "Run the motor self-test", confirm: SLACK_CONFIRM }, ...rollback(upgrade)],
+    buttons: [
+      { step: "selfTest", label: "Run the motor self-test", confirm: SLACK_CONFIRM },
+      ...rollback(upgrade),
+      { step: "reset", label: "Start over" },
+    ],
   }),
   testing: () => busy("Testing the motors"),
   done: (upgrade) => ({
     title: `Upgraded to ${upgrade.target}`,
     busy: false,
-    buttons: [{ step: "selfTest", label: "Run the self-test again", confirm: SLACK_CONFIRM }, ...rollback(upgrade)],
+    buttons: [
+      { step: "selfTest", label: "Run the self-test again", confirm: SLACK_CONFIRM },
+      ...rollback(upgrade),
+      { step: "reset", label: "Start over" },
+    ],
   }),
   failed: (upgrade) => ({
     title: "The upgrade failed",
