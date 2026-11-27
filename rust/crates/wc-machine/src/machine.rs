@@ -402,6 +402,7 @@ pub struct Machine {
     /// The LEDs as last handed to the shell.
     pub(crate) leds_shown: Leds,
     pub(crate) gcode: Arc<Vec<String>>,
+    pub(crate) positions: Arc<Vec<[f64; 3]>>,
     pub(crate) index: usize,
     pub(crate) gcode_file: Option<PathBuf>,
     /// Edited in the UI since it was read, so `gcode_file` no longer holds what runs.
@@ -486,6 +487,7 @@ impl Machine {
             leds: Leds::default(),
             leds_shown: Leds::default(),
             gcode: Arc::new(Vec::new()),
+            positions: Arc::new(wc_gcode::position::positions(&[])),
             index: 0,
             gcode_file: None,
             gcode_edited: false,
@@ -536,6 +538,7 @@ impl Machine {
     /// Loads lines as `/openGCode` would, without the preview; transcripts and tests use it directly.
     pub fn load_gcode(&mut self, text: &str) {
         self.gcode = Arc::new(wc_gcode::load::filter(text, None).unwrap_or_default());
+        self.positions = Arc::new(wc_gcode::position::positions(&self.gcode));
         self.file_tools = Arc::new(wc_gcode::tools::file_tools(text));
         self.stats.estimate = crate::files::estimate(&self.gcode, &self.settings);
         self.index = 0;

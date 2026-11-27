@@ -126,6 +126,21 @@ fn the_control_screen_shows_the_line_the_report_names() {
 }
 
 #[test]
+fn the_viewer_marks_where_the_running_line_leads() {
+    let mut rig = planner();
+    start(&mut rig, &["G1 X1 F600", "G91", "G1 X2 Y1", "G1 X3"]);
+    ["ok", "ok N5", "ok N6", "ok N7"].iter().for_each(|line| {
+        rig.rx(line);
+    });
+    let marked = |rig: &mut Rig, line| {
+        let position = pushed(&rig.rx(&report(line, 1, 127)), "gcodePositionMessage");
+        position.iter().map(|p| (p["xval"].clone(), p["yval"].clone(), p["gcodeLineIndex"].clone())).collect::<Vec<_>>()
+    };
+    assert_eq!(marked(&mut rig, 5), [(json!(1.0), json!(0.0), json!(0))]);
+    assert_eq!(marked(&mut rig, 7), [(json!(3.0), json!(1.0), json!(2))]);
+}
+
+#[test]
 fn an_rs_for_lines_an_alarm_flushed_does_not_hold_play() {
     let mut rig = planner();
     start(&mut rig, &["G1 X1 F600", "G1 X2", "G1 X3"]);

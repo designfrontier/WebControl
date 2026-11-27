@@ -523,3 +523,20 @@ fn a_byte_order_mark_does_not_hide_the_files_units_from_a_restart() {
     let sent = rig.run_to_quiet();
     assert_eq!(sent[..4], ["G21", "G90", SAFE_Z, "G0 X100.0 Y50.0"], "{sent:?}");
 }
+
+#[test]
+fn a_stock_job_marks_each_sent_line_where_it_leads() {
+    let mut rig = Rig::connected();
+    rig.machine.load_gcode(&file(&["G1 X1 F600", "G91", "G1 X2 Y1", "G1 X3"]));
+    let marks = |effects: &[Effect]| -> Vec<(Value, Value, Value)> {
+        let position = pushed(effects, "gcodePositionMessage");
+        position.iter().map(|p| (p["xval"].clone(), p["yval"].clone(), p["gcodeLineIndex"].clone())).collect()
+    };
+    let mut marked = marks(&rig.act("startRun"));
+    (0..4).for_each(|_| {
+        marked.extend(marks(&rig.rx("ok")));
+        marked.extend(marks(&rig.advance(100)));
+    });
+    let leads = [(1.0, 0.0, 0), (1.0, 0.0, 1), (3.0, 1.0, 2), (6.0, 1.0, 3)];
+    assert_eq!(marked, leads.map(|(x, y, index)| (json!(x), json!(y), json!(index))));
+}

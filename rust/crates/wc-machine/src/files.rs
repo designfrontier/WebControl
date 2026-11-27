@@ -10,7 +10,7 @@ use wc_gcode::arc::arc_centre_note;
 use wc_gcode::board::{Board, BoardEdit, BoardTrim};
 use wc_gcode::estimate::{Rates, cumulative_seconds};
 use wc_gcode::preview::{self, Move};
-use wc_gcode::{GcodeError, load, py};
+use wc_gcode::{GcodeError, load, position, py};
 use wc_protocol::boards::BoardDataUpdate;
 use wc_protocol::files::UpdateDirectories;
 use wc_protocol::main::{ActivateModal, ControllerMessage, GcodeFile, Units};
@@ -55,6 +55,8 @@ pub struct Gcode {
     pub tools: Vec<FileTool>,
     /// Estimated seconds through the end of each line.
     pub estimate: Vec<f32>,
+    /// `find_position_at` for each index, so a position update reads none of the file.
+    pub positions: Vec<[f64; 3]>,
 }
 
 /// `Advanced Settings.truncate` is on when it equals 1; `digits` is the text Python splices into its pattern.
@@ -98,6 +100,7 @@ impl Gcode {
             arc_centres: arc_centre_note(&lines),
             tools: wc_gcode::tools::file_tools(raw),
             estimate: estimate(&lines, settings),
+            positions: position::positions(&lines),
             lines,
         })
     }
@@ -113,6 +116,7 @@ impl Gcode {
             arc_centres: None,
             tools: Vec::new(),
             estimate: Vec::new(),
+            positions: position::positions(&[]),
         }
     }
 }
@@ -271,16 +275,17 @@ impl Machine {
     /// The file line at `index` and where it leads, as the line a planner build runs.
     pub(crate) fn push_position_of(&mut self, index: usize, effects: &mut Vec<Effect>) {
         if index < self.gcode.len() {
-            let (gcode, scale) = (self.gcode.clone(), self.gcode_scale());
-            self.compute(Work::GcodePosition { gcode, index, scale, failure: None }, effects);
+            let (gcode, positions, scale) = (self.gcode.clone(), self.positions.clone(), self.gcode_scale());
+            self.compute(Work::GcodePosition { gcode, positions, index, after: true, scale, failure: None }, effects);
         }
     }
 
     /// The same for one client, outside the lane, since it changes nothing.
     pub(crate) fn push_gcode_position_to(&mut self, sid: &str, effects: &mut Vec<Effect>) {
         if self.index < self.gcode.len() {
-            let (gcode, index, scale) = (self.gcode.clone(), self.index, self.gcode_scale());
-            self.compute(Work::GcodePositionFor { sid: sid.into(), gcode, index, scale }, effects);
+            let (gcode, positions, index, scale) =
+                (self.gcode.clone(), self.positions.clone(), self.index, self.gcode_scale());
+            self.compute(Work::GcodePositionFor { sid: sid.into(), gcode, positions, index, scale }, effects);
         }
     }
 
@@ -289,8 +294,9 @@ impl Machine {
         if self.index >= self.gcode.len() {
             return false;
         }
-        let (gcode, index, scale) = (self.gcode.clone(), self.index, self.gcode_scale());
-        self.compute(Work::GcodePosition { gcode, index, scale, failure }, effects);
+        let (gcode, positions, index, scale) =
+            (self.gcode.clone(), self.positions.clone(), self.index, self.gcode_scale());
+        self.compute(Work::GcodePosition { gcode, positions, index, after: false, scale, failure }, effects);
         true
     }
 
@@ -304,6 +310,7 @@ impl Machine {
 
     fn install(&mut self, gcode: Gcode) {
         self.gcode = Arc::new(gcode.lines);
+        self.positions = Arc::new(gcode.positions);
         self.z_moves = gcode.z_moves;
         self.preview = Arc::new(gcode.preview);
         self.file_tools = Arc::new(gcode.tools);
